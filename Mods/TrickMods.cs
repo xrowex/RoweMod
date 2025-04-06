@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System;
-using Il2CppMG_Core.C_R_I_D.Animation_System.Animancer_Test;
+//using Il2CppMG_Core.C_R_I_D.Animation_System.Animancer_Test;
 using rowemod.Utils;
 using UnityEngine;
 using UnityEngine.InputSystem;

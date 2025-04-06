@@ -6,7 +6,7 @@ using EquipSlot = Il2CppMashBox.Character.Scripts.EquipSlot;
 using static rowemod.Mods.ClothingPreset;
 using static rowemod.Menu;
 using static rowemod.Utils.Memory;
-using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
+using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;

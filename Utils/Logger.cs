@@ -24,9 +24,9 @@ namespace rowemod.Utils
         // toggle for console logs
         static bool bDebug = true;
 
-        static MelonLogger.Instance loggerInstance = new MelonLogger.Instance(moduleName, Color.Magenta);
-        static MelonLogger.Instance warningInstance = new MelonLogger.Instance(moduleName, Color.Yellow);
-        static MelonLogger.Instance errorInstance = new MelonLogger.Instance(moduleName, Color.Orange);
+        static MelonLogger.Instance loggerInstance = new MelonLogger.Instance(moduleName);
+        static MelonLogger.Instance warningInstance = new MelonLogger.Instance(moduleName);
+        static MelonLogger.Instance errorInstance = new MelonLogger.Instance(moduleName);
 
         public static void Msg(object msg)
         {

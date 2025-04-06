@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 using Harmony;
 using UnityEngine.Rendering;
 using Il2CppMashBox.BMX_Physics_Development;
-using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
+//using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
 using Il2CppModIOBrowser;
 using Il2CppPlayFab.ClientModels;
 using static rowemod.Mods.Custom;
@@ -104,16 +104,16 @@ namespace rowemod
                 case Tab.Physics:
                     Mods.Physics.Update();
                     GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true)); // Colored separator
-                    Toggle("Spin Assist", ref bSpinAssist);
-                    Toggle("Spin/Flip Fix", ref bSpinFlipFix);
+                    Toggle("Spin Assist", ref bSpinAssist);/*
+                    Toggle("Spin/Flip Fix", ref bSpinFlipFix);*/
                     //Toggle("Allow Trick Landers", ref allowTrickLanders);
                     //Toggle("Always Allow Fire Tricks", ref alwaysAllowFireTricks);
                     Toggle("Drifting", ref bDriftAbility);
                     GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true)); // Colored separator
                     Slider("Gravity", ref gravity, 0f, 30f);
                     Slider("Hop Force", ref hopForce, 0f, 25f);
-                    Slider("Small Hop Force", ref smallHopForce, 0f, 25f);
-                    Slider("Side Hop Force", ref sideHopPower, 0.1f, 5.0f);
+                    Slider("Small Hop Force", ref smallHopForce, 0f, 25f);/*
+                    Slider("Side Hop Force", ref sideHopPower, 0.1f, 5.0f);*/
                     GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true)); // Colored separator
                     Slider("Pump Force", ref pumpForce, 0f, 30f);
                     Slider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);

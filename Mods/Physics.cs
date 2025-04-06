@@ -6,10 +6,10 @@ using static rowemod.Utils.Memory;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppMashBox.Character;
-using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
+using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XInput;
-using Il2CppMashBox.Core.Physics.Vehicle;
+using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 
 namespace rowemod.Mods
 {
@@ -29,14 +29,15 @@ namespace rowemod.Mods
                     //set quickSpinEffectiveness to adjustedValue
                     spinSystem.quickSpinEffectivness = Mathf.Clamp(adjustedValue, 1, 1 * multiplier);
 
+                    /*
                     if (bSpinFlipFix)
                     {
                         //
                         //  SQUARE SCALING INPUTS
                         //
                         // Read your raw inputs
-                        float rawX = vehicleController._steerInputRaw;  // For spin
-                        float rawY = vehicleController._flipInputRaw;   // For flip
+                        float rawX = vehicleController._steerInputRaw.x;  // For spin
+                        float rawY = vehicleController._flipInputRaw.y;   // For flip
 
                         // Compute the axis with the larger absolute value
                         float maxVal = Mathf.Max(Mathf.Abs(rawX), Mathf.Abs(rawY));
@@ -57,6 +58,7 @@ namespace rowemod.Mods
                     //set lateral hop power
                     vehicleController._lateralInputLeftRaw = Mathf.Clamp(vehicleController._lateralInputLeftRaw, 0, sideHopPower);
                     vehicleController._lateralInputRightRaw = Mathf.Clamp(vehicleController._lateralInputRightRaw, 0, sideHopPower);
+                    */
                     
                 }
             }
@@ -111,14 +113,7 @@ namespace rowemod.Mods
                     Log.Warning("PumpSystem component is not initialized.");
                 }
 
-                if (flightAugment != null)
-                {
-                    flightAugment.enabled = flightAugment;
-                }
-                else
-                {
-                    Log.Warning("FlightAugmentTest component is not initialized.");
-                }
+                
             }
 
             foreach (MotorVehicleSettings vehicleInstance in vehicleSettingsInstances)

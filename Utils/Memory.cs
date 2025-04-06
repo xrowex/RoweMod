@@ -2,8 +2,7 @@
 using Il2CppMashBox.Addons.ContentManagment;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
-using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
-using Il2CppMashBox.Core.Physics.Projectile_Motion;
+
 using static rowemod.Config;
 
 using UnityEngine;
@@ -11,15 +10,15 @@ using Il2CppMashBox.Addons.SlowMotionSystem;
 using Il2CppPlayFab.ProgressionModels;
 using Il2CppMashBox.Addons.ProtoDrone;
 using UnityEngine.Events;
-using Il2CppMashBox.Core.Physics.Vehicle;
-using Il2CppMash_Box;
+using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 using Il2CppMashBox.Character;
 using Il2CppMashBox.Character.Scripts;
-using Il2CppMashBox.Core.Audio;
-using Il2CppMashBox.Core.Camera;
-using Il2CppMashBox.Core.Events;
-using Il2CppMashBox.Core.Physics;
-using Il2CppMashBox.Core.Spawning;
+using Il2CppMashBox.Core.Runtime.Audio;
+using Il2CppMashBox.Core.Runtime.Camera;
+using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
+using Il2CppMashBox.Core.Runtime.Events;
+using Il2CppMashBox.Core.Runtime.Physics;
+using Il2CppMashBox.Core.Runtime.Spawning;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
 using Il2CppMashBox.Development.RandD.Vehicle_Force_Pull;
 using rowemod.Mods;
@@ -70,9 +69,7 @@ namespace rowemod.Utils
         
         public static VehicleController vehicleController;
         public static MotorVehicleSettings[] vehicleSettingsInstances;
-        public static FlightAugmentTest flightAugment;
         public static VehicleBalancePID vehicleBalance;
-        public static FlightPrediction flightPrediction;
         public static BMXCollisionHandler collisionHandler;
         public static TestVehicleChanger vehicleChanger;
         public static CenterOfMassBehaviour rCenterOfMassBehaviour;
@@ -169,12 +166,6 @@ namespace rowemod.Utils
                         Log.Error("VehicleController component not found in BMXChassis.");
                     }
 
-                    flightAugment = rMBCharacter.GetComponentInChildren<FlightAugmentTest>();
-                    if (flightAugment != null)
-                        Log.Msg("FlightAugmentTest component found in BMXChassis.");
-                    else
-                        Log.Error("FlightAugmentTest component not found in BMXChassis.");
-
                     rCenterOfMassBehaviour = rMBCharacter.GetComponentInChildren<CenterOfMassBehaviour>();
                     if (rCenterOfMassBehaviour != null)
                         Log.Msg("rCenterOfMassBehaviour component found in BMXChassis.");
@@ -201,12 +192,6 @@ namespace rowemod.Utils
                         Log.Msg("VehicleBalancePID component found in BMXChassis.");
                     else
                         Log.Error("VehicleBalancePID component not found in BMXChassis.");
-
-                    flightPrediction = rMBCharacter.GetComponentInChildren<FlightPrediction>();
-                    if (flightPrediction != null)
-                        Log.Msg("FlightPrediction component found in BMXChassis.");
-                    else
-                        Log.Error("FlightPrediction component not found in BMXChassis.");
 
                     chassisRb = rMBCharacter.GetComponentInChildren<Rigidbody>();
                     if (chassisRb != null)

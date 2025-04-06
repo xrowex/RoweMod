@@ -7,21 +7,20 @@ using static rowemod.Utils.Memory;
 using static rowemod.Mods.Custom;
 using static rowemod.Mods.TrickMods;
 using static rowemod.GameEventListener;
-using UniverseLib;
 
 using rowemod.Utils;
 using Il2CppMashBox.Addons.ContentManagment;
-using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
+//using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
 using UnityEngine.Animations;
 using rowemod.Mods;
 using Log = rowemod.Utils.Log;
 using System.Collections;
-using Il2CppMashBox.Core.Events;
+using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppModIOBrowser;
 using Il2CppSteamworks;
 using Il2CppSystem.Linq.Expressions;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.3.0" , "rowe", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.3.0" , "rowe & nolew", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -37,13 +36,13 @@ namespace rowemod
         private bool _isProcessingVehicleChange;
         public override void OnLateInitializeMelon()
         {
-            if (!SteamAPI.IsSteamRunning())
+            /*if (!SteamAPI.IsSteamRunning())
             {
                 Log.Msg("Steam is not running. Cannot retrieve Steam ID.");
                 return;
             }
 
-            SteamAPI.Shutdown(); // Ensure SteamAPI resets
+            /*SteamAPI.Shutdown(); // Ensure SteamAPI resets#1#
             if (!SteamAPI.Init())
             {
                 Log.Msg("Failed to initialize Steamworks!");
@@ -51,7 +50,7 @@ namespace rowemod
             }
 
             Log.Msg("Steamworks initialized successfully.");
-            SteamUserManager.LogAndCheckUser();
+            SteamUserManager.LogAndCheckUser();*/
 
             
             previousWindowPosition = windowRect.position;
@@ -64,9 +63,25 @@ namespace rowemod
         
             if (File.Exists(cfgFile))
             {
-                Config.Load();
+                
+                try
+                {
+                    Config.Load();
+                }
+                catch (Exception ex)
+                {
+                    Log.Msg($"Failed to load configuration: {ex.Message}");
+                }
             }
-            Config.Save(); // creates a file if it doesn't exist
+            
+            try
+            {
+                Config.Save(); // creates a file if it doesn't exist
+            }
+            catch (Exception ex)
+            {
+                Log.Msg($"Failed to save configuration: {ex.Message}");
+            }
             
 
 
@@ -91,10 +106,6 @@ namespace rowemod
                 .ToList();
 
             cachedVolumes = UnityEngine.Object.FindObjectsOfType<UnityEngine.Rendering.Volume>().ToList();
-
-            
-
-
 
         }
 
@@ -135,8 +146,7 @@ namespace rowemod
 
             if (isOpen)
             {
-                //show left stick debug
-                //rowemod.Mods.Physics.DrawDebugStick();
+                
                 Vector2 currentWindowPosition = Menu.windowRect.position;
 
                 // Render the main menu

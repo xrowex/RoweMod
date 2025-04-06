@@ -1,11 +1,11 @@
-﻿using Il2CppMashBox.Core.Events;
+﻿using Il2CppMashBox.Core.Runtime.Events;
 using UnityEngine;
 using System;
 using rowemod.Utils;
 using UnityEngine.Events;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppMashBox.Addons.ContentManagment;
-using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
+using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using rowemod.Mods;
 using rowemod.Utils;
 using MelonLoader;
