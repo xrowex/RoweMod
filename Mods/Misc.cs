@@ -1,14 +1,6 @@
-﻿using rowemod.Utils;
-using UnityEngine;
-using UnityEngine.Rendering;
+﻿using UnityEngine;
 using static rowemod.Utils.Memory;
 using static rowemod.Config;
-using System.Collections.Generic;
-using UnityEngine.Rendering.HighDefinition;
-using UnityEngine.Rendering.LookDev;
-using Harmony;
-using Il2CppInterop.Runtime.InteropTypes.Fields;
-using Object = UnityEngine.Object;
 
 namespace rowemod.Mods
 {

@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using static rowemod.Config;
 
 namespace rowemod
 {

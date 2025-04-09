@@ -4,23 +4,13 @@ using MelonLoader;
 using static rowemod.Menu;
 using static rowemod.Config;
 using static rowemod.Utils.Memory;
-using static rowemod.Mods.Custom;
-using static rowemod.Mods.TrickMods;
-using static rowemod.GameEventListener;
-
 using rowemod.Utils;
-using Il2CppMashBox.Addons.ContentManagment;
-//using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
-using UnityEngine.Animations;
 using rowemod.Mods;
 using Log = rowemod.Utils.Log;
 using System.Collections;
-using Il2CppMashBox.Core.Runtime.Events;
-using Il2CppModIOBrowser;
 using Il2CppSteamworks;
-using Il2CppSystem.Linq.Expressions;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.3.0" , "rowe & nolew", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.4.0" , "rowe & nolew", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -36,13 +26,13 @@ namespace rowemod
         private bool _isProcessingVehicleChange;
         public override void OnLateInitializeMelon()
         {
-            /*if (!SteamAPI.IsSteamRunning())
+            if (!SteamAPI.IsSteamRunning())
             {
                 Log.Msg("Steam is not running. Cannot retrieve Steam ID.");
                 return;
             }
 
-            /*SteamAPI.Shutdown(); // Ensure SteamAPI resets#1#
+            /*SteamAPI.Shutdown(); // Ensure SteamAPI resets*/
             if (!SteamAPI.Init())
             {
                 Log.Msg("Failed to initialize Steamworks!");
@@ -50,7 +40,7 @@ namespace rowemod
             }
 
             Log.Msg("Steamworks initialized successfully.");
-            SteamUserManager.LogAndCheckUser();*/
+            SteamUserManager.LogAndCheckUser();
 
             
             previousWindowPosition = windowRect.position;
@@ -150,7 +140,7 @@ namespace rowemod
                 Vector2 currentWindowPosition = Menu.windowRect.position;
 
                 // Render the main menu
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"<b>rowemod v. 1.3.0</b>", Menu.windowStyle);
+                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"<b>rowemod v. 1.4.0</b>", Menu.windowStyle);
 
 
                 // Handle dragging logic

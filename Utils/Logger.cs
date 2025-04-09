@@ -1,6 +1,5 @@
 ﻿using MelonLoader;
 using System.Reflection;
-using System.Drawing;
 
 // CREDIT:
 // This is a slightly modified version of Lineryders Logger class 

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("rowemod")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1c1ed12895afad41c1cee1a7935814c0f9259b37")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4bf42cac49558725160a099a5435d8537d080bd1")]
 [assembly: System.Reflection.AssemblyProductAttribute("rowemod")]
 [assembly: System.Reflection.AssemblyTitleAttribute("rowemod")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

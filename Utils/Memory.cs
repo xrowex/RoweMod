@@ -7,7 +7,6 @@ using static rowemod.Config;
 
 using UnityEngine;
 using Il2CppMashBox.Addons.SlowMotionSystem;
-using Il2CppPlayFab.ProgressionModels;
 using Il2CppMashBox.Addons.ProtoDrone;
 using UnityEngine.Events;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
@@ -22,9 +21,7 @@ using Il2CppMashBox.Core.Runtime.Spawning;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
 using Il2CppMashBox.Development.RandD.Vehicle_Force_Pull;
 using rowemod.Mods;
-using MelonLoader;
 using Camera = UnityEngine.Camera;
-using Il2CppModIOBrowser;
 using Object = UnityEngine.Object;
 
 namespace rowemod.Utils
@@ -673,7 +670,7 @@ namespace rowemod.Utils
 
 
 
-        public static void ToggleBMXFrames()
+        public static void ToggleBmxFrames()
         {
             if (rMBCharacter == null)
             {

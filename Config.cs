@@ -1,11 +1,6 @@
-﻿using System.IO;
-using rowemod.Utils;
-using MelonLoader;
-using MelonLoader.Utils;
+﻿using rowemod.Utils;
 using Newtonsoft.Json;
-using rowemod;
 using UnityEngine;
-using static rowemod.Mods.Custom;
 
 namespace rowemod
 {

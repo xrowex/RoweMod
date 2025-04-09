@@ -1,15 +1,9 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using static rowemod.Menu;
 using static rowemod.Utils.Memory;
 using rowemod.Utils;
 using Il2CppMashBox.Addons.ContentManagment;
 using MelonLoader.Utils;
-using Il2CppSirenix.OdinInspector;
-using rowemod.Mods;
 
 namespace rowemod.Mods
 {
@@ -473,24 +467,6 @@ namespace rowemod.Mods
             }
         }
 
-        /*private static void LoadPreviewsForCategory(string category, string folderPath)
-        {
-            if (categoryPreviews.ContainsKey(category))
-            {
-                return;
-            }
-
-            Dictionary<string, Texture2D> previews = new Dictionary<string, Texture2D>();
-
-            foreach (var materialFile in Directory.GetFiles(folderPath, "*.material"))
-            {
-                string materialName = Path.GetFileNameWithoutExtension(materialFile);
-                Texture2D preview = GetMaterialPreview(materialFile);
-                previews[materialName] = preview;
-            }
-
-            categoryPreviews[category] = previews;
-        }*/
 
         private static void LoadBikeFolders()
         {

@@ -1,14 +1,7 @@
-﻿using Il2CppMashBox.BMX_Physics_Development;
-using rowemod.Utils;
+﻿using rowemod.Utils;
 using UnityEngine;
 using static rowemod.Config;
 using static rowemod.Utils.Memory;
-using HarmonyLib;
-using Il2Cpp;
-using Il2CppMashBox.Character;
-using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
-using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.XInput;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 
 namespace rowemod.Mods

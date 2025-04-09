@@ -1,4 +1,3 @@
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSalvage.ClothingCuller.Configuration;
 using rowemod.Utils;

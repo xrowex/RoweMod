@@ -1,8 +1,5 @@
-using System.Net.Http;
-using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using Il2CppSteamworks;
-using MelonLoader;
 using rowemod.Utils;
 using UnityEngine;
 

@@ -1,18 +1,8 @@
 ﻿using Il2CppMashBox.Core.Runtime.Events;
 using UnityEngine;
-using System;
 using rowemod.Utils;
 using UnityEngine.Events;
-using Il2CppInterop.Runtime.InteropTypes;
-using Il2CppMashBox.Addons.ContentManagment;
-using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using rowemod.Mods;
-using rowemod.Utils;
-using MelonLoader;
-using Il2CppModIOBrowser;
-using rowemod.Mods;
-using UnityEngine.Animations;
-using Camera = UnityEngine.Camera;
 
 namespace rowemod
 {
@@ -97,7 +87,6 @@ namespace rowemod
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMBCharacter = go.transform.parent?.gameObject;
                 Main.playableSceneLoaded = true;
-                Memory.ToggleBMXFrames();
                 Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
                 Memory.SetupCameraSeatRelay();
