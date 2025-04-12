@@ -115,6 +115,7 @@ namespace rowemod
                 
                 case Tab.Bike:
                     PartTweaker.drawPartTweaker();
+                    
                     break;
                 
                 case Tab.Tricks:

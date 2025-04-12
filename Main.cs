@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEngine.Events;
 using MelonLoader;
 using static rowemod.Menu;
 using static rowemod.Config;
@@ -17,11 +16,7 @@ namespace rowemod
 {
     public class Main : MelonMod
     {
-        
-        public static bool modEnabled = true;
         public static bool playableSceneLoaded = false;
-        public static string theSceneName;
-        public static UnityEvent testUnityEvent;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
         public override void OnLateInitializeMelon()
@@ -88,8 +83,7 @@ namespace rowemod
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
-            
-            theSceneName = sceneName;
+
             cachedHDRCameras = UnityEngine.Camera.allCameras
                 .Select(cam => cam.GetComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>())
                 .Where(hdrp => hdrp != null)
@@ -111,7 +105,6 @@ namespace rowemod
             if (playableSceneLoaded && rMBCharacter)
             {
                 HandleMenuToggle();
-                //HandleVehicleChanges();
                 if (isOpen)
                 {
                     Mods.Physics.Update();
@@ -254,20 +247,6 @@ namespace rowemod
                     Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
                     MelonCoroutines.Start(DelayedUpdateCharacter());
-                    //var stem = currentVehicle.transform.FindDeepChild("Stem");
-                    //if (stem != null)
-                    //{
-                    //    stem.gameObject.SetActive(true);
-                    //    stem.localPosition = new Vector3(-0.0009f, 0.0622f, -0.0195f);
-                    //}
-
-                    //var fork = currentVehicle.transform.FindDeepChild("MTB_Fork_Vanilla_Bean_Btm");
-                    //var offset = currentVehicle.transform.FindDeepChild("Offset");
-                    //if (fork != null && offset != null)
-                    //{
-                    //    fork.parent = offset;
-                    //    fork.localPosition = new Vector3(0f, 0.1602f, -0.0297f);
-                    //}
                     break;
 
                 case 3://Proto_Scoot
@@ -290,18 +269,6 @@ namespace rowemod
                     Log.Msg("Starting DelayedApplySavedMaterials(5) coroutine...");
                     MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
 
-                    /*var chain = currentVehicle.transform.FindDeepChild("Chain");
-                    if (chain != null)
-                    {
-                        chain.gameObject.SetActive(true);
-                        var anchor = chain.GetComponent<Anchor>();
-                        var aimConstraint = chain.GetComponent<AimConstraint>();
-
-                        if (anchor != null) anchor.enabled = false;
-                        if (aimConstraint != null) aimConstraint.enabled = false;
-
-                        chain.localEulerAngles = new Vector3(353.9754f, 359.6659f, 0.2001f);
-                    }*/
                     break;
 
                 case 5://Proto_Uni

@@ -91,6 +91,9 @@ namespace rowemod
                 Memory.FindObjects(go);
                 Memory.SetupCameraSeatRelay();
                 PartTweaker.FindParts();
+                Memory.ToggleBmxFrames();
+                
+                // Load saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.customSessionMarker))
                 {
                     GameObject savedMarker = Memory.sessionMarkers.FirstOrDefault(marker => marker.name == Config.customSessionMarker);
@@ -109,19 +112,6 @@ namespace rowemod
                     Log.Msg("No saved session marker found in config.");
                 }  
                 
-                
-                /*var chain = Memory.rMBCharacter.transform.FindDeepChild("Chain");
-                if (chain != null)
-                {
-                    chain.gameObject.SetActive(true);
-                    var anchor = chain.GetComponent<Anchor>();
-                    var aimConstraint = chain.GetComponent<AimConstraint>();
-
-                    if (anchor != null) anchor.enabled = true;
-                    if (aimConstraint != null) aimConstraint.enabled = true;
-
-                    chain.localEulerAngles = new Vector3(353.9754f, 359.6659f, 0.2001f);
-                }*/
 
             }
         }

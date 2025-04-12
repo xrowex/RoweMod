@@ -20,6 +20,7 @@ using Il2CppMashBox.Core.Runtime.Physics;
 using Il2CppMashBox.Core.Runtime.Spawning;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
 using Il2CppMashBox.Development.RandD.Vehicle_Force_Pull;
+using MelonLoader;
 using rowemod.Mods;
 using Camera = UnityEngine.Camera;
 using Object = UnityEngine.Object;
@@ -309,7 +310,7 @@ namespace rowemod.Utils
                 Log.Msg(vehicleChanger != null
                     ? "TestVehicleChanger component found in Vehicle Changer."
                     : "TestVehicleChanger component not found in Vehicle Changer.");
-            }
+            } 
             catch (Exception ex)
             {
                 Log.Error($"Exception while finding vehicle changer: {ex.Message}");
@@ -433,16 +434,7 @@ namespace rowemod.Utils
             }
             
             
-            //auto enable cassette
-            /*try
-            {
-                rMBCharacter.transform.GetComponentInChildren<Cassette>()._isCassette = true;
-            }
-            catch (Exception e)
-            {
-                Log.Error(e);
-                throw;
-            }*/
+            
             
             
             
@@ -456,8 +448,11 @@ namespace rowemod.Utils
             //TransitionScannerDebugger.OnInitializeMelon();
             
             BikeMaterialsLoader.Initialize();
-            //MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-            BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
+            
+            //Delayed bike materials load to bypass shop load
+            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+            
+            //BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
             Custom.LoadPreset(lastLoadedPresetCharacter);
             
             
@@ -614,57 +609,57 @@ namespace rowemod.Utils
         
      
        public static void ReplaceSessionMarkerWithPrefab(GameObject selectedMarker)
-{
-    if (selectedMarker == null)
-    {
-        Log.Warning("Selected marker is null, cannot replace SessionMarker.");
-        return;
-    }
-
-    if (rMBCharacter != null)
-    {
-        Log.Msg("Searching for SessionMarker...");
-        Il2CppSystem.Object sessionMarkerObj = rMBCharacter.transform.FindDeepChild("Session Marker");
-
-        if (sessionMarkerObj != null)
         {
-            Transform sessionMarkerTransform = sessionMarkerObj.TryCast<Transform>(); // Safe casting
-
-            if (sessionMarkerTransform != null)
+            if (selectedMarker == null)
             {
-                Log.Msg("SessionMarker found.");
+                Log.Warning("Selected marker is null, cannot replace SessionMarker.");
+                return;
+            }
 
-                // Destroy existing marker children
-                foreach (Transform child in sessionMarkerTransform.GetComponentsInChildren<Transform>(true))
+            if (rMBCharacter != null)
+            {
+                Log.Msg("Searching for SessionMarker...");
+                Il2CppSystem.Object sessionMarkerObj = rMBCharacter.transform.FindDeepChild("Session Marker");
+
+                if (sessionMarkerObj != null)
                 {
-                    if (child != sessionMarkerTransform) // Prevent destroying the parent
-                        Object.Destroy(child.gameObject);
+                    Transform sessionMarkerTransform = sessionMarkerObj.TryCast<Transform>(); // Safe casting
+
+                    if (sessionMarkerTransform != null)
+                    {
+                        Log.Msg("SessionMarker found.");
+
+                        // Destroy existing marker children
+                        foreach (Transform child in sessionMarkerTransform.GetComponentsInChildren<Transform>(true))
+                        {
+                            if (child != sessionMarkerTransform) // Prevent destroying the parent
+                                Object.Destroy(child.gameObject);
+                        }
+
+                        // Instantiate the new marker
+                        GameObject instantiatedMarker = GameObject.Instantiate(selectedMarker);
+                        instantiatedMarker.transform.SetParent(sessionMarkerTransform, false);
+                        instantiatedMarker.transform.localPosition = new Vector3(-0.5f, 0.0f, 0.0f);
+                        instantiatedMarker.transform.localRotation = selectedMarker.transform.localRotation;
+                        instantiatedMarker.transform.localScale = selectedMarker.transform.localScale;
+
+                        Log.Msg($"Replaced SessionMarker with prefab: {selectedMarker.name}");
+
+                        // Save the selected marker name to config and persist it
+                        Config.customSessionMarker = selectedMarker.name;
+                        Config.Save();
+                    }
+                    else
+                    {
+                        Log.Warning("SessionMarker transform casting failed.");
+                    }
                 }
-
-                // Instantiate the new marker
-                GameObject instantiatedMarker = GameObject.Instantiate(selectedMarker);
-                instantiatedMarker.transform.SetParent(sessionMarkerTransform, false);
-                instantiatedMarker.transform.localPosition = new Vector3(-0.5f, 0.0f, 0.0f);
-                instantiatedMarker.transform.localRotation = selectedMarker.transform.localRotation;
-                instantiatedMarker.transform.localScale = selectedMarker.transform.localScale;
-
-                Log.Msg($"Replaced SessionMarker with prefab: {selectedMarker.name}");
-
-                // Save the selected marker name to config and persist it
-                Config.customSessionMarker = selectedMarker.name;
-                Config.Save();
-            }
-            else
-            {
-                Log.Warning("SessionMarker transform casting failed.");
+                else
+                {
+                    Log.Warning("SessionMarker not found.");
+                }
             }
         }
-        else
-        {
-            Log.Warning("SessionMarker not found.");
-        }
-    }
-}
 
 
 
@@ -683,7 +678,7 @@ namespace rowemod.Utils
                 Log.Msg("Searching for BMX frames...");
         
                 // Locate BMX_Frame_Vanilla_Standard and disable it
-                var bmxFrameVanilla = rMBCharacter.transform.FindDeepChild("BMX_Frame_Vanilla_Standard")?.gameObject;
+                /*var bmxFrameVanilla = rMBCharacter.transform.FindDeepChild("BMX_Frame_Vanilla_Standard")?.gameObject;
                 if (bmxFrameVanilla != null)
                 {
                     bmxFrameVanilla.SetActive(false);
@@ -716,7 +711,7 @@ namespace rowemod.Utils
                 else
                 {
                     Log.Warning("BMX_Frame_NoBrand_Standard_Brakeless not found.");
-                }
+                }*/
                 
 
                 //var spokes = Resources.FindObjectsOfTypeAll<GameObject>().FirstOrDefault(obj => obj.name == "spokes");
