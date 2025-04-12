@@ -66,29 +66,8 @@
 		<Reference Include="Il2CppFusion.Unity">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppFusion.Unity.dll</HintPath>
 		</Reference>
-		<Reference Include="Il2CppMashBox.Addons">
-		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Addons.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppMashBox.Bicycle">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Bicycle.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppMashBox.Core">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppMashBox.Core.Editor">
-		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.Editor.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppMashBox.Core.InverseKinematics">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.InverseKinematics.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppMashBox.Core.Physics">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.Physics.dll</HintPath>
-		</Reference>
 		<Reference Include="Il2CppMashBox.Core.Runtime">
-		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.Runtime.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppMGCore.CommandSystem">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMGCore.CommandSystem.dll</HintPath>
+		  <HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.Runtime.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2CppMGPainter">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMGPainter.dll</HintPath>
@@ -122,9 +101,6 @@
 		</Reference>
 		<Reference Include="Il2CppPlayFab">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppPlayFab.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppReplaySystem">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppReplaySystem.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2CppSalvage.ClothingCuller">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppSalvage.ClothingCuller.dll</HintPath>
@@ -206,36 +182,6 @@
 		</Reference>
 		<Reference Include="Unity.Mathematics">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Mathematics.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.Adapters">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.Adapters.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.Adapters.Ngo1">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.Adapters.Ngo1.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.Common">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.Common.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.MetricEvents">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.MetricEvents.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.MetricTypes">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.MetricTypes.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.NetStats">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.NetStats.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.NetStatsReporting">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.NetStatsReporting.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Multiplayer.Tools.NetworkSolutionInterface">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Multiplayer.Tools.NetworkSolutionInterface.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Netcode.Runtime">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Netcode.Runtime.dll</HintPath>
-		</Reference>
-		<Reference Include="Unity.Networking.Transport">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Networking.Transport.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.Profiling.Core">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Profiling.Core.dll</HintPath>
@@ -501,15 +447,6 @@
 		<Reference Include="Il2CppInterop.Common">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\net6\Il2CppInterop.Common.dll</HintPath>
 		</Reference>
-		<Reference Include="UniverseLib.IL2CPP">
-		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\UserLibs\UniverseLib.IL2CPP.dll</HintPath>
-		</Reference>
-		<Reference Include="UniverseLib.IL2CPP.Interop.ML">
-		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\UserLibs\UniverseLib.IL2CPP.Interop.ML.dll</HintPath>
-		</Reference>
-		<Reference Include="UniverseLib.IL2CPP.Unhollower">
-		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\UserLibs\UniverseLib.IL2CPP.Unhollower.dll</HintPath>
-		</Reference>
 
 	</ItemGroup>
 
@@ -531,6 +468,8 @@
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
+		<Compile Include="Mods\Patches\ActiveRagdollBehaviourPatches.cs" />
+		<Compile Include="Mods\Patches\TestDeathPatches.cs" />
 		<Compile Include="Mods\Physics.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
@@ -544,6 +483,6 @@
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="COPY &quot;$(TargetPath)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods&quot;" />
+		<Exec Command="MOVE &quot;$(TargetPath)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods&quot;&#xD;&#xA;MOVE &quot;$(TargetDir)$(TargetName).pdb&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods&quot;" />
 	</Target>
 </Project>

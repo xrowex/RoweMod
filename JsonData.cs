@@ -77,7 +77,8 @@ namespace rowemod
         public Vector3 camOffset { get; set; }
 
         // Misc
-        public bool bShowInstructions { get; set; }
+        public bool bNeverBail { get; set; }
+        public bool bShowHUD { get; set; }
         public bool bDiscoMode { get; set; }
         public bool bVibration { get; set; }
         public float droneMass { get; set; }

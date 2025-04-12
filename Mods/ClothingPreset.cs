@@ -16,9 +16,6 @@ namespace rowemod.Mods
 
         public static void SavePreset(ClothingPreset preset)
         {
-            if (!Directory.Exists(PresetDirectory))
-                Directory.CreateDirectory(PresetDirectory);
-
             string filePath = Path.Combine(PresetDirectory, $"{preset.name}.json");
             File.WriteAllText(filePath, JsonConvert.SerializeObject(preset, Formatting.Indented));
 

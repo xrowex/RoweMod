@@ -63,7 +63,8 @@ namespace rowemod
         private static readonly float DefaulttpCameraPitch = 15f;
         private static readonly float DefaulttpFovValue = 60f;
 
-        private static readonly bool DefaultBShowInstructions = true;
+        private static readonly bool DefaultBNeverBail = false;
+        private static readonly bool DefaultBShowHUD = true;
         private static readonly bool DefaultBDiscoMode = false;
         private static readonly bool DefaultBVibration = true;
         private static readonly float DefaultDroneMass = 10f;
@@ -138,11 +139,12 @@ namespace rowemod
         public static Vector3 tpCameraOffset = DefaulttpCameraOffset;
         public static float tpCameraPitch = DefaulttpCameraPitch;
         public static float tpFovValue = DefaulttpFovValue;
-        
-        
-        
+
+
+
         // Misc variables
-        public static bool bShowInstructions = DefaultBShowInstructions;
+        public static bool bNeverBail = DefaultBNeverBail;
+        public static bool bShowHUD = DefaultBShowHUD;
         public static bool bDiscoMode = DefaultBDiscoMode;
         public static bool bVibration = DefaultBVibration;
         public static float droneMass = DefaultDroneMass;
@@ -210,7 +212,8 @@ namespace rowemod
                 camLerp,
                 fovValue,
                 camOffset = new { camOffset.x, camOffset.y, camOffset.z },
-                bShowInstructions,
+                bNeverBail,
+                bShowHUD,
                 bDiscoMode,
                 bVibration,
                 droneMass,
@@ -285,7 +288,8 @@ namespace rowemod
             camLerp = jsonData.camLerp;
             fovValue = jsonData.fovValue;
             camOffset = new Vector3(jsonData.camOffset.x, jsonData.camOffset.y, jsonData.camOffset.z);
-            bShowInstructions = jsonData.bShowInstructions;
+            bNeverBail = jsonData.bNeverBail;
+            bShowHUD = jsonData.bShowHUD;
             bDiscoMode = jsonData.bDiscoMode;
             bVibration = jsonData.bVibration;
             droneMass = jsonData.droneMass;
@@ -461,7 +465,8 @@ namespace rowemod
         public static void ResetMiscTab()
         {
             bHideHelmet = DefaultBHideHelmet;
-            bShowInstructions = DefaultBShowInstructions;
+            bNeverBail = DefaultBNeverBail;
+            bShowHUD = DefaultBShowHUD;
             bDiscoMode = DefaultBDiscoMode;
             bVibration = DefaultBVibration;
             droneMass = DefaultDroneMass;

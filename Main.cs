@@ -19,6 +19,53 @@ namespace rowemod
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
+
+        void CreateModDirectories()
+        {
+            // Main mod folder
+            if (!Directory.Exists(modFolder))
+                Directory.CreateDirectory(modFolder);
+
+            // Bundles folder
+            if (!Directory.Exists(bundlesFolderPath))
+                Directory.CreateDirectory(bundlesFolderPath);
+
+            // character root path
+            if (!Directory.Exists(Custom.characterRootPath))
+                Directory.CreateDirectory(Custom.characterRootPath);
+
+            // Bike material folders
+            foreach (var category in BikeMaterialsLoader.categories.Values)
+            {
+                string categoryPath = Path.Combine(BikeMaterialsLoader.bikeRootPath, category.displayName);
+
+                if (!Directory.Exists(categoryPath))
+                    Directory.CreateDirectory(categoryPath);
+            }
+
+            // Clothing slot folders
+            foreach (var slot in Enum.GetValues(typeof(Custom.Slot)))
+            {
+                var slotPath = Path.Combine(Custom.characterRootPath, slot.ToString());
+
+                if (!Directory.Exists(slotPath))
+                    Directory.CreateDirectory(slotPath);
+            }
+
+            // Bike presets directory
+            if (!Directory.Exists(BikeMaterialPreset.PresetDirectory))
+                Directory.CreateDirectory(BikeMaterialPreset.PresetDirectory);
+
+            // Clothing presets directory
+            if (!Directory.Exists(ClothingPreset.PresetDirectory))
+                Directory.CreateDirectory(ClothingPreset.PresetDirectory);
+        }
+
+        public override void OnEarlyInitializeMelon()
+        {
+            CreateModDirectories();
+        }
+
         public override void OnLateInitializeMelon()
         {
             if (!SteamAPI.IsSteamRunning())
@@ -39,12 +86,6 @@ namespace rowemod
 
             
             previousWindowPosition = windowRect.position;
-
-            
-            if (!Directory.Exists(modFolder))
-            {
-                Directory.CreateDirectory(modFolder);
-            }
         
             if (File.Exists(cfgFile))
             {
@@ -129,33 +170,8 @@ namespace rowemod
 
             if (isOpen)
             {
-                
-                Vector2 currentWindowPosition = Menu.windowRect.position;
-
-                // Render the main menu
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"<b>rowemod v. 1.4.0</b>", Menu.windowStyle);
-
-
-                // Handle dragging logic
-                if (Menu.windowRect.position != currentWindowPosition)
-                {
-                    if (!Menu.isDraggingWindow)
-                    {
-                        Menu.isDraggingWindow = true;
-                    }
-                }
-                else
-                {
-                    if (Menu.isDraggingWindow)
-                    {
-                        Menu.isDraggingWindow = false;
-                    }
-                }
-
-                Menu.previousWindowPosition = Menu.windowRect.position;
-
+                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. 1.4.0", Menu.windowStyle);
             }
-
         }
         private void HandleMenuToggle()
         {
@@ -286,8 +302,5 @@ namespace rowemod
                     break;
             }
         }
-
-
-
     }
 }

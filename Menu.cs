@@ -139,9 +139,8 @@ namespace rowemod
                 
                 case Tab.Misc:
                     Mods.Misc.Update();
-                    Toggle("Show HUD", ref bShowInstructions);
-                    if (InstructionCanvas != null)
-                        InstructionCanvas.SetActive(bShowInstructions);
+                    Toggle("Never Bail", ref bNeverBail);
+                    Toggle("Show HUD", ref bShowHUD);
 
                     Toggle("Vibration", ref bVibration);
                     if (hapticFeedBack != null)

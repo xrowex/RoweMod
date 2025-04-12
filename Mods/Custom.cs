@@ -44,7 +44,7 @@ namespace rowemod.Mods
 
         static Transform prefab;
         static GameObject customObject;
-        static string characterRootPath = Path.Combine(
+        public static string characterRootPath = Path.Combine(
             Path.GetDirectoryName(typeof(Custom).Assembly.Location),
             @"rowemod\Character"
         );
@@ -300,17 +300,8 @@ namespace rowemod.Mods
                 inModelsTab = true;
                 lastSelectedSlot = slot;
             }
-            if (!Directory.Exists(characterRootPath))
-            {
-                Directory.CreateDirectory(characterRootPath);
-            }
             
             string slotPath = Path.Combine(characterRootPath, slot.ToString());
-            if (!Directory.Exists(slotPath))
-            {
-                Directory.CreateDirectory(slotPath);
-                Log.Msg($"Directory created: {slotPath}");
-            }
             
             GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();

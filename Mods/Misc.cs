@@ -12,6 +12,9 @@ namespace rowemod.Mods
         {
             try
             {
+                if (mashBucksHUD != null)
+                    mashBucksHUD.useGUILayout = bShowHUD;
+
                 // Update Drone Rigidbody Mass
                 if (droneRb != null)
                 {

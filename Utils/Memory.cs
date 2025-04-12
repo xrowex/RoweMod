@@ -24,6 +24,7 @@ using MelonLoader;
 using rowemod.Mods;
 using Camera = UnityEngine.Camera;
 using Object = UnityEngine.Object;
+using Il2CppMashBox.Development.RandD.IAP;
 
 namespace rowemod.Utils
 {
@@ -43,7 +44,10 @@ namespace rowemod.Utils
 
         public static GameObject physicsDrivenCharacter;
         public static GameObject rPhysicsSkeleton;
-        
+
+        // --- HUD ---
+        public static Test mashBucksHUD;
+
         // --- CAMERA ---
         public static Camera roweCam;
         public static BMXCMCameraTarget camTarget;
@@ -116,7 +120,20 @@ namespace rowemod.Utils
             }
             gameplayCameraBrain = GameObject.FindObjectsOfType<CinemachineBrain>()
     .FirstOrDefault(brain => brain != null && brain.gameObject.name.Contains("Gameplay Camera"));
-            
+
+            // HUD shit
+            var testInstances = Resources.FindObjectsOfTypeAll<Test>();
+            if (testInstances != null && testInstances.Length > 0)
+            {
+                foreach (Test instance in testInstances)
+                {
+                    if (instance.name != "Fart") // lol (should be only 2 instances, the objects name were loookin for is random)
+                    {
+                        mashBucksHUD = instance;
+                    }
+                }
+            }
+
             // Find specific components inside rMBCharacter instead of using GameObject.Find()
             if (rMBCharacter != null)
             {
@@ -527,7 +544,7 @@ namespace rowemod.Utils
         public static List<GameObject> prefabList = new List<GameObject>();
         public static List<GameObject> sessionMarkers = new List<GameObject>();
         public static List<string> prefabNames = new List<string>();
-        public static string modsFolderPath = "Mods\\rowemod\\Bundles";
+        public static string bundlesFolderPath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Mods\\rowemod\\Bundles");
         public static AssetBundle loadedBundle;
         public static List<AssetBundle> loadedBundles = new List<AssetBundle>();
         public static GameObject roweSpokes, roweBars;
@@ -536,17 +553,10 @@ namespace rowemod.Utils
          public static void LoadAllAssetBundles()
         {
             string rootPath = Path.GetDirectoryName(Application.dataPath);
-            string fullModsFolderPath = Path.Combine(rootPath, modsFolderPath);
 
-            Log.Msg($"Looking for AssetBundles in: {fullModsFolderPath}");
+            Log.Msg($"Looking for AssetBundles in: {bundlesFolderPath}");
 
-            if (!Directory.Exists(fullModsFolderPath))
-            {
-                Log.Msg($"Mods folder not found at: {fullModsFolderPath}");
-                return;
-            }
-
-            string[] bundleFiles = Directory.GetFiles(fullModsFolderPath);
+            string[] bundleFiles = Directory.GetFiles(bundlesFolderPath);
             if (bundleFiles.Length == 0)
             {
                 Log.Msg("No files found in the mods folder.");

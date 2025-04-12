@@ -9,7 +9,7 @@ namespace rowemod.Mods
 {
     public class BikeMaterialsLoader
     {
-        private static readonly string bikeRootPath =
+        public static readonly string bikeRootPath =
             Path.Combine(MelonEnvironment.ModsDirectory, @"rowemod\Bike");
 
         private static List<string> bikeFolders = new List<string>();
@@ -470,22 +470,9 @@ namespace rowemod.Mods
 
         private static void LoadBikeFolders()
         {
-            if (!Directory.Exists(bikeRootPath))
-            {
-                Log.Warning($"Bike root path does not exist: {bikeRootPath}");
-                Directory.CreateDirectory(bikeRootPath);
-                Log.Msg($"Created bike root path: {bikeRootPath}");
-            }
-
             foreach (var category in categories.Values)
             {
                 string categoryFolder = Path.Combine(bikeRootPath, category.displayName);
-        
-                if (!Directory.Exists(categoryFolder))
-                {
-                    Directory.CreateDirectory(categoryFolder);
-                    Log.Msg($"Created folder: {categoryFolder}");
-                }
             }
         }
 
