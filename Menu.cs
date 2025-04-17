@@ -93,8 +93,8 @@ namespace rowemod
                 case Tab.Physics:
                     Mods.Physics.Update();
                     GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true)); // Colored separator
-                    Toggle("Spin Assist", ref bSpinAssist);/*
-                    Toggle("Spin/Flip Fix", ref bSpinFlipFix);*/
+                    Toggle("Spin Assist", ref bSpinAssist);
+                    //Toggle("Spin/Flip Fix", ref bSpinFlipFix);
                     //Toggle("Allow Trick Landers", ref allowTrickLanders);
                     //Toggle("Always Allow Fire Tricks", ref alwaysAllowFireTricks);
                     Toggle("Drifting", ref bDriftAbility);
@@ -112,10 +112,10 @@ namespace rowemod
                     Slider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
                     Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
                     break;
-                
+
                 case Tab.Bike:
-                    PartTweaker.drawPartTweaker();
-                    
+                    //PartTweaker.drawPartTweaker();
+                   
                     break;
                 
                 case Tab.Tricks:
@@ -282,7 +282,7 @@ namespace rowemod
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("<b>Physics</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Physics); }
             //if (GUILayout.Button("<b>Tricks</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Tricks); }
-            //if (GUILayout.Button("<b>Bike</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Bike); }
+            if (GUILayout.Button("<b>Bike</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Bike); }
             if (GUILayout.Button("<b>Character</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Character); }
             if (GUILayout.Button("<b>BikeMaterials</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.BikeMaterials); }
             if (GUILayout.Button("<b>Drone</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Drone); }

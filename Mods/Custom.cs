@@ -41,6 +41,9 @@ namespace rowemod.Mods
         // Because your actual slot GameObjects live deeper in the hierarchy,
         // we can define that path here. (Adjust if yours is slightly different.)
         private const string SLOT_PARENT_PATH = "Physics Skeleton/";
+        
+        //Change to just skeleton to try to work with new main menu? jk fuck that
+        //private const string SLOT_PARENT_PATH = "Skeleton/";
 
         static Transform prefab;
         static GameObject customObject;

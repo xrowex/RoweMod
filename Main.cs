@@ -131,7 +131,18 @@ namespace rowemod
                 .ToList();
 
             cachedVolumes = UnityEngine.Object.FindObjectsOfType<UnityEngine.Rendering.Volume>().ToList();
-
+            
+            /*if(sceneName.Contains("TheShop"))
+            {
+                rMBCharacter = GameObject.Find("Custom Character");
+                Memory.physicsDrivenCharacter = rMBCharacter;
+                //Memory.rMBCharacter = go.transform.parent?.gameObject;
+                //Main.playableSceneLoaded = true;
+                Custom.UpdateAllPresets();
+                Memory.FindObjects(rMBCharacter);
+                Memory.SetupCameraSeatRelay();
+                PartTweaker.FindParts();
+            }*/
         }
 
         public override void OnFixedUpdate()
