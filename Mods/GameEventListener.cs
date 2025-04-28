@@ -3,35 +3,36 @@ using UnityEngine;
 using rowemod.Utils;
 using UnityEngine.Events;
 using rowemod.Mods;
+using Physics = UnityEngine.Physics;
 
 namespace rowemod
 {
     public class GameEventListener
     {
-        private GameEvent playerSpawnEvent;
-        private GameEvent playerResetAtMarker;
+        private GameEvent _playerSpawnEvent;
+        private GameEvent _playerResetAtMarker;
         public void Initialize()
         {
             // Find the existing GameEvent instance
-            playerSpawnEvent = null;
-            playerResetAtMarker = null;
+            _playerSpawnEvent = null;
+            _playerResetAtMarker = null;
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
                 Log.Msg(ev.name);
                 if(ev.name.Contains("GameEvent_OnResetAtMarker"))
                 {
-                    playerResetAtMarker = ev;
+                    _playerResetAtMarker = ev;
                 }
                 if (ev.name.Contains("MainPlayerHumanSpawned"))
                 {
-                    playerSpawnEvent = ev;
+                    _playerSpawnEvent = ev;
                     break;
                 }
                 
             }
 
-            if (playerSpawnEvent == null)
+            if (_playerSpawnEvent == null)
             {
                 Log.Error("PlayerSpawnEvent is null!");
                 return;
@@ -43,10 +44,10 @@ namespace rowemod
             
             // IL2CPP-Safe Delegate Registration
             UnityAction action = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerSpawned);
-            playerSpawnEvent.OnRaise.AddListener(action);
+            _playerSpawnEvent.OnRaise.AddListener(action);
             
             
-            if (playerResetAtMarker == null)
+            if (_playerResetAtMarker == null)
             {
                 Log.Error("PlayerResetAtMarker is null!");
                 return;
@@ -56,7 +57,7 @@ namespace rowemod
             
             UnityAction resetAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
-            playerResetAtMarker.OnRaise.AddListener(resetAction);
+            _playerResetAtMarker.OnRaise.AddListener(resetAction);
         }
 
         private void OnPlayerResetAtMarker()
@@ -69,7 +70,7 @@ namespace rowemod
         {
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
 
-            var unityObj = playerSpawnEvent._extraEventDataUnityObject;
+            var unityObj = _playerSpawnEvent._extraEventDataUnityObject;
             if (unityObj == null)
             {
                 Log.Error("Player object is null in event data!");
@@ -85,32 +86,37 @@ namespace rowemod
             {
                 Log.Msg($"Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
-                Memory.rMBCharacter = go.transform.parent?.gameObject;
+                Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
                 Memory.SetupCameraSeatRelay();
                 PartTweaker.FindParts();
-                Memory.ToggleBmxFrames();
+                //Memory.ToggleBmxFrames();
                 
                 // Load saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.customSessionMarker))
                 {
-                    GameObject savedMarker = Memory.sessionMarkers.FirstOrDefault(marker => marker.name == Config.customSessionMarker);
-                    if (savedMarker != null)
+                    if (Memory.sessionMarkers != null)
                     {
-                        Memory.ReplaceSessionMarkerWithPrefab(savedMarker);
-                        Log.Msg($"Loaded saved session marker: {Config.customSessionMarker}");
+                        GameObject savedMarker = Memory.sessionMarkers
+                            .FirstOrDefault(marker => marker != null && marker.name == Config.customSessionMarker);
+
+                        if (savedMarker != null)
+                        {
+                            Memory.ReplaceSessionMarkerWithPrefab(savedMarker);
+                            Log.Msg($"Loaded saved session marker: {Config.customSessionMarker}");
+                        }
+                        else
+                        {
+                            Log.Warning($"Saved session marker '{Config.customSessionMarker}' not found in loaded assets.");
+                        }
                     }
                     else
                     {
-                        Log.Warning($"Saved session marker '{Config.customSessionMarker}' not found in loaded assets.");
+                        Log.Warning("sessionMarkers list is null.");
                     }
                 }
-                else
-                {
-                    Log.Msg("No saved session marker found in config.");
-                }  
                 
 
             }

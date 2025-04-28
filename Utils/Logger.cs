@@ -18,28 +18,28 @@ namespace rowemod.Utils
     /// </remarks>
     public static class Log
     {
-        static string moduleName = Assembly.GetExecutingAssembly().GetName().Name;
+        static string _moduleName = Assembly.GetExecutingAssembly().GetName().Name;
 
         // toggle for console logs
-        static bool bDebug = true;
+        static bool _bDebug = true;
 
-        static MelonLogger.Instance loggerInstance = new MelonLogger.Instance(moduleName);
-        static MelonLogger.Instance warningInstance = new MelonLogger.Instance(moduleName);
-        static MelonLogger.Instance errorInstance = new MelonLogger.Instance(moduleName);
+        static MelonLogger.Instance _loggerInstance = new MelonLogger.Instance(_moduleName);
+        static MelonLogger.Instance _warningInstance = new MelonLogger.Instance(_moduleName);
+        static MelonLogger.Instance _errorInstance = new MelonLogger.Instance(_moduleName);
 
         public static void Msg(object msg)
         {
-            if (bDebug) loggerInstance.Msg(msg);
+            if (_bDebug) _loggerInstance.Msg(msg);
         }
 
         public static void Warning(object msg)
         {
-            if (bDebug) warningInstance.Msg(msg);
+            if (_bDebug) _warningInstance.Msg(msg);
         }
 
         public static void Error(object msg)
         {
-            if (bDebug) errorInstance.Msg(msg);
+            if (_bDebug) _errorInstance.Msg(msg);
         }
 
 

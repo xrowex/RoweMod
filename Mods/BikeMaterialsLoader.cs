@@ -7,20 +7,18 @@ using MelonLoader.Utils;
 
 namespace rowemod.Mods
 {
-    public class BikeMaterialsLoader
+    public static class BikeMaterialsLoader
     {
-        public static readonly string bikeRootPath =
+        public static readonly string BikeRootPath =
             Path.Combine(MelonEnvironment.ModsDirectory, @"rowemod\Bike");
 
-        private static List<string> bikeFolders = new List<string>();
-        private static string selectedFolder = string.Empty;
+        private static List<string> _bikeFolders = new List<string>();
+        private static string _selectedFolder = string.Empty;
 
-        private static string selectedCategory = null;
+        private static string _selectedCategory = null;
 
-        private static Dictionary<string, Dictionary<string, Texture2D>> categoryPreviews = new Dictionary<string, Dictionary<string, Texture2D>>();
-        private static Dictionary<string, Texture2D> materialPreviews = new Dictionary<string, Texture2D>();
-        private static string hoveredMaterial = null;
-        private static Texture2D hoveredPreview = null;
+        private static Dictionary<string, Dictionary<string, Texture2D>> _categoryPreviews = new Dictionary<string, Dictionary<string, Texture2D>>();
+        private static Dictionary<string, Texture2D> _materialPreviews = new Dictionary<string, Texture2D>();
     
         public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
             new Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)>
@@ -65,8 +63,8 @@ namespace rowemod.Mods
                 { "BMX_Tire", ("Tires", new List<EquipSlotVehicle>()) },
             };
 
-        private static string newPresetName = "";
-        private static int selectedPresetIndex = 0;
+        private static string _newPresetName = "";
+        private static int _selectedPresetIndex = 0;
 
         public static void DrawBikeMaterialsTabUI()
         {
@@ -81,8 +79,8 @@ namespace rowemod.Mods
                 {
                     if (GUILayout.Button(category.Value.displayName, Menu.highQualityButtonStyle))
                     {
-                        selectedCategory = category.Key;
-                        selectedFolder = Path.Combine(bikeRootPath, category.Value.displayName);
+                        _selectedCategory = category.Key;
+                        _selectedFolder = Path.Combine(BikeRootPath, category.Value.displayName);
                         //LoadPreviewsForCategory(selectedCategory, selectedFolder);
                     }
                 }
@@ -91,9 +89,9 @@ namespace rowemod.Mods
                 GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
                 GUILayout.Label("Materials:", Menu.labelStyle);
 
-                if (!string.IsNullOrEmpty(selectedFolder) && Directory.Exists(selectedFolder))
+                if (!string.IsNullOrEmpty(_selectedFolder) && Directory.Exists(_selectedFolder))
                 {
-                    foreach (var materialFile in Directory.GetFiles(selectedFolder, "*.material"))
+                    foreach (var materialFile in Directory.GetFiles(_selectedFolder, "*.material"))
                     {
                         string materialName = Path.GetFileNameWithoutExtension(materialFile);
 
@@ -103,9 +101,9 @@ namespace rowemod.Mods
                         if (GUI.Button(buttonRect, materialName, Menu.highQualityButtonStyle))
                         {
                             Material loadedMaterial = LoadMaterialFromFile(materialFile);
-                            if (loadedMaterial != null && selectedCategory != null)
+                            if (loadedMaterial != null && _selectedCategory != null)
                             {
-                                ApplyMaterialToCategory(selectedCategory, loadedMaterial, materialFile);
+                                ApplyMaterialToCategory(_selectedCategory, loadedMaterial, materialFile);
                             }
                             else
                             {
@@ -113,7 +111,7 @@ namespace rowemod.Mods
                             }
                         }
 
-                        if (buttonRect.Contains(Event.current.mousePosition))
+                        /*if (buttonRect.Contains(Event.current.mousePosition))
                         {
                             hoveredMaterial = materialName;
                             hoveredPreview = GetMaterialPreview(materialFile);
@@ -122,7 +120,7 @@ namespace rowemod.Mods
                         {
                             hoveredMaterial = null;
                             hoveredPreview = null;
-                        }
+                        }*/
                         GUILayout.EndHorizontal();
                     }
                 }
@@ -137,15 +135,15 @@ namespace rowemod.Mods
                 GUILayout.Label("Bike Material Presets", Menu.labelStyle);
 
                 // Text field to enter new preset name
-                newPresetName = GUILayout.TextField(newPresetName, 25);
+                _newPresetName = GUILayout.TextField(_newPresetName, 25);
 
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle))
                 {
-                    if (!string.IsNullOrWhiteSpace(newPresetName))
+                    if (!string.IsNullOrWhiteSpace(_newPresetName))
                     {
-                        SaveBikeMaterialPreset(newPresetName);
-                        newPresetName = ""; // Clear input field after saving
+                        SaveBikeMaterialPreset(_newPresetName);
+                        _newPresetName = ""; // Clear input field after saving
                         GUI.FocusControl(null); // Reset focus to the GUI window
                     }
                     
@@ -160,8 +158,8 @@ namespace rowemod.Mods
                     {
                         if (GUILayout.Button(availableBikePresets[i], Menu.highQualityButtonStyle))
                         {
-                            selectedPresetIndex = i;
-                            LoadBikeMaterialPreset(availableBikePresets[selectedPresetIndex]);
+                            _selectedPresetIndex = i;
+                            LoadBikeMaterialPreset(availableBikePresets[_selectedPresetIndex]);
                         }
                     }
                     GUILayout.EndVertical();
@@ -182,16 +180,16 @@ namespace rowemod.Mods
             Log.Msg("Initializing BikeMaterialsLoader...");
 
             categories.Values.ToList().ForEach(c => c.slots.Clear());
-            selectedFolder = string.Empty;
-            selectedCategory = null;
+            _selectedFolder = string.Empty;
+            _selectedCategory = null;
 
             LoadBikeFolders();
 
-            Log.Msg($"rMBCharacter value: {(rMBCharacter != null ? rMBCharacter.name : "NULL")}");
+            Log.Msg($"rMBCharacter value: {(rMbCharacter != null ? rMbCharacter.name : "NULL")}");
 
-            if (rMBCharacter != null)
+            if (rMbCharacter != null)
             {
-                EquipSlotVehicle[] equipSlotVehicles = rMBCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
+                EquipSlotVehicle[] equipSlotVehicles = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
                 //Log.Msg($"Found {equipSlotVehicles.Length} EquipSlotVehicle components.");
                 CategorizeEquipSlots(equipSlotVehicles);
             }
@@ -322,7 +320,7 @@ namespace rowemod.Mods
         }
 
 
-        private static Texture2D GetMaterialPreview(string materialPath)
+        /*private static Texture2D GetMaterialPreview(string materialPath)
         {
             if (materialPreviews.TryGetValue(materialPath, out Texture2D cachedPreview))
             {
@@ -380,16 +378,18 @@ namespace rowemod.Mods
                 Log.Error($"Error generating material preview for '{materialPath}': {ex.Message}");
                 return null;
             }
-        }
+        }*/
 
 
 
         
         public static System.Collections.IEnumerator DelayedApplySavedMaterials()
         {
+            Initialize();
             yield return new WaitForSeconds(5f);
 
             Log.Msg("Applying saved bike materials after delay...");
+            
             ApplySavedMaterialsOnSceneLoad();
         }
         public static void ApplySavedMaterialsOnSceneLoad()
@@ -404,7 +404,7 @@ namespace rowemod.Mods
                 }
 
                 var materialName = category.Value;
-                var materialPath = Path.Combine(bikeRootPath, categories[category.Key].displayName, $"{materialName}.material");
+                var materialPath = Path.Combine(BikeRootPath, categories[category.Key].displayName, $"{materialName}.material");
 
                 if (!File.Exists(materialPath))
                 {
@@ -472,12 +472,12 @@ namespace rowemod.Mods
         {
             foreach (var category in categories.Values)
             {
-                string categoryFolder = Path.Combine(bikeRootPath, category.displayName);
+                string categoryFolder = Path.Combine(BikeRootPath, category.displayName);
             }
         }
 
 
-        private static void ApplyMaterialToCategory(string category, Material material, string materialPath)
+        /*private static void ApplyMaterialToCategory(string category, Material material, string materialPath)
         {
             if (!categories.ContainsKey(category))
             {
@@ -495,7 +495,7 @@ namespace rowemod.Mods
                     continue;
                 }
 
-                Renderer[] renderers = slot._equipItem.GetComponentsInChildren<Renderer>(true);
+                Renderer[] renderers = slot._equipItem.GetComponentsInChildren<MeshRenderer>(true);
                 if (renderers.Length == 0)
                 {
                     Log.Warning($"No renderers found in category '{category}'.");
@@ -519,15 +519,64 @@ namespace rowemod.Mods
             // Update the saved config
             Config.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
             Config.Save();
-        }
+        }*/
+        private static void ApplyMaterialToCategory(string category, Material material, string materialPath)
+        {
+            if (!categories.ContainsKey(category))
+            {
+                Log.Warning($"Category '{category}' does not exist.");
+                return;
+            }
 
+            Log.Msg($"Applying material '{material.name}' to category '{category}'");
+
+            foreach (var slot in categories[category].slots)
+            {
+                if (slot?._itemSlot == null || !slot._itemSlot.HasItemEquip)
+                {
+                    Log.Warning($"Slot '{slot?.name}' has no equipped item yet.");
+                    continue;
+                }
+
+                GameObject equippedObject = slot._itemSlot.EquippedItem;
+                if (equippedObject == null)
+                {
+                    Log.Warning($"Equipped object is null for slot '{slot.name}'.");
+                    continue;
+                }
+
+                Renderer[] renderers = equippedObject.GetComponentsInChildren<MeshRenderer>(true);
+                if (renderers.Length == 0)
+                {
+                    Log.Warning($"No renderers found under equipped object for slot '{slot.name}'.");
+                    continue;
+                }
+
+                foreach (var renderer in renderers)
+                {
+                    Log.Msg($"Applying material '{material.name}' to renderer '{renderer.name}'.");
+
+                    Material[] mats = renderer.materials;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        mats[i] = new Material(material);
+                    }
+                    renderer.materials = mats;
+                    renderer.material = material;
+                }
+            }
+
+            scrollOffset = 0;
+            Config.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
+            Config.Save();
+        }
         public static void SaveBikeMaterialPreset(string presetName)
         {
             BikeMaterialPreset preset = new BikeMaterialPreset { name = presetName };
 
             foreach (var material in Config.bikeMaterials)
             {
-                preset.materials[material.Key] = material.Value;
+                preset.Materials[material.Key] = material.Value;
             }
 
             BikeMaterialPreset.SavePreset(preset);
@@ -538,11 +587,11 @@ namespace rowemod.Mods
             BikeMaterialPreset? preset = BikeMaterialPreset.LoadPreset(presetName);
             if (preset == null) return;
 
-            foreach (var kvp in preset.materials)
+            foreach (var kvp in preset.Materials)
             {
                 if (!categories.ContainsKey(kvp.Key)) continue;
 
-                string materialPath = Path.Combine(bikeRootPath, categories[kvp.Key].displayName, $"{kvp.Value}.material");
+                string materialPath = Path.Combine(BikeRootPath, categories[kvp.Key].displayName, $"{kvp.Value}.material");
                 if (!File.Exists(materialPath))
                 {
                     Log.Error($"Material file '{materialPath}' not found for category '{kvp.Key}'.");

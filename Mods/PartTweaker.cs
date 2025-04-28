@@ -12,7 +12,7 @@ public class PartTweaker
     public static void FindParts()
     {
         
-            seatPostAnchor = Memory.rMBCharacter.transform.FindDeepChild("SeatPost_Anchor").transform;
+            seatPostAnchor = Memory.rMbCharacter.transform.FindDeepChild("SeatPost_Anchor").transform;
             if (seatPostAnchor != null)
             {
                 Log.Msg("SeatPost_Anchor found.");
@@ -22,7 +22,7 @@ public class PartTweaker
                 Log.Error("SeatPost_Anchor not found.");
             }
             
-            barsAnchor = Memory.rMBCharacter.transform.FindDeepChild("Bars_Anchor").transform;
+            barsAnchor = Memory.rMbCharacter.transform.FindDeepChild("Bars_Anchor").transform;
             if (barsAnchor != null)
             {
                 Log.Msg("Bars_Anchor found.");
@@ -34,7 +34,7 @@ public class PartTweaker
         
     }
 
-    public static void drawPartTweaker()
+    public static void DrawPartTweaker()
     {
         GUILayout.Label("Seat Height");
         if (GUILayout.Button("-"))

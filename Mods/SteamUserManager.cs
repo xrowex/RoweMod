@@ -5,11 +5,11 @@ using UnityEngine;
 
 public class SteamUserManager
 {
-    private static readonly string apiKey = "BA65224FF3CE85B812F2724BA11EDC1E";
+    private static readonly string DefaultAPIKey = "BA65224FF3CE85B812F2724BA11EDC1E";
 
-    private static readonly string logUrl =
+    private static readonly string DefaultLOGUrl =
         "https://script.google.com/macros/s/AKfycbww8DrJOGrt9x3_ZkSt0dpGOS0qZUiu2SjqVvrFlloY0aSkanReinBHprUZWl40bK5T/exec";
-    private static readonly string banCheckUrl = "https://script.google.com/macros/s/AKfycbw8M99FPuthJlKee964BZDcO3ssV81XhzWyEYeIWg0KlrEFLk8yCkYM9coBC34SnHXX/exec";
+    private static readonly string DefaultBanCheckUrl = "https://script.google.com/macros/s/AKfycbw8M99FPuthJlKee964BZDcO3ssV81XhzWyEYeIWg0KlrEFLk8yCkYM9coBC34SnHXX/exec";
 
     public static ulong GetSteamID()
     {
@@ -26,7 +26,7 @@ public class SteamUserManager
     {
         using (HttpClient client = new HttpClient())
         {
-            string url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={apiKey}&steamids={steamId}";
+            string url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={DefaultAPIKey}&steamids={steamId}";
             try
             {
                 string response = await client.GetStringAsync(url);
@@ -45,7 +45,7 @@ public class SteamUserManager
     {
         using (HttpClient client = new HttpClient())
         {
-            string url = $"{banCheckUrl}?steamid={steamId}";
+            string url = $"{DefaultBanCheckUrl}?steamid={steamId}";
 
             try
             {
@@ -75,7 +75,7 @@ public class SteamUserManager
     {
         using (HttpClient client = new HttpClient())
         {
-            string url = $"{logUrl}?steamid={steamId}&username={Uri.EscapeDataString(username)}"; // Ensure proper encoding
+            string url = $"{DefaultLOGUrl}?steamid={steamId}&username={Uri.EscapeDataString(username)}"; // Ensure proper encoding
         
             try
             {

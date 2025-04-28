@@ -34,8 +34,8 @@ namespace rowemod.Utils
         public static bool bFoundAllObjects = true;
 
         // References
-        public static GameObject rMBCharacter;
-        public static GameObject InstructionCanvas;
+        public static GameObject rMbCharacter;
+        public static GameObject instructionCanvas;
         public static GameObject hapticFeedBack;
         public static GameObject[] drones;
         public static GameObject helmet;
@@ -110,8 +110,8 @@ namespace rowemod.Utils
 
                 if (physicsDrivenCharacter != null)
                 {
-                    rMBCharacter = player.transform.parent.gameObject;
-                    Log.Msg($"rMBCharacter found: {rMBCharacter.name}");
+                    rMbCharacter = player.transform.parent.gameObject;
+                    Log.Msg($"rMBCharacter found: {rMbCharacter.name}");
                 }
                 else
                 {
@@ -135,40 +135,40 @@ namespace rowemod.Utils
             }
 
             // Find specific components inside rMBCharacter instead of using GameObject.Find()
-            if (rMBCharacter != null)
+            if (rMbCharacter != null)
             {
                 try
                 {
                     Log.Msg("Starting to find components under rMBCharacter...");
-                    CharacterManager characterManager = rMBCharacter.GetComponentInChildren<CharacterManager>();
+                    CharacterManager characterManager = rMbCharacter.GetComponentInChildren<CharacterManager>();
                     physicsPropHandBehaviour = characterManager._physicsPropHandBehaviour;
                     
                     
-                    equipSlots = rMBCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
+                    equipSlots = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
                     if (equipSlots.Length > 0)
                         Log.Msg($"Found {equipSlots.Length} EquipSlotVehicle components.");
                     else
                         Log.Error("No EquipSlotVehicle components found under rMBCharacter.");
 
-                    theCharacter = rMBCharacter.GetComponentInChildren<Character>();
+                    theCharacter = rMbCharacter.GetComponentInChildren<Character>();
                     if (theCharacter != null)
                         Log.Msg($"Found character component: {theCharacter.name}");
                     else
                         Log.Error("Character component not found under rMBCharacter.");
 
-                    customizableEntity = rMBCharacter.GetComponentInChildren<CustomizableEntity>();
+                    customizableEntity = rMbCharacter.GetComponentInChildren<CustomizableEntity>();
                     if (customizableEntity != null)
                         Log.Msg($"Found customizable entity: {customizableEntity.name}");
                     else
                         Log.Error("CustomizableEntity is null!");
 
-                    spinSystem = rMBCharacter.GetComponentInChildren<SpinSystem>();
+                    spinSystem = rMbCharacter.GetComponentInChildren<SpinSystem>();
                     if (spinSystem != null)
                         Log.Msg("SpinSystem component found under rMBCharacter.");
                     else
                         Log.Error("SpinSystem component not found under rMBCharacter.");
 
-                    vehicleController = rMBCharacter.GetComponentInChildren<VehicleController>();
+                    vehicleController = rMbCharacter.GetComponentInChildren<VehicleController>();
                     if (vehicleController != null)
                     {
                         vehicleController._airSpinAssist = bSpinAssist;
@@ -181,7 +181,7 @@ namespace rowemod.Utils
                         Log.Error("VehicleController component not found in BMXChassis.");
                     }
 
-                    rCenterOfMassBehaviour = rMBCharacter.GetComponentInChildren<CenterOfMassBehaviour>();
+                    rCenterOfMassBehaviour = rMbCharacter.GetComponentInChildren<CenterOfMassBehaviour>();
                     if (rCenterOfMassBehaviour != null)
                         Log.Msg("rCenterOfMassBehaviour component found in BMXChassis.");
                     else
@@ -190,43 +190,43 @@ namespace rowemod.Utils
                     
 
 
-                    collisionHandler = rMBCharacter.GetComponentInChildren<BMXCollisionHandler>();
+                    collisionHandler = rMbCharacter.GetComponentInChildren<BMXCollisionHandler>();
                     if (collisionHandler != null)
                         Log.Msg("BMXCollisionHandler component found in BMXChassis.");
                     else
                         Log.Error("BMXCollisionHandler component not found in BMXChassis.");
 
-                    pumpSystem = rMBCharacter.GetComponentInChildren<PumpSystem>();
+                    pumpSystem = rMbCharacter.GetComponentInChildren<PumpSystem>();
                     if (pumpSystem != null)
                         Log.Msg("PumpSystem component found in BMXChassis.");
                     else
                         Log.Error("PumpSystem component not found in BMXChassis.");
 
-                    vehicleBalance = rMBCharacter.GetComponentInChildren<VehicleBalancePID>();
+                    vehicleBalance = rMbCharacter.GetComponentInChildren<VehicleBalancePID>();
                     if (vehicleBalance != null)
                         Log.Msg("VehicleBalancePID component found in BMXChassis.");
                     else
                         Log.Error("VehicleBalancePID component not found in BMXChassis.");
 
-                    chassisRb = rMBCharacter.GetComponentInChildren<Rigidbody>();
+                    chassisRb = rMbCharacter.GetComponentInChildren<Rigidbody>();
                     if (chassisRb != null)
                         Log.Msg("Rigidbody component found in BMXChassis.");
                     else
                         Log.Error("Rigidbody component not found in BMXChassis.");
 
-                    driftAbility = rMBCharacter.GetComponentInChildren<DriftAbility>();
+                    driftAbility = rMbCharacter.GetComponentInChildren<DriftAbility>();
                     if (driftAbility != null)
                         Log.Msg("DriftAbility component found in BMXChassis.");
                     else
                         Log.Error("DriftAbility component not found in BMXChassis.");
 
-                    joints = rMBCharacter.GetComponentsInChildren<Joint>(true);
+                    joints = rMbCharacter.GetComponentsInChildren<Joint>(true);
                     if (joints.Length > 0)
                         Log.Msg($"Found {joints.Length} Joint components in BMXChassis.");
                     else
                         Log.Error("No Joint components found in BMXChassis.");
 
-                    roweTimeInterpolator = rMBCharacter.GetComponentInChildren<TimeInterpolator>();
+                    roweTimeInterpolator = rMbCharacter.GetComponentInChildren<TimeInterpolator>();
                     if (roweTimeInterpolator != null)
                         Log.Msg("TimeInterpolator component found in Time Interpolator.");
                     else
@@ -238,7 +238,7 @@ namespace rowemod.Utils
                     else
                         Log.Error("No MotorVehicleSettings instances found.");
 
-                    theCharacter = rMBCharacter.GetComponentInChildren<Character>();
+                    theCharacter = rMbCharacter.GetComponentInChildren<Character>();
                     if (theCharacter != null)
                         Log.Msg("Character component found in Trick Launcher.");
                     else
@@ -268,7 +268,7 @@ namespace rowemod.Utils
                 Log.Msg("Starting to find all drones...");
     
                 // Get all DroneController components under rMBCharacter
-                var dronesComponents = rMBCharacter.GetComponentsInChildren<DroneController>(true);
+                var dronesComponents = rMbCharacter.GetComponentsInChildren<DroneController>(true);
     
                 if (dronesComponents.Length > 0)
                 {
@@ -323,7 +323,7 @@ namespace rowemod.Utils
             try
             {
                 Log.Msg("Starting to find vehicle changer...");
-                vehicleChanger = rMBCharacter.GetComponentInChildren<TestVehicleChanger>();
+                vehicleChanger = rMbCharacter.GetComponentInChildren<TestVehicleChanger>();
                 Log.Msg(vehicleChanger != null
                     ? "TestVehicleChanger component found in Vehicle Changer."
                     : "TestVehicleChanger component not found in Vehicle Changer.");
@@ -337,7 +337,7 @@ namespace rowemod.Utils
             try
             {
                 Log.Msg("Starting to find helmet...");
-                helmet = rMBCharacter.transform.FindDeepChild("Extreme_Helmet_with_Goggles")?.gameObject;
+                helmet = rMbCharacter.transform.FindDeepChild("Extreme_Helmet_with_Goggles")?.gameObject;
                 Log.Msg(helmet != null
                     ? "Helmet GameObject found under Human Temp."
                     : "Helmet GameObject not found under Human Temp.");
@@ -364,7 +364,7 @@ namespace rowemod.Utils
                 }
                 
                 //virtualCam = GameObject.Find("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
-                virtualCam = rMBCharacter.transform.FindDeepChild("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
+                virtualCam = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
                 if (virtualCam != null)
                 {
                     Log.Msg("virtualCam component found in Sports Vehicle Camera.");
@@ -390,7 +390,7 @@ namespace rowemod.Utils
             }
             
             //Third person camera
-            tpCamera = rMBCharacter.GetComponentInChildren<ThirdPersonCamera>();
+            tpCamera = rMbCharacter.GetComponentInChildren<ThirdPersonCamera>();
             if (tpCamera != null)
             {
                 Log.Msg("ThirdPersonCamera component found in Mash Box Character.");
@@ -464,7 +464,7 @@ namespace rowemod.Utils
             
             //TransitionScannerDebugger.OnInitializeMelon();
             
-            BikeMaterialsLoader.Initialize();
+            
             
             //Delayed bike materials load to bypass shop load
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
@@ -485,11 +485,11 @@ namespace rowemod.Utils
 
         public static void SetupCameraSeatRelay()
         {
-            bmxCameraTarget = rMBCharacter.transform.FindDeepChild("BMX Camera Target")?.gameObject;
-            sportsVehicleCamera = rMBCharacter.transform.FindDeepChild("Sports Vehicle Camera")?.gameObject;
+            bmxCameraTarget = rMbCharacter.transform.FindDeepChild("BMX Camera Target")?.gameObject;
+            sportsVehicleCamera = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera")?.gameObject;
             
                     //setup seat relay
-                    physicsSeatEventRelay = rMBCharacter.GetComponentInChildren<PhysicsSeatEventRelay>();
+                    physicsSeatEventRelay = rMbCharacter.GetComponentInChildren<PhysicsSeatEventRelay>();
                     // Convert your method to an IL2CPP-safe delegate
                     
                     if (physicsSeatEventRelay.OnAttached.GetPersistentEventCount() == 0 && physicsSeatEventRelay.OnDetached.GetPersistentEventCount() == 0)
@@ -626,10 +626,10 @@ namespace rowemod.Utils
                 return;
             }
 
-            if (rMBCharacter != null)
+            if (rMbCharacter != null)
             {
                 Log.Msg("Searching for SessionMarker...");
-                Il2CppSystem.Object sessionMarkerObj = rMBCharacter.transform.FindDeepChild("Session Marker");
+                Il2CppSystem.Object sessionMarkerObj = rMbCharacter.transform.FindDeepChild("Session Marker");
 
                 if (sessionMarkerObj != null)
                 {
@@ -675,7 +675,7 @@ namespace rowemod.Utils
 
 
 
-        public static void ToggleBmxFrames()
+        /*public static void ToggleBmxFrames()
         {
             if (rMBCharacter == null)
             {
@@ -721,7 +721,7 @@ namespace rowemod.Utils
                 else
                 {
                     Log.Warning("BMX_Frame_NoBrand_Standard_Brakeless not found.");
-                }*/
+                }#1#
                 
 
                 //var spokes = Resources.FindObjectsOfTypeAll<GameObject>().FirstOrDefault(obj => obj.name == "spokes");
@@ -799,7 +799,7 @@ namespace rowemod.Utils
                             newFrontBars.SetActive(true);
                             //newFrontBars.transform.localPosition = new Vector3(0, 0, 0);
                             newFrontBars.AddComponent<EquipSlotVehicle>();
-                            newFrontBars.name = "BMX_Bars_NoBrand_4PC";*/
+                            newFrontBars.name = "BMX_Bars_NoBrand_4PC";#1#
                             
                             frontBars.GetComponent<EquipSlotVehicle>().InstantiateItem(roweBars);
                             frontBars.GetComponent<Anchor>().SnapToAnchor();
@@ -830,7 +830,7 @@ namespace rowemod.Utils
             {
                 Log.Error($"Exception while toggling BMX frames: {ex.Message}");
             }
-        }
+        }*/
         
         
         

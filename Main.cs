@@ -9,7 +9,7 @@ using Log = rowemod.Utils.Log;
 using System.Collections;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.4.0" , "rowe & nolew", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.6.0" , "rowe & nolew", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -37,7 +37,7 @@ namespace rowemod
             // Bike material folders
             foreach (var category in BikeMaterialsLoader.categories.Values)
             {
-                string categoryPath = Path.Combine(BikeMaterialsLoader.bikeRootPath, category.displayName);
+                string categoryPath = Path.Combine(BikeMaterialsLoader.BikeRootPath, category.displayName);
 
                 if (!Directory.Exists(categoryPath))
                     Directory.CreateDirectory(categoryPath);
@@ -53,12 +53,12 @@ namespace rowemod
             }
 
             // Bike presets directory
-            if (!Directory.Exists(BikeMaterialPreset.PresetDirectory))
-                Directory.CreateDirectory(BikeMaterialPreset.PresetDirectory);
+            if (!Directory.Exists(BikeMaterialPreset.presetDirectory))
+                Directory.CreateDirectory(BikeMaterialPreset.presetDirectory);
 
             // Clothing presets directory
-            if (!Directory.Exists(ClothingPreset.PresetDirectory))
-                Directory.CreateDirectory(ClothingPreset.PresetDirectory);
+            if (!Directory.Exists(ClothingPreset.presetDirectory))
+                Directory.CreateDirectory(ClothingPreset.presetDirectory);
         }
 
         public override void OnEarlyInitializeMelon()
@@ -147,14 +147,14 @@ namespace rowemod
 
         public override void OnFixedUpdate()
         {
-            if (playableSceneLoaded && rMBCharacter)
+            if (playableSceneLoaded && rMbCharacter)
             {
                 Mods.Physics.FixedUpdate();
             }
         }
         public override void OnUpdate()
         {
-            if (playableSceneLoaded && rMBCharacter)
+            if (playableSceneLoaded && rMbCharacter)
             {
                 HandleMenuToggle();
                 if (isOpen)
@@ -181,7 +181,7 @@ namespace rowemod
 
             if (isOpen)
             {
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. 1.4.0", Menu.windowStyle);
+                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. 1.6.0", Menu.windowStyle);
             }
         }
         private void HandleMenuToggle()

@@ -21,11 +21,11 @@ namespace rowemod.Mods
                                   trickSet5InputAction, trickSet6InputAction;
 
         // We'll store the extracted trick names in a dictionary: TrickSetData.name -> List of strings
-        public static Dictionary<string, List<string>> TrickDictionary { get; private set; }
+        public static Dictionary<string, List<string>> trickDictionary { get; private set; }
             = new Dictionary<string, List<string>>();
 
         // For easy display in the GUI, create a pre-built list of "menu entries"
-        public static List<TrickMenuEntry> TrickMenuDisplayItems { get; private set; }
+        public static List<TrickMenuEntry> trickMenuDisplayItems { get; private set; }
             = new List<TrickMenuEntry>();
 
         #endregion
@@ -42,7 +42,7 @@ namespace rowemod.Mods
         #endregion
 
         // Example direction labels
-        private static readonly string[] DirectionLabels =
+        private static readonly string[] DefaultDirectionLabels =
         {
             "Up", "UpRight", "Right", "DownRight",
             "Down", "DownLeft", "Left", "UpLeft"
@@ -59,8 +59,8 @@ namespace rowemod.Mods
             rTrickSystemBrain = GameObject.FindObjectOfType<TrickSystemBrain>();
 
             // Clear out old data
-            TrickDictionary.Clear();
-            TrickMenuDisplayItems.Clear();
+            trickDictionary.Clear();
+            trickMenuDisplayItems.Clear();
 
             if (rTrickSetData != null && rTrickSetData.Length > 0)
             {
@@ -84,7 +84,7 @@ namespace rowemod.Mods
                     if (trickSetData._dataList == null)
                     {
                         Log.Msg($"  _dataList is null in {trickSetData.name}. Skipping...");
-                        TrickDictionary[trickSetData.name] = trickNames;
+                        trickDictionary[trickSetData.name] = trickNames;
                         continue;
                     }
 
@@ -121,7 +121,7 @@ namespace rowemod.Mods
                     }
 
                     // Store the list of names in the dictionary
-                    TrickDictionary[trickSetData.name] = trickNames;
+                    trickDictionary[trickSetData.name] = trickNames;
                 }
             }
             else
@@ -160,14 +160,14 @@ namespace rowemod.Mods
             GUILayout.Label("=== Trick Menu ===");
 
             // If we have nothing built, bail out
-            if (TrickMenuDisplayItems == null || TrickMenuDisplayItems.Count == 0)
+            if (trickMenuDisplayItems == null || trickMenuDisplayItems.Count == 0)
             {
                 GUILayout.Label("No Trick Menu Items found...");
                 return;
             }
 
             // Simply iterate over the pre-built menu items and draw
-            foreach (var entry in TrickMenuDisplayItems)
+            foreach (var entry in trickMenuDisplayItems)
             {
                 GUILayout.Label($"Trick Set: {entry.TrickSetDisplayName}");
                 foreach (var directionString in entry.TrickDirections)
@@ -184,7 +184,7 @@ namespace rowemod.Mods
         private static void BuildTrickMenuDisplay()
         {
             // Re-build our TrickMenuDisplayItems based on the dictionary we populated
-            TrickMenuDisplayItems.Clear();
+            trickMenuDisplayItems.Clear();
 
             // If rTrickSetData is empty, just return
             if (rTrickSetData == null || rTrickSetData.Length == 0) return;
@@ -197,12 +197,12 @@ namespace rowemod.Mods
                 string displaySetName = trickSetData.name.Replace("_TrickSetData_BMX", "");
 
                 var directions = new List<string>();
-                if (TrickDictionary.TryGetValue(trickSetData.name, out var trickNames))
+                if (trickDictionary.TryGetValue(trickSetData.name, out var trickNames))
                 {
                     for (int i = 0; i < trickNames.Count; i++)
                     {
-                        string direction = (i < DirectionLabels.Length)
-                            ? DirectionLabels[i]
+                        string direction = (i < DefaultDirectionLabels.Length)
+                            ? DefaultDirectionLabels[i]
                             : $"Index {i}";
 
                         // Clean up the trickName
@@ -225,7 +225,7 @@ namespace rowemod.Mods
                     TrickSetDisplayName = displaySetName,
                     TrickDirections = directions
                 };
-                TrickMenuDisplayItems.Add(entry);
+                trickMenuDisplayItems.Add(entry);
             }
         }
 

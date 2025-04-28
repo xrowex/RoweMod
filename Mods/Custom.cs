@@ -24,7 +24,7 @@ namespace rowemod.Mods
 
         // Map your enum to the ACTUAL child names that appear in the screenshot:
         // "HeadGear", "EquipSlot_Body", "EquipSlot_Shirt", "EquipSlot_Pants", etc.
-        public static readonly Dictionary<Slot, string> slotNameMap = new Dictionary<Slot, string>()
+        public static readonly Dictionary<Slot, string> SlotNameMap = new Dictionary<Slot, string>()
         {
             { Slot.Hat,      "Hat_EquipSlot"    },
             { Slot.Hair,     "Hair_EquipSlot"   },
@@ -40,25 +40,25 @@ namespace rowemod.Mods
 
         // Because your actual slot GameObjects live deeper in the hierarchy,
         // we can define that path here. (Adjust if yours is slightly different.)
-        private const string SLOT_PARENT_PATH = "Physics Skeleton/";
+        private const string SlotParentPath = "Physics Skeleton/";
         
         //Change to just skeleton to try to work with new main menu? jk fuck that
         //private const string SLOT_PARENT_PATH = "Skeleton/";
 
-        static Transform prefab;
-        static GameObject customObject;
+        static Transform _prefab;
+        static GameObject _customObject;
         public static string characterRootPath = Path.Combine(
             Path.GetDirectoryName(typeof(Custom).Assembly.Location),
             @"rowemod\Character"
         );
-        private static Dictionary<Slot, bool> slotVisibility = new Dictionary<Slot, bool>();
+        private static Dictionary<Slot, bool> _slotVisibility = new Dictionary<Slot, bool>();
 
         public static bool inModelsTab = true;
-        static Dictionary<Slot, string> selectedModelDirectories = new Dictionary<Slot, string>();
-        static Slot? lastSelectedSlot = null;
+        static Dictionary<Slot, string> _selectedModelDirectories = new Dictionary<Slot, string>();
+        static Slot? _lastSelectedSlot = null;
 
-        private static string newPresetName = "";
-        private static int selectedPresetIndex = 0;
+        private static string _newPresetName = "";
+        private static int _selectedPresetIndex = 0;
         
         /*public static void DrawCharacterTab()
         {
@@ -162,16 +162,16 @@ namespace rowemod.Mods
                     GUILayout.BeginHorizontal(); 
 
                     // Initialize toggle state if not set
-                    if (!slotVisibility.ContainsKey(slot))
+                    if (!_slotVisibility.ContainsKey(slot))
                     {
-                        slotVisibility[slot] = true; // Default to visible
+                        _slotVisibility[slot] = true; // Default to visible
                     }
 
                     // Toggle button (placed to the left of the slot button)
-                    bool newState = GUILayout.Toggle(slotVisibility[slot], "", GUILayout.Width(20));
-                    if (newState != slotVisibility[slot])
+                    bool newState = GUILayout.Toggle(_slotVisibility[slot], "", GUILayout.Width(20));
+                    if (newState != _slotVisibility[slot])
                     {
-                        slotVisibility[slot] = newState;
+                        _slotVisibility[slot] = newState;
                         ToggleSlotVisibility(slot, newState);
                     }
 
@@ -191,15 +191,15 @@ namespace rowemod.Mods
                 GUILayout.Label("Presets", Menu.labelStyle);
 
                 // Text field to enter new preset name
-                newPresetName = GUILayout.TextField(newPresetName, 25);
+                _newPresetName = GUILayout.TextField(_newPresetName, 25);
 
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle))
                 {
-                    if (!string.IsNullOrWhiteSpace(newPresetName))
+                    if (!string.IsNullOrWhiteSpace(_newPresetName))
                     {
-                        SaveCurrentPreset(newPresetName);
-                        newPresetName = ""; // Clear input field after saving
+                        SaveCurrentPreset(_newPresetName);
+                        _newPresetName = ""; // Clear input field after saving
                     }
                 }
 
@@ -207,28 +207,28 @@ namespace rowemod.Mods
 
                 ClothingPreset defaultPreset = ClothingPreset.LoadPreset("DefaultPreset");
                 if (defaultPreset == null || 
-                    defaultPreset.modelPaths == null || 
-                    defaultPreset.materialPaths == null || 
-                    defaultPreset.modelPaths.Count > 0 || 
-                    defaultPreset.materialPaths.Count > 0)
+                    defaultPreset.ModelPaths == null || 
+                    defaultPreset.MaterialPaths == null || 
+                    defaultPreset.ModelPaths.Count > 0 || 
+                    defaultPreset.MaterialPaths.Count > 0)
                 {
                     defaultPreset = new ClothingPreset 
                     { 
-                        name = "DefaultPreset", 
-                        modelPaths = new Dictionary<Slot, string>(), 
-                        materialPaths = new Dictionary<Slot, string>() 
+                        Name = "DefaultPreset", 
+                        ModelPaths = new Dictionary<Slot, string>(), 
+                        MaterialPaths = new Dictionary<Slot, string>() 
                     };
                     ClothingPreset.SavePreset(defaultPreset);
                 }
-                availablePresets.Add(defaultPreset.name);
+                availablePresets.Add(defaultPreset.Name);
 
                 if (availablePresets.Count > 0)
                 {
-                    selectedPresetIndex = Mathf.Clamp(selectedPresetIndex, 0, availablePresets.Count - 1);
+                    _selectedPresetIndex = Mathf.Clamp(_selectedPresetIndex, 0, availablePresets.Count - 1);
 
                     if (availablePresets.Count == 1)
                     {
-                        selectedPresetIndex = 0;
+                        _selectedPresetIndex = 0;
                         LoadPreset(availablePresets[0]);
                     }
 
@@ -239,8 +239,8 @@ namespace rowemod.Mods
                         {
                             if (GUILayout.Button(availablePresets[i], Menu.highQualityButtonStyle))
                             {
-                                selectedPresetIndex = i;
-                                LoadPreset(availablePresets[selectedPresetIndex]);
+                                _selectedPresetIndex = i;
+                                LoadPreset(availablePresets[_selectedPresetIndex]);
                             }
                         }
                         GUILayout.EndVertical();
@@ -254,32 +254,32 @@ namespace rowemod.Mods
             }
         }
 
-        private static Dictionary<Slot, GameObject> slotObjects = new Dictionary<Slot, GameObject>();
+        private static Dictionary<Slot, GameObject> _slotObjects = new Dictionary<Slot, GameObject>();
 
         private static void ToggleSlotVisibility(Slot slot, bool isVisible)
         {
             // Ensure the slot exists in the dictionary
-            if (!slotNameMap.TryGetValue(slot, out string equipSlotName))
+            if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
             {
                 Debug.LogError($"ToggleSlotVisibility: No mapped name found for slot '{slot}'.");
                 return;
             }
 
             // Construct the correct full path
-            string fullPath = SLOT_PARENT_PATH + equipSlotName;
+            string fullPath = SlotParentPath + equipSlotName;
             if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
             {
-                fullPath = SLOT_PARENT_PATH + "HeadGear/" + equipSlotName;
+                fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
             }
 
             // Check if we already stored this GameObject
-            if (!slotObjects.TryGetValue(slot, out GameObject slotObject) || slotObject == null)
+            if (!_slotObjects.TryGetValue(slot, out GameObject slotObject) || slotObject == null)
             {
                 // Find and store the GameObject only once
                 slotObject = GameObject.Find(fullPath);
                 if (slotObject != null)
                 {
-                    slotObjects[slot] = slotObject;
+                    _slotObjects[slot] = slotObject;
                 }
                 else
                 {
@@ -298,10 +298,10 @@ namespace rowemod.Mods
         
         public static void ListCharacterBundles(Slot slot)
         {
-            if (lastSelectedSlot != slot)
+            if (_lastSelectedSlot != slot)
             {
                 inModelsTab = true;
-                lastSelectedSlot = slot;
+                _lastSelectedSlot = slot;
             }
             
             string slotPath = Path.Combine(characterRootPath, slot.ToString());
@@ -327,7 +327,7 @@ namespace rowemod.Mods
             else
             {
                 // If we have a selected model directory, show any *.material files in it
-                if (selectedModelDirectories.TryGetValue(slot, out string modelDirectory)
+                if (_selectedModelDirectories.TryGetValue(slot, out string modelDirectory)
                     && Directory.Exists(modelDirectory))
                 {
                     string[] materialFiles = Directory.GetFiles(modelDirectory, "*.material", SearchOption.AllDirectories);
@@ -368,7 +368,7 @@ namespace rowemod.Mods
             string directory = Path.GetDirectoryName(newBundlePath);
             if (!string.IsNullOrEmpty(directory))
             {
-                selectedModelDirectories[slot] = directory;
+                _selectedModelDirectories[slot] = directory;
             }
 
             // Load the new asset bundle
@@ -380,15 +380,15 @@ namespace rowemod.Mods
             }
 
             // Clean up old references
-            if (customObject != null)
+            if (_customObject != null)
             {
-                GameObject.Destroy(customObject);
-                customObject = null;
+                GameObject.Destroy(_customObject);
+                _customObject = null;
             }
-            if (prefab != null)
+            if (_prefab != null)
             {
-                GameObject.Destroy(prefab.gameObject);
-                prefab = null;
+                GameObject.Destroy(_prefab.gameObject);
+                _prefab = null;
             }
 
             // Load the prefab (assuming the first asset is the prefab you want)
@@ -400,8 +400,8 @@ namespace rowemod.Mods
                 return;
             }
 
-            prefab = newBundle.LoadAsset<GameObject>(assetNames[0])?.transform;
-            if (prefab == null)
+            _prefab = newBundle.LoadAsset<GameObject>(assetNames[0])?.transform;
+            if (_prefab == null)
             {
                 Log.Error("ReplaceModel: Failed to load prefab from asset bundle.");
                 newBundle.Unload(false);
@@ -436,7 +436,7 @@ namespace rowemod.Mods
             }
 
             // **Use the dictionary** to find which child name we should look for.
-            if (!slotNameMap.TryGetValue(slot, out string equipSlotName))
+            if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
             {
                 Log.Error($"ReplaceModel: No known mapping for slot '{slot}'.");
                 newBundle.Unload(false);
@@ -444,10 +444,10 @@ namespace rowemod.Mods
             }
 
             // Find the actual slot transform. Notice the full path includes "Physics Skeleton/Character_Reference/"
-            string fullPath = SLOT_PARENT_PATH + equipSlotName;
+            string fullPath = SlotParentPath + equipSlotName;
             if (equipSlotName == "Hat_EquipSlot"  || equipSlotName == "Hair_EquipSlot" || equipSlotName == "Eyes_EquipSlot")
             {
-                fullPath = SLOT_PARENT_PATH + "HeadGear/" + equipSlotName;
+                fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
             }
             Transform slotTransform = charRoot.Find(fullPath);
             if (slotTransform == null)
@@ -459,11 +459,11 @@ namespace rowemod.Mods
 
             // In your bundle’s prefab, also look for the child named the same as the slot, if needed
             // (If your prefab root actually *is* the model, you might not need this step.)
-            var prefabSlotChild = prefab.Find(equipSlotName);
+            var prefabSlotChild = _prefab.Find(equipSlotName);
             if (prefabSlotChild == null)
             {
                 // If your model is just the prefab itself, use prefab.gameObject
-                customObject = prefab.gameObject;
+                _customObject = _prefab.gameObject;
                 /*if (slot == Slot.Hair)
                 {
                     customObject.AddComponent<ComplexCharacterPartBehaviour>();
@@ -471,9 +471,9 @@ namespace rowemod.Mods
             }
             else
             {
-                customObject = prefabSlotChild.gameObject;
+                _customObject = prefabSlotChild.gameObject;
             }
-            if (customObject == null)
+            if (_customObject == null)
             {
                 Log.Error($"ReplaceModel: Could not find child '{equipSlotName}' in the loaded prefab.");
                 newBundle.Unload(false);
@@ -481,7 +481,7 @@ namespace rowemod.Mods
             }
 
             // If it has Cloth, enable cloth
-            if (customObject.GetComponent<Cloth>() != null)
+            if (_customObject.GetComponent<Cloth>() != null)
             {
                 Log.Msg("customObject has a Cloth Component! Enabling!");
                 Cloth clothComp = slotTransform.GetComponent<Cloth>();
@@ -492,7 +492,7 @@ namespace rowemod.Mods
             var equipSlot = slotTransform.GetComponent<EquipSlot>();
             if (equipSlot != null)
             {
-                equipSlot.Equip(customObject);
+                equipSlot.Equip(_customObject);
                 Log.Msg($"ReplaceModel: Successfully equipped {slot} model.");
             }
             else
@@ -521,17 +521,17 @@ namespace rowemod.Mods
             }
 
             // Use the dictionary to figure out which GameObject to get
-            if (!slotNameMap.TryGetValue(slot, out string equipSlotName))
+            if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
             {
                 Log.Error($"ReplaceMaterial: No known mapping for slot '{slot}'.");
                 return;
             }
             
             
-            string fullPath = SLOT_PARENT_PATH + equipSlotName;
+            string fullPath = SlotParentPath + equipSlotName;
             if (equipSlotName == "Hat_EquipSlot"  || equipSlotName == "Hair_EquipSlot" || equipSlotName == "Eyes_EquipSlot")
             {
-                fullPath = SLOT_PARENT_PATH + "HeadGear/" + equipSlotName;
+                fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
             }
             Transform slotTransform = charRoot.Find(fullPath);
             
@@ -572,8 +572,11 @@ namespace rowemod.Mods
             }
 
             Material newMaterial = newBundle.LoadAsset<Material>(assetNames[0]);
-            var skinnedRenderer = slotTransform.GetComponent<SkinnedMeshRenderer>();
-            var renderer = (Renderer)skinnedRenderer ?? slotTransform.GetComponent<MeshRenderer>();
+            //var renderer = slotTransform.GetComponent<SkinnedMeshRenderer>() ?? (Renderer)slotTransform.GetComponent<MeshRenderer>();
+            //wtf mash
+            Renderer renderer = slotTransform.GetComponentInChildren<SkinnedMeshRenderer>();
+            if (renderer == null)
+                renderer = slotTransform.GetComponentInChildren<MeshRenderer>();
 
             if (renderer != null && newMaterial != null)
             {
@@ -591,33 +594,33 @@ namespace rowemod.Mods
        
         public static void SaveCurrentPreset(string presetName)
         {
-            ClothingPreset preset = new ClothingPreset { name = presetName };
+            ClothingPreset preset = new ClothingPreset { Name = presetName };
 
             // Model paths -> relative
-            preset.modelPaths[Slot.Body] = Config.MakeRelativePath(Config.bodyModelPath);
-            preset.modelPaths[Slot.Top] = Config.MakeRelativePath(Config.topModelPath);
-            preset.modelPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.bottomsModelPath);
-            preset.modelPaths[Slot.Gloves] = Config.MakeRelativePath(Config.glovesModelPath);
-            preset.modelPaths[Slot.Socks] = Config.MakeRelativePath(Config.socksModelPath);
-            preset.modelPaths[Slot.Shoes] = Config.MakeRelativePath(Config.shoesModelPath);
-            preset.modelPaths[Slot.Bust] = Config.MakeRelativePath(Config.bustModelPath);
-            preset.modelPaths[Slot.Hat] = Config.MakeRelativePath(Config.hatModelPath);
-            preset.modelPaths[Slot.Hair] = Config.MakeRelativePath(Config.hairModelPath);
-            preset.modelPaths[Slot.Eyes] = Config.MakeRelativePath(Config.eyesModelPath);
+            preset.ModelPaths[Slot.Body] = Config.MakeRelativePath(Config.bodyModelPath);
+            preset.ModelPaths[Slot.Top] = Config.MakeRelativePath(Config.topModelPath);
+            preset.ModelPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.bottomsModelPath);
+            preset.ModelPaths[Slot.Gloves] = Config.MakeRelativePath(Config.glovesModelPath);
+            preset.ModelPaths[Slot.Socks] = Config.MakeRelativePath(Config.socksModelPath);
+            preset.ModelPaths[Slot.Shoes] = Config.MakeRelativePath(Config.shoesModelPath);
+            preset.ModelPaths[Slot.Bust] = Config.MakeRelativePath(Config.bustModelPath);
+            preset.ModelPaths[Slot.Hat] = Config.MakeRelativePath(Config.hatModelPath);
+            preset.ModelPaths[Slot.Hair] = Config.MakeRelativePath(Config.hairModelPath);
+            preset.ModelPaths[Slot.Eyes] = Config.MakeRelativePath(Config.eyesModelPath);
 
             
 
             // Material paths -> relative
-            preset.materialPaths[Slot.Body] = Config.MakeRelativePath(Config.bodyMaterialPath);
-            preset.materialPaths[Slot.Top] = Config.MakeRelativePath(Config.topMaterialPath);
-            preset.materialPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.bottomsMaterialPath);
-            preset.materialPaths[Slot.Gloves] = Config.MakeRelativePath(Config.glovesMaterialPath);
-            preset.materialPaths[Slot.Socks] = Config.MakeRelativePath(Config.socksMaterialPath);
-            preset.materialPaths[Slot.Shoes] = Config.MakeRelativePath(Config.shoesMaterialPath);
-            preset.materialPaths[Slot.Bust] = Config.MakeRelativePath(Config.bustMaterialPath);
-            preset.materialPaths[Slot.Hat] = Config.MakeRelativePath(Config.hatMaterialPath);
-            preset.materialPaths[Slot.Hair] = Config.MakeRelativePath(Config.hairMaterialPath);
-            preset.materialPaths[Slot.Eyes] = Config.MakeRelativePath(Config.eyesMaterialPath);
+            preset.MaterialPaths[Slot.Body] = Config.MakeRelativePath(Config.bodyMaterialPath);
+            preset.MaterialPaths[Slot.Top] = Config.MakeRelativePath(Config.topMaterialPath);
+            preset.MaterialPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.bottomsMaterialPath);
+            preset.MaterialPaths[Slot.Gloves] = Config.MakeRelativePath(Config.glovesMaterialPath);
+            preset.MaterialPaths[Slot.Socks] = Config.MakeRelativePath(Config.socksMaterialPath);
+            preset.MaterialPaths[Slot.Shoes] = Config.MakeRelativePath(Config.shoesMaterialPath);
+            preset.MaterialPaths[Slot.Bust] = Config.MakeRelativePath(Config.bustMaterialPath);
+            preset.MaterialPaths[Slot.Hat] = Config.MakeRelativePath(Config.hatMaterialPath);
+            preset.MaterialPaths[Slot.Hair] = Config.MakeRelativePath(Config.hairMaterialPath);
+            preset.MaterialPaths[Slot.Eyes] = Config.MakeRelativePath(Config.eyesMaterialPath);
             
             ClothingPreset.SavePreset(preset);
         }
@@ -627,7 +630,7 @@ namespace rowemod.Mods
             ClothingPreset preset = ClothingPreset.LoadPreset(presetName);
             if (preset == null) return;
 
-            foreach (var kvp in preset.modelPaths)
+            foreach (var kvp in preset.ModelPaths)
             {
                 if (!string.IsNullOrEmpty(kvp.Value))
                 {
@@ -635,7 +638,7 @@ namespace rowemod.Mods
                 }
             }
 
-            foreach (var kvp in preset.materialPaths)
+            foreach (var kvp in preset.MaterialPaths)
             {
                 if (!string.IsNullOrEmpty(kvp.Value))
                 {
@@ -679,9 +682,9 @@ namespace rowemod.Mods
                 // Ensure missing slots exist in modelPaths
                 foreach (var slot in defaultModelPaths.Keys)
                 {
-                    if (!preset.modelPaths.ContainsKey(slot))
+                    if (!preset.ModelPaths.ContainsKey(slot))
                     {
-                        preset.modelPaths[slot] = defaultModelPaths[slot];
+                        preset.ModelPaths[slot] = defaultModelPaths[slot];
                         updated = true;
                     }
                 }
@@ -689,9 +692,9 @@ namespace rowemod.Mods
                 // Ensure missing slots exist in materialPaths
                 foreach (var slot in defaultMaterialPaths.Keys)
                 {
-                    if (!preset.materialPaths.ContainsKey(slot))
+                    if (!preset.MaterialPaths.ContainsKey(slot))
                     {
-                        preset.materialPaths[slot] = defaultMaterialPaths[slot];
+                        preset.MaterialPaths[slot] = defaultMaterialPaths[slot];
                         updated = true;
                     }
                 }
@@ -699,7 +702,7 @@ namespace rowemod.Mods
                 if (updated)
                 {
                     ClothingPreset.SavePreset(preset);
-                    Log.Msg($"Preset '{preset.name}' updated with missing slots.");
+                    Log.Msg($"Preset '{preset.Name}' updated with missing slots.");
                 }
             }
         }

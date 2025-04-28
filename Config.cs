@@ -31,37 +31,37 @@ namespace rowemod
         private static readonly float DefaultSideHopPower = 1.0f;
 
         private static readonly bool DefaultBHideHelmet = true;
-        private static string? DefaultBodyModelPath = null;
-        private static string? DefaultBodyMaterialPath = null;
-        private static string? DefaultTopModelPath = null;
-        private static string? DefaultTopMaterialPath = null;
-        private static string? DefaultGlovesModelPath = null;
-        private static string? DefaultGlovesMaterialPath = null;
-        private static string? DefaultBottomsModelPath = null;
-        private static string? DefaultBottomsMaterialPath = null;
-        private static string? DefaultSocksModelPath = null;
-        private static string? DefaultSocksMaterialPath = null;
-        private static string? DefaultShoesModelPath = null;
-        private static string? DefaultShoesMaterialPath = null;
-        private static string? DefaultBustModelPath = null;
-        private static string? DefaultBustMaterialPath = null;
-        private static string? DefaultHatModelPath = null;
-        private static string? DefaultHatMaterialPath = null;
-        private static string? DefaultHairModelPath = null;
-        private static string? DefaultHairMaterialPath = null;
-        private static string? DefaultEyesModelPath = null;
-        private static string? DefaultEyesMaterialPath = null;
+        private static string? _defaultBodyModelPath = null;
+        private static string? _defaultBodyMaterialPath = null;
+        private static string? _defaultTopModelPath = null;
+        private static string? _defaultTopMaterialPath = null;
+        private static string? _defaultGlovesModelPath = null;
+        private static string? _defaultGlovesMaterialPath = null;
+        private static string? _defaultBottomsModelPath = null;
+        private static string? _defaultBottomsMaterialPath = null;
+        private static string? _defaultSocksModelPath = null;
+        private static string? _defaultSocksMaterialPath = null;
+        private static string? _defaultShoesModelPath = null;
+        private static string? _defaultShoesMaterialPath = null;
+        private static string? _defaultBustModelPath = null;
+        private static string? _defaultBustMaterialPath = null;
+        private static string? _defaultHatModelPath = null;
+        private static string? _defaultHatMaterialPath = null;
+        private static string? _defaultHairModelPath = null;
+        private static string? _defaultHairMaterialPath = null;
+        private static string? _defaultEyesModelPath = null;
+        private static string? _defaultEyesMaterialPath = null;
 
         private static readonly float DefaultCamLerp = 6f;
         private static readonly float DefaultFovValue = 60f;
         private static readonly Vector3 DefaultCamOffset = new Vector3(-0.35f, 0.65f, -2.92f);
-        private static readonly bool DefaultFPVCamera = false;
+        private static readonly bool DefaultFpvCamera = false;
         
         
-        private static readonly float DefaulttpRecenterSpeed = 90f;
-        private static readonly Vector3 DefaulttpCameraOffset = new Vector3(0f, -0.1f, -3f);
-        private static readonly float DefaulttpCameraPitch = 15f;
-        private static readonly float DefaulttpFovValue = 60f;
+        private static readonly float DefaultTpRecenterSpeed = 90f;
+        private static readonly Vector3 DefaultTpCameraOffset = new Vector3(0f, -0.1f, -3f);
+        private static readonly float DefaultTpCameraPitch = 15f;
+        private static readonly float DefaultTpFovValue = 60f;
 
         private static readonly bool DefaultBNeverBail = false;
         private static readonly bool DefaultBShowHUD = true;
@@ -101,26 +101,26 @@ namespace rowemod
         
         // Custom model and material paths
         public static bool bHideHelmet = DefaultBHideHelmet;
-        public static string? bodyModelPath = DefaultBodyModelPath;
-        public static string? bodyMaterialPath = DefaultBodyMaterialPath;
-        public static string? topModelPath = DefaultTopModelPath;
-        public static string? topMaterialPath = DefaultTopMaterialPath;
-        public static string? glovesModelPath = DefaultGlovesModelPath;
-        public static string? glovesMaterialPath = DefaultGlovesMaterialPath;
-        public static string? bottomsModelPath = DefaultBottomsModelPath;
-        public static string? bottomsMaterialPath = DefaultBottomsMaterialPath;
-        public static string? socksModelPath = DefaultSocksModelPath;
-        public static string? socksMaterialPath = DefaultSocksMaterialPath;
-        public static string? shoesModelPath = DefaultShoesModelPath;
-        public static string? shoesMaterialPath = DefaultShoesMaterialPath;
-        public static string? bustModelPath = DefaultBustModelPath;
-        public static string? bustMaterialPath = DefaultBustMaterialPath;
-        public static string? hatModelPath = DefaultHatModelPath;
-        public static string? hatMaterialPath = DefaultHatMaterialPath;
-        public static string? hairModelPath = DefaultHairModelPath;
-        public static string? hairMaterialPath = DefaultHairMaterialPath;
-        public static string? eyesModelPath = DefaultEyesModelPath;
-        public static string? eyesMaterialPath = DefaultEyesMaterialPath;
+        public static string? bodyModelPath = _defaultBodyModelPath;
+        public static string? bodyMaterialPath = _defaultBodyMaterialPath;
+        public static string? topModelPath = _defaultTopModelPath;
+        public static string? topMaterialPath = _defaultTopMaterialPath;
+        public static string? glovesModelPath = _defaultGlovesModelPath;
+        public static string? glovesMaterialPath = _defaultGlovesMaterialPath;
+        public static string? bottomsModelPath = _defaultBottomsModelPath;
+        public static string? bottomsMaterialPath = _defaultBottomsMaterialPath;
+        public static string? socksModelPath = _defaultSocksModelPath;
+        public static string? socksMaterialPath = _defaultSocksMaterialPath;
+        public static string? shoesModelPath = _defaultShoesModelPath;
+        public static string? shoesMaterialPath = _defaultShoesMaterialPath;
+        public static string? bustModelPath = _defaultBustModelPath;
+        public static string? bustMaterialPath = _defaultBustMaterialPath;
+        public static string? hatModelPath = _defaultHatModelPath;
+        public static string? hatMaterialPath = _defaultHatMaterialPath;
+        public static string? hairModelPath = _defaultHairModelPath;
+        public static string? hairMaterialPath = _defaultHairMaterialPath;
+        public static string? eyesModelPath = _defaultEyesModelPath;
+        public static string? eyesMaterialPath = _defaultEyesMaterialPath;
 
         public static string customSessionMarker = "None";
 
@@ -131,14 +131,14 @@ namespace rowemod
         public static float camLerp = DefaultCamLerp;
         public static float fovValue = DefaultFovValue;
         public static Vector3 camOffset = DefaultCamOffset;
-        public static bool bFpvCamera = DefaultFPVCamera;
+        public static bool bFpvCamera = DefaultFpvCamera;
         public static bool bUseOldCam = false;
         
         //third person camera
-        public static float tpRecenterSpeed = DefaulttpRecenterSpeed;
-        public static Vector3 tpCameraOffset = DefaulttpCameraOffset;
-        public static float tpCameraPitch = DefaulttpCameraPitch;
-        public static float tpFovValue = DefaulttpFovValue;
+        public static float tpRecenterSpeed = DefaultTpRecenterSpeed;
+        public static Vector3 tpCameraOffset = DefaultTpCameraOffset;
+        public static float tpCameraPitch = DefaultTpCameraPitch;
+        public static float tpFovValue = DefaultTpFovValue;
 
 
 
@@ -429,26 +429,26 @@ namespace rowemod
 
         public static void ResetCharacterTab()
         {
-            bodyModelPath = DefaultBodyModelPath;
-            bodyMaterialPath = DefaultBodyMaterialPath;
-            topModelPath = DefaultTopModelPath;
-            topMaterialPath = DefaultTopMaterialPath;
-            glovesModelPath = DefaultGlovesModelPath;
-            glovesMaterialPath = DefaultGlovesMaterialPath;
-            bottomsModelPath = DefaultBottomsModelPath;
-            bottomsMaterialPath = DefaultBottomsMaterialPath;
-            socksModelPath = DefaultSocksModelPath;
-            socksMaterialPath = DefaultSocksMaterialPath;
-            shoesModelPath = DefaultShoesModelPath;
-            shoesMaterialPath = DefaultShoesMaterialPath;
-            bustModelPath = DefaultBustModelPath;
-            bustMaterialPath = DefaultBustMaterialPath;
-            hatModelPath = DefaultHatModelPath;
-            hatMaterialPath = DefaultHatMaterialPath;
-            hairModelPath = DefaultHairModelPath;
-            hairMaterialPath = DefaultHairMaterialPath;
-            eyesModelPath = DefaultEyesModelPath;
-            eyesMaterialPath = DefaultEyesMaterialPath;
+            bodyModelPath = _defaultBodyModelPath;
+            bodyMaterialPath = _defaultBodyMaterialPath;
+            topModelPath = _defaultTopModelPath;
+            topMaterialPath = _defaultTopMaterialPath;
+            glovesModelPath = _defaultGlovesModelPath;
+            glovesMaterialPath = _defaultGlovesMaterialPath;
+            bottomsModelPath = _defaultBottomsModelPath;
+            bottomsMaterialPath = _defaultBottomsMaterialPath;
+            socksModelPath = _defaultSocksModelPath;
+            socksMaterialPath = _defaultSocksMaterialPath;
+            shoesModelPath = _defaultShoesModelPath;
+            shoesMaterialPath = _defaultShoesMaterialPath;
+            bustModelPath = _defaultBustModelPath;
+            bustMaterialPath = _defaultBustMaterialPath;
+            hatModelPath = _defaultHatModelPath;
+            hatMaterialPath = _defaultHatMaterialPath;
+            hairModelPath = _defaultHairModelPath;
+            hairMaterialPath = _defaultHairMaterialPath;
+            eyesModelPath = _defaultEyesModelPath;
+            eyesMaterialPath = _defaultEyesMaterialPath;
             
         }
 
@@ -483,12 +483,12 @@ namespace rowemod
             camLerp = DefaultCamLerp;
             fovValue = DefaultFovValue;
             camOffset = DefaultCamOffset;
-            bFpvCamera = DefaultFPVCamera;
+            bFpvCamera = DefaultFpvCamera;
             bUseOldCam = false;
-            tpRecenterSpeed = DefaulttpRecenterSpeed;
-            tpCameraOffset = DefaulttpCameraOffset;
-            tpCameraPitch = DefaulttpCameraPitch;
-            tpFovValue = DefaulttpFovValue;
+            tpRecenterSpeed = DefaultTpRecenterSpeed;
+            tpCameraOffset = DefaultTpCameraOffset;
+            tpCameraPitch = DefaultTpCameraPitch;
+            tpFovValue = DefaultTpFovValue;
         }
 
         public static void ResetGraphicsTab()

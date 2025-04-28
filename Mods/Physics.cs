@@ -12,7 +12,7 @@ namespace rowemod.Mods
         {
             try
             {
-                if (rMBCharacter != null)
+                if (rMbCharacter != null)
                 {
 
                     float originalValue = spinSystem.quickSpinEffectivness;
@@ -65,7 +65,7 @@ namespace rowemod.Mods
         {
             UnityEngine.Physics.gravity = new Vector3(0f, -gravity, 0f);
         
-            if (rMBCharacter != null)
+            if (rMbCharacter != null)
             {
                 if (spinSystem != null)
                 {

@@ -6,7 +6,7 @@ using static rowemod.Utils.Memory;
 
 namespace rowemod.Mods;
 
-public class roweCustomCharacter
+public class RoweCustomCharacter
 {
     public static CharacterData defaultCharacterData;
     public static CustomCharacterManager rCharacterManager;
