@@ -17,7 +17,7 @@ public class RoweCustomCharacter
     
     public static void GetDefaultCharacter()
     {
-        rCharacterManager = physicsDrivenCharacter.GetComponent<CustomCharacterManager>();
+        rCharacterManager = UnityEngine.GameObject.FindObjectOfType<CustomCharacterManager>();
         if (rCharacterManager != null)
         {
             defaultCharacterData = rCharacterManager._characterData;
@@ -53,10 +53,7 @@ public class RoweCustomCharacter
         
         
     }
-    public static void LoadCharacter()
-    {
-        
-    }
+    
     
     public static void UpdateCharacter()
     {

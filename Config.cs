@@ -97,8 +97,9 @@ namespace rowemod
         public static float noseManualAngle = DefaultNoseManualAngle;
         public static float quickSpinMultiplier = DefaultQuickSpinMultiplier;
         public static float sideHopPower = DefaultSideHopPower;
-        
-        
+        public static float vertAssistCorrectionStrength = 30f;
+
+
         // Custom model and material paths
         public static bool bHideHelmet = DefaultBHideHelmet;
         public static string? bodyModelPath = _defaultBodyModelPath;
@@ -273,7 +274,7 @@ namespace rowemod
             bottomsMaterialPath = MakeAbsolutePath(jsonData.bottomsMaterialPath);
             socksModelPath = MakeAbsolutePath(jsonData.socksModelPath);
             socksMaterialPath = MakeAbsolutePath(jsonData.socksMaterialPath);
-            shoesModelPath = MakeAbsolutePath(jsonData.shoesMaterialPath);
+            shoesModelPath = MakeAbsolutePath(jsonData.shoesModelPath);
             shoesMaterialPath = MakeAbsolutePath(jsonData.shoesMaterialPath);
             bustModelPath = MakeAbsolutePath(jsonData.bustModelPath);
             bustMaterialPath = MakeAbsolutePath(jsonData.bustMaterialPath);

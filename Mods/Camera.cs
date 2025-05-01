@@ -12,7 +12,7 @@ namespace rowemod.Mods
 
         public static void Update()
         {
-            try
+            /*try
             {
                 // Update Camera settings
                 if (camTarget != null)
@@ -87,7 +87,7 @@ namespace rowemod.Mods
             {
                 Log.Error(e);
                 throw;
-            }
+            }*/
             
         }
 

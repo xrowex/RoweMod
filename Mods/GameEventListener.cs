@@ -90,8 +90,8 @@ namespace rowemod
                 Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
-                Memory.SetupCameraSeatRelay();
                 PartTweaker.FindParts();
+                
                 //Memory.ToggleBmxFrames();
                 
                 // Load saved session marker if it exists

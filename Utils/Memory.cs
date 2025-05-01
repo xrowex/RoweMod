@@ -141,9 +141,8 @@ namespace rowemod.Utils
                 {
                     Log.Msg("Starting to find components under rMBCharacter...");
                     CharacterManager characterManager = rMbCharacter.GetComponentInChildren<CharacterManager>();
-                    physicsPropHandBehaviour = characterManager._physicsPropHandBehaviour;
-                    
-                    
+                    //physicsPropHandBehaviour = characterManager._physicsPropHandBehaviour;
+
                     equipSlots = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
                     if (equipSlots.Length > 0)
                         Log.Msg($"Found {equipSlots.Length} EquipSlotVehicle components.");
@@ -362,9 +361,9 @@ namespace rowemod.Utils
                 {
                     Log.Error("BMXCMCameraTarget component not found in BMX Camera Target.");
                 }
-                
+
                 //virtualCam = GameObject.Find("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
-                virtualCam = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
+                /*virtualCam = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
                 if (virtualCam != null)
                 {
                     Log.Msg("virtualCam component found in Sports Vehicle Camera.");
@@ -383,6 +382,7 @@ namespace rowemod.Utils
                 {
                     Log.Error("camTranspose component not found in Sports Vehicle Camera.");
                 }
+                */
             }
             catch (Exception ex)
             {
@@ -477,13 +477,13 @@ namespace rowemod.Utils
 
             
             Mods.Physics.Update();
-            Mods.Misc.Update();
+            //Mods.Misc.Update();
             Mods.Camera.Update();
             
             
         }
 
-        public static void SetupCameraSeatRelay()
+        /*public static void SetupCameraSeatRelay()
         {
             bmxCameraTarget = rMbCharacter.transform.FindDeepChild("BMX Camera Target")?.gameObject;
             sportsVehicleCamera = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera")?.gameObject;
@@ -513,8 +513,8 @@ namespace rowemod.Utils
                             bmxCameraTarget.SetActive(true);
                             virtualCam.transform.gameObject.SetActive(true);
 
-                            /*Log.Msg(virtualCam.transform.gameObject.name + " is now active.");
-                            Log.Msg("OnAttached event triggered!");*/
+                            *//*Log.Msg(virtualCam.transform.gameObject.name + " is now active.");
+                            Log.Msg("OnAttached event triggered!");*//*
                         }
                         else
                         {
@@ -522,7 +522,7 @@ namespace rowemod.Utils
                             bmxCameraTarget.SetActive(false);
                             virtualCam.transform.gameObject.SetActive(false);
                 
-                            /*Log.Msg(virtualCam.transform.gameObject.name + " is now inactive.");*/
+                            *//*Log.Msg(virtualCam.transform.gameObject.name + " is now inactive.");*//*
                         }
                     }
 
@@ -532,11 +532,11 @@ namespace rowemod.Utils
                         bmxCameraTarget.SetActive(false);
                         virtualCam.transform.gameObject.SetActive(false);
                 
-                        /*Log.Msg(virtualCam.transform.gameObject.name + " is now inactive.");
-                        Log.Msg("OnDetached event triggered!");*/
+                        *//*Log.Msg(virtualCam.transform.gameObject.name + " is now inactive.");
+                        Log.Msg("OnDetached event triggered!");*//*
                     }
                 
-        }
+        }*/
         
         
         
@@ -613,7 +613,7 @@ namespace rowemod.Utils
                 Log.Msg($"Successfully loaded {loadedBundles.Count} AssetBundles.");
             }
         }
-
+        
 
        
         

@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+﻿/*using HarmonyLib;
 using Il2CppMashBox.BMX_Physics_Development;
 using UnityEngine.InputSystem;
 using static rowemod.Utils.Memory;
@@ -12,7 +12,7 @@ namespace rowemod.Mods.Patches
         {
             public static bool Prefix(TestDeath __instance)
             {
-                if (Gamepad.current.buttonWest.wasPressedThisFrame) return true;
+                if (Gamepad.current.xButton.wasPressedThisFrame) return true;
                 return !Config.bNeverBail;
             }
         }
@@ -22,9 +22,9 @@ namespace rowemod.Mods.Patches
         {
             public static bool Prefix(TestDeath __instance)
             {
-                if (Gamepad.current.buttonWest.wasPressedThisFrame) return true;
+                if (Gamepad.current.xButton.wasPressedThisFrame) return true;
                 return !Config.bNeverBail;
             }
         }
     }
-}
+}*/

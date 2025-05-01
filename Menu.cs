@@ -13,6 +13,7 @@ using UnityEngine.SceneManagement;
 using Harmony;
 using UnityEngine.Rendering;
 using Il2CppMashBox.BMX_Physics_Development;
+using Il2CppMashBox.Character.Scripts;
 //using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
 using Il2CppModIOBrowser;
 using Il2CppPlayFab.ClientModels;
@@ -109,7 +110,7 @@ namespace rowemod
                     Toggle("Spin Assist", ref bSpinAssist); /*
                                        Toggle("Spin/Flip Fix", ref bSpinFlipFix);*/
 //Toggle("Allow Trick Landers", ref allowTrickLanders);
-//Toggle("Always Allow Fire Tricks", ref alwaysAllowFireTricks);
+                    //Toggle("Always Allow Fire Tricks", ref alwaysAllowFireTricks);
                     Toggle("Drifting", ref bDriftAbility);
                     GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
                         GUILayout.ExpandWidth(true)); // Colored separator
@@ -127,6 +128,9 @@ namespace rowemod
                         GUILayout.ExpandWidth(true)); // Colored separator
                     Slider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
                     Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
+                    //GUILayout.Box("Vert", coloredBoxStyle, GUILayout.Height(25),
+                    //    GUILayout.ExpandWidth(true)); // Colored separator
+                    //Slider("Standard Langing Pitch", )
                     break;
 
 /*case Tab.Bike:
@@ -149,15 +153,26 @@ break;*/
                     Mods.Misc.Update();
                     Toggle("Toggle Drone Body", ref droneBodyToggle);
                     Slider("Drone Mass", ref droneMass, 2f, 1000f);
-//Toggle("Toggle Drone Sound",ref )
+                    //Toggle("Toggle Drone Sound",ref )
                     break;
 
                 case Tab.Misc:
                     Mods.Misc.Update();
-/*Toggle("Show HUD", ref bShowInstructions);
-if (InstructionCanvas != null)
-InstructionCanvas.SetActive(bShowInstructions);*/
-
+                    /*Toggle("Show HUD", ref bShowInstructions);
+                    if (InstructionCanvas != null)
+                    InstructionCanvas.SetActive(bShowInstructions);*/
+                    if (GUILayout.Button("Cycle Character", highQualityButtonStyle))
+                    {
+                        var roweCharacterCycler = GameObject.Find("Character Changer").GetComponentInChildren<TempCharacterCycler>();
+                        if (roweCharacterCycler != null)
+                        {
+                            roweCharacterCycler.CycleUp();
+                        }
+                        else
+                        {
+                            Debug.LogError("TempCharacterCycler component not found on rMbCharacter.");
+                        }
+                    }
                     Toggle("Vibration", ref bVibration);
                     if (hapticFeedBack != null)
                         hapticFeedBack.SetActive(bVibration);
@@ -180,46 +195,46 @@ InstructionCanvas.SetActive(bShowInstructions);*/
 
                     break;
 
-//case Tab.Dropper:
-//    GUILayout.Label("Object Dropper / Transform Manipulation", labelStyle);
-//    break;
+                //case Tab.Dropper:
+                //    GUILayout.Label("Object Dropper / Transform Manipulation", labelStyle);
+                //    break;
+                /*
+                                case Tab.Camera:
+                                    Mods.Camera.Update();
+                                    GUILayout.Box("Old Camera", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
 
-                case Tab.Camera:
-                    Mods.Camera.Update();
-                    GUILayout.Box("Old Camera", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
+                                    Toggle("Use Old Camera", ref bUseOldCam);
+                                    if (bUseOldCam)
+                                    {
+                                        Slider("Camera Rotation Speed", ref camLerp, 0f, 5f);
+                                        Slider("Field Of View", ref fovValue, 1f, 360f);
+                                        Slider("Camera Offset X", ref camOffset.x, -10f, 10f);
+                                        Slider("Camera Offset Y", ref camOffset.y, -10f, 10f);
+                                        Slider("Camera Offset Z", ref camOffset.z, -30f, 30f);
+                                    }
 
-                    Toggle("Use Old Camera", ref bUseOldCam);
-                    if (bUseOldCam)
-                    {
-                        Slider("Camera Rotation Speed", ref camLerp, 0f, 5f);
-                        Slider("Field Of View", ref fovValue, 1f, 360f);
-                        Slider("Camera Offset X", ref camOffset.x, -10f, 10f);
-                        Slider("Camera Offset Y", ref camOffset.y, -10f, 10f);
-                        Slider("Camera Offset Z", ref camOffset.z, -30f, 30f);
-                    }
 
-/*
-                   GUILayout.Box("First Person Cam [WIP]", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
-                   Toggle("First Person Camera", ref bFpvCamera);
-                   if (bFpvCamera)
-                   {
-                       Slider("First Person X", ref fpvOffset.x, -2f, 2f);
-                       Slider("First Person Y", ref fpvOffset.y, -2f, 2f);
-                       Slider("First Person Z", ref fpvOffset.z, -2f, 2f);
-                       Slider("First Person Rotation X", ref fpvRotation.x, -180f, 180f);
-                       //Slider("First Person Rotation Y", ref fpvRotation.y, -180f, 180f);
-                       Slider("First Person Rotation Z", ref fpvRotation.z, -180f, 180f);
-                   }
-                   GUILayout.Box("Third Person Cam", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
-                   Slider("Cam FOV", ref tpFovValue, 10f, 120f);
-                   Slider("Camera AutoCenter Speed",ref tpRecenterSpeed, 0f, 1000f);
-                   Slider("Camera Pitch", ref tpCameraPitch, -25f, 25f);
-                   Slider("Camera Offset X", ref tpCameraOffset.x, -1f,1f);
-                   Slider("Camera Offset Y", ref tpCameraOffset.y, -1f, 1f);
-                   Slider("Camera Offset Z", ref tpCameraOffset.z, -6f, 0f);*/
+                                   GUILayout.Box("First Person Cam [WIP]", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
+                                   Toggle("First Person Camera", ref bFpvCamera);
+                                   if (bFpvCamera)
+                                   {
+                                       Slider("First Person X", ref fpvOffset.x, -2f, 2f);
+                                       Slider("First Person Y", ref fpvOffset.y, -2f, 2f);
+                                       Slider("First Person Z", ref fpvOffset.z, -2f, 2f);
+                                       Slider("First Person Rotation X", ref fpvRotation.x, -180f, 180f);
+                                       //Slider("First Person Rotation Y", ref fpvRotation.y, -180f, 180f);
+                                       Slider("First Person Rotation Z", ref fpvRotation.z, -180f, 180f);
+                                   }
+                                   GUILayout.Box("Third Person Cam", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
+                                   Slider("Cam FOV", ref tpFovValue, 10f, 120f);
+                                   Slider("Camera AutoCenter Speed",ref tpRecenterSpeed, 0f, 1000f);
+                                   Slider("Camera Pitch", ref tpCameraPitch, -25f, 25f);
+                                   Slider("Camera Offset X", ref tpCameraOffset.x, -1f,1f);
+                                   Slider("Camera Offset Y", ref tpCameraOffset.y, -1f, 1f);
+                                   Slider("Camera Offset Z", ref tpCameraOffset.z, -6f, 0f);
 
-                    break;
-
+                break;
+                */
                 case Tab.Graphics:
                     try
                     {

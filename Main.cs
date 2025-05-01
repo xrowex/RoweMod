@@ -9,7 +9,7 @@ using Log = rowemod.Utils.Log;
 using System.Collections;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod","1.6.0" , "rowe & nolew", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.6.0", "rowe & nolew", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -84,12 +84,12 @@ namespace rowemod
             Log.Msg("Steamworks initialized successfully.");
             SteamUserManager.LogAndCheckUser();
 
-            
+
             previousWindowPosition = windowRect.position;
-        
+
             if (File.Exists(cfgFile))
             {
-                
+
                 try
                 {
                     Config.Load();
@@ -99,7 +99,7 @@ namespace rowemod
                     Log.Msg($"Failed to load configuration: {ex.Message}");
                 }
             }
-            
+
             try
             {
                 Config.Save(); // creates a file if it doesn't exist
@@ -108,19 +108,19 @@ namespace rowemod
             {
                 Log.Msg($"Failed to save configuration: {ex.Message}");
             }
-            
+
 
 
             Log.Msg("Starting Bundle loading...");
             Memory.LoadAllAssetBundles();
-            
+
             // Set up event listener
             Log.Msg("Starting game event listener...");
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
 
         }
-        
+
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
@@ -131,18 +131,18 @@ namespace rowemod
                 .ToList();
 
             cachedVolumes = UnityEngine.Object.FindObjectsOfType<UnityEngine.Rendering.Volume>().ToList();
-            
-            /*if(sceneName.Contains("TheShop"))
+
+            if (sceneName.Contains("TheShop"))
             {
-                rMBCharacter = GameObject.Find("Custom Character");
-                Memory.physicsDrivenCharacter = rMBCharacter;
+                Memory.rMbCharacter = GameObject.Find("Custom Character");
+                Memory.physicsDrivenCharacter = Memory.rMbCharacter;
                 //Memory.rMBCharacter = go.transform.parent?.gameObject;
-                //Main.playableSceneLoaded = true;
+                Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
-                Memory.FindObjects(rMBCharacter);
-                Memory.SetupCameraSeatRelay();
+                Memory.FindObjects(Memory.rMbCharacter);
                 PartTweaker.FindParts();
-            }*/
+                
+            }
         }
 
         public override void OnFixedUpdate()
@@ -173,11 +173,7 @@ namespace rowemod
         }
         public override void OnGUI()
         {
-            if (!stylesInitialized)
-            {
-                InitializeStyles();
-                stylesInitialized = true;
-            }
+            InitializeStyles();
 
             if (isOpen)
             {
@@ -288,7 +284,7 @@ namespace rowemod
                     Mods.Physics.Update();
                     Mods.Misc.Update();
                     Mods.Camera.Update();
-                    
+
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
                     MelonCoroutines.Start(DelayedUpdateCharacter());
 

@@ -12,8 +12,8 @@ namespace rowemod.Mods
         {
             try
             {
-                if (mashBucksHUD != null)
-                    mashBucksHUD.useGUILayout = bShowHUD;
+                /*if (mashBucksHUD != null)
+                    mashBucksHUD.useGUILayout = bShowHUD;*/
 
                 // Update Drone Rigidbody Mass
                 if (droneRb != null)
@@ -27,7 +27,7 @@ namespace rowemod.Mods
                     else helmet.active = true;
                 }
 
-                roweTimeInterpolator.maxStanimaTime = sloMoTimer;
+                //roweTimeInterpolator.maxStanimaTime = sloMoTimer;
 
                 if (allDroneMeshRenderers != null)
                 {

@@ -87,6 +87,5 @@ namespace rowemod
         public float menuAccentG { get; set; }
         public float menuAccentB { get; set; }
         public float sloMoTimer { get; set; }
-        public bool showDebug { get; set; }
     }
 }
