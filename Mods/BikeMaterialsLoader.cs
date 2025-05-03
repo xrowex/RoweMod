@@ -544,12 +544,20 @@ namespace rowemod.Mods
                     Log.Warning($"Equipped object is null for slot '{slot.name}'.");
                     continue;
                 }
-
+                
                 Renderer[] renderers = equippedObject.GetComponentsInChildren<MeshRenderer>(true);
                 if (renderers.Length == 0)
                 {
-                    Log.Warning($"No renderers found under equipped object for slot '{slot.name}'.");
-                    continue;
+                    renderers = equippedObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                    if (renderers.Length == 0)
+                    {
+                        Log.Warning($"No renderers (Mesh or Skinned) found under equipped object for slot '{slot.name}'.");
+                        continue;
+                    }
+                    else
+                    {
+                        Log.Msg($"Fallback to SkinnedMeshRenderer successful for slot '{slot.name}'.");
+                    }
                 }
 
                 foreach (var renderer in renderers)

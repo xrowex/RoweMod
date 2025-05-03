@@ -7,6 +7,7 @@ using rowemod.Utils;
 using rowemod.Mods;
 using Log = rowemod.Utils.Log;
 using System.Collections;
+using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
 [assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.6.0", "rowe & nolew", null)]
@@ -134,24 +135,36 @@ namespace rowemod
 
             if (sceneName.Contains("TheShop"))
             {
+                RoweCustomCharacter.GetDefaultCharacter();
                 Memory.rMbCharacter = GameObject.Find("Custom Character");
-                Memory.physicsDrivenCharacter = Memory.rMbCharacter;
+                Memory.physicsDrivenCharacter = Memory.rMbCharacter.GetComponentsInChildren<CustomCharacterManager>().FirstOrDefault()?.gameObject;
+                if (Memory.physicsDrivenCharacter == null)
+                    return;
+                
                 //Memory.rMBCharacter = go.transform.parent?.gameObject;
-                Main.playableSceneLoaded = true;
+                //Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
-                Memory.FindObjects(Memory.rMbCharacter);
-                PartTweaker.FindParts();
+                
+                MelonCoroutines.Start(DelayedLoadPreset());
                 
             }
         }
-
-        public override void OnFixedUpdate()
+        private IEnumerator DelayedLoadPreset()
         {
-            if (playableSceneLoaded && rMbCharacter)
+            yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
+
+            if (!string.IsNullOrEmpty(lastLoadedPresetCharacter) && Memory.rMbCharacter != null)
             {
-                Mods.Physics.FixedUpdate();
+                Log.Msg("Manually invoking LoadPreset on TheShop scene...");
+                Memory.FindObjects(Memory.rMbCharacter); // Refresh all references
+                Custom.LoadPreset(lastLoadedPresetCharacter); // Now it should work
+            }
+            else
+            {
+                Log.Warning("Cannot load preset - missing reference or preset name.");
             }
         }
+        
         public override void OnUpdate()
         {
             if (playableSceneLoaded && rMbCharacter)

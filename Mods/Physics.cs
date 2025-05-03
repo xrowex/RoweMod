@@ -8,59 +8,6 @@ namespace rowemod.Mods
 {
     public static class Physics
     {
-        public static void FixedUpdate()
-        {
-            try
-            {
-                if (rMbCharacter != null)
-                {
-
-                    float originalValue = spinSystem.quickSpinEffectivness;
-                    float multiplier = quickSpinMultiplier;
-                    float adjustedValue = originalValue + multiplier;
-
-                    //set quickSpinEffectiveness to adjustedValue
-                    spinSystem.quickSpinEffectivness = Mathf.Clamp(adjustedValue, 1, 1 * multiplier);
-
-                    /*
-                    if (bSpinFlipFix)
-                    {
-                        //
-                        //  SQUARE SCALING INPUTS
-                        //
-                        // Read your raw inputs
-                        float rawX = vehicleController._steerInputRaw.x;  // For spin
-                        float rawY = vehicleController._flipInputRaw.y;   // For flip
-
-                        // Compute the axis with the larger absolute value
-                        float maxVal = Mathf.Max(Mathf.Abs(rawX), Mathf.Abs(rawY));
-
-                        // If maxVal is 0, the stick is centered; otherwise, rescale so the bigger axis goes to ±1
-                        if (maxVal > 0f)
-                        {
-                            rawX /= maxVal;
-                            rawY = Mathf.Lerp(rawY, rawY / maxVal, Time.deltaTime * 10f); // Lerp rawY after normalization
-                        }
-
-                        // Now rawX, rawY lie on a square boundary, so diagonal pushes will be (±1, ±1)
-                        vehicleController._spinInput = rawX;
-                        vehicleController._flipInput = rawY;
-                    }
-
-
-                    //set lateral hop power
-                    vehicleController._lateralInputLeftRaw = Mathf.Clamp(vehicleController._lateralInputLeftRaw, 0, sideHopPower);
-                    vehicleController._lateralInputRightRaw = Mathf.Clamp(vehicleController._lateralInputRightRaw, 0, sideHopPower);
-                    */
-                    
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"[Physics.FixedUpdate] Error: {ex.Message}\n{ex.StackTrace}");
-            }
-        }
-        
         public static void Update()
         {
             UnityEngine.Physics.gravity = new Vector3(0f, -gravity, 0f);

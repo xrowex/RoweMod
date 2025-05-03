@@ -91,7 +91,7 @@ namespace rowemod.Utils
         public static PhysicsBasedEventEmitter[] droneEmitter;
         public static CustomizableEntity customizableEntity;
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
-
+        
         //Game Events
         public static GameEvent playerSpawned;
 
@@ -108,14 +108,16 @@ namespace rowemod.Utils
                 Log.Msg($"Player GameObject: {player.name}");
                 physicsDrivenCharacter = player;
 
-                if (physicsDrivenCharacter != null)
+                var driven = player.transform.FindDeepChild("Physics Driven Character");
+                if (driven != null)
                 {
-                    rMbCharacter = player.transform.parent.gameObject;
-                    Log.Msg($"rMBCharacter found: {rMbCharacter.name}");
+                    physicsDrivenCharacter = driven.gameObject;
+                    Log.Msg("physicsDrivenCharacter set.");
                 }
                 else
                 {
-                    Log.Error("physicsDrivenCharacter not found!");
+                    Log.Warning("FindObjects: 'Physics Driven Character' not found. Using player GameObject as fallback.");
+                    physicsDrivenCharacter = player;
                 }
             }
             gameplayCameraBrain = GameObject.FindObjectsOfType<CinemachineBrain>()

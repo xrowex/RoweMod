@@ -107,10 +107,7 @@ namespace rowemod
                     Mods.Physics.Update();
                     GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(25),
                         GUILayout.ExpandWidth(true)); // Colored separator
-                    Toggle("Spin Assist", ref bSpinAssist); /*
-                                       Toggle("Spin/Flip Fix", ref bSpinFlipFix);*/
-//Toggle("Allow Trick Landers", ref allowTrickLanders);
-                    //Toggle("Always Allow Fire Tricks", ref alwaysAllowFireTricks);
+                    Toggle("Spin Assist", ref bSpinAssist); 
                     Toggle("Drifting", ref bDriftAbility);
                     GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
                         GUILayout.ExpandWidth(true)); // Colored separator
@@ -123,14 +120,11 @@ namespace rowemod
                     Slider("Pump Force", ref pumpForce, 0f, 30f);
                     Slider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
                     Slider("Steer Damping", ref steerDamp, 1f, 5f);
-                    Slider("Quick Spin Multiplier", ref quickSpinMultiplier, 1.0f, 10.0f);
+                    //Slider("Quick Spin Multiplier", ref quickSpinMultiplier, 1.0f, 10.0f);
                     GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(25),
                         GUILayout.ExpandWidth(true)); // Colored separator
                     Slider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
                     Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
-                    //GUILayout.Box("Vert", coloredBoxStyle, GUILayout.Height(25),
-                    //    GUILayout.ExpandWidth(true)); // Colored separator
-                    //Slider("Standard Langing Pitch", )
                     break;
 
 /*case Tab.Bike:
@@ -311,7 +305,7 @@ break;*/
                 SetCurrentTab(Tab.Physics);
             }
 
-//if (GUILayout.Button("<b>Tricks</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Tricks); }
+            if (GUILayout.Button("<b>Tricks</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Tricks); }
 //if (GUILayout.Button("<b>Bike</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Bike); }
             if (GUILayout.Button("<b>Character</b>", highQualityButtonStyle))
             {

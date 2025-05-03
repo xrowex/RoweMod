@@ -1,5 +1,6 @@
 ﻿using rowemod.Utils;
 using Newtonsoft.Json;
+using rowemod.Mods;
 using UnityEngine;
 
 namespace rowemod
@@ -450,7 +451,7 @@ namespace rowemod
             hairMaterialPath = _defaultHairMaterialPath;
             eyesModelPath = _defaultEyesModelPath;
             eyesMaterialPath = _defaultEyesMaterialPath;
-            
+            RoweCustomCharacter.rCharacterManager.ChangeData(RoweCustomCharacter.defaultCharacterData);
         }
 
         public static void ResetBikeTab()

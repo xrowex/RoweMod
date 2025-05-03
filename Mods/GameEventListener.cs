@@ -11,6 +11,7 @@ namespace rowemod
     {
         private GameEvent _playerSpawnEvent;
         private GameEvent _playerResetAtMarker;
+        private GameEvent _playerCloseMenu;
         public void Initialize()
         {
             // Find the existing GameEvent instance
@@ -20,18 +21,26 @@ namespace rowemod
             foreach (var ev in allEvents)
             {
                 Log.Msg(ev.name);
+
                 if(ev.name.Contains("GameEvent_OnResetAtMarker"))
                 {
                     _playerResetAtMarker = ev;
                 }
+
                 if (ev.name.Contains("MainPlayerHumanSpawned"))
                 {
                     _playerSpawnEvent = ev;
                     break;
                 }
+
+                if (ev.name.Contains("GameEvent_SimpleGameLoop_Paused_OnExit"))
+                {
+                    _playerCloseMenu = ev;
+                }
                 
             }
 
+            //PLAYER SPAWNN
             if (_playerSpawnEvent == null)
             {
                 Log.Error("PlayerSpawnEvent is null!");
@@ -39,27 +48,44 @@ namespace rowemod
             }
 
             Log.Msg("GameEvent_MainPlayerHumanSpawned found! Subscribing to event...");
-
-
-            
-            // IL2CPP-Safe Delegate Registration
             UnityAction action = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerSpawned);
             _playerSpawnEvent.OnRaise.AddListener(action);
             
             
+
+
+            //RESET AT MARKER
             if (_playerResetAtMarker == null)
             {
                 Log.Error("PlayerResetAtMarker is null!");
                 return;
-            }
+            }   
             
             Log.Msg("GameEvent_OnResetAtMarker found! Subscribing to event...");
-            
             UnityAction resetAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
             _playerResetAtMarker.OnRaise.AddListener(resetAction);
-        }
 
+
+
+            //PLAYER CLOSES MENU
+            if (_playerCloseMenu == null)
+            {
+                Log.Error("playerCloseMenu is null!");
+                return;
+            }
+
+            Log.Msg("GameEvent_SimpleGameLoop_Paused_OnExit found! Subscribing to event...");
+            UnityAction closeMenuAction =
+                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseMenu);
+            _playerResetAtMarker.OnRaise.AddListener(closeMenuAction);
+
+        }
+        private void OnPlayerCloseMenu()
+        {
+            Log.Msg("GameEvent_SimpleGameLoop_Paused_OnExit!");
+            Memory.FindObjects(Memory.physicsDrivenCharacter);
+        }
         private void OnPlayerResetAtMarker()
         {
             Misc.Update();
@@ -90,7 +116,7 @@ namespace rowemod
                 Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
-                PartTweaker.FindParts();
+                //PartTweaker.FindParts();
                 
                 //Memory.ToggleBmxFrames();
                 
