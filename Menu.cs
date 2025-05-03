@@ -167,6 +167,7 @@ break;*/
                             Debug.LogError("TempCharacterCycler component not found on rMbCharacter.");
                         }
                     }
+                    Toggle("Never Bail", ref bNeverBail);
                     Toggle("Vibration", ref bVibration);
                     if (hapticFeedBack != null)
                         hapticFeedBack.SetActive(bVibration);
