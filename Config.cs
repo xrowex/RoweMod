@@ -72,7 +72,7 @@ namespace rowemod
         private static readonly bool DefaultBVibration = true;
         private static readonly float DefaultDroneMass = 10f;
         private static readonly bool DefaultDroneBodyToggle = true;
-        private static bool DefaultDroneEmitterToggle = true;
+        private static readonly bool DefaultDroneEmitterToggle = true;
         private static readonly float DefaultMenuAccentR = 0f;
         private static readonly float DefaultMenuAccentG = 0.2f;
         private static readonly float DefaultMenuAccentB = 0.6f;

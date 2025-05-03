@@ -10,7 +10,7 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.6.0", "rowe & nolew", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.6.1", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod

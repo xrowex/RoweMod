@@ -24,7 +24,10 @@ namespace rowemod.Mods
                 {
                     foreach (var droneEmitter in droneEmitters)
                     {
-                        droneEmitter.enabled = droneEmitterToggle;
+                        if (droneEmitter != null)
+                        {
+                            droneEmitter.enabled = droneEmitterToggle;
+                        }
                     }
                 }
                 if (helmet != null)
