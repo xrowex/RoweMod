@@ -127,9 +127,9 @@ namespace rowemod
                     Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
                     break;
 
-/*case Tab.Bike:
-PartTweaker.drawPartTweaker();
-break;*/
+                    /*case Tab.Bike:
+                    PartTweaker.drawPartTweaker();
+                    break;*/
 
                 case Tab.Tricks:
                     TrickMods.DrawTrickMenu();
@@ -146,7 +146,7 @@ break;*/
                 case Tab.Drone:
                     Mods.Misc.Update();
                     Toggle("Toggle Drone Body", ref droneBodyToggle);
-                    Toggle("Toggle Drone Sound", ref droneEmitter);
+                    Toggle("Toggle Drone Sound", ref droneEmitterToggle);
                     Slider("Drone Mass", ref droneMass, 2f, 1000f);
                     break;
 
@@ -155,18 +155,7 @@ break;*/
                     /*Toggle("Show HUD", ref bShowInstructions);
                     if (InstructionCanvas != null)
                     InstructionCanvas.SetActive(bShowInstructions);*/
-                    if (GUILayout.Button("Cycle Character", highQualityButtonStyle))
-                    {
-                        var roweCharacterCycler = GameObject.Find("Character Changer").GetComponentInChildren<TempCharacterCycler>();
-                        if (roweCharacterCycler != null)
-                        {
-                            roweCharacterCycler.CycleUp();
-                        }
-                        else
-                        {
-                            Debug.LogError("TempCharacterCycler component not found on rMbCharacter.");
-                        }
-                    }
+                   
                     Toggle("Never Bail", ref bNeverBail);
                     Toggle("Vibration", ref bVibration);
                     if (hapticFeedBack != null)

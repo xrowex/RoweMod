@@ -177,13 +177,7 @@ namespace rowemod
                     Mods.Camera.Update();
                 }
             }
-        }
-        private static System.Collections.IEnumerator DelayedUpdateCharacter()
-        {
-            yield return new WaitForSeconds(3f); // Wait 3 seconds for the scene to load fully
-            Log.Msg("Running delayed UpdateCharacter()");
-            Custom.LoadPreset(lastLoadedPresetCharacter);
-        }
+        } 
         public override void OnGUI()
         {
             InitializeStyles();
@@ -282,7 +276,6 @@ namespace rowemod
                     Mods.Misc.Update();
                     Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    MelonCoroutines.Start(DelayedUpdateCharacter());
                     break;
 
                 case 3://Proto_Scoot
@@ -290,7 +283,6 @@ namespace rowemod
                     Mods.Misc.Update();
                     Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    MelonCoroutines.Start(DelayedUpdateCharacter());
                     break;
 
                 case 4://BMX
@@ -299,7 +291,6 @@ namespace rowemod
                     Mods.Camera.Update();
 
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    MelonCoroutines.Start(DelayedUpdateCharacter());
 
                     BikeMaterialsLoader.Initialize();
                     Log.Msg("Starting DelayedApplySavedMaterials(5) coroutine...");
@@ -318,7 +309,6 @@ namespace rowemod
                     Mods.Misc.Update();
                     Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    MelonCoroutines.Start(DelayedUpdateCharacter());
                     break;
             }
         }

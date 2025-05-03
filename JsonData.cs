@@ -83,12 +83,13 @@ namespace rowemod
         public bool bVibration { get; set; }
         public float droneMass { get; set; }
         public bool droneBodyToggle { get; set; }
+        public bool droneEmitterToggle { get; set; }
         public float menuAccentR { get; set; }
         public float menuAccentG { get; set; }
         public float menuAccentB { get; set; }
         public float sloMoTimer { get; set; }
 
-        public bool droneEmitter { get; set; }
+        
     }
-    }
+    
 }

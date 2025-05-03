@@ -7,6 +7,8 @@ namespace rowemod
 {
     public static class Config
     {
+        
+
         // Default values for resetting
         private static readonly bool DefaultBBreakBike = false;
         private static readonly bool DefaultBDisableLevelInAir = false;
@@ -70,6 +72,7 @@ namespace rowemod
         private static readonly bool DefaultBVibration = true;
         private static readonly float DefaultDroneMass = 10f;
         private static readonly bool DefaultDroneBodyToggle = true;
+        private static bool DefaultDroneEmitterToggle = true;
         private static readonly float DefaultMenuAccentR = 0f;
         private static readonly float DefaultMenuAccentG = 0.2f;
         private static readonly float DefaultMenuAccentB = 0.6f;
@@ -151,6 +154,7 @@ namespace rowemod
         public static bool bVibration = DefaultBVibration;
         public static float droneMass = DefaultDroneMass;
         public static bool droneBodyToggle = DefaultDroneBodyToggle;
+        public static bool droneEmitterToggle = DefaultDroneEmitterToggle;
         public static float menuAccentR = DefaultMenuAccentR;
         public static float menuAccentG = DefaultMenuAccentG;
         public static float menuAccentB = DefaultMenuAccentB;
@@ -232,7 +236,8 @@ namespace rowemod
                 tpCameraOffset = new { tpCameraOffset.x, tpCameraOffset.y, tpCameraOffset.z },
                 tpCameraPitch,
                 tpFovValue,
-                customSessionMarker
+                customSessionMarker,
+                droneEmitterToggle
             });
 
             File.WriteAllText(cfgFile, contents);
@@ -309,6 +314,7 @@ namespace rowemod
             tpCameraPitch = jsonData.tpCameraPitch;
             tpFovValue = jsonData.tpFovValue;
             customSessionMarker = jsonData.customSessionMarker;
+            droneEmitterToggle = jsonData.droneEmitterToggle;
         }
         
         /*public static void SaveCurrentLoadedItems()

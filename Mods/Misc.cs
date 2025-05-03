@@ -20,7 +20,13 @@ namespace rowemod.Mods
                 {
                     droneRb.mass = droneMass;
                 }
-                
+                if (droneEmitters != null)
+                {
+                    foreach (var droneEmitter in droneEmitters)
+                    {
+                        droneEmitter.enabled = droneEmitterToggle;
+                    }
+                }
                 if (helmet != null)
                 {
                     if (bHideHelmet) helmet.active = false;

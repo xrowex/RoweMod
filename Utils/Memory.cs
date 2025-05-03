@@ -41,8 +41,8 @@ namespace rowemod.Utils
         public static GameObject helmet;
         public static GameObject bmxCameraTarget;
         public static GameObject sportsVehicleCamera;
-        // Drone
-        public static bool droneEmitter;
+        
+        
         public static GameObject physicsDrivenCharacter;
         public static GameObject rPhysicsSkeleton;
 
@@ -89,6 +89,7 @@ namespace rowemod.Utils
         public static EquipSlotVehicle[] equipSlots;
         public static Joint[] joints;
         public static DroneManager droneManager;
+        public static PhysicsBasedEventEmitter[] droneEmitters;
         public static CustomizableEntity customizableEntity;
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
         
@@ -292,24 +293,15 @@ namespace rowemod.Utils
                             allDroneMeshRenderers.AddRange(droneMeshRenderers);
                         }
 
-                        var emitters = droneGameObject.GetComponentsInChildren<PhysicsBasedEventEmitter>(false);
-                        droneEmitter = emitters != null && emitters.Length > 0; // Store whether there are any emitters
-                        if (droneEmitter)
-                        {
-                            foreach (var emitter in emitters)
-                            {
-                                emitter.enabled = false;
-                            }
-                        }
                         // Get Rigidbody for the drone
-                        var droneRb = droneGameObject.GetComponentInChildren<Rigidbody>();
+                        droneRb = droneGameObject.GetComponentInChildren<Rigidbody>();
                         if (droneRb != null)
                             Log.Msg($"Drone '{droneGameObject.name}' has a Rigidbody component.");
                         else
                             Log.Warning($"Drone '{droneGameObject.name}' does not have a Rigidbody component.");
                             
                         // Store a reference to the PhysicsBasedEventEmitter
-                        PhysicsBasedEventEmitter physicsEmitter = droneGameObject.GetComponent<PhysicsBasedEventEmitter>();
+                        droneEmitters = droneGameObject.GetComponentsInChildren<PhysicsBasedEventEmitter>();
                     }
                 }
                 else
