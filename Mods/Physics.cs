@@ -62,7 +62,7 @@ namespace rowemod.Mods
                 {
                     vehicleInstance.JumpSettings.JumpVelocity[0] = smallHopForce;
                     vehicleInstance.JumpSettings.JumpVelocity[1] = smallHopForce;
-                    vehicleInstance.JumpSettings.JumpVelocity[2] = hopForce;
+                    //vehicleInstance.JumpSettings.JumpVelocity[2] = hopForce;
                 }
                 catch (Exception ex)
                 {

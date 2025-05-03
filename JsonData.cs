@@ -17,7 +17,7 @@ namespace rowemod
         public int lastVehicle { get; set; }
         public float gravity { get; set; }
         public float smallHopForce { get; set; }
-        public float hopForce { get; set; }
+        //public float hopForce { get; set; }
         public float sideHopPower { get; set; }
 
         public float pumpForce { get; set; }
@@ -87,5 +87,8 @@ namespace rowemod
         public float menuAccentG { get; set; }
         public float menuAccentB { get; set; }
         public float sloMoTimer { get; set; }
+
+        public bool droneEmitter { get; set; }
+    }
     }
 }

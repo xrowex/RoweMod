@@ -109,10 +109,10 @@ namespace rowemod
                         GUILayout.ExpandWidth(true)); // Colored separator
                     Toggle("Spin Assist", ref bSpinAssist); 
                     Toggle("Drifting", ref bDriftAbility);
-                    GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
-                        GUILayout.ExpandWidth(true)); // Colored separator
+                    //GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
+                        //GUILayout.ExpandWidth(true)); // Colored separator
                     Slider("Gravity", ref gravity, 0f, 30f);
-                    Slider("Hop Force", ref hopForce, 0f, 25f);
+                    //Slider("Hop Force", ref hopForce, 0f, 25f);
                     Slider("Small Hop Force", ref smallHopForce, 0f, 25f); /*
                                        Slider("Side Hop Force", ref sideHopPower, 0.1f, 5.0f);*/
                     GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(25),
@@ -146,8 +146,8 @@ break;*/
                 case Tab.Drone:
                     Mods.Misc.Update();
                     Toggle("Toggle Drone Body", ref droneBodyToggle);
+                    Toggle("Toggle Drone Sound", ref droneEmitter);
                     Slider("Drone Mass", ref droneMass, 2f, 1000f);
-                    //Toggle("Toggle Drone Sound",ref )
                     break;
 
                 case Tab.Misc:
@@ -426,7 +426,7 @@ break;*/
 
 // Physics Tab Sliders
             sliderTextValues["Gravity"] = gravity.ToString("F2");
-            sliderTextValues["Hop Force"] = hopForce.ToString("F2");
+            //sliderTextValues["Hop Force"] = hopForce.ToString("F2");
             sliderTextValues["Small Hop Force"] = smallHopForce.ToString("F2");
             sliderTextValues["Side Hop Force"] = sideHopPower.ToString("F2");
             sliderTextValues["Pump Force"] = pumpForce.ToString("F2");

@@ -19,7 +19,7 @@ namespace rowemod
         private static readonly int DefaultLastVehicle = 0;
         private static readonly float DefaultGravity = 12.5f;
         private static readonly float DefaultSmallHopForce = 4.2f;
-        private static readonly float DefaultHopForce = 5.5f;
+        //private static readonly float DefaultHopForce = 5.5f;
         private static readonly float DefaultPumpForce = 1.5f;
         private static readonly float DefaultSpinTorque = 1f;
         private static readonly float DefaultPedalForce = 5f;
@@ -87,7 +87,7 @@ namespace rowemod
         public static int lastVehicle = DefaultLastVehicle;
         public static float gravity = DefaultGravity;
         public static float smallHopForce = DefaultSmallHopForce;
-        public static float hopForce = DefaultHopForce;
+        //public static float hopForce = DefaultHopForce;
         public static float pumpForce = DefaultPumpForce;
         public static float spinTorque = DefaultSpinTorque;
         public static float pedalForce = DefaultPedalForce;
@@ -179,7 +179,7 @@ namespace rowemod
                 lastVehicle,
                 gravity,
                 smallHopForce,
-                hopForce,
+                //hopForce,
                 sideHopPower,
                 pumpForce,
                 spinTorque,
@@ -254,7 +254,7 @@ namespace rowemod
             lastVehicle = jsonData.lastVehicle;
             gravity = jsonData.gravity;
             smallHopForce = jsonData.smallHopForce;
-            hopForce = jsonData.hopForce;
+            //hopForce = jsonData.hopForce;
             sideHopPower = jsonData.sideHopPower;
             pumpForce = jsonData.pumpForce;
             spinTorque = jsonData.spinTorque;
@@ -418,7 +418,7 @@ namespace rowemod
             bSpinAssist = DefaultSpinAssist;
             gravity = DefaultGravity;
             smallHopForce = DefaultSmallHopForce;
-            hopForce = DefaultHopForce;
+            //hopForce = DefaultHopForce;
             pumpForce = DefaultPumpForce;
             spinTorque = DefaultSpinTorque;
             steerDamp = DefaultSteerDamp;

@@ -20,7 +20,7 @@ namespace rowemod.Mods
                 {
                     droneRb.mass = droneMass;
                 }
-
+                
                 if (helmet != null)
                 {
                     if (bHideHelmet) helmet.active = false;
