@@ -7,8 +7,6 @@ namespace rowemod
 {
     public static class Config
     {
-        
-
         // Default values for resetting
         private static readonly bool DefaultBBreakBike = false;
         private static readonly bool DefaultBDisableLevelInAir = false;
@@ -485,24 +483,7 @@ namespace rowemod
             
         }
 
-        public static void ResetCameraTab()
-        {
-            Log.Warning("Camera tab resetting.");
-            camLerp = DefaultCamLerp;
-            fovValue = DefaultFovValue;
-            camOffset = DefaultCamOffset;
-            bFpvCamera = DefaultFpvCamera;
-            bUseOldCam = false;
-            tpRecenterSpeed = DefaultTpRecenterSpeed;
-            tpCameraOffset = DefaultTpCameraOffset;
-            tpCameraPitch = DefaultTpCameraPitch;
-            tpFovValue = DefaultTpFovValue;
-        }
 
-        public static void ResetGraphicsTab()
-        {
-            //
-        }
         public static string MakeRelativePath(string fullPath)
         {
             if (string.IsNullOrEmpty(fullPath))

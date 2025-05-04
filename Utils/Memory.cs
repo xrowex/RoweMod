@@ -447,21 +447,8 @@ namespace rowemod.Utils
                 Log.Error($"Exception while finding Haptic Feedback Manager: {ex.Message}");
             }
             
-            
-            
-            
-            
-            
-            
-            
             Log.Msg("Running GrabTrickData()");
             TrickMods.GrabTrickData();
-            
-            
-            
-            //TransitionScannerDebugger.OnInitializeMelon();
-            
-            
             
             //Delayed bike materials load to bypass shop load
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
@@ -469,73 +456,12 @@ namespace rowemod.Utils
             //BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
             Custom.LoadPreset(lastLoadedPresetCharacter);
             
-            
-            
-
-            
             Mods.Physics.Update();
             //Mods.Misc.Update();
             
             
         }
 
-        /*public static void SetupCameraSeatRelay()
-        {
-            bmxCameraTarget = rMbCharacter.transform.FindDeepChild("BMX Camera Target")?.gameObject;
-            sportsVehicleCamera = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera")?.gameObject;
-            
-                    //setup seat relay
-                    physicsSeatEventRelay = rMbCharacter.GetComponentInChildren<PhysicsSeatEventRelay>();
-                    // Convert your method to an IL2CPP-safe delegate
-                    
-                    if (physicsSeatEventRelay.OnAttached.GetPersistentEventCount() == 0 && physicsSeatEventRelay.OnDetached.GetPersistentEventCount() == 0)
-                    {
-                        UnityAction onAttachedAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnAttachedHandler);
-                        UnityAction onDetachedAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnDetachedHandler);
-
-                        // Register the event listeners
-                        physicsSeatEventRelay.OnAttached.AddListener(onAttachedAction);
-                        physicsSeatEventRelay.OnDetached.AddListener(onDetachedAction);
-                        Log.Msg("OnAttached and OnDetached event listeners registered.");
-                    }
-            
-                
-                    // Handler methods
-                    void OnAttachedHandler()
-                    {
-                        if (bUseOldCam)
-                        {
-                            sportsVehicleCamera.SetActive(true);
-                            bmxCameraTarget.SetActive(true);
-                            virtualCam.transform.gameObject.SetActive(true);
-
-                            *//*Log.Msg(virtualCam.transform.gameObject.name + " is now active.");
-                            Log.Msg("OnAttached event triggered!");*//*
-                        }
-                        else
-                        {
-                            sportsVehicleCamera.SetActive(false);
-                            bmxCameraTarget.SetActive(false);
-                            virtualCam.transform.gameObject.SetActive(false);
-                
-                            *//*Log.Msg(virtualCam.transform.gameObject.name + " is now inactive.");*//*
-                        }
-                    }
-
-                    void OnDetachedHandler()
-                    {
-                        sportsVehicleCamera.SetActive(false);
-                        bmxCameraTarget.SetActive(false);
-                        virtualCam.transform.gameObject.SetActive(false);
-                
-                        *//*Log.Msg(virtualCam.transform.gameObject.name + " is now inactive.");
-                        Log.Msg("OnDetached event triggered!");*//*
-                    }
-                
-        }*/
-        
-        
-        
         //prefab variables
         public static List<GameObject> prefabList = new List<GameObject>();
         public static List<GameObject> sessionMarkers = new List<GameObject>();
@@ -671,9 +597,9 @@ namespace rowemod.Utils
 
 
 
-        /*public static void ToggleBmxFrames()
+        public static void ToggleBmxFrames()
         {
-            if (rMBCharacter == null)
+            if (rMbCharacter == null)
             {
                 Log.Error("rMBCharacter is null. Cannot toggle BMX frames.");
                 return;
@@ -684,7 +610,7 @@ namespace rowemod.Utils
                 Log.Msg("Searching for BMX frames...");
         
                 // Locate BMX_Frame_Vanilla_Standard and disable it
-                /*var bmxFrameVanilla = rMBCharacter.transform.FindDeepChild("BMX_Frame_Vanilla_Standard")?.gameObject;
+                var bmxFrameVanilla = rMbCharacter.transform.FindDeepChild("BMX_Frame_Vanilla_Standard")?.gameObject;
                 if (bmxFrameVanilla != null)
                 {
                     bmxFrameVanilla.SetActive(false);
@@ -696,7 +622,7 @@ namespace rowemod.Utils
                 }
         
                 // Locate BMX_Frame_NoBrand_Standard_Brakeless and enable it
-                var bmxFrameNoBrand = rMBCharacter.transform.FindDeepChild("BMX_Frame_NoBrand_Standard_Brakeless")?.gameObject;
+                var bmxFrameNoBrand = rMbCharacter.transform.FindDeepChild("BMX_Frame_NoBrand_Standard_Brakeless")?.gameObject;
                 if (bmxFrameNoBrand != null)
                 {
                     bmxFrameNoBrand.SetActive(true);
@@ -717,20 +643,19 @@ namespace rowemod.Utils
                 else
                 {
                     Log.Warning("BMX_Frame_NoBrand_Standard_Brakeless not found.");
-                }#1#
+                }
                 
 
-                //var spokes = Resources.FindObjectsOfTypeAll<GameObject>().FirstOrDefault(obj => obj.name == "spokes");
 
                 roweSpokes = prefabList.FirstOrDefault(obj => obj.name == "SpokesAndRims");
                 roweBars = prefabList.FirstOrDefault(obj => obj.name == "Bars");
                 
                 if (roweSpokes != null)
                 { 
-                    var bmxFrontSpokes = rMBCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Offset/Rotator Bone/Wheel Mesh/BMX_Spokes_Front_EquipSlot/")?.gameObject;
-                    var bmxRearSpokes = rMBCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Back Wheel/Rotator Bone/Wheel Mesh/BMX_Spokes_Front_EquipSlot/")?.gameObject;
-                    var bmxFrontRim = rMBCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Offset/Rotator Bone/Wheel Mesh/BMX_Rim_Front_EquipSlot/")?.gameObject;
-                    var bmxRearRim = rMBCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Back Wheel/Rotator Bone/Wheel Mesh/BMX_Rim_Front_EquipSlot/")?.gameObject;
+                    var bmxFrontSpokes = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Offset/Rotator Bone/Wheel Mesh/BMX_Spokes_Front_EquipSlot/")?.gameObject;
+                    var bmxRearSpokes = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Back Wheel/Rotator Bone/Wheel Mesh/BMX_Spokes_Front_EquipSlot/")?.gameObject;
+                    var bmxFrontRim = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Offset/Rotator Bone/Wheel Mesh/BMX_Rim_Front_EquipSlot/")?.gameObject;
+                    var bmxRearRim = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Back Wheel/Rotator Bone/Wheel Mesh/BMX_Rim_Front_EquipSlot/")?.gameObject;
                     
                     if(bmxFrontRim != null)
                         bmxFrontRim.SetActive(false);
@@ -784,18 +709,18 @@ namespace rowemod.Utils
                 roweBars = prefabList.FirstOrDefault(obj => obj.name == "bars");
                 if (roweBars != null)
                 {
-                    var frontBars = rMBCharacter.transform
+                    var frontBars = rMbCharacter.transform
                         .FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Front End/Bars/")?.gameObject;
                     if (frontBars != null)
                     {
                         
                         if (roweBars != null)
                         {
-                            /*GameObject newFrontBars = Object.Instantiate(roweBars, frontBars.transform.parent);
+                            GameObject newFrontBars = Object.Instantiate(roweBars, frontBars.transform.parent);
                             newFrontBars.SetActive(true);
                             //newFrontBars.transform.localPosition = new Vector3(0, 0, 0);
                             newFrontBars.AddComponent<EquipSlotVehicle>();
-                            newFrontBars.name = "BMX_Bars_NoBrand_4PC";#1#
+                            newFrontBars.name = "BMX_Bars_NoBrand_4PC";
                             
                             frontBars.GetComponent<EquipSlotVehicle>().InstantiateItem(roweBars);
                             frontBars.GetComponent<Anchor>().SnapToAnchor();
@@ -826,7 +751,7 @@ namespace rowemod.Utils
             {
                 Log.Error($"Exception while toggling BMX frames: {ex.Message}");
             }
-        }*/
+        }
         
         
         
