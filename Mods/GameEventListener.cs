@@ -4,14 +4,21 @@ using rowemod.Utils;
 using UnityEngine.Events;
 using rowemod.Mods;
 using Physics = UnityEngine.Physics;
+using System;
 
 namespace rowemod
 {
-    public class GameEventListener
+    public class GameEventListener : IDisposable
     {
         private GameEvent _playerSpawnEvent;
         private GameEvent _playerResetAtMarker;
         private GameEvent _playerCloseMenu;
+        
+        // Store delegate references so we can remove them later
+        private UnityAction _spawnAction;
+        private UnityAction _resetAction;
+        private UnityAction _closeMenuAction;
+
         public void Initialize()
         {
             // Find the existing GameEvent instance
@@ -48,8 +55,8 @@ namespace rowemod
             }
 
             Log.Msg("GameEvent_MainPlayerHumanSpawned found! Subscribing to event...");
-            UnityAction action = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerSpawned);
-            _playerSpawnEvent.OnRaise.AddListener(action);
+            _spawnAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerSpawned);
+            _playerSpawnEvent.OnRaise.AddListener(_spawnAction);
             
             
 
@@ -62,9 +69,8 @@ namespace rowemod
             }   
             
             Log.Msg("GameEvent_OnResetAtMarker found! Subscribing to event...");
-            UnityAction resetAction =
-                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
-            _playerResetAtMarker.OnRaise.AddListener(resetAction);
+            _resetAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
+            _playerResetAtMarker.OnRaise.AddListener(_resetAction);
 
 
 
@@ -76,11 +82,32 @@ namespace rowemod
             }
 
             Log.Msg("GameEvent_SimpleGameLoop_Paused_OnExit found! Subscribing to event...");
-            UnityAction closeMenuAction =
-                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseMenu);
-            _playerResetAtMarker.OnRaise.AddListener(closeMenuAction);
+            _closeMenuAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseMenu);
+            _playerCloseMenu.OnRaise.AddListener(_closeMenuAction);
 
         }
+
+        public void Dispose()
+        {
+            // Remove listeners
+            if (_playerSpawnEvent != null && _spawnAction != null)
+                _playerSpawnEvent.OnRaise.RemoveListener(_spawnAction);
+                
+            if (_playerResetAtMarker != null && _resetAction != null)
+                _playerResetAtMarker.OnRaise.RemoveListener(_resetAction);
+                
+            if (_playerCloseMenu != null && _closeMenuAction != null)
+                _playerCloseMenu.OnRaise.RemoveListener(_closeMenuAction);
+
+            // Clear references
+            _playerSpawnEvent = null;
+            _playerResetAtMarker = null;
+            _playerCloseMenu = null;
+            _spawnAction = null;
+            _resetAction = null;
+            _closeMenuAction = null;
+        }
+
         private void OnPlayerCloseMenu()
         {
             Log.Msg("GameEvent_SimpleGameLoop_Paused_OnExit!");
