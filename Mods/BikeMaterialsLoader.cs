@@ -81,7 +81,6 @@ namespace rowemod.Mods
                     {
                         _selectedCategory = category.Key;
                         _selectedFolder = Path.Combine(BikeRootPath, category.Value.displayName);
-                        //LoadPreviewsForCategory(selectedCategory, selectedFolder);
                     }
                 }
                 GUILayout.EndVertical();

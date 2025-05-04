@@ -65,6 +65,8 @@ namespace rowemod
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
+            
+            
         }
 
         public override void OnLateInitializeMelon()
@@ -121,7 +123,7 @@ namespace rowemod
             listener.Initialize();
 
         }
-
+        
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
@@ -132,7 +134,21 @@ namespace rowemod
                 .ToList();
 
             cachedVolumes = UnityEngine.Object.FindObjectsOfType<UnityEngine.Rendering.Volume>().ToList();
-
+            
+            //We set styles to false to reload each time scene is initialized
+            stylesInitialized = false;
+            
+            
+            //disable test mod in game
+            foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
+            {
+                if (obj.name == "TestRoweMod" || obj.name == "TestRoweMod(Clone)")
+                {
+                    obj.SetActive(false);
+                    Log.Msg($"Disabled: {obj.name}");
+                }
+            }
+            
             if (sceneName.Contains("TheShop"))
             {
                 RoweCustomCharacter.GetDefaultCharacter();
@@ -179,8 +195,12 @@ namespace rowemod
         } 
         public override void OnGUI()
         {
-            InitializeStyles();
-
+            if (!stylesInitialized)
+            {
+                InitializeStyles();
+                stylesInitialized = true;
+            }
+                
             if (isOpen)
             {
                 Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. 1.8.0", Menu.windowStyle);
@@ -215,93 +235,5 @@ namespace rowemod
             }
         }
 
-        private void HandleVehicleChanges()
-        {
-            if (vehicleChanger == null)
-            {
-                //Log.Error("vehicleChanger is not set.");
-                return;
-            }
-
-            if (vehicleChanger._currentVehicle != lastVehicle)
-            {
-                Log.Msg($"Vehicle changed from '{lastVehicle}' to '{vehicleChanger._currentVehicle}'");
-
-                // Cancel previous coroutine if still running
-                if (_currentVehicleCheckCoroutine != null)
-                {
-                    MelonCoroutines.Stop(_currentVehicleCheckCoroutine);
-                }
-
-                _currentVehicleCheckCoroutine = (Coroutine?)MelonCoroutines.Start(ProcessVehicleChange());
-                lastVehicle = vehicleChanger._currentVehicle;
-            }
-        }
-
-        private IEnumerator ProcessVehicleChange()
-        {
-            _isProcessingVehicleChange = true;
-            Log.Msg("Processing vehicle change...");
-            // Wait for vehicle to fully spawn
-            yield return new WaitForSeconds(2f);
-
-            FindObjects(Memory.physicsDrivenCharacter);
-            ValidateCurrentVehicleComponents();
-            _isProcessingVehicleChange = false;
-        }
-
-        private static void ValidateCurrentVehicleComponents()
-        {
-            var currentVehicle = vehicleChanger?._spawnedVehicle;
-            if (currentVehicle == null) return;
-
-            switch (vehicleChanger._currentVehicle)
-            {
-                case 0://Proto_Dually
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-                    break;
-
-                case 1://Proto_Bike
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-                    break;
-
-                case 2://MTB
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-                    Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    break;
-
-                case 3://Proto_Scoot
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-                    Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    break;
-
-                case 4://BMX
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-
-                    Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-
-                    BikeMaterialsLoader.Initialize();
-                    Log.Msg("Starting DelayedApplySavedMaterials(5) coroutine...");
-                    MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-
-                    break;
-
-                case 5://Proto_Uni
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-                    break;
-
-                case 6://Proto_BMX_LONG Variant
-                    Mods.Physics.Update();
-                    Mods.Misc.Update();
-                    Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
-                    break;
-            }
-        }
     }
 }

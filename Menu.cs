@@ -59,7 +59,7 @@ namespace rowemod
         public static GUIStyle horizontalSliderThumbStyle;
         public static GUIStyle coloredBoxStyle;
         public static GUIStyle highQualityButtonStyle;
-        private static bool stylesInitialized = false;
+        public static bool stylesInitialized = false;
 
         // Dictionaries and caches
         private static readonly Dictionary<string, string> sliderTextValues = new Dictionary<string, string>();
@@ -253,7 +253,6 @@ namespace rowemod
                         case Tab.Character: ResetCharacterTab(); break;
                         case Tab.BikeMaterials: ResetBikeMaterialsTab(); break;
                         case Tab.Misc: ResetMiscTab(); break;
-                        case Tab.Graphics: ResetGraphicsTab(); break;
                     }
                     ResetSliderTextValues();
                 }
