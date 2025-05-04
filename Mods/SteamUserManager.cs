@@ -1,9 +1,7 @@
-using Il2CppSteamworks;
 using Newtonsoft.Json.Linq;
+using Il2CppSteamworks;
 using rowemod.Utils;
 using UnityEngine;
-
-namespace rowemod.Mods;
 
 public class SteamUserManager
 {

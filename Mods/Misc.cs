@@ -10,6 +10,7 @@ namespace rowemod.Mods
         {
             try
             {
+
                 // Update Drone Rigidbody Mass
                 if (droneRb != null)
                 {
