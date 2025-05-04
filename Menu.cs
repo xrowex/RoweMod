@@ -156,7 +156,7 @@ namespace rowemod
                     if (InstructionCanvas != null)
                     InstructionCanvas.SetActive(bShowInstructions);*/
                    
-                    Toggle("Never Bail", ref bNeverBail);
+                    // Toggle("Never Bail", ref bNeverBail);
                     Toggle("Vibration", ref bVibration);
                     if (hapticFeedBack != null)
                         hapticFeedBack.SetActive(bVibration);

@@ -10,7 +10,7 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.6.1", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.7.0", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -184,7 +184,7 @@ namespace rowemod
 
             if (isOpen)
             {
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. 1.6.0", Menu.windowStyle);
+                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. 1.7.0", Menu.windowStyle);
             }
         }
         private void HandleMenuToggle()
