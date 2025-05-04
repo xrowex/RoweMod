@@ -123,7 +123,7 @@ namespace rowemod
             listener.Initialize();
 
         }
-
+        
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
