@@ -1,4 +1,4 @@
-﻿using Il2CppCinemachine;
+﻿/*using Il2CppCinemachine;
 using rowemod.Utils;
 using static rowemod.Utils.Memory;
 using static rowemod.Config;
@@ -12,7 +12,7 @@ namespace rowemod.Mods
 
         public static void Update()
         {
-            /*try
+            *//*try
             {
                 // Update Camera settings
                 if (camTarget != null)
@@ -87,9 +87,10 @@ namespace rowemod.Mods
             {
                 Log.Error(e);
                 throw;
-            }*/
+            }*//*
             
         }
 
     }
 }
+*/

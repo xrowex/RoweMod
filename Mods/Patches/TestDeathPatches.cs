@@ -12,7 +12,7 @@ namespace rowemod.Mods.Patches
         {
             public static bool Prefix(TestDeath __instance)
             {
-                if (Gamepad.current != null && Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current.enabled) return true;
+                if (Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current.enabled) return true;
                 return !Config.bNeverBail;
             }
         }
@@ -23,9 +23,9 @@ namespace rowemod.Mods.Patches
             public static bool Prefix(TestDeath __instance)
             {
                 
-                if (Gamepad.current != null && Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current.enabled) return true;
+                if (Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current.enabled) return true;
                 return !Config.bNeverBail;
             }
         }
     }
-} 
+}

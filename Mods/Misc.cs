@@ -6,14 +6,10 @@ namespace rowemod.Mods
 {
     public static class Misc
     {
-
-        
         public static void Update()
         {
             try
             {
-                /*if (mashBucksHUD != null)
-                    mashBucksHUD.useGUILayout = bShowHUD;*/
 
                 // Update Drone Rigidbody Mass
                 if (droneRb != null)

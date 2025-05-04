@@ -4,11 +4,10 @@ using rowemod.Utils;
 using UnityEngine.Events;
 using rowemod.Mods;
 using Physics = UnityEngine.Physics;
-using System;
 
 namespace rowemod
 {
-    public class GameEventListener : IDisposable
+    public class GameEventListener
     {
         private GameEvent _playerSpawnEvent;
         private GameEvent _playerResetAtMarker;

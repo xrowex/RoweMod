@@ -17,7 +17,8 @@ using Il2CppMashBox.Character.Scripts;
 //using Il2CppMashBox.Core.Common_Utils.Extension_Methods;
 using Il2CppModIOBrowser;
 using Il2CppPlayFab.ClientModels;
-using static rowemod.Mods.Custom;
+using UnityEngine.Networking;
+using System.Collections;
 
 namespace rowemod
 {
@@ -106,7 +107,7 @@ namespace rowemod
                 case Tab.Physics:
                     Mods.Physics.Update();
                     GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(25),
-                        GUILayout.ExpandWidth(true)); // Colored separator
+                    GUILayout.ExpandWidth(true)); // Colored separator
                     Toggle("Spin Assist", ref bSpinAssist); 
                     Toggle("Drifting", ref bDriftAbility);
                     //GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
@@ -287,6 +288,11 @@ namespace rowemod
 
         static void DrawTabs()
         {
+            // Draw RoweMods logo at top
+            if (logoTexture != null)
+            {
+                GUILayout.Label(logoTexture, GUILayout.Width(150), GUILayout.Height(50));
+            }
             GUILayout.BeginHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -296,7 +302,7 @@ namespace rowemod
             }
 
             if (GUILayout.Button("<b>Tricks</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Tricks); }
-//if (GUILayout.Button("<b>Bike</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Bike); }
+            //if (GUILayout.Button("<b>Bike</b>", highQualityButtonStyle)) { SetCurrentTab(Tab.Bike); }
             if (GUILayout.Button("<b>Character</b>", highQualityButtonStyle))
             {
                 SetCurrentTab(Tab.Character);
@@ -316,11 +322,11 @@ namespace rowemod
             {
                 SetCurrentTab(Tab.Misc);
             }
-
+/*
             if (GUILayout.Button("<b>Camera</b>", highQualityButtonStyle))
             {
                 SetCurrentTab(Tab.Camera);
-            }
+            }*/
 
             if (GUILayout.Button("<b>Graphics</b>", highQualityButtonStyle))
             {
@@ -842,5 +848,28 @@ namespace rowemod
             GUILayout.EndHorizontal();
             return value;
         }
+        static Texture2D logoTexture;
+
+        public static IEnumerator LoadRoweLogo()
+        {
+
+            string url = "https://github.com/xrowex/RoweModsLogo/raw/main/rowemods.png";
+            UnityWebRequest www = UnityWebRequestTexture.GetTexture(url);
+
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Logo download failed: " + www.error);
+            }
+            else
+            {
+                logoTexture = DownloadHandlerTexture.GetContent(www);
+                Debug.Log("RoweMods logo loaded successfully.");
+            }
+
+            www.Dispose(); // optional but clean
+        }
+
     }
 }

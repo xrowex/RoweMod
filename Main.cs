@@ -174,7 +174,6 @@ namespace rowemod
                 {
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                 }
             }
         } 
@@ -199,7 +198,6 @@ namespace rowemod
                         Log.Msg("Menu toggled on.");
                         Mods.Physics.Update();
                         Mods.Misc.Update();
-                        Mods.Camera.Update();
                         Cursor.visible = true;
                         Cursor.lockState = CursorLockMode.None;
                     }
@@ -262,33 +260,28 @@ namespace rowemod
                 case 0://Proto_Dually
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                     break;
 
                 case 1://Proto_Bike
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                     break;
 
                 case 2://MTB
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
                     break;
 
                 case 3://Proto_Scoot
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
                     break;
 
                 case 4://BMX
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
 
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
 
@@ -301,13 +294,11 @@ namespace rowemod
                 case 5://Proto_Uni
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                     break;
 
                 case 6://Proto_BMX_LONG Variant
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Mods.Camera.Update();
                     Log.Msg("Starting DelayedUpdateCharacter(3) coroutine...");
                     break;
             }

@@ -475,7 +475,6 @@ namespace rowemod.Utils
             
             Mods.Physics.Update();
             //Mods.Misc.Update();
-            Mods.Camera.Update();
             
             
         }
