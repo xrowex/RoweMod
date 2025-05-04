@@ -59,6 +59,7 @@ namespace rowemod
         public static GUIStyle horizontalSliderThumbStyle;
         public static GUIStyle coloredBoxStyle;
         public static GUIStyle highQualityButtonStyle;
+        public static GUIStyle activeTabButtonStyle;
         public static bool stylesInitialized = false;
 
         // Dictionaries and caches
@@ -142,6 +143,7 @@ namespace rowemod
 
                     case Tab.Misc:
                         Mods.Misc.Update();
+                        Toggle(text: "No Bail", ref bNeverBail);
                         Toggle("Vibration", ref bVibration);
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
@@ -227,14 +229,27 @@ namespace rowemod
                 }
                 GUILayout.BeginHorizontal();
 
-                if (GUILayout.Button("<b>Physics</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Physics);
-                if (GUILayout.Button("<b>Tricks</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Tricks);
-                if (GUILayout.Button("<b>Character</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Character);
-                if (GUILayout.Button("<b>BikeMaterials</b>", highQualityButtonStyle)) SetCurrentTab(Tab.BikeMaterials);
-                if (GUILayout.Button("<b>Drone</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Drone);
-                if (GUILayout.Button("<b>Misc</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Misc);
-                if (GUILayout.Button("<b>Graphics</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Graphics);
-                if (GUILayout.Button("<b>Marker</b>", highQualityButtonStyle)) SetCurrentTab(Tab.Marker);
+                // Define tab labels and corresponding enum values
+                (string label, Tab tab)[] tabs = new[]
+                {
+                    ("Physics", Tab.Physics),
+                    ("Tricks", Tab.Tricks),
+                    ("Character", Tab.Character),
+                    ("BikeMaterials", Tab.BikeMaterials),
+                    ("Drone", Tab.Drone),
+                    ("Misc", Tab.Misc),
+                    ("Graphics", Tab.Graphics),
+                    ("Marker", Tab.Marker)
+                };
+
+                foreach (var (label, tab) in tabs)
+                {
+                    GUIStyle buttonStyle = currentTab == tab ? activeTabButtonStyle : highQualityButtonStyle;
+                    if (GUILayout.Button($"<b>{label}</b>", buttonStyle))
+                    {
+                        SetCurrentTab(tab);
+                    }
+                }
 
                 GUILayout.Space(50);
                 if (GUILayout.Button("<b>Snap</b>", highQualityButtonStyle, GUILayout.Width(80)))
@@ -291,6 +306,7 @@ namespace rowemod
             {
                 scrollOffset = 0;
                 currentTab = newTab;
+                InitializeStyles(); // Refresh styles to update active tab highlight
             }
         }
 
@@ -335,7 +351,7 @@ namespace rowemod
         {
             try
             {
-                if (stylesInitialized) return;
+                // Removed stylesInitialized check to allow style updates
                 stylesInitialized = true;
 
                 // Window Style
@@ -344,8 +360,10 @@ namespace rowemod
                 Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(0.2f, 0.2f, 0.2f, 1f));
                 Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB);
                 Color accentHoverBaseColor = accentBaseColor * 1.35f;
+                Color activeTabColor = accentBaseColor * 2f; // Slightly different for active tab
                 Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10);
                 Texture2D roundedButtonHover = MakeRoundedTex(20, 40, accentHoverBaseColor, 10);
+                Texture2D activeTabBackground = MakeRoundedTex(20, 40, activeTabColor, 10);
                 Texture2D accentColor = MakeTex(2, 2, accentBaseColor);
 
                 windowStyle.normal.background = backgroundTexture;
@@ -394,6 +412,15 @@ namespace rowemod
                 highQualityButtonStyle.fontStyle = FontStyle.Bold;
                 highQualityButtonStyle.alignment = TextAnchor.MiddleCenter;
                 highQualityButtonStyle.border = new RectOffset(10, 10, 10, 10);
+
+                // Active Tab Button Style
+                activeTabButtonStyle = new GUIStyle(highQualityButtonStyle);
+                activeTabButtonStyle.normal.background = activeTabBackground;
+                activeTabButtonStyle.hover.background = roundedButtonHover; // Same hover as normal
+                activeTabButtonStyle.active.background = activeTabBackground;
+                activeTabButtonStyle.normal.textColor = Color.white;
+                activeTabButtonStyle.hover.textColor = Color.yellow;
+                activeTabButtonStyle.active.textColor = Color.green;
             }
             catch (Exception ex)
             {
