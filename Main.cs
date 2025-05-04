@@ -20,7 +20,6 @@ namespace rowemod
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
-        private GameEventListener _listener;
 
         void CreateModDirectories()
         {
@@ -118,15 +117,9 @@ namespace rowemod
 
             // Set up event listener
             Log.Msg("Starting game event listener...");
-            _listener = new GameEventListener();
-            _listener.Initialize();
+            GameEventListener listener = new GameEventListener();
+            listener.Initialize();
 
-        }
-
-        public override void OnDeinitializeMelon()
-        {
-            _listener?.Dispose();
-            _listener = null;
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
