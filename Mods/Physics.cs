@@ -70,22 +70,6 @@ namespace rowemod.Mods
                 }
             }
 
-            /*if (theCharacter != null)
-            {
-                try
-                {
-                    theCharacter._allowTrickLanders = allowTrickLanders;
-                    theCharacter._alwaysAllowFireTricks = alwaysAllowFireTricks;
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"[Physics.Update] Error updating character settings: {ex.Message}\n{ex.StackTrace}");
-                }
-            }
-            else
-            {
-                Log.Error("theCharacter is null.");
-            }*/
         }
     }
 }

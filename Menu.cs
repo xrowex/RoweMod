@@ -107,23 +107,26 @@ namespace rowemod
                 case Tab.Physics:
                     Mods.Physics.Update();
                     GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(25),
-                    GUILayout.ExpandWidth(true)); // Colored separator
+                    GUILayout.ExpandWidth(true));
+
                     Toggle("Spin Assist", ref bSpinAssist); 
                     Toggle("Drifting", ref bDriftAbility);
-                    //GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
-                        //GUILayout.ExpandWidth(true)); // Colored separator
+
+                    GUILayout.Box("Hops", coloredBoxStyle, GUILayout.Height(25),
+                    GUILayout.ExpandWidth(true));
                     Slider("Gravity", ref gravity, 0f, 30f);
-                    //Slider("Hop Force", ref hopForce, 0f, 25f);
-                    Slider("Small Hop Force", ref smallHopForce, 0f, 25f); /*
-                                       Slider("Side Hop Force", ref sideHopPower, 0.1f, 5.0f);*/
+                    Slider("Small Hop Force", ref smallHopForce, 0f, 25f); 
+                    Slider("Side Hop Force", ref sideHopPower, 0.1f, 5.0f);
+
                     GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(25),
-                        GUILayout.ExpandWidth(true)); // Colored separator
+                    GUILayout.ExpandWidth(true));
                     Slider("Pump Force", ref pumpForce, 0f, 30f);
                     Slider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
                     Slider("Steer Damping", ref steerDamp, 1f, 5f);
                     //Slider("Quick Spin Multiplier", ref quickSpinMultiplier, 1.0f, 10.0f);
+
                     GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(25),
-                        GUILayout.ExpandWidth(true)); // Colored separator
+                    GUILayout.ExpandWidth(true));
                     Slider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
                     Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
                     break;
@@ -180,46 +183,6 @@ namespace rowemod
 
                     break;
 
-                //case Tab.Dropper:
-                //    GUILayout.Label("Object Dropper / Transform Manipulation", labelStyle);
-                //    break;
-                /*
-                                case Tab.Camera:
-                                    Mods.Camera.Update();
-                                    GUILayout.Box("Old Camera", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
-
-                                    Toggle("Use Old Camera", ref bUseOldCam);
-                                    if (bUseOldCam)
-                                    {
-                                        Slider("Camera Rotation Speed", ref camLerp, 0f, 5f);
-                                        Slider("Field Of View", ref fovValue, 1f, 360f);
-                                        Slider("Camera Offset X", ref camOffset.x, -10f, 10f);
-                                        Slider("Camera Offset Y", ref camOffset.y, -10f, 10f);
-                                        Slider("Camera Offset Z", ref camOffset.z, -30f, 30f);
-                                    }
-
-
-                                   GUILayout.Box("First Person Cam [WIP]", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
-                                   Toggle("First Person Camera", ref bFpvCamera);
-                                   if (bFpvCamera)
-                                   {
-                                       Slider("First Person X", ref fpvOffset.x, -2f, 2f);
-                                       Slider("First Person Y", ref fpvOffset.y, -2f, 2f);
-                                       Slider("First Person Z", ref fpvOffset.z, -2f, 2f);
-                                       Slider("First Person Rotation X", ref fpvRotation.x, -180f, 180f);
-                                       //Slider("First Person Rotation Y", ref fpvRotation.y, -180f, 180f);
-                                       Slider("First Person Rotation Z", ref fpvRotation.z, -180f, 180f);
-                                   }
-                                   GUILayout.Box("Third Person Cam", coloredBoxStyle, GUILayout.Height(30), GUILayout.ExpandWidth(true));
-                                   Slider("Cam FOV", ref tpFovValue, 10f, 120f);
-                                   Slider("Camera AutoCenter Speed",ref tpRecenterSpeed, 0f, 1000f);
-                                   Slider("Camera Pitch", ref tpCameraPitch, -25f, 25f);
-                                   Slider("Camera Offset X", ref tpCameraOffset.x, -1f,1f);
-                                   Slider("Camera Offset Y", ref tpCameraOffset.y, -1f, 1f);
-                                   Slider("Camera Offset Z", ref tpCameraOffset.z, -6f, 0f);
-
-                break;
-                */
                 case Tab.Graphics:
                     try
                     {
@@ -368,12 +331,6 @@ namespace rowemod
                         break;
                     case Tab.Misc:
                         ResetMiscTab();
-                        break;
-                    case Tab.Camera:
-                        ResetCameraTab();
-                        break;
-                    case Tab.Graphics:
-                        ResetGraphicsTab();
                         break;
                 }
 
