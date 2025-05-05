@@ -72,12 +72,6 @@ namespace rowemod
         public static List<UnityEngine.Rendering.Volume> cachedVolumes = new List<UnityEngine.Rendering.Volume>();
         private static Texture2D logoTexture;
 
-        // Graphics settings
-        public static Resolution[] availableResolutions;
-        public static int selectedResolutionIndex;
-        public static bool isFullScreen;
-        public static int selectedQualityIndex;
-        private static bool isVSyncEnabled = QualitySettings.vSyncCount > 0;
 
         //-------------------------------------------------------------------
         // MENU & TAB LOGIC
@@ -87,6 +81,14 @@ namespace rowemod
         {
             try
             {
+                
+                if (logoTexture != null)
+                {
+                    GUI.color = new Color(1f, 1f, 1f, 0.1f); // 10% opacity
+                    GUI.DrawTexture(new Rect(0, 0, windowRect.width, windowRect.height), logoTexture, ScaleMode.ScaleAndCrop, true);
+                    GUI.color = Color.white; // Reset alpha
+                }
+                
                 GUI.DragWindow(new Rect(0, 0, windowRect.width, 20));
                 GUILayout.BeginVertical();
                 GUILayout.Space(5);
@@ -158,14 +160,14 @@ namespace rowemod
                         GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Toggle("Hide Helmet", ref bHideHelmet);
                         Slider("Slo Motion Timer", ref sloMoTimer, 1.0f, 10.0f);
-                        GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
+                       /* GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Slider("Menu Color R", ref menuAccentR, 0f, 1f);
                         Slider("Menu Color G", ref menuAccentG, 0f, 1f);
                         Slider("Menu Color B", ref menuAccentB, 0f, 1f);
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
-                        }
+                        }*/
                         break;
 
                     case Tab.Graphics:
@@ -231,10 +233,6 @@ namespace rowemod
         {
             try
             {
-                if (logoTexture != null)
-                {
-                    GUILayout.Label(logoTexture, GUILayout.Width(150), GUILayout.Height(50));
-                }
                 GUILayout.BeginHorizontal();
 
                 // Define tab labels and corresponding enum values
@@ -365,9 +363,10 @@ namespace rowemod
 
                 // Window Style
                 windowStyle = new GUIStyle(GUI.skin.window);
-                Texture2D backgroundTexture = MakeTex(2, 2, new Color(0, 0, 0, 0.9f));
+                //Texture2D backgroundTexture = MakeTex(2, 2, new Color(0, 0, 0, 0.9f));
+                Texture2D backgroundTexture = MakeRoundedTex(900, 800, new Color(0, 0, 0, 0.9f), 20); // width, height, color, radius
                 Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(0.2f, 0.2f, 0.2f, 1f));
-                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB);
+                Color accentBaseColor = new Color(0.4576f, 0.2078f, 0.0712f);
                 Color accentHoverBaseColor = accentBaseColor * 1.35f;
                 Color activeTabColor = accentBaseColor * 2f; // Slightly different for active tab
                 Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10);
@@ -489,21 +488,6 @@ namespace rowemod
         // GRAPHICS
         //-------------------------------------------------------------------
 
-        public static void ApplyGraphicsSettings()
-        {
-            try
-            {
-                if (availableResolutions == null || availableResolutions.Length == 0) return;
-                Resolution res = availableResolutions[selectedResolutionIndex];
-                Screen.SetResolution(res.width, res.height, isFullScreen);
-                QualitySettings.vSyncCount = isVSyncEnabled ? 1 : 0;
-                QualitySettings.SetQualityLevel(selectedQualityIndex);
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in ApplyGraphicsSettings: {ex.Message}");
-            }
-        }
 
         public static void DrawGraphicsSettings()
         {
@@ -533,28 +517,7 @@ namespace rowemod
             }
         }
 
-        public static void ApplyGlobalGraphicsSettings(int taaQualityIndex)
-        {
-            try
-            {
-                if (cachedHDRCameras == null || cachedHDRCameras.Count == 0) return;
-                foreach (var hdrpCamera in cachedHDRCameras)
-                {
-                    if (hdrpCamera == null) continue;
-                    switch (taaQualityIndex)
-                    {
-                        case 0: hdrpCamera.antialiasing = UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData.AntialiasingMode.None; break;
-                        case 1: hdrpCamera.antialiasing = UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData.AntialiasingMode.FastApproximateAntialiasing; break;
-                        case 2: hdrpCamera.antialiasing = UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData.AntialiasingMode.TemporalAntialiasing; break;
-                        case 3: hdrpCamera.antialiasing = UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData.AntialiasingMode.SubpixelMorphologicalAntiAliasing; break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in ApplyGlobalGraphicsSettings: {ex.Message}");
-            }
-        }
+        
 
         //-------------------------------------------------------------------
         // SLIDER & GUI METHODS

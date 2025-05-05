@@ -10,7 +10,7 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.1", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.2", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -66,8 +66,6 @@ namespace rowemod
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
-            
-            
         }
 
         public override void OnLateInitializeMelon()
@@ -139,6 +137,8 @@ namespace rowemod
             //We set styles to false to reload each time scene is initialized
             stylesInitialized = false;
             
+            //load rowe logo
+            MelonCoroutines.Start(LoadRoweLogo());
             
             //disable test mod in game
             foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
@@ -211,7 +211,7 @@ namespace rowemod
                 
             if (isOpen)
             {
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. {ModVersion}", Menu.windowStyle);
+                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
             }
         }
         
