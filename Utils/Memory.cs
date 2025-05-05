@@ -2,9 +2,7 @@
 using Il2CppMashBox.Addons.ContentManagment;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
-
 using static rowemod.Config;
-
 using UnityEngine;
 using Il2CppMashBox.Addons.SlowMotionSystem;
 using Il2CppMashBox.Addons.ProtoDrone;
@@ -46,10 +44,10 @@ namespace rowemod.Utils
         public static GameObject physicsDrivenCharacter;
         public static GameObject rPhysicsSkeleton;
 
-        // --- HUD ---
+        // --- HUD --- //
         public static Test mashBucksHUD;
 
-        // --- CAMERA ---
+        // --- CAMERA --- //
         public static Camera roweCam;
         public static BMXCMCameraTarget camTarget;
         public static CinemachineVirtualCamera virtualCam;
@@ -59,11 +57,10 @@ namespace rowemod.Utils
         public static Vector3 fpvRotation;
         public static CameraData cameraData;
         
-        // --- Third person camera data ---
+        // --- Third person camera data --- //
         public static ThirdPersonCamera tpCamera;
         public static CameraData tpCameraData;
         public static CinemachineVirtualCamera tpVirtualCam;
-        
         
         // --- Character Settings --- //
         public static CharacterData roweCharacterData;
@@ -93,12 +90,11 @@ namespace rowemod.Utils
         public static CustomizableEntity customizableEntity;
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
         
-        //Game Events
+        // Game Events
         public static GameEvent playerSpawned;
 
         public static TeleportRelay teleportRelay;
         public static PhysicsPropHandBehaviour physicsPropHandBehaviour;
-        
         
         public static void FindObjects(GameObject player)
         {
@@ -122,7 +118,7 @@ namespace rowemod.Utils
                 }
             }
             gameplayCameraBrain = GameObject.FindObjectsOfType<CinemachineBrain>()
-    .FirstOrDefault(brain => brain != null && brain.gameObject.name.Contains("Gameplay Camera"));
+                .FirstOrDefault(brain => brain != null && brain.gameObject.name.Contains("Gameplay Camera"));
 
             // HUD shit
             var testInstances = Resources.FindObjectsOfTypeAll<Test>();
@@ -189,9 +185,6 @@ namespace rowemod.Utils
                     else
                         Log.Error("rCenterOfMassBehaviour component not found in BMXChassis.");
 
-                    
-
-
                     collisionHandler = rMbCharacter.GetComponentInChildren<BMXCollisionHandler>();
                     if (collisionHandler != null)
                         Log.Msg("BMXCollisionHandler component found in BMXChassis.");
@@ -253,13 +246,12 @@ namespace rowemod.Utils
                     Log.Error($"Exception while finding components: {ex.Message}");
                 }
             }
-
             else
             {
                 Log.Error("rMBCharacter is null! Cannot search within it.");
             }
             
-            //Hop heights
+            // Hop heights
             vehicleSettingsInstances = Resources.FindObjectsOfTypeAll<MotorVehicleSettings>();
             Log.Msg(vehicleSettingsInstances != null && vehicleSettingsInstances.Length > 0
                 ? $"Found {vehicleSettingsInstances.Length} MotorVehicleSettings instances."
@@ -283,7 +275,7 @@ namespace rowemod.Utils
                         Log.Msg($"Processing drone: {droneGameObject.name}");
 
                         // Get MeshRenderers for the drone
-                         droneMeshRenderers = droneGameObject.GetComponentsInChildren<MeshRenderer>(true);
+                        droneMeshRenderers = droneGameObject.GetComponentsInChildren<MeshRenderer>(true);
                         Log.Msg(droneMeshRenderers.Length > 0
                             ? $"Drone '{droneGameObject.name}' has {droneMeshRenderers.Length} MeshRenderer components."
                             : $"Drone '{droneGameObject.name}' has no MeshRenderer components.");
@@ -329,7 +321,7 @@ namespace rowemod.Utils
                 Log.Error($"Exception while finding vehicle changer: {ex.Message}");
             }
 
-            //helmet
+            // Helmet
             try
             {
                 Log.Msg("Starting to find helmet...");
@@ -344,7 +336,6 @@ namespace rowemod.Utils
             }
 
             // Find camera components
-        
             try
             {
                 Log.Msg("Starting to find camera components...");
@@ -386,7 +377,7 @@ namespace rowemod.Utils
                 Log.Error($"Exception while finding camera components: {ex.Message}");
             }
             
-            //Third person camera
+            // Third person camera
             tpCamera = rMbCharacter.GetComponentInChildren<ThirdPersonCamera>();
             if (tpCamera != null)
             {
@@ -414,7 +405,6 @@ namespace rowemod.Utils
                 tpVirtualCam = tpCamera.GetComponentInChildren<CinemachineVirtualCamera>();
                 if (tpVirtualCam != null)
                 {
-            
                     Log.Msg("tpVirtualCam component found in ThirdPersonCamera.");
                 }
                 else
@@ -426,8 +416,6 @@ namespace rowemod.Utils
             {
                 Log.Error("ThirdPersonCamera component not found in BMX Camera Target.");
             }
-
-
 
             // Find Haptic Feedback Manager
             try
@@ -450,7 +438,7 @@ namespace rowemod.Utils
             Log.Msg("Running GrabTrickData()");
             TrickMods.GrabTrickData();
             
-            //Delayed bike materials load to bypass shop load
+            // Delayed bike materials load to bypass shop load
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             
             //BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
@@ -458,11 +446,9 @@ namespace rowemod.Utils
             
             Mods.Physics.Update();
             //Mods.Misc.Update();
-            
-            
         }
 
-        //prefab variables
+        // Prefab variables
         public static List<GameObject> prefabList = new List<GameObject>();
         public static List<GameObject> sessionMarkers = new List<GameObject>();
         public static List<string> prefabNames = new List<string>();
@@ -472,7 +458,7 @@ namespace rowemod.Utils
         public static GameObject roweSpokes, roweBars;
         public static GameObject newSessionMarker;
         
-         public static void LoadAllAssetBundles()
+        public static void LoadAllAssetBundles()
         {
             string rootPath = Path.GetDirectoryName(Application.dataPath);
 
@@ -484,6 +470,11 @@ namespace rowemod.Utils
                 Log.Msg("No files found in the mods folder.");
                 return;
             }
+
+            // Clear existing lists to avoid duplicates
+            prefabList.Clear();
+            sessionMarkers.Clear();
+            loadedBundles.Clear();
 
             foreach (string bundlePath in bundleFiles)
             {
@@ -536,11 +527,77 @@ namespace rowemod.Utils
             }
         }
         
+        public static void ReloadAssetsFromCachedBundles()
+        {
+            Log.Msg("Reloading assets from cached AssetBundles...");
 
-       
+            // Clear existing lists to avoid duplicates
+            prefabList.Clear();
+            sessionMarkers.Clear();
+
+            foreach (AssetBundle bundle in loadedBundles)
+            {
+                if (bundle == null)
+                {
+                    Log.Warning("Found null AssetBundle in cache, skipping.");
+                    continue;
+                }
+
+                string[] assetNames = bundle.GetAllAssetNames();
+                foreach (var assetName in assetNames)
+                {
+                    Log.Msg($"Processing cached asset: {assetName}");
+
+                    if (assetName.EndsWith(".prefab"))
+                    {
+                        GameObject asset = bundle.LoadAsset<GameObject>(assetName);
+                        if (asset != null)
+                        {
+                            prefabList.Add(asset);
+                            if (asset.name.Contains("Marker"))
+                            {
+                                sessionMarkers.Add(asset);
+                                Log.Msg($"Added Marker prefab from cache: {asset.name}");
+
+                                // Check if this is the last saved marker
+                                if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
+                                {
+                                    newSessionMarker = asset;
+                                    Log.Msg($"Loaded custom session marker from cache: {newSessionMarker.name}");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (prefabList.Count == 0)
+            {
+                Log.Warning("No prefabs loaded from cached AssetBundles.");
+            }
+            else
+            {
+                Log.Msg($"Successfully reloaded {prefabList.Count} prefabs from cached AssetBundles.");
+            }
+
+            // Reapply session marker if needed
+            if (!string.IsNullOrEmpty(Config.customSessionMarker))
+            {
+                GameObject savedMarker = sessionMarkers
+                    .FirstOrDefault(marker => marker != null && marker.name == Config.customSessionMarker);
+                if (savedMarker != null)
+                {
+                    ReplaceSessionMarkerWithPrefab(savedMarker);
+                    Log.Msg($"Reapplied saved session marker: {Config.customSessionMarker}");
+                }
+                else
+                {
+                    Log.Warning($"Saved session marker '{Config.customSessionMarker}' not found in cached assets.");
+                }
+            }
+        }
         
-     
-       public static void ReplaceSessionMarkerWithPrefab(GameObject selectedMarker)
+        public static void ReplaceSessionMarkerWithPrefab(GameObject selectedMarker)
         {
             if (selectedMarker == null)
             {
@@ -593,10 +650,6 @@ namespace rowemod.Utils
             }
         }
 
-
-
-
-
         public static void ToggleBmxFrames()
         {
             if (rMbCharacter == null)
@@ -645,8 +698,6 @@ namespace rowemod.Utils
                     Log.Warning("BMX_Frame_NoBrand_Standard_Brakeless not found.");
                 }
                 
-
-
                 roweSpokes = prefabList.FirstOrDefault(obj => obj.name == "SpokesAndRims");
                 roweBars = prefabList.FirstOrDefault(obj => obj.name == "Bars");
                 
@@ -705,7 +756,7 @@ namespace rowemod.Utils
                     Log.Warning("No roweSpokes found.");
                 }
                 
-                //change bars
+                // Change bars
                 roweBars = prefabList.FirstOrDefault(obj => obj.name == "bars");
                 if (roweBars != null)
                 {
@@ -713,7 +764,6 @@ namespace rowemod.Utils
                         .FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Front End/Bars/")?.gameObject;
                     if (frontBars != null)
                     {
-                        
                         if (roweBars != null)
                         {
                             GameObject newFrontBars = Object.Instantiate(roweBars, frontBars.transform.parent);
@@ -725,7 +775,6 @@ namespace rowemod.Utils
                             frontBars.GetComponent<EquipSlotVehicle>().InstantiateItem(roweBars);
                             frontBars.GetComponent<Anchor>().SnapToAnchor();
                             Config.bikeMaterials.Remove("Bars");
-                            
                             
                             Log.Msg("Replaced frontBars with roweBars.");
                         }
@@ -743,18 +792,12 @@ namespace rowemod.Utils
                 {
                     Log.Warning("roweBars not found, cannot replace.");
                 }
-                
-                
-                
             }
             catch (Exception ex)
             {
                 Log.Error($"Exception while toggling BMX frames: {ex.Message}");
             }
         }
-        
-        
-        
         
         public static bool GetGameObject(string name, ref GameObject obj, bool bSometimesNull = false)
         {
