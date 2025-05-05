@@ -1,6 +1,6 @@
-﻿using rowemod.Utils;
+﻿using Il2CppMashBox.Character.Scripts;
+using rowemod.Utils;
 using UnityEngine;
-using EquipSlot = Il2CppMashBox.Character.Scripts.EquipSlot;
 using static rowemod.Menu;
 using static rowemod.Utils.Memory;
 
@@ -186,7 +186,7 @@ namespace rowemod.Mods
                 }
                 GUILayout.EndVertical();
 
-                ListCharacterBundles(Menu.currentSlot);
+                ListCharacterBundles(currentSlot);
                 GUILayout.EndHorizontal();
                 GUILayout.Label("Presets", Menu.labelStyle);
 
@@ -702,7 +702,7 @@ namespace rowemod.Mods
                 if (updated)
                 {
                     ClothingPreset.SavePreset(preset);
-                    Log.Msg($"Preset '{preset.Name}' updated with missing slots.");
+                    Log.Error($"Preset '{preset.Name}' updated with missing slots.");
                 }
             }
         }

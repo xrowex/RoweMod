@@ -10,7 +10,7 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.2", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.1", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -66,6 +66,8 @@ namespace rowemod
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
+            
+            
         }
 
         public override void OnLateInitializeMelon()
@@ -86,10 +88,12 @@ namespace rowemod
             Log.Msg("Steamworks initialized successfully.");
             SteamUserManager.LogAndCheckUser();
 
+
             previousWindowPosition = windowRect.position;
 
             if (File.Exists(cfgFile))
             {
+
                 try
                 {
                     Config.Load();
@@ -109,6 +113,8 @@ namespace rowemod
                 Log.Msg($"Failed to save configuration: {ex.Message}");
             }
 
+
+
             Log.Msg("Starting Bundle loading...");
             Memory.LoadAllAssetBundles();
 
@@ -116,6 +122,7 @@ namespace rowemod
             Log.Msg("Starting game event listener...");
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
+
         }
         
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -129,10 +136,11 @@ namespace rowemod
 
             cachedVolumes = UnityEngine.Object.FindObjectsOfType<UnityEngine.Rendering.Volume>().ToList();
             
-            // We set styles to false to reload each time scene is initialized
+            //We set styles to false to reload each time scene is initialized
             stylesInitialized = false;
             
-            // Disable test mod in game
+            
+            //disable test mod in game
             foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
             {
                 if (obj.name == "TestRoweMod" || obj.name == "TestRoweMod(Clone)")
@@ -232,5 +240,6 @@ namespace rowemod
                 }
             }
         }
+
     }
 }

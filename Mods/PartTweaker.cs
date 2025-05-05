@@ -36,44 +36,40 @@ public class PartTweaker
 
     public static void DrawPartTweaker()
     {
-        GUILayout.Label("Seat Height");
+        /*GUILayout.Label("Seat Height");
         if (GUILayout.Button("-"))
         {
             if (seatPostAnchor != null)
             {
-                seatPostAnchor.localPosition -= new Vector3(0, 0.01f, 0);
+                seatPostAnchor.localPosition -= new Vector3(0, 1f, 0);
                 Memory.customizableEntity.RelaySnap();
             }
-                
         }
         if (GUILayout.Button("+"))
         {
             if (seatPostAnchor != null)
             {
-                seatPostAnchor.localPosition += new Vector3(0, 0.01f, 0);
+                seatPostAnchor.localPosition += new Vector3(0, 1f, 0);
                 Memory.customizableEntity.RelaySnap();
             }
-                
-        }
+        }*/
         
         GUILayout.Label("Bars Rotation");
         if (GUILayout.Button("-"))
         {
             if (barsAnchor != null)
             {
-                barsAnchor.localRotation *= Quaternion.Euler(-0.1f, 0, 0);
+                barsAnchor.localRotation *= Quaternion.Euler(-5f, 0, 0);
                 Memory.customizableEntity.RelaySnap();
             }
-                
         }
         if (GUILayout.Button("+"))
         {
             if (barsAnchor != null)
             {
-                barsAnchor.localRotation *= Quaternion.Euler(0.1f, 0, 0);
+                barsAnchor.localRotation *= Quaternion.Euler(5f, 0, 0);
                 Memory.customizableEntity.RelaySnap();
-            }
-                
+            } 
         }
     }
 }

@@ -29,6 +29,7 @@ namespace rowemod
         public enum Tab
         {
             Physics,
+            Bike,
             Tricks,
             Character,
             BikeMaterials,
@@ -121,7 +122,14 @@ namespace rowemod
                         Slider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
                         Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
                         break;
-
+                    case Tab.Bike:
+                        PartTweaker.DrawPartTweaker();
+                        GUILayout.BeginHorizontal();
+                        
+                        GUILayout.Box("Bike Parts", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true));
+                        
+                        GUILayout.EndHorizontal();
+                        break;
                     case Tab.Tricks:
                         TrickMods.DrawTrickMenu();
                         break;
@@ -233,6 +241,7 @@ namespace rowemod
                 (string label, Tab tab)[] tabs = new[]
                 {
                     ("Physics", Tab.Physics),
+                    ("Bike", Tab.Bike),
                     ("Tricks", Tab.Tricks),
                     ("Character", Tab.Character),
                     ("BikeMaterials", Tab.BikeMaterials),

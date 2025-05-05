@@ -116,11 +116,11 @@ namespace rowemod
                 Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
-                //PartTweaker.FindParts();
+                PartTweaker.FindParts();
                 
                 //Memory.ToggleBmxFrames();
                 
-                // Load saved session marker if it exists
+                // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.customSessionMarker))
                 {
                     if (Memory.sessionMarkers != null)
