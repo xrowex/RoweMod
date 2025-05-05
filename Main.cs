@@ -153,6 +153,9 @@ namespace rowemod
             if (sceneName.Contains("TheShop"))
             {
                 RoweCustomCharacter.GetDefaultCharacter();
+                //Memory.rMbCharacter = GameObject.Find("Custom Character");.
+                //Memory.physicsDrivenCharacter = Memory.rMbCharacter.GetComponentsInChildren<CustomCharacterManager>().FirstOrDefault()?.gameObject;
+
                 Memory.rMbCharacter = GameObject.Find("Custom Character");
                 Memory.physicsDrivenCharacter = Memory.rMbCharacter.GetComponentsInChildren<CustomCharacterManager>().FirstOrDefault()?.gameObject;
                 if (Memory.physicsDrivenCharacter == null)
@@ -171,7 +174,7 @@ namespace rowemod
         
         private IEnumerator DelayedLoadPreset()
         {
-            yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
+            yield return new WaitForSeconds(3f); // Give it time to fully load scene stuff
 
             if (!string.IsNullOrEmpty(lastLoadedPresetCharacter) && Memory.rMbCharacter != null)
             {

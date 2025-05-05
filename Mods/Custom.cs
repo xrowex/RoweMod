@@ -450,6 +450,17 @@ namespace rowemod.Mods
                 fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
             }
             Transform slotTransform = charRoot.Find(fullPath);
+            
+            //change the slot transform name to see if it works in TheShop
+            if (slotTransform == null)
+            {
+                Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
+                Log.Error($"ReplaceModel: Trying to find '{fullPath.Replace("Physics Skeleton","Skeleton")}' instead.");
+                fullPath = fullPath.Replace("Physics Skeleton","Skeleton");
+                slotTransform = charRoot.Find(fullPath);
+            }
+                
+            
             if (slotTransform == null)
             {
                 Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
@@ -535,11 +546,19 @@ namespace rowemod.Mods
             }
             Transform slotTransform = charRoot.Find(fullPath);
             
+            //change the slot transform name to see if it works in TheShop
+            if(slotTransform == null)
+                fullPath = fullPath.Replace("Physics Skeleton","Skeleton");
+            
+            //change the slot transform name to see if it works in TheShop
             if (slotTransform == null)
             {
-                Log.Error($"ReplaceMaterial: Could not find transform '{fullPath}'.");
-                return;
+                Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
+                Log.Error($"ReplaceModel: Trying to find '{fullPath.Replace("Physics Skeleton", "Skeleton")}' instead.");
+                fullPath = fullPath.Replace("Physics Skeleton", "Skeleton");
+                slotTransform = charRoot.Find(fullPath);
             }
+
 
             // Set the user’s config so you can persist the material path
             switch (slot)
