@@ -481,8 +481,12 @@
 	<ItemGroup>
 	  <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="DLL\" />
+	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="MOVE &quot;$(TargetPath)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods&quot;&#xD;&#xA;MOVE &quot;$(TargetDir)$(TargetName).pdb&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods&quot;" />
+		<Exec Command="IF NOT EXIST &quot;$(ProjectDir)DLL&quot; mkdir &quot;$(ProjectDir)DLL&quot;&#xD;&#xA;COPY &quot;$(TargetPath)&quot; &quot;$(ProjectDir)DLL\&quot;&#xD;&#xA;COPY &quot;$(TargetPath)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\&quot;&#xD;&#xA;COPY &quot;$(TargetDir)$(TargetName).pdb&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\&quot;&#xD;&#xA;" />
 	</Target>
 </Project>

@@ -10,64 +10,23 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.1", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.3", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "1.8.2";
+        public const string ModVersion = "1.8.3";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
-
-        void CreateModDirectories()
-        {
-            // Main mod folder
-            if (!Directory.Exists(modFolder))
-                Directory.CreateDirectory(modFolder);
-
-            // Bundles folder
-            if (!Directory.Exists(bundlesFolderPath))
-                Directory.CreateDirectory(bundlesFolderPath);
-
-            // character root path
-            if (!Directory.Exists(Custom.characterRootPath))
-                Directory.CreateDirectory(Custom.characterRootPath);
-
-            // Bike material folders
-            foreach (var category in BikeMaterialsLoader.categories.Values)
-            {
-                string categoryPath = Path.Combine(BikeMaterialsLoader.BikeRootPath, category.displayName);
-
-                if (!Directory.Exists(categoryPath))
-                    Directory.CreateDirectory(categoryPath);
-            }
-
-            // Clothing slot folders
-            foreach (var slot in Enum.GetValues(typeof(Custom.Slot)))
-            {
-                var slotPath = Path.Combine(Custom.characterRootPath, slot.ToString());
-
-                if (!Directory.Exists(slotPath))
-                    Directory.CreateDirectory(slotPath);
-            }
-
-            // Bike presets directory
-            if (!Directory.Exists(BikeMaterialPreset.presetDirectory))
-                Directory.CreateDirectory(BikeMaterialPreset.presetDirectory);
-
-            // Clothing presets directory
-            if (!Directory.Exists(ClothingPreset.presetDirectory))
-                Directory.CreateDirectory(ClothingPreset.presetDirectory);
-        }
+        
+        
 
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
-            
-            
         }
 
         public override void OnLateInitializeMelon()
@@ -139,6 +98,8 @@ namespace rowemod
             //We set styles to false to reload each time scene is initialized
             stylesInitialized = false;
             
+            //load rowe logo
+            MelonCoroutines.Start(LoadRoweLogo());
             
             //disable test mod in game
             foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
@@ -211,7 +172,7 @@ namespace rowemod
                 
             if (isOpen)
             {
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"rowemod v. {ModVersion}", Menu.windowStyle);
+                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
             }
         }
         
@@ -243,6 +204,45 @@ namespace rowemod
                 }
             }
         }
+        void CreateModDirectories()
+        {
+            // Main mod folder
+            if (!Directory.Exists(modFolder))
+                Directory.CreateDirectory(modFolder);
 
+            // Bundles folder
+            if (!Directory.Exists(bundlesFolderPath))
+                Directory.CreateDirectory(bundlesFolderPath);
+
+            // character root path
+            if (!Directory.Exists(Custom.characterRootPath))
+                Directory.CreateDirectory(Custom.characterRootPath);
+
+            // Bike material folders
+            foreach (var category in BikeMaterialsLoader.categories.Values)
+            {
+                string categoryPath = Path.Combine(BikeMaterialsLoader.BikeRootPath, category.displayName);
+
+                if (!Directory.Exists(categoryPath))
+                    Directory.CreateDirectory(categoryPath);
+            }
+
+            // Clothing slot folders
+            foreach (var slot in Enum.GetValues(typeof(Custom.Slot)))
+            {
+                var slotPath = Path.Combine(Custom.characterRootPath, slot.ToString());
+
+                if (!Directory.Exists(slotPath))
+                    Directory.CreateDirectory(slotPath);
+            }
+
+            // Bike presets directory
+            if (!Directory.Exists(BikeMaterialPreset.presetDirectory))
+                Directory.CreateDirectory(BikeMaterialPreset.presetDirectory);
+
+            // Clothing presets directory
+            if (!Directory.Exists(ClothingPreset.presetDirectory))
+                Directory.CreateDirectory(ClothingPreset.presetDirectory);
+        }
     }
 }

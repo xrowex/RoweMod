@@ -200,6 +200,7 @@ namespace rowemod.Mods
                     {
                         SaveCurrentPreset(_newPresetName);
                         _newPresetName = ""; // Clear input field after saving
+                        GUI.FocusControl(null);
                     }
                 }
 
