@@ -10,14 +10,14 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.8.3", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.0", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "1.8.3";
+        public const string ModVersion = "1.9.0";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
