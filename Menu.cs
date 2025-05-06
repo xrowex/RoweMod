@@ -111,24 +111,24 @@ namespace rowemod
                 {
                     case Tab.Physics:
                         Mods.Physics.Update();
-                        GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true));
-                        Toggle("Spin Assist", ref bSpinAssist);
-                        Toggle("Drifting", ref bDriftAbility);
-                        Slider("Gravity", ref gravity, 0f, 30f);
-                        Slider("Small Hop Force", ref smallHopForce, 0f, 25f);
-                        GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true));
-                        Slider("Pump Force", ref pumpForce, 0f, 30f);
-                        Slider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
-                        Slider("Steer Damping", ref steerDamp, 1f, 5f);
-                        GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true));
-                        Slider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
-                        Slider("Max Manual Angle", ref manualAngle, 10f, 90f);
+                        GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        ModernToggle("Spin Assist", ref bSpinAssist);
+                        ModernToggle("Drifting", ref bDriftAbility);
+                        ModernSlider("Gravity", ref gravity, 0f, 30f);
+                        ModernSlider("Small Hop Force", ref smallHopForce, 0f, 25f);
+                        GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        ModernSlider("Pump Force", ref pumpForce, 0f, 30f);
+                        ModernSlider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
+                        ModernSlider("Steer Damping", ref steerDamp, 1f, 5f);
+                        GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
+                        ModernSlider("Max Manual Angle", ref manualAngle, 10f, 90f);
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
                         GUILayout.BeginHorizontal();
                         
-                        GUILayout.Box("Bike Parts", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("Bike Parts", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         
                         GUILayout.EndHorizontal();
                         break;
@@ -146,20 +146,18 @@ namespace rowemod
 
                     case Tab.Drone:
                         Mods.Misc.Update();
-                        Toggle("Toggle Drone Body", ref droneBodyToggle);
-                        Toggle("Toggle Drone Sound", ref droneEmitterToggle);
-                        Slider("Drone Mass", ref droneMass, 2f, 1000f);
+                        ModernToggle("Toggle Drone Body", ref droneBodyToggle);
+                        ModernToggle("Toggle Drone Sound", ref droneEmitterToggle);
+                        ModernSlider("Drone Mass", ref droneMass, 2f, 1000f);
                         break;
 
                     case Tab.Misc:
                         Mods.Misc.Update();
-                        Toggle(text: "No Bail", ref bNeverBail);
-                        Toggle("Vibration", ref bVibration);
+                        ModernToggle("No Bail", ref bNeverBail);
+                        ModernToggle("Vibration", ref bVibration);
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
-                        GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
-                        Toggle("Hide Helmet", ref bHideHelmet);
-                        Slider("Slo Motion Timer", ref sloMoTimer, 1.0f, 10.0f);
+                        ModernToggle("Hide Helmet", ref bHideHelmet);
                        /* GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Slider("Menu Color R", ref menuAccentR, 0f, 1f);
                         Slider("Menu Color G", ref menuAccentG, 0f, 1f);
@@ -175,7 +173,7 @@ namespace rowemod
                         break;
 
                     case Tab.Marker:
-                        GUILayout.Box("Session Markers", coloredBoxStyle, GUILayout.Height(25), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("Session Markers", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         foreach (GameObject marker in sessionMarkers.Where(m => m != null))
                         {
                             if (GUILayout.Button(marker.name, highQualityButtonStyle))
@@ -235,14 +233,17 @@ namespace rowemod
             {
                 GUILayout.BeginHorizontal();
 
+                float tabHeight = 30f; // Matches rounded button height
+                float tabWidth = 80f; // Adjust as needed for spacing
+
                 // Define tab labels and corresponding enum values
                 (string label, Tab tab)[] tabs = new[]
                 {
                     ("Physics", Tab.Physics),
+                    //("Tricks", Tab.Tricks),
                     ("Bike", Tab.Bike),
-                    ("Tricks", Tab.Tricks),
+                    ("Materials", Tab.BikeMaterials),
                     ("Character", Tab.Character),
-                    ("BikeMaterials", Tab.BikeMaterials),
                     ("Drone", Tab.Drone),
                     ("Misc", Tab.Misc),
                     ("Graphics", Tab.Graphics),
@@ -252,22 +253,24 @@ namespace rowemod
                 foreach (var (label, tab) in tabs)
                 {
                     GUIStyle buttonStyle = currentTab == tab ? activeTabButtonStyle : highQualityButtonStyle;
-                    if (GUILayout.Button($"<b>{label}</b>", buttonStyle))
+                    if (GUILayout.Button($"<b>{label}</b>", buttonStyle, GUILayout.Width(tabWidth), GUILayout.Height(tabHeight)))
                     {
                         SetCurrentTab(tab);
                     }
                 }
 
-                GUILayout.Space(50);
-                if (GUILayout.Button("<b>Snap</b>", highQualityButtonStyle, GUILayout.Width(80)))
+                GUILayout.Space(100);
+                GUILayout.BeginVertical();
+                /*if (GUILayout.Button("<b>Snap</b>", highQualityButtonStyle, GUILayout.Width(tabWidth-15), GUILayout.Height(tabHeight-15)))
                 {
                     if (customizableEntity != null)
                     {
                         customizableEntity.RelaySnap();
                         Log.Msg("RelaySnap() called...");
                     }
-                }
-                if (GUILayout.Button("<b>RESET</b>", highQualityButtonStyle, GUILayout.Width(80)))
+                }*/
+
+                if (GUILayout.Button("<b>RESET\nTAB</b>", highQualityButtonStyle, GUILayout.Width(tabWidth - 15), GUILayout.Height(tabHeight)))
                 {
                     switch (currentTab)
                     {
@@ -278,6 +281,7 @@ namespace rowemod
                     }
                     ResetSliderTextValues();
                 }
+                GUILayout.EndVertical();
                 GUILayout.EndHorizontal();
             }
             catch (Exception ex)
@@ -285,6 +289,7 @@ namespace rowemod
                 Log.Error($"Error in DrawTabs: {ex.Message}");
             }
         }
+
 
         public static void HandleScrolling()
         {
@@ -364,19 +369,31 @@ namespace rowemod
                 // Window Style
                 windowStyle = new GUIStyle(GUI.skin.window);
                 //Texture2D backgroundTexture = MakeTex(2, 2, new Color(0, 0, 0, 0.9f));
-                Texture2D backgroundTexture = MakeRoundedTex(900, 800, new Color(0, 0, 0, 0.9f), 20); // width, height, color, radius
-                Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(0.2f, 0.2f, 0.2f, 1f));
-                Color accentBaseColor = new Color(0.4576f, 0.2078f, 0.0712f);
-                Color accentHoverBaseColor = accentBaseColor * 1.35f;
-                Color activeTabColor = accentBaseColor * 2f; // Slightly different for active tab
-                Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10);
-                Texture2D roundedButtonHover = MakeRoundedTex(20, 40, accentHoverBaseColor, 10);
-                Texture2D activeTabBackground = MakeRoundedTex(20, 40, activeTabColor, 10);
+                
+                Color accentBaseColor = new Color(0.2f, 0.6f, 1f); // Same as toggle
+                Color accentHoverBaseColor = new Color(0.3f, 0.7f, 1.2f); // Slightly lighter on hover
+                Color activeTabColor = new Color(0.4f, 0.8f, 1.4f); // Brighter for active tab
+                
+                Texture2D backgroundTexture = MakeRoundedTex(900, 800, new Color(0, 0, 0, 0.9f), 10, 4, accentBaseColor);
+
+                Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(1f, 1f, 1f, 1f));
+                
+                //Color accentBaseColor = new Color(0.8176f, 0.3078f, 0.0412f);
+               // Color accentHoverBaseColor = accentBaseColor * 1.35f;
+                //Color activeTabColor = accentBaseColor * 2f; // Slightly different for active tab
+                
+                
+
+                
+                Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10,1,Color.black);
+                Texture2D roundedButtonHover = MakeRoundedTex(20, 40, accentHoverBaseColor, 10, 1, Color.black);
+                Texture2D activeTabBackground = MakeRoundedTex(20, 40, activeTabColor, 10, 1, Color.black);
                 Texture2D accentColor = MakeTex(2, 2, accentBaseColor);
 
                 windowStyle.normal.background = backgroundTexture;
                 windowStyle.onNormal.background = backgroundTexture;
                 windowStyle.hover.background = backgroundTexture;
+                windowStyle.hover.textColor = Color.white;
                 windowStyle.active.background = backgroundTextureSelected;
                 windowStyle.normal.textColor = Color.white;
                 windowStyle.fontSize = 16;
@@ -385,7 +402,8 @@ namespace rowemod
                 // Label Style
                 labelStyle = new GUIStyle(GUI.skin.label);
                 labelStyle.normal.textColor = Color.white;
-                labelStyle.fontSize = 12;
+                labelStyle.hover.textColor = Color.white;
+                labelStyle.fontSize = 15;
 
                 // Toggle Style
                 toggleStyle = new GUIStyle(GUI.skin.toggle);
@@ -407,6 +425,9 @@ namespace rowemod
                 // Colored Box Style
                 coloredBoxStyle = new GUIStyle(GUI.skin.box);
                 coloredBoxStyle.normal.background = accentColor;
+                coloredBoxStyle.normal.textColor = Color.black;
+                coloredBoxStyle.fontSize = 16;
+                coloredBoxStyle.fixedHeight = 24;
 
                 // High-Quality Button Style
                 highQualityButtonStyle = new GUIStyle(GUI.skin.button);
@@ -416,7 +437,7 @@ namespace rowemod
                 highQualityButtonStyle.normal.textColor = Color.white;
                 highQualityButtonStyle.hover.textColor = Color.yellow;
                 highQualityButtonStyle.active.textColor = Color.green;
-                highQualityButtonStyle.fontSize = 16;
+                highQualityButtonStyle.fontSize = 12;
                 highQualityButtonStyle.fontStyle = FontStyle.Bold;
                 highQualityButtonStyle.alignment = TextAnchor.MiddleCenter;
                 highQualityButtonStyle.border = new RectOffset(10, 10, 10, 10);
@@ -455,24 +476,42 @@ namespace rowemod
             }
         }
 
-        public static Texture2D MakeRoundedTex(int width, int height, Color color, int radius)
+        public static Texture2D MakeRoundedTex(int width, int height, Color fillColor, int radius, int borderThickness = 3, Color? borderColor = null)
         {
             try
             {
-                Texture2D tex = new Texture2D(width, height);
+                Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
                 Color[] colors = new Color[width * height];
+
+                Color finalBorderColor = borderColor ?? Color.white;
+
                 for (int y = 0; y < height; y++)
                 {
                     for (int x = 0; x < width; x++)
                     {
-                        bool insideCorner =
-                            (x < radius && y < radius && Vector2.Distance(new Vector2(x, y), new Vector2(radius, radius)) > radius) ||
-                            (x > width - radius - 1 && y < radius && Vector2.Distance(new Vector2(x, y), new Vector2(width - radius - 1, radius)) > radius) ||
-                            (x < radius && y > height - radius - 1 && Vector2.Distance(new Vector2(x, y), new Vector2(radius, height - radius - 1)) > radius) ||
-                            (x > width - radius - 1 && y > height - radius - 1 && Vector2.Distance(new Vector2(x, y), new Vector2(width - radius - 1, height - radius - 1)) > radius);
-                        colors[y * width + x] = insideCorner ? new Color(0, 0, 0, 0) : color;
+                        float distTL = Vector2.Distance(new Vector2(x, y), new Vector2(radius, radius));
+                        float distTR = Vector2.Distance(new Vector2(x, y), new Vector2(width - radius - 1, radius));
+                        float distBL = Vector2.Distance(new Vector2(x, y), new Vector2(radius, height - radius - 1));
+                        float distBR = Vector2.Distance(new Vector2(x, y), new Vector2(width - radius - 1, height - radius - 1));
+
+                        bool outsideCorner =
+                            (x < radius && y < radius && distTL > radius) ||
+                            (x > width - radius - 1 && y < radius && distTR > radius) ||
+                            (x < radius && y > height - radius - 1 && distBL > radius) ||
+                            (x > width - radius - 1 && y > height - radius - 1 && distBR > radius);
+
+                        bool isBorder =
+                            x < borderThickness || x >= width - borderThickness ||
+                            y < borderThickness || y >= height - borderThickness;
+
+                        colors[y * width + x] = outsideCorner
+                            ? new Color(0, 0, 0, 0)
+                            : isBorder
+                                ? finalBorderColor
+                                : fillColor;
                     }
                 }
+
                 tex.SetPixels(colors);
                 tex.Apply();
                 return tex;
@@ -623,6 +662,134 @@ namespace rowemod
                 return value;
             }
         }
+        private static Dictionary<string, float> toggleAnimationState = new Dictionary<string, float>();
+
+        public static bool ModernToggle(string label, ref bool value)
+        {
+            float width = 50f;
+            float height = 25f;
+            float knobSize = 20f;
+            float padding = 2f;
+
+            Rect fullRect = GUILayoutUtility.GetRect(windowRect.width - 30f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+
+            Rect labelRect = new Rect(fullRect.x, fullRect.y, fullRect.width - width - 10f, height);
+            Rect toggleRect = new Rect(fullRect.x + fullRect.width - width, fullRect.y, width, height);
+
+            if (!toggleAnimationState.ContainsKey(label))
+                toggleAnimationState[label] = value ? 1f : 0f;
+
+            if (Event.current.type == EventType.MouseDown && toggleRect.Contains(Event.current.mousePosition))
+            {
+                value = !value;
+                Event.current.Use();
+            }
+
+            // Animate
+            float target = value ? 1f : 0f;
+            toggleAnimationState[label] = Mathf.Lerp(toggleAnimationState[label], target, 0.2f);
+
+            // Draw background
+            Color onColor = new Color(0.2f, 0.6f, 1f);
+            Color offColor = new Color(0.3f, 0.3f, 0.3f);
+            DrawSolidColorRect(toggleRect, Color.Lerp(offColor, onColor, toggleAnimationState[label]));
+
+            // Draw knob
+            float knobX = Mathf.Lerp(toggleRect.x + padding, toggleRect.x + toggleRect.width - knobSize - padding, toggleAnimationState[label]);
+            Rect knobRect = new Rect(knobX, toggleRect.y + padding, knobSize, knobSize);
+            DrawSolidColorRect(knobRect, Color.white);
+
+            // Draw label on the left
+            GUI.Label(labelRect, label, labelStyle);
+
+            return value;
+        }
+
+        private static Texture2D _whiteTex;
+        private static Texture2D GetWhiteTexture()
+        {
+            if (_whiteTex == null)
+            {
+                _whiteTex = new Texture2D(1, 1);
+                _whiteTex.SetPixel(0, 0, Color.white);
+                _whiteTex.Apply();
+            }
+            return _whiteTex;
+        }
+
+        private static void DrawSolidColorRect(Rect rect, Color color)
+        {
+            Color oldColor = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, GetWhiteTexture());
+            GUI.color = oldColor;
+        }
+
+
+        public static void ModernSlider(string label, ref float target, float min, float max)
+        {
+            float height = 25f;
+            float labelWidth = 150f;
+            float valueBoxWidth = 50f;
+            float spacing = 15f;
+            float sliderWidth = windowRect.width - labelWidth - valueBoxWidth - spacing * 4;
+
+            Rect fullRect = GUILayoutUtility.GetRect(windowRect.width - 30f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+
+            Rect labelRect = new Rect(fullRect.x, fullRect.y, labelWidth, height);
+            Rect sliderRect = new Rect(fullRect.x + labelWidth + spacing, fullRect.y + 6, sliderWidth, height - 12f);
+            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y, valueBoxWidth, height);
+
+            // Label
+            GUI.Label(labelRect, label, labelStyle);
+
+            // Slider background
+            DrawSolidColorRect(sliderRect, new Color(0.25f, 0.25f, 0.25f));
+
+            // Slider fill
+            float percent = Mathf.InverseLerp(min, max, target);
+            Rect fillRect = new Rect(sliderRect.x, sliderRect.y, sliderRect.width * percent, sliderRect.height);
+            DrawSolidColorRect(fillRect, new Color(0.2f, 0.6f, 1f));
+
+            // Thumb
+            float thumbX = Mathf.Lerp(sliderRect.x, sliderRect.xMax - 10f, percent);
+            Rect thumbRect = new Rect(thumbX - 5f, sliderRect.y - 2f, 10f, sliderRect.height + 4f);
+            DrawSolidColorRect(thumbRect, Color.white);
+
+            // Handle mouse input and snap to step size
+            if (Event.current.type == EventType.MouseDown && sliderRect.Contains(Event.current.mousePosition))
+            {
+                float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
+                float rawValue = Mathf.Lerp(min, max, newPercent);
+                target = Mathf.Round(rawValue / 0.05f) * 0.05f;
+                Event.current.Use();
+            }
+
+            if (Event.current.type == EventType.MouseDrag && sliderRect.Contains(Event.current.mousePosition))
+            {
+                float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
+                float rawValue = Mathf.Lerp(min, max, newPercent);
+                target = Mathf.Round(rawValue / 0.05f) * 0.05f;
+                Event.current.Use();
+            }
+
+            // Value label
+            string valueStr = target.ToString("0.00");
+
+            // Border + background
+            float borderSize = 2f;
+            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
+            DrawSolidColorRect(borderRect, new Color(0.2f, 0.6f, 1f)); // Accent border
+            DrawSolidColorRect(valueRect, Color.black); // Inner background
+
+            // Draw value label
+            GUIStyle valueLabelStyle = new GUIStyle(labelStyle);
+            valueLabelStyle.alignment = TextAnchor.MiddleCenter;
+            valueLabelStyle.normal.textColor = Color.white;
+            GUI.Label(valueRect, valueStr, valueLabelStyle);
+        }
+
+
 
         public static IEnumerator LoadRoweLogo()
         {

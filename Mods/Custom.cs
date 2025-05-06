@@ -19,7 +19,7 @@ namespace rowemod.Mods
             Bottoms,
             Socks,
             Shoes,
-            Bust,
+            Bust
         }
 
         // Map your enum to the ACTUAL child names that appear in the screenshot:
@@ -60,96 +60,7 @@ namespace rowemod.Mods
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
         
-        /*public static void DrawCharacterTab()
-        {
-            try
-            {
-                GUILayout.BeginHorizontal();
-
-                GUILayout.BeginVertical(GUILayout.Width(125));
-                foreach (Slot slot in Enum.GetValues(typeof(Slot)))
-                {
-                    GUILayout.BeginHorizontal(); 
-                    
-                    
-                    if (GUILayout.Button($"<b>{slot.ToString()}</b>", Menu.buttonStyle))
-                    {
-                        Menu.currentSlot = slot;
-                        Menu.inModelsTab = true;
-                    }
-
-                    GUILayout.EndHorizontal(); // End row
-                }
-                GUILayout.EndVertical();
-                
-                ListCharacterBundles(Menu.currentSlot);
-                GUILayout.EndHorizontal();
-                GUILayout.Label("Presets", Menu.labelStyle);
-
-                // Text field to enter new preset name
-                newPresetName = GUILayout.TextField(newPresetName, 25);
-
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Save Preset", Menu.buttonStyle))
-                {
-                    if (!string.IsNullOrWhiteSpace(newPresetName))
-                    {
-                        SaveCurrentPreset(newPresetName);
-                        newPresetName = ""; // Clear input field after saving
-                    }
-                }
-
-                List<string> availablePresets = ClothingPreset.GetAvailablePresets();
-
-                
-                ClothingPreset defaultPreset = ClothingPreset.LoadPreset("DefaultPreset");
-                if (defaultPreset == null || 
-                    defaultPreset.modelPaths == null || 
-                    defaultPreset.materialPaths == null || 
-                    defaultPreset.modelPaths.Count > 0 || 
-                    defaultPreset.materialPaths.Count > 0)
-                {
-                    defaultPreset = new ClothingPreset 
-                    { 
-                        name = "DefaultPreset", 
-                        modelPaths = new Dictionary<Slot, string>(), 
-                        materialPaths = new Dictionary<Slot, string>() 
-                    };
-                    ClothingPreset.SavePreset(defaultPreset);
-                }
-                availablePresets.Add(defaultPreset.name);
-                
-                if (availablePresets.Count > 0)
-                {
-                    selectedPresetIndex = Mathf.Clamp(selectedPresetIndex, 0, availablePresets.Count - 1);
-
-                    if (availablePresets.Count == 1)
-                    {
-                        selectedPresetIndex = 0;
-                        LoadPreset(availablePresets[0]);
-                    }
-
-                    if (availablePresets.Count > 0)
-                    {
-                        GUILayout.BeginVertical();
-                        for (int i = 0; i < availablePresets.Count; i++)
-                        {
-                            if (GUILayout.Button(availablePresets[i], Menu.buttonStyle))
-                            {
-                                selectedPresetIndex = i;
-                                LoadPreset(availablePresets[selectedPresetIndex]);
-                            }
-                        }
-                        GUILayout.EndVertical();
-                    }
-                }
-                GUILayout.EndHorizontal();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"An error occurred in DrawCharacterTab: {ex.Message}");
-            }
-        }*/
+      
         public static void DrawCharacterTab()
         {
             try
