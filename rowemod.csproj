@@ -458,6 +458,7 @@
 	<ItemGroup>
 		<Compile Include="Config.cs" />
 		<Compile Include="JsonData.cs" />
+		<Compile Include="mashmxmod.cs" />
 		<Compile Include="Menu.cs" />
 		<Compile Include="Main.cs" />
 		<Compile Include="Mods\BikeMaterialPreset.cs" />

@@ -1,4 +1,5 @@
 ﻿using Il2CppCinemachine;
+using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ContentManagment;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
@@ -23,6 +24,7 @@ using rowemod.Mods;
 using Camera = UnityEngine.Camera;
 using Object = UnityEngine.Object;
 using Il2CppMashBox.Development.RandD.IAP;
+using PlayerInputBehaviour = Il2CppMashBox.BMX_Physics_Development.NewShit.PlayerInputBehaviour;
 
 namespace rowemod.Utils
 {
@@ -89,6 +91,8 @@ namespace rowemod.Utils
         public static PhysicsBasedEventEmitter[] droneEmitters;
         public static CustomizableEntity customizableEntity;
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
+        public static PlayerInputBehaviour playerInputBehaviour;
+        public static MGCharacterController mgCharacterController;
         
         // Game Events
         public static GameEvent playerSpawned;
@@ -140,6 +144,8 @@ namespace rowemod.Utils
                 {
                     Log.Msg("Starting to find components under rMBCharacter...");
                     CharacterManager characterManager = rMbCharacter.GetComponentInChildren<CharacterManager>();
+                    
+                    playerInputBehaviour = rMbCharacter.GetComponentInChildren<PlayerInputBehaviour>();
                     //physicsPropHandBehaviour = characterManager._physicsPropHandBehaviour;
 
                     equipSlots = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
@@ -350,27 +356,7 @@ namespace rowemod.Utils
                     Log.Error("BMXCMCameraTarget component not found in BMX Camera Target.");
                 }
 
-                //virtualCam = GameObject.Find("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
-                /*virtualCam = rMbCharacter.transform.FindDeepChild("Sports Vehicle Camera").GetComponent<CinemachineVirtualCamera>();
-                if (virtualCam != null)
-                {
-                    Log.Msg("virtualCam component found in Sports Vehicle Camera.");
-                }
-                else
-                {
-                    Log.Error("virtualCam component not found in Sports Vehicle Camera.");
-                }
-
-                camTranspose = virtualCam.GetComponentInChildren<CinemachineTransposer>();
-                if (camTranspose != null)
-                {
-                    Log.Msg("camTranspose component found in Sports Vehicle Camera.");
-                }
-                else
-                {
-                    Log.Error("camTranspose component not found in Sports Vehicle Camera.");
-                }
-                */
+               
             }
             catch (Exception ex)
             {
@@ -461,21 +447,22 @@ namespace rowemod.Utils
         public static void LoadAllAssetBundles()
         {
             string rootPath = Path.GetDirectoryName(Application.dataPath);
-
+            
             Log.Msg($"Looking for AssetBundles in: {bundlesFolderPath}");
-
+            
             string[] bundleFiles = Directory.GetFiles(bundlesFolderPath);
             if (bundleFiles.Length == 0)
             {
                 Log.Msg("No files found in the mods folder.");
                 return;
             }
-
+            
             // Clear existing lists to avoid duplicates
+            
             prefabList.Clear();
             sessionMarkers.Clear();
             loadedBundles.Clear();
-
+            
             foreach (string bundlePath in bundleFiles)
             {
                 Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
@@ -485,26 +472,27 @@ namespace rowemod.Utils
                     Log.Msg($"Failed to load AssetBundle from: {bundlePath}. Skipping file.");
                     continue;
                 }
-
+            
                 loadedBundles.Add(bundle);
                 Log.Msg($"Successfully loaded AssetBundle from: {bundlePath}");
-
+            
                 string[] assetNames = bundle.GetAllAssetNames();
                 foreach (var assetName in assetNames)
                 {
                     Log.Msg($"Found asset in bundle: {assetName}");
-
+            
                     if (assetName.EndsWith(".prefab"))
                     {
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
                         if (asset != null)
                         {
                             prefabList.Add(asset);
-                            if (asset.name.Contains("Marker"))
+                            Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
+                            if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
                             {
                                 sessionMarkers.Add(asset);
                                 Log.Msg($"Added Marker prefab: {asset.name}");
-
+            
                                 // Check if this is the last saved marker
                                 if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
                                 {
@@ -516,7 +504,7 @@ namespace rowemod.Utils
                     }
                 }
             }
-
+                        
             if (loadedBundles.Count == 0)
             {
                 Log.Msg("No valid AssetBundles were loaded.");
@@ -534,6 +522,8 @@ namespace rowemod.Utils
             // Clear existing lists to avoid duplicates
             prefabList.Clear();
             sessionMarkers.Clear();
+            barListInitialized = false;
+            frameListInitialized = false;
 
             foreach (AssetBundle bundle in loadedBundles)
             {
@@ -542,7 +532,6 @@ namespace rowemod.Utils
                     Log.Warning("Found null AssetBundle in cache, skipping.");
                     continue;
                 }
-
                 string[] assetNames = bundle.GetAllAssetNames();
                 foreach (var assetName in assetNames)
                 {
@@ -554,6 +543,7 @@ namespace rowemod.Utils
                         if (asset != null)
                         {
                             prefabList.Add(asset);
+                            Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
                             if (asset.name.Contains("Marker"))
                             {
                                 sessionMarkers.Add(asset);
@@ -650,155 +640,198 @@ namespace rowemod.Utils
             }
         }
 
-        public static void ToggleBmxFrames()
+        private static int selectedBarIndex = 0;
+        private static bool barListInitialized = false;
+        private static string[] barNames;
+        private static List<GameObject> barPrefabs = new();
+        private static Vector2 barScrollPos = Vector2.zero;
+
+        public static void DrawBmxBarsSelector()
         {
-            if (rMbCharacter == null)
+            if (!barListInitialized || barPrefabs.Count == 0)
             {
-                Log.Error("rMBCharacter is null. Cannot toggle BMX frames.");
+                Log.Msg("[Bars] (Re)building bar prefab list...");
+                barPrefabs = Memory.prefabList
+                    .Where(p => p != null && p.name.ToLower().Contains("bar"))
+                    .ToList();
+
+                barNames = barPrefabs.Select(p => p.name).ToArray();
+                barListInitialized = true;
+
+                Log.Msg($"[Bars] Found {barPrefabs.Count} bar prefabs.");
+            }
+
+            GUILayout.Label("Select BMX Bars:");
+
+            if (barNames == null || barNames.Length == 0)
+            {
+                GUILayout.Label("No bar prefabs found.");
+                Log.Warning("[Bars] barNames array is empty.");
                 return;
             }
-        
+
+            barScrollPos = GUILayout.BeginScrollView(barScrollPos, GUILayout.Height(150));
+            for (int i = 0; i < barNames.Length; i++)
+            {
+                if (Menu.ModernButton(barNames[i], 150f))
+                if (Menu.ModernButton(barNames[i], 150f))
+                {
+                    selectedBarIndex = i;
+                    Log.Msg($"[Bars] Selected bar index: {selectedBarIndex}, name: {barNames[i]}");
+                }
+            }
+            GUILayout.EndScrollView();
+
+            GUILayout.Space(10);
+            if (Menu.ModernButton("Apply Selected Bars", 150f))
+            {
+                Log.Msg($"[Bars] Apply button clicked. Attempting to apply: {barPrefabs[selectedBarIndex].name}");
+                TryReplaceBars(barPrefabs[selectedBarIndex]);
+            }
+        }
+
+
+        private static void TryReplaceBars(GameObject newBarsPrefab)
+        {
             try
             {
-                Log.Msg("Searching for BMX frames...");
-        
-                // Locate BMX_Frame_Vanilla_Standard and disable it
-                var bmxFrameVanilla = rMbCharacter.transform.FindDeepChild("BMX_Frame_Vanilla_Standard")?.gameObject;
-                if (bmxFrameVanilla != null)
+                if (Memory.rMbCharacter == null)
                 {
-                    bmxFrameVanilla.SetActive(false);
-                    Log.Msg("Disabled BMX_Frame_Vanilla_Standard.");
+                    Log.Error("[Bars] rMbCharacter is null.");
+                    return;
                 }
-                else
-                {
-                    Log.Warning("BMX_Frame_Vanilla_Standard not found.");
-                }
-        
-                // Locate BMX_Frame_NoBrand_Standard_Brakeless and enable it
-                var bmxFrameNoBrand = rMbCharacter.transform.FindDeepChild("BMX_Frame_NoBrand_Standard_Brakeless")?.gameObject;
-                if (bmxFrameNoBrand != null)
-                {
-                    bmxFrameNoBrand.SetActive(true);
-                    Log.Msg("Enabled BMX_Frame_NoBrand_Standard_Brakeless.");
 
-                    // Find EquipSlotVehicle component on the frame and call InstantiateItem
-                    var equipSlot = bmxFrameNoBrand.transform.parent.GetComponent<EquipSlotVehicle>();
-                    if (equipSlot != null)
-                    {
-                        equipSlot.InstantiateItem(bmxFrameNoBrand);
-                        Log.Msg("EquipSlotVehicle.InstantiateItem called on Frame.");
-                    }
-                    else
-                    {
-                        Log.Warning("EquipSlotVehicle component not found on Frame.");
-                    }
-                }
-                else
+                Log.Msg("[Bars] Searching for Bars EquipSlot...");
+                var frontBars = rMbCharacter.transform
+                    .FindDeepChild("Bars")
+                    ?.gameObject.GetComponent<EquipSlotVehicle>();
+
+                if (frontBars == null)
                 {
-                    Log.Warning("BMX_Frame_NoBrand_Standard_Brakeless not found.");
+                    Log.Warning("[Bars] Couldn't find current Bars EquipSlot.");
+                    return;
                 }
-                
-                roweSpokes = prefabList.FirstOrDefault(obj => obj.name == "SpokesAndRims");
-                roweBars = prefabList.FirstOrDefault(obj => obj.name == "Bars");
-                
-                if (roweSpokes != null)
-                { 
-                    var bmxFrontSpokes = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Offset/Rotator Bone/Wheel Mesh/BMX_Spokes_Front_EquipSlot/")?.gameObject;
-                    var bmxRearSpokes = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Back Wheel/Rotator Bone/Wheel Mesh/BMX_Spokes_Front_EquipSlot/")?.gameObject;
-                    var bmxFrontRim = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Offset/Rotator Bone/Wheel Mesh/BMX_Rim_Front_EquipSlot/")?.gameObject;
-                    var bmxRearRim = rMbCharacter.transform.FindDeepChild("Proto_BMX/Chassis Body/Back Wheel/Rotator Bone/Wheel Mesh/BMX_Rim_Front_EquipSlot/")?.gameObject;
-                    
-                    if(bmxFrontRim != null)
-                        bmxFrontRim.SetActive(false);
-                    if(bmxRearRim != null)
-                        bmxRearRim.SetActive(false);
-                    
-                    // Replace bmxFrontSpokes with roweSpokes
-                    if (bmxFrontSpokes != null)
-                    {
-                        //bmxFrontSpokes.SetActive(false);
-                        if (roweSpokes != null)
-                        {
-                            bmxFrontSpokes.GetComponent<EquipSlotVehicle>().InstantiateItem(roweSpokes);
-                            Log.Msg("Replaced bmxFrontSpokes with roweSpokes.");
-                        }
-                        else
-                        {
-                            Log.Warning("roweSpokes is null, cannot replace bmxFrontSpokes.");
-                        }
-                    }
-                    else
-                    {
-                        Log.Warning("bmxFrontSpokes not found, cannot replace.");
-                    }
-               
-                    // Replace bmxRearSpokes with roweSpokes
-                    if (bmxRearSpokes != null)
-                    {
-                        //bmxRearSpokes.SetActive(false);
-                        if (roweSpokes != null)
-                        {
-                            bmxRearSpokes.GetComponent<EquipSlotVehicle>().InstantiateItem(roweSpokes);
-                            Log.Msg("Replaced bmxRearSpokes with roweSpokes.");
-                        }
-                        else
-                        {
-                            Log.Warning("roweSpokes is null, cannot replace bmxRearSpokes.");
-                        }
-                    }
-                    else
-                    {
-                        Log.Warning("bmxRearSpokes not found, cannot replace.");
-                    }
-                }
-                else
-                {
-                    Log.Warning("No roweSpokes found.");
-                }
-                
-                // Change bars
-                roweBars = prefabList.FirstOrDefault(obj => obj.name == "bars");
-                if (roweBars != null)
-                {
-                    var frontBars = rMbCharacter.transform
-                        .FindDeepChild("Proto_BMX/Chassis Body/Front Wheel/Front End/Bars/")?.gameObject;
-                    if (frontBars != null)
-                    {
-                        if (roweBars != null)
-                        {
-                            GameObject newFrontBars = Object.Instantiate(roweBars, frontBars.transform.parent);
-                            newFrontBars.SetActive(true);
-                            //newFrontBars.transform.localPosition = new Vector3(0, 0, 0);
-                            newFrontBars.AddComponent<EquipSlotVehicle>();
-                            newFrontBars.name = "BMX_Bars_NoBrand_4PC";
-                            
-                            frontBars.GetComponent<EquipSlotVehicle>().InstantiateItem(roweBars);
-                            frontBars.GetComponent<Anchor>().SnapToAnchor();
-                            Config.bikeMaterials.Remove("Bars");
-                            
-                            Log.Msg("Replaced frontBars with roweBars.");
-                        }
-                        else
-                        {
-                            Log.Warning("roweBars is null, cannot replace frontBars.");
-                        }
-                    }
-                    else
-                    {
-                        Log.Warning("frontBars not found, cannot replace.");
-                    }
-                }
-                else
-                {
-                    Log.Warning("roweBars not found, cannot replace.");
-                }
+
+                Log.Msg($"[Bars] Found Bars EquipSlot, instantiating: {newBarsPrefab.name}");
+                frontBars.InstantiateItem(newBarsPrefab);
+                frontBars.GetComponent<Anchor>()?.SnapToAnchor();
+
+                Log.Msg($"[Bars] Successfully switched bars to: {newBarsPrefab.name}");
+                Config.bikeMaterials.Remove("Bars");
             }
             catch (Exception ex)
             {
-                Log.Error($"Exception while toggling BMX frames: {ex.Message}");
+                Log.Error($"[Bars] Error swapping bars: {ex.Message}");
             }
         }
-        
+
+
+        private static int selectedFrameIndex = 0;
+        private static bool frameListInitialized = false;
+        private static string[] frameNames;
+        private static List<GameObject> framePrefabs = new();
+        private static Vector2 frameScrollPos = Vector2.zero;
+
+        public static void DrawBmxFramesSelector()
+        {
+            if (!frameListInitialized || framePrefabs.Count == 0)
+            {
+                Log.Msg("[Frames] (Re)building frame prefab list...");
+                framePrefabs = Memory.prefabList
+                    .Where(p => p != null && p.name.ToLower().Contains("frame"))
+                    .ToList();
+
+                frameNames = framePrefabs.Select(p => p.name).ToArray();
+                frameListInitialized = true;
+
+                Log.Msg($"[Frames] Found {framePrefabs.Count} frame prefabs.");
+            }
+
+            GUILayout.Space(15);
+            GUILayout.Label("Select BMX Frame:");
+
+            if (frameNames == null || frameNames.Length == 0)
+            {
+                GUILayout.Label("No frame prefabs found.");
+                Log.Warning("[Frames] frameNames array is empty.");
+                return;
+            }
+
+            frameScrollPos = GUILayout.BeginScrollView(frameScrollPos, GUILayout.Height(150));
+            for (int i = 0; i < frameNames.Length; i++)
+            {
+                if (Menu.ModernButton(frameNames[i], 150f))
+                {
+                    selectedFrameIndex = i;
+                    Log.Msg($"[Frames] Selected frame index: {selectedFrameIndex}, name: {frameNames[i]}");
+                }
+            }
+            GUILayout.EndScrollView();
+
+            GUILayout.Space(5);
+            if (Menu.ModernButton("Apply Selected Frame", 150f))
+            {
+                Log.Msg($"[Frames] Apply button clicked. Attempting to apply: {framePrefabs[selectedFrameIndex].name}");
+                TryReplaceFrame(framePrefabs[selectedFrameIndex]);
+            }
+        }
+
+        private static void TryReplaceFrame(GameObject newFramePrefab)
+        {
+            try
+            {
+                if (Memory.rMbCharacter == null)
+                {
+                    Log.Error("[Frames] rMbCharacter is null.");
+                    return;
+                }
+
+                Log.Msg("[Frames] Searching for Frame GameObject with EquipSlotVehicle...");
+
+                var frameObj = rMbCharacter.transform
+                    .GetComponentsInChildren<Transform>(true)
+                    .FirstOrDefault(t => t.name == "Frame" && t.GetComponent<EquipSlotVehicle>() != null);
+
+                if (frameObj == null)
+                {
+                    Log.Warning("[Frames] Could not find a 'Frame' GameObject with EquipSlotVehicle.");
+                    return;
+                }
+
+
+                var frameSlot = frameObj.GetComponent<EquipSlotVehicle>();
+                if (frameSlot == null)
+                {
+                    Log.Warning("[Frames] 'Frame' exists, but EquipSlotVehicle is missing.");
+                    return;
+                }
+
+                Log.Msg($"[Frames] Found Frame EquipSlot. Replacing with: {newFramePrefab.name}");
+                frameSlot.InstantiateItem(newFramePrefab);
+                frameSlot.GetComponent<Anchor>()?.SnapToAnchor();
+
+                Log.Msg($"[Frames] Successfully replaced frame with: {newFramePrefab.name}");
+                Config.bikeMaterials.Remove("Frame");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[Frames] Exception while replacing frame: {ex.Message}");
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         public static bool GetGameObject(string name, ref GameObject obj, bool bSometimesNull = false)
         {
             obj = GameObject.Find(name);

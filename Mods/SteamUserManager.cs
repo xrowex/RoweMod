@@ -23,7 +23,7 @@ public class SteamUserManager
     
         return SteamUser.GetSteamID().m_SteamID;
     }
-
+    
     public static async Task<string> GetSteamUsername(ulong steamId)
     {
         using (HttpClient client = new HttpClient())

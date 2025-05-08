@@ -114,16 +114,12 @@ namespace rowemod
             if (sceneName.Contains("TheShop"))
             {
                 RoweCustomCharacter.GetDefaultCharacter();
-                //Memory.rMbCharacter = GameObject.Find("Custom Character");.
-                //Memory.physicsDrivenCharacter = Memory.rMbCharacter.GetComponentsInChildren<CustomCharacterManager>().FirstOrDefault()?.gameObject;
 
                 Memory.rMbCharacter = GameObject.Find("Custom Character");
                 Memory.physicsDrivenCharacter = Memory.rMbCharacter.GetComponentsInChildren<CustomCharacterManager>().FirstOrDefault()?.gameObject;
                 if (Memory.physicsDrivenCharacter == null)
                     return;
                 
-                //Memory.rMBCharacter = go.transform.parent?.gameObject;
-                //Main.playableSceneLoaded = true;
                 Custom.UpdateAllPresets();
                 
                 MelonCoroutines.Start(DelayedLoadPreset());
@@ -131,6 +127,7 @@ namespace rowemod
 
             // Reload assets from cached bundles
             Memory.ReloadAssetsFromCachedBundles();
+
         }
         
         private IEnumerator DelayedLoadPreset()

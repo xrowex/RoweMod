@@ -456,6 +456,7 @@ namespace rowemod
             eyesModelPath = _defaultEyesModelPath;
             eyesMaterialPath = _defaultEyesMaterialPath;
             RoweCustomCharacter.rCharacterManager.ChangeData(RoweCustomCharacter.defaultCharacterData);
+            //RoweCustomCharacter.rCharacterManager.EquipData();
         }
 
         public static void ResetBikeTab()

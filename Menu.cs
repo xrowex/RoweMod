@@ -36,7 +36,8 @@ namespace rowemod
             Drone,
             Misc,
             Graphics,
-            Marker
+            Marker,
+            //Premium
         }
 
         // Menu Variables
@@ -81,7 +82,6 @@ namespace rowemod
         {
             try
             {
-                
                 if (logoTexture != null)
                 {
                     GUI.color = new Color(1f, 1f, 1f, 0.1f); // 10% opacity
@@ -121,16 +121,18 @@ namespace rowemod
                         ModernSlider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
                         ModernSlider("Steer Damping", ref steerDamp, 1f, 5f);
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 90f);
-                        ModernSlider("Max Manual Angle", ref manualAngle, 10f, 90f);
+                        ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 50f);
+                        ModernSlider("Max Manual Angle", ref manualAngle, 10f, 50f);
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
+
                         GUILayout.BeginHorizontal();
-                        
                         GUILayout.Box("Bike Parts", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        
                         GUILayout.EndHorizontal();
+
+                        Memory.DrawBmxBarsSelector();
+                        Memory.DrawBmxFramesSelector();
                         break;
                     case Tab.Tricks:
                         TrickMods.DrawTrickMenu();
@@ -184,6 +186,11 @@ namespace rowemod
                         }
                         GUILayout.Box("Current Selected Marker: " + (Config.customSessionMarker ?? "None"), labelStyle);
                         break;
+                    /*case Tab.Premium:
+                        
+
+
+                        break;*/
                 }
             }
             catch (Exception ex)
@@ -275,9 +282,16 @@ namespace rowemod
                     switch (currentTab)
                     {
                         case Tab.Physics: ResetPhysicsTab(); break;
+                        case Tab.Bike:
+                            LoadAllAssetBundles();
+                            Log.Msg("Bike Tab reset!");
+                                break;
                         case Tab.Character: ResetCharacterTab(); break;
                         case Tab.BikeMaterials: ResetBikeMaterialsTab(); break;
                         case Tab.Misc: ResetMiscTab(); break;
+                        case Tab.Marker: 
+                                Memory.ReloadAssetsFromCachedBundles();
+                            break;
                     }
                     ResetSliderTextValues();
                 }
@@ -426,7 +440,7 @@ namespace rowemod
                 coloredBoxStyle = new GUIStyle(GUI.skin.box);
                 coloredBoxStyle.normal.background = accentColor;
                 coloredBoxStyle.normal.textColor = Color.black;
-                coloredBoxStyle.fontSize = 16;
+                coloredBoxStyle.fontSize = 13;
                 coloredBoxStyle.fixedHeight = 24;
 
                 // High-Quality Button Style
@@ -621,28 +635,7 @@ namespace rowemod
             }
         }
 
-        public static Transform FindDeepChild(Transform parent, string name)
-        {
-            try
-            {
-                if (parent == null) return null;
-                foreach (Transform child in parent)
-                {
-                    if (child != null && child.name == name)
-                        return child;
-                    Transform found = FindDeepChild(child, name);
-                    if (found != null)
-                        return found;
-                }
-                return null;
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in FindDeepChild: {ex.Message}");
-                return null;
-            }
-        }
-
+       
         public static bool Toggle(string text, ref bool value)
         {
             try
@@ -761,7 +754,7 @@ namespace rowemod
             {
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
-                target = Mathf.Round(rawValue / 0.05f) * 0.05f;
+                target = Mathf.Round(rawValue / 0.01f) * 0.015f;
                 Event.current.Use();
             }
 
@@ -769,7 +762,7 @@ namespace rowemod
             {
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
-                target = Mathf.Round(rawValue / 0.05f) * 0.05f;
+                target = Mathf.Round(rawValue / 0.01f) * 0.01f;
                 Event.current.Use();
             }
 
@@ -789,6 +782,39 @@ namespace rowemod
             GUI.Label(valueRect, valueStr, valueLabelStyle);
         }
 
+        public static bool ModernButton(string label, float width = 200f, float height = 30f)
+        {
+            Rect buttonRect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false), GUILayout.Height(height));
+
+            // Detect hover state
+            bool isHovering = buttonRect.Contains(Event.current.mousePosition);
+
+            // Colors
+            Color baseColor = new Color(0.2f, 0.6f, 1f);      // Accent blue
+            Color hoverColor = new Color(0.3f, 0.7f, 1.2f);   // Brighter blue
+            Color backgroundColor = isHovering ? hoverColor : baseColor;
+
+            // Draw rounded background
+            DrawSolidColorRect(buttonRect, backgroundColor);
+
+            // Draw label
+            GUIStyle style = new GUIStyle(labelStyle);
+            style.alignment = TextAnchor.MiddleCenter;
+            style.fontSize = 14;
+            style.fontStyle = FontStyle.Bold;
+            style.normal.textColor = Color.white;
+
+            GUI.Label(buttonRect, label, style);
+
+            // Handle click
+            if (Event.current.type == EventType.MouseDown && buttonRect.Contains(Event.current.mousePosition))
+            {
+                Event.current.Use();
+                return true;
+            }
+
+            return false;
+        }
 
 
         public static IEnumerator LoadRoweLogo()
