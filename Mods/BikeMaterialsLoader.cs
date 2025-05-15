@@ -15,12 +15,14 @@ namespace rowemod.Mods
         private static List<string> _bikeFolders = new List<string>();
         private static string _selectedFolder = string.Empty;
 
+        public static EquipSlotVehicle[] equipSlotVehicles = null;
+
         private static string _selectedCategory = null;
 
         private static Dictionary<string, Dictionary<string, Texture2D>> _categoryPreviews = new Dictionary<string, Dictionary<string, Texture2D>>();
         private static Dictionary<string, Texture2D> _materialPreviews = new Dictionary<string, Texture2D>();
-    
-        public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
+
+        /*public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
             new Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)>
             {
                 { "Bars", ("Bars", new List<EquipSlotVehicle>()) },
@@ -61,7 +63,55 @@ namespace rowemod.Mods
                 { "BMX_Tire_Front", ("Front Tire", new List<EquipSlotVehicle>()) },
                 { "BMX_Tire_Rear", ("Rear Tire", new List<EquipSlotVehicle>()) },
                 { "BMX_Tire", ("Tires", new List<EquipSlotVehicle>()) },
-            };
+            };*/
+        public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
+    new Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)>
+    {
+        { "Bars", ("Bars", new List<EquipSlotVehicle>()) },
+        { "Bar End", ("Bar Ends", new List<EquipSlotVehicle>()) },
+        { "BB", ("Bottom Bracket", new List<EquipSlotVehicle>()) },
+        { "Chain", ("Chain", new List<EquipSlotVehicle>()) },
+        { "Crank Arm", ("Crank Arm", new List<EquipSlotVehicle>()) },
+        { "Forks", ("Forks", new List<EquipSlotVehicle>()) },
+        { "Frame", ("Frame", new List<EquipSlotVehicle>()) },
+        { "Grip", ("Grips", new List<EquipSlotVehicle>()) },
+        { "Guard", ("Hub Guards", new List<EquipSlotVehicle>()) },
+        { "Headset", ("Headsets", new List<EquipSlotVehicle>()) },
+        { "Hub", ("Hubs", new List<EquipSlotVehicle>()) },
+        { "Hub_Front", ("Front Hub", new List<EquipSlotVehicle>()) },
+        { "Hub_Rear", ("Rear Hub", new List<EquipSlotVehicle>()) },
+        { "Pedal", ("Pedals", new List<EquipSlotVehicle>()) },
+        { "BMX_Peg_FrontLeft", ("Front Left Peg", new List<EquipSlotVehicle>()) },
+        { "BMX_Peg_FrontRight", ("Front Right Peg", new List<EquipSlotVehicle>()) },
+        { "BMX_Peg_RearLeft", ("Rear Left Peg", new List<EquipSlotVehicle>()) },
+        { "BMX_Peg_RearRight", ("Rear Right Peg", new List<EquipSlotVehicle>()) },
+        { "BMX_Peg", ("Pegs", new List<EquipSlotVehicle>()) },
+        { "BMX_Nipples", ("Nipples", new List<EquipSlotVehicle>()) },
+        { "BMX_Nipples_Front", ("Front Nipples", new List<EquipSlotVehicle>()) },
+        { "BMX_Nipples_Rear", ("Rear Nipples", new List<EquipSlotVehicle>()) },
+        { "BMX_Rim_Front", ("Front Rim", new List<EquipSlotVehicle>()) },
+        { "BMX_Rim_Rear", ("Rear Rim", new List<EquipSlotVehicle>()) },
+        { "BMX_Rim", ("Rims", new List<EquipSlotVehicle>()) },
+        { "BMX_Valve Cap_Front", ("Front Valve Cap", new List<EquipSlotVehicle>()) },
+        { "BMX_Valve Cap_Rear", ("Rear Valve Cap", new List<EquipSlotVehicle>()) },
+        { "BMX_Valve_Front", ("Front Valve", new List<EquipSlotVehicle>()) },
+        { "BMX_Valve_Rear", ("Rear Valve", new List<EquipSlotVehicle>()) },
+        { "BMX_Mag_Front", ("Front Mag", new List<EquipSlotVehicle>()) },
+        { "BMX_Mag_Rear", ("Rear Mag", new List<EquipSlotVehicle>()) },
+        { "Seat", ("Seats", new List<EquipSlotVehicle>()) },
+        { "SeatClamp", ("Seat Clamp", new List<EquipSlotVehicle>()) },
+        { "Seat Post", ("Seat Posts", new List<EquipSlotVehicle>()) },
+        { "BMX_Spokes_Front", ("Front Spokes", new List<EquipSlotVehicle>()) },
+        { "BMX_Spokes_Rear", ("Rear Spokes", new List<EquipSlotVehicle>()) },
+        { "BMX_Spokes", ("Spokes", new List<EquipSlotVehicle>()) },
+        { "Sprocket", ("Sprockets", new List<EquipSlotVehicle>()) },
+        { "Stem", ("Stems", new List<EquipSlotVehicle>()) },
+        { "StemBolt", ("Stem Bolts", new List<EquipSlotVehicle>()) },
+        { "Stem Cap", ("Stem Caps", new List<EquipSlotVehicle>()) },
+        { "BMX_Tire_Front", ("Front Tire", new List<EquipSlotVehicle>()) },
+        { "BMX_Tire_Rear", ("Rear Tire", new List<EquipSlotVehicle>()) },
+        { "BMX_Tire", ("Tires", new List<EquipSlotVehicle>()) },
+    };
 
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
@@ -100,6 +150,14 @@ namespace rowemod.Mods
                         if (GUI.Button(buttonRect, materialName, Menu.highQualityButtonStyle))
                         {
                             Material loadedMaterial = LoadMaterialFromFile(materialFile);
+
+                            // 🔧 Disable decals if applicable
+                            if (loadedMaterial != null && loadedMaterial.HasProperty("_SupportDecals"))
+                            {
+                                loadedMaterial.SetFloat("_SupportDecals", 0f);
+                                Log.Msg("Decals disabled on material " + loadedMaterial.name);
+                            }
+
                             if (loadedMaterial != null && _selectedCategory != null)
                             {
                                 ApplyMaterialToCategory(_selectedCategory, loadedMaterial, materialFile);
@@ -169,11 +227,11 @@ namespace rowemod.Mods
             {
                 Log.Error($"An error occurred in DrawBikeMaterialsTabUI: {ex.Message}");
             }
+
         }
 
 
-        
-        
+
         public static void Initialize()
         {
             Log.Msg("Initializing BikeMaterialsLoader...");
@@ -188,7 +246,7 @@ namespace rowemod.Mods
 
             if (rMbCharacter != null)
             {
-                EquipSlotVehicle[] equipSlotVehicles = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
+                equipSlotVehicles = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
                 //Log.Msg($"Found {equipSlotVehicles.Length} EquipSlotVehicle components.");
                 CategorizeEquipSlots(equipSlotVehicles);
             }
@@ -287,7 +345,7 @@ namespace rowemod.Mods
             }
             Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
         }*/
-        private static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
+        public static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
         {
             Log.Msg("Listing all EquipSlotVehicle names:");
             foreach (var slot in equipSlotVehicles)
@@ -305,73 +363,103 @@ namespace rowemod.Mods
 
             foreach (var slot in equipSlotVehicles)
             {
-                Log.Msg($"Checking slot: {slot.gameObject.name}");
+                string slotName = slot.gameObject.name;
+                Log.Msg($"Checking slot: {slotName}");
 
-                bool isPeg = slot.gameObject.name.Contains("Peg", StringComparison.OrdinalIgnoreCase);
+                bool isPeg = slotName.Contains("Peg", StringComparison.OrdinalIgnoreCase);
                 string wheelType = GetWheelType(slot.gameObject);
                 bool isFront = wheelType == "Front Wheel";
                 bool isBack = wheelType == "Back Wheel";
 
+                // Handle BMX_ parts with Front/Rear position using hierarchy, not name
+                if (slotName.StartsWith("BMX_", StringComparison.OrdinalIgnoreCase))
+                {
+                    string baseName = slotName
+                        .Replace("_Front_EquipSlot", "")
+                        .Replace("_Rear_EquipSlot", "")
+                        .Replace("_Back_EquipSlot", "")
+                        .Replace("_EquipSlot", ""); // fallback cleanup
+
+                    if (isFront)
+                    {
+                        string frontKey = $"{baseName}_Front";
+                        if (categories.ContainsKey(frontKey))
+                        {
+                            categories[frontKey].slots.Add(slot);
+                            Log.Msg($"Assigned '{slotName}' to '{frontKey}'.");
+                        }
+
+                        if (categories.ContainsKey(baseName))
+                        {
+                            categories[baseName].slots.Add(slot);
+                            Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
+                        }
+                    }
+                    else if (isBack)
+                    {
+                        string rearKey = $"{baseName}_Rear";
+                        if (categories.ContainsKey(rearKey))
+                        {
+                            categories[rearKey].slots.Add(slot);
+                            Log.Msg($"Assigned '{slotName}' to '{rearKey}'.");
+                        }
+
+                        if (categories.ContainsKey(baseName))
+                        {
+                            categories[baseName].slots.Add(slot);
+                            Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
+                        }
+                    }
+
+                    else if (categories.ContainsKey(baseName))
+                    {
+                        categories[baseName].slots.Add(slot);
+                        Log.Msg($"Assigned '{slotName}' to generic '{baseName}' category.");
+                    }
+
+                    // Add to 'Pegs' if applicable
+                    if (isPeg && categories.ContainsKey("BMX_Peg"))
+                    {
+                        categories["BMX_Peg"].slots.Add(slot);
+                        Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
+                    }
+
+                    slotsCategorized++;
+                    continue;
+                }
+
+                // Pegs with specific naming
+                if (isPeg)
+                {
+                    var specificPegCategory = categories.Keys
+                        .Where(c => c.StartsWith("BMX_Peg_", StringComparison.OrdinalIgnoreCase)
+                                    && slotName.Contains(c, StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(c => c.Length)
+                        .FirstOrDefault();
+
+                    if (!string.IsNullOrEmpty(specificPegCategory))
+                    {
+                        categories[specificPegCategory].slots.Add(slot);
+                        Log.Msg($"Assigned '{slotName}' to '{categories[specificPegCategory].displayName}'.");
+                    }
+
+                    if (categories.ContainsKey("BMX_Peg"))
+                    {
+                        categories["BMX_Peg"].slots.Add(slot);
+                        Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
+                    }
+
+                    slotsCategorized++;
+                    continue;
+                }
+
+                // General fallback: find a matching category by containment
                 foreach (var category in categories.Keys)
                 {
-                    if (slot.gameObject.name.Contains(category, StringComparison.OrdinalIgnoreCase))
+                    if (slotName.Contains(category, StringComparison.OrdinalIgnoreCase))
                     {
-                        // 🛞 Specific Peg Handling
-                        if (isPeg)
-                        {
-                            var specificPegCategory = categories.Keys
-                                .Where(c => c.StartsWith("BMX_Peg_", StringComparison.OrdinalIgnoreCase)
-                                         && slot.gameObject.name.Contains(c, StringComparison.OrdinalIgnoreCase))
-                                .OrderByDescending(c => c.Length)
-                                .FirstOrDefault();
-
-                            if (!string.IsNullOrEmpty(specificPegCategory))
-                            {
-                                categories[specificPegCategory].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to '{categories[specificPegCategory].displayName}'.");
-                                categories["BMX_Peg"].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to 'Pegs'.");
-                            }
-                            else
-                            {
-                                categories["BMX_Peg"].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to 'Pegs'.");
-                            }
-                        }
-
-                        // 🛞 Front/Back differentiation for BMX_ parts
-                        else if ((isFront || isBack) && category.StartsWith("BMX_", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (isBack)
-                            {
-                                string rearCategory = category.Replace("Front", "Rear");
-                                if (categories.ContainsKey(rearCategory))
-                                {
-                                    categories[rearCategory].slots.Add(slot);
-                                    Log.Msg($"Assigned '{slot.gameObject.name}' to '{rearCategory}'.");
-                                }
-
-                                string generalCategory = category.Replace("_Front", "");
-                                if (categories.ContainsKey(generalCategory))
-                                {
-                                    categories[generalCategory].slots.Add(slot);
-                                    Log.Msg($"Assigned '{slot.gameObject.name}' to general '{generalCategory}' category.");
-                                }
-                            }
-                            else // Front Wheel
-                            {
-                                categories[category].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to '{categories[category].displayName}'.");
-                            }
-                        }
-
-                        // ✅ General fallback
-                        else
-                        {
-                            categories[category].slots.Add(slot);
-                            Log.Msg($"Categorized slot '{slot.gameObject.name}' under '{categories[category].displayName}'.");
-                        }
-
+                        categories[category].slots.Add(slot);
+                        Log.Msg($"Categorized slot '{slotName}' under '{categories[category].displayName}'.");
                         slotsCategorized++;
                         break;
                     }
@@ -380,6 +468,8 @@ namespace rowemod.Mods
 
             Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
         }
+
+
 
 
 
@@ -400,6 +490,11 @@ namespace rowemod.Mods
                     return "Front Wheel";
                 }
                 if (parentName.Contains("back"))
+                {
+                    Log.Msg($"   ✅ '{obj.name}' belongs to the REAR wheel (found '{current.name}').");
+                    return "Back Wheel";
+                }
+                if (parentName.Contains("rear"))
                 {
                     Log.Msg($"   ✅ '{obj.name}' belongs to the REAR wheel (found '{current.name}').");
                     return "Back Wheel";
@@ -514,6 +609,7 @@ namespace rowemod.Mods
                 }
             }
         }
+
         private static Texture2D ResizeTexture(Texture2D original, int width, int height)
         {
             RenderTexture renderTexture = RenderTexture.GetTemporary(width, height);
@@ -691,23 +787,38 @@ namespace rowemod.Mods
 
             foreach (var kvp in preset.Materials)
             {
-                if (!categories.ContainsKey(kvp.Key)) continue;
+                string categoryKey = kvp.Key;
 
-                string materialPath = Path.Combine(BikeRootPath, categories[kvp.Key].displayName, $"{kvp.Value}.material");
+                // 🔄 Convert old "Back" keys to "Rear" keys for compatibility
+                if (categoryKey.Contains("Back") && !BikeMaterialsLoader.categories.ContainsKey(categoryKey))
+                {
+                    string convertedKey = categoryKey.Replace("Back", "Rear");
+                    if (BikeMaterialsLoader.categories.ContainsKey(convertedKey))
+                    {
+                        Log.Warning($"[rowemod] Converting old category '{categoryKey}' to '{convertedKey}' for compatibility.");
+                        categoryKey = convertedKey;
+                    }
+                }
+
+                if (!BikeMaterialsLoader.categories.ContainsKey(categoryKey))
+                {
+                    Log.Error($"[rowemod] Skipping unknown category '{categoryKey}' in preset.");
+                    continue;
+                }
+
+                string materialPath = Path.Combine(BikeRootPath, BikeMaterialsLoader.categories[categoryKey].displayName, $"{kvp.Value}.material");
                 if (!File.Exists(materialPath))
                 {
-                    Log.Error($"Material file '{materialPath}' not found for category '{kvp.Key}'.");
+                    Log.Error($"[rowemod] Material file '{materialPath}' not found for category '{categoryKey}'.");
                     continue;
                 }
 
                 Material loadedMaterial = LoadMaterialFromFile(materialPath);
                 if (loadedMaterial != null)
                 {
-                    ApplyMaterialToCategory(kvp.Key, loadedMaterial, materialPath);
+                    ApplyMaterialToCategory(categoryKey, loadedMaterial, materialPath);
                 }
             }
-
-            //Log.Msg($"Bike material preset '{presetName}' loaded.");
         }
 
 

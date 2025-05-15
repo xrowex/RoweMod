@@ -503,8 +503,23 @@ namespace rowemod.Mods
             }
 
             Material newMaterial = newBundle.LoadAsset<Material>(assetNames[0]);
-            //var renderer = slotTransform.GetComponent<SkinnedMeshRenderer>() ?? (Renderer)slotTransform.GetComponent<MeshRenderer>();
-            //wtf mash
+
+            // Disable decal receiving for HDRP materials
+            if (newMaterial != null)
+            {
+                Debug.Log("Material is HDRP Lit. Disabling decals");
+                newMaterial.DisableKeyword("RECEIVE_DECALS");                        // Disable the keyword
+                newMaterial.EnableKeyword("RECEIVE_DECALS_OFF");                    // Optional: enable the OFF keyword
+
+                Debug.Log("[ReplaceMaterial] Decal receiving disabled on HDRP Lit material.");
+                
+            }
+            else
+            {
+                Log.Error($"[ReplaceMaterial] Material load failed from bundle at path: {assetNames[0]}");
+            }
+
+            // Assign to renderer
             Renderer renderer = slotTransform.GetComponentInChildren<SkinnedMeshRenderer>();
             if (renderer == null)
                 renderer = slotTransform.GetComponentInChildren<MeshRenderer>();
@@ -512,7 +527,7 @@ namespace rowemod.Mods
             if (renderer != null && newMaterial != null)
             {
                 renderer.sharedMaterial = newMaterial;
-                Log.Msg($"ReplaceMaterial: Material replaced for slot {slot}.");
+                Log.Msg($"ReplaceMaterial: Material replaced for slot {slot} (decals disabled).");
             }
             else
             {

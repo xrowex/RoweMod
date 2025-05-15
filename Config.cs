@@ -30,6 +30,9 @@ namespace rowemod
         private static readonly float DefaultNoseManualAngle = 30f;
         private static readonly float DefaultQuickSpinMultiplier = 1.0f;
         private static readonly float DefaultSideHopPower = 1.0f;
+        private static readonly float DefaultBarRotationAngle = 0f;
+        private static readonly float DefaultSeatHeight = 0.15f;
+        private static readonly float DefaultSeatRotationX = 330f;
 
         private static readonly bool DefaultBHideHelmet = true;
         private static string? _defaultBodyModelPath = null;
@@ -99,7 +102,8 @@ namespace rowemod
         public static float noseManualAngle = DefaultNoseManualAngle;
         public static float quickSpinMultiplier = DefaultQuickSpinMultiplier;
         public static float sideHopPower = DefaultSideHopPower;
-        public static float vertAssistCorrectionStrength = 30f;
+        public static float vertAssistCorrectionStrength = 30f; 
+
 
 
         // Custom model and material paths
@@ -467,6 +471,7 @@ namespace rowemod
         public static void ResetBikeMaterialsTab()
         {
             bikeMaterials.Clear();
+
         }
 
         public static void ResetMiscTab()

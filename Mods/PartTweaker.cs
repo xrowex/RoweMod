@@ -59,7 +59,7 @@ namespace rowemod.Mods
 
 
         private static float barRotationAngle = 0f;
-        private static float seatHeight = 0.5f;      // Y position
+        private static float seatHeight = 0.15f;      // Y position
         private static float seatRotationX = 330f;   // Euler X (wraps from 330 to 19)
 
         public static void DrawPartTweaker()
@@ -71,7 +71,7 @@ namespace rowemod.Mods
             if (seatPostAnchor != null)
             {
                 GUILayout.Label("Seat Height", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Height", ref seatHeight, -0.0f, 0.25f);
+                Menu.ModernSlider("Height", ref seatHeight, 0.0f, 0.25f);
                 seatPostAnchor.localPosition = new Vector3(
                     seatPostAnchor.localPosition.x,
                     seatHeight,
@@ -91,8 +91,8 @@ namespace rowemod.Mods
                 {
                     Log.Error("Skipping Seat_Anchor rotation: seatAnchor is null.");
                 }
-
-                Memory.customizableEntity.RelaySnap();
+                
+               // Memory.customizableEntity.RelaySnap();
             }
 
             if (barsAnchor != null)
@@ -101,7 +101,7 @@ namespace rowemod.Mods
                 GUILayout.Label("Bars Rotation", Menu.coloredBoxStyle);
                 Menu.ModernSlider("Rotation", ref barRotationAngle, -45f, 45f);
                 barsAnchor.localRotation = Quaternion.Euler(barRotationAngle, 0f, 0f);
-                Memory.customizableEntity.RelaySnap();
+                //Memory.customizableEntity.RelaySnap();
             }
         }
     }

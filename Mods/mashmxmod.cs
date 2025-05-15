@@ -7,10 +7,6 @@ public class mashmxmod
 {
     public void Update()
     {
-
-        if (Keyboard.current.dKey.isPressed)
-        {
-            
-        }
+        
     }
 }

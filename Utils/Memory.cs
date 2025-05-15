@@ -443,7 +443,8 @@ namespace rowemod.Utils
         public static List<AssetBundle> loadedBundles = new List<AssetBundle>();
         public static GameObject roweSpokes, roweBars;
         public static GameObject newSessionMarker;
-        
+        private static Dictionary<GameObject, string> prefabToBundleMap = new();
+
         public static void LoadAllAssetBundles()
         {
             string rootPath = Path.GetDirectoryName(Application.dataPath);
@@ -462,7 +463,6 @@ namespace rowemod.Utils
             prefabList.Clear();
             sessionMarkers.Clear();
             loadedBundles.Clear();
-            
             foreach (string bundlePath in bundleFiles)
             {
                 Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
@@ -480,12 +480,17 @@ namespace rowemod.Utils
                 foreach (var assetName in assetNames)
                 {
                     Log.Msg($"Found asset in bundle: {assetName}");
-            
+                
+
                     if (assetName.EndsWith(".prefab"))
                     {
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
                         if (asset != null)
                         {
+                            if (asset.name.ToLower().Contains("bar"))
+                            {
+                                prefabToBundleMap[asset] = Path.GetFileName(bundlePath); 
+                            }
                             prefabList.Add(asset);
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
                             if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -542,6 +547,8 @@ namespace rowemod.Utils
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
                         if (asset != null)
                         {
+
+
                             prefabList.Add(asset);
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
                             if (asset.name.Contains("Marker"))
@@ -655,7 +662,12 @@ namespace rowemod.Utils
                     .Where(p => p != null && p.name.ToLower().Contains("bar"))
                     .ToList();
 
-                barNames = barPrefabs.Select(p => p.name).ToArray();
+                //barNames = barPrefabs.Select(p => p.name).ToArray();
+                barNames = barPrefabs.Select(p =>
+                {
+                    string bundleName = prefabToBundleMap.TryGetValue(p, out var bundle) ? bundle : "UnknownBundle";
+                    return $"{p.name} ({bundleName})";
+                }).ToArray();
                 barListInitialized = true;
 
                 Log.Msg($"[Bars] Found {barPrefabs.Count} bar prefabs.");
@@ -673,21 +685,16 @@ namespace rowemod.Utils
             barScrollPos = GUILayout.BeginScrollView(barScrollPos, GUILayout.Height(150));
             for (int i = 0; i < barNames.Length; i++)
             {
-                if (Menu.ModernButton(barNames[i], 150f))
-                if (Menu.ModernButton(barNames[i], 150f))
+                if (Menu.ModernButton(barNames[i], 300f))
                 {
                     selectedBarIndex = i;
+                    TryReplaceBars(barPrefabs[selectedBarIndex]);
                     Log.Msg($"[Bars] Selected bar index: {selectedBarIndex}, name: {barNames[i]}");
                 }
             }
             GUILayout.EndScrollView();
 
             GUILayout.Space(10);
-            if (Menu.ModernButton("Apply Selected Bars", 150f))
-            {
-                Log.Msg($"[Bars] Apply button clicked. Attempting to apply: {barPrefabs[selectedBarIndex].name}");
-                TryReplaceBars(barPrefabs[selectedBarIndex]);
-            }
         }
 
 
@@ -734,7 +741,7 @@ namespace rowemod.Utils
 
         public static void DrawBmxFramesSelector()
         {
-            if (!frameListInitialized || framePrefabs.Count == 0)
+            if (!frameListInitialized == true || framePrefabs.Count == 0)
             {
                 Log.Msg("[Frames] (Re)building frame prefab list...");
                 framePrefabs = Memory.prefabList
@@ -818,18 +825,6 @@ namespace rowemod.Utils
                 Log.Error($"[Frames] Exception while replacing frame: {ex.Message}");
             }
         }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
         public static bool GetGameObject(string name, ref GameObject obj, bool bSometimesNull = false)

@@ -14,13 +14,13 @@ using HarmonyLib;
 using UnityEngine.Rendering;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.Character.Scripts;
-using Il2CppModIOBrowser;
 using Il2CppPlayFab.ClientModels;
 using UnityEngine.Networking;
 using System.Collections;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 
 namespace rowemod
 {
@@ -111,7 +111,7 @@ namespace rowemod
                 {
                     case Tab.Physics:
                         Mods.Physics.Update();
-                        GUILayout.Box("Toggles", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernToggle("Spin Assist", ref bSpinAssist);
                         ModernToggle("Drifting", ref bDriftAbility);
                         ModernSlider("Gravity", ref gravity, 0f, 30f);
@@ -123,6 +123,7 @@ namespace rowemod
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 50f);
                         ModernSlider("Max Manual Angle", ref manualAngle, 10f, 50f);
+                        GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
@@ -132,7 +133,7 @@ namespace rowemod
                         GUILayout.EndHorizontal();
 
                         Memory.DrawBmxBarsSelector();
-                        Memory.DrawBmxFramesSelector();
+                        //Memory.DrawBmxFramesSelector();
                         break;
                     case Tab.Tricks:
                         TrickMods.DrawTrickMenu();
@@ -160,14 +161,14 @@ namespace rowemod
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
                         ModernToggle("Hide Helmet", ref bHideHelmet);
-                       /* GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Slider("Menu Color R", ref menuAccentR, 0f, 1f);
                         Slider("Menu Color G", ref menuAccentG, 0f, 1f);
                         Slider("Menu Color B", ref menuAccentB, 0f, 1f);
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
-                        }*/
+                        }
                         break;
 
                     case Tab.Graphics:
@@ -287,8 +288,13 @@ namespace rowemod
                             Log.Msg("Bike Tab reset!");
                                 break;
                         case Tab.Character: ResetCharacterTab(); break;
-                        case Tab.BikeMaterials: ResetBikeMaterialsTab(); break;
-                        case Tab.Misc: ResetMiscTab(); break;
+                        case Tab.BikeMaterials:
+                            CategorizeEquipSlots(equipSlotVehicles);
+                            ResetBikeMaterialsTab(); 
+                            break;
+                        case Tab.Misc: 
+                            ResetMiscTab(); 
+                            break;
                         case Tab.Marker: 
                                 Memory.ReloadAssetsFromCachedBundles();
                             break;
@@ -754,7 +760,7 @@ namespace rowemod
             {
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
-                target = Mathf.Round(rawValue / 0.01f) * 0.015f;
+                target = Mathf.Round(rawValue / 0.05f) * 0.015f;
                 Event.current.Use();
             }
 
@@ -762,7 +768,7 @@ namespace rowemod
             {
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
-                target = Mathf.Round(rawValue / 0.01f) * 0.01f;
+                target = Mathf.Round(rawValue / 0.05f) * 0.01f;
                 Event.current.Use();
             }
 

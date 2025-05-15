@@ -458,15 +458,16 @@
 	<ItemGroup>
 		<Compile Include="Config.cs" />
 		<Compile Include="JsonData.cs" />
-		<Compile Include="mashmxmod.cs" />
 		<Compile Include="Menu.cs" />
 		<Compile Include="Main.cs" />
+		<Compile Include="Mods\AudioPatchie.cs" />
 		<Compile Include="Mods\BikeMaterialPreset.cs" />
 		<Compile Include="Mods\BikeMaterialsLoader.cs" />
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\Custom.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
+		<Compile Include="Mods\mashmxmod.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\Patches\ActiveRagdollBehaviourPatches.cs" />

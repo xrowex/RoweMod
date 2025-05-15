@@ -9,13 +9,15 @@ namespace rowemod
 {
     public class GameEventListener
     {
-        private GameEvent _playerSpawnEvent;
+        private GameEvent _localGameplayHumanSpawnEvent;
+        private GameEvent _localMenuHumanSpawnEvent;
         private GameEvent _playerResetAtMarker;
-        private GameEvent _playerCloseMenu;
+        private GameEvent _playerCloseReplay;
         public void Initialize()
         {
             // Find the existing GameEvent instance
-            _playerSpawnEvent = null;
+            _localGameplayHumanSpawnEvent = null;
+            _localMenuHumanSpawnEvent = null;
             _playerResetAtMarker = null;
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
@@ -27,21 +29,25 @@ namespace rowemod
                     _playerResetAtMarker = ev;
                 }
 
-                if (ev.name.Contains("MainPlayerHumanSpawned"))
+                if (ev.name.Contains("LocalGameplayHumanSpawned"))
                 {
-                    _playerSpawnEvent = ev;
+                    _localGameplayHumanSpawnEvent = ev;
                     break;
                 }
 
-                if (ev.name.Contains("GameEvent_SimpleGameLoop_Paused_OnExit"))
+                if (ev.name.Contains("GameEvent_TitleLoop_TransitionTrigger_OpenReplay"))
                 {
-                    _playerCloseMenu = ev;
+                    _playerCloseReplay = ev;
+                }
+                if (ev.name.Contains("GameEvent_LocalMenuHumanSpawned"))
+                {
+                    _localMenuHumanSpawnEvent = ev;
                 }
                 
             }
 
             //PLAYER SPAWNN
-            if (_playerSpawnEvent == null)
+            if (_localGameplayHumanSpawnEvent == null)
             {
                 Log.Error("PlayerSpawnEvent is null!");
                 return;
@@ -49,7 +55,7 @@ namespace rowemod
 
             Log.Msg("GameEvent_MainPlayerHumanSpawned found! Subscribing to event...");
             UnityAction action = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerSpawned);
-            _playerSpawnEvent.OnRaise.AddListener(action);
+            _localGameplayHumanSpawnEvent.OnRaise.AddListener(action);
             
             
 
@@ -68,22 +74,22 @@ namespace rowemod
 
 
 
-            //PLAYER CLOSES MENU
-            if (_playerCloseMenu == null)
+            //PLAYER CLOSES replay
+            if (_playerCloseReplay == null)
             {
                 Log.Error("playerCloseMenu is null!");
                 return;
             }
 
-            Log.Msg("GameEvent_SimpleGameLoop_Paused_OnExit found! Subscribing to event...");
-            UnityAction closeMenuAction =
-                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseMenu);
-            _playerResetAtMarker.OnRaise.AddListener(closeMenuAction);
+            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_OpenReplay found! Subscribing to event...");
+            UnityAction closeReplayAction =
+                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseReplay);
+            _playerResetAtMarker.OnRaise.AddListener(closeReplayAction);
 
         }
-        private void OnPlayerCloseMenu()
+        private void OnPlayerCloseReplay()
         {
-            Log.Msg("GameEvent_SimpleGameLoop_Paused_OnExit!");
+            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_OpenReplay!");
             Memory.FindObjects(Memory.physicsDrivenCharacter);
         }
         private void OnPlayerResetAtMarker()
@@ -96,7 +102,7 @@ namespace rowemod
         {
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
 
-            var unityObj = _playerSpawnEvent._extraEventDataUnityObject;
+            var unityObj = _localGameplayHumanSpawnEvent._extraEventDataUnityObject;
             if (unityObj == null)
             {
                 Log.Error("Player object is null in event data!");
