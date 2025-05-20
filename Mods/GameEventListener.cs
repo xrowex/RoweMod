@@ -22,8 +22,11 @@ namespace rowemod
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
+                
+                UnityAction genericListener = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(() => OnAnyGameEvent(ev.name));
+                ev.OnRaise.AddListener(genericListener);
+                
                 Log.Msg(ev.name);
-
                 if(ev.name.Contains("GameEvent_OnResetAtMarker"))
                 {
                     _playerResetAtMarker = ev;
@@ -33,6 +36,11 @@ namespace rowemod
                 {
                     _localGameplayHumanSpawnEvent = ev;
                     break;
+                }
+
+                if (ev.name.Contains("LocalMenuHumanSpawned"))
+                {
+                    _localMenuHumanSpawnEvent = ev;
                 }
 
                 if (ev.name.Contains("GameEvent_TitleLoop_TransitionTrigger_OpenReplay"))
@@ -87,9 +95,14 @@ namespace rowemod
             _playerResetAtMarker.OnRaise.AddListener(closeReplayAction);
 
         }
+        private void OnAnyGameEvent(string eventName)
+        {
+            Log.Msg($"[GameEventListener] Event raised: {eventName}");
+        }
+
         private void OnPlayerCloseReplay()
         {
-            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_OpenReplay!");
+            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
             Memory.FindObjects(Memory.physicsDrivenCharacter);
         }
         private void OnPlayerResetAtMarker()
@@ -124,7 +137,6 @@ namespace rowemod
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
                 
-                //Memory.ToggleBmxFrames();
                 
                 // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.customSessionMarker))

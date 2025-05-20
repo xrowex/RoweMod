@@ -21,7 +21,6 @@ namespace rowemod.Mods
             Shoes,
             Bust
         }
-
         // Map your enum to the ACTUAL child names that appear in the screenshot:
         // "HeadGear", "EquipSlot_Body", "EquipSlot_Shirt", "EquipSlot_Pants", etc.
         public static readonly Dictionary<Slot, string> SlotNameMap = new Dictionary<Slot, string>()

@@ -161,14 +161,14 @@ namespace rowemod
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
                         ModernToggle("Hide Helmet", ref bHideHelmet);
-                        GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
+                        /*GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Slider("Menu Color R", ref menuAccentR, 0f, 1f);
                         Slider("Menu Color G", ref menuAccentG, 0f, 1f);
                         Slider("Menu Color B", ref menuAccentB, 0f, 1f);
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
-                        }
+                        }*/
                         break;
 
                     case Tab.Graphics:
@@ -419,7 +419,7 @@ namespace rowemod
                 windowStyle.fontSize = 16;
                 windowStyle.fontStyle = FontStyle.Bold;
 
-                // Label Style
+                // Label Styles
                 labelStyle = new GUIStyle(GUI.skin.label);
                 labelStyle.normal.textColor = Color.white;
                 labelStyle.hover.textColor = Color.white;
@@ -725,27 +725,28 @@ namespace rowemod
         }
 
 
+        private static string _activeSliderLabel = null;
+
         public static void ModernSlider(string label, ref float target, float min, float max)
         {
             float height = 25f;
             float labelWidth = 150f;
             float valueBoxWidth = 50f;
             float spacing = 15f;
-            float sliderWidth = windowRect.width - labelWidth - valueBoxWidth - spacing * 4;
+            float sliderWidth = Menu.windowRect.width - labelWidth - valueBoxWidth - spacing * 4;
 
-            Rect fullRect = GUILayoutUtility.GetRect(windowRect.width - 30f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            Rect fullRect = GUILayoutUtility.GetRect(Menu.windowRect.width - 30f, height, GUILayout.ExpandWidth(true),
+                GUILayout.Height(height));
 
             Rect labelRect = new Rect(fullRect.x, fullRect.y, labelWidth, height);
             Rect sliderRect = new Rect(fullRect.x + labelWidth + spacing, fullRect.y + 6, sliderWidth, height - 12f);
-            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y, valueBoxWidth, height);
+            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y,
+                valueBoxWidth, height);
 
-            // Label
-            GUI.Label(labelRect, label, labelStyle);
+            GUI.Label(labelRect, label, Menu.labelStyle);
 
-            // Slider background
+            // Slider background and fill
             DrawSolidColorRect(sliderRect, new Color(0.25f, 0.25f, 0.25f));
-
-            // Slider fill
             float percent = Mathf.InverseLerp(min, max, target);
             Rect fillRect = new Rect(sliderRect.x, sliderRect.y, sliderRect.width * percent, sliderRect.height);
             DrawSolidColorRect(fillRect, new Color(0.2f, 0.6f, 1f));
@@ -755,38 +756,48 @@ namespace rowemod
             Rect thumbRect = new Rect(thumbX - 5f, sliderRect.y - 2f, 10f, sliderRect.height + 4f);
             DrawSolidColorRect(thumbRect, Color.white);
 
-            // Handle mouse input and snap to step size
-            if (Event.current.type == EventType.MouseDown && sliderRect.Contains(Event.current.mousePosition))
+            Event e = Event.current;
+
+            if (e.type == EventType.MouseDown && sliderRect.Contains(e.mousePosition))
             {
-                float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
-                float rawValue = Mathf.Lerp(min, max, newPercent);
-                target = Mathf.Round(rawValue / 0.05f) * 0.015f;
-                Event.current.Use();
+                _activeSliderLabel = label;
+                e.Use();
             }
 
-            if (Event.current.type == EventType.MouseDrag && sliderRect.Contains(Event.current.mousePosition))
+            if (e.type == EventType.MouseUp && _activeSliderLabel == label)
             {
-                float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, Event.current.mousePosition.x);
-                float rawValue = Mathf.Lerp(min, max, newPercent);
-                target = Mathf.Round(rawValue / 0.05f) * 0.01f;
-                Event.current.Use();
+                _activeSliderLabel = null;
+                e.Use();
             }
 
-            // Value label
+            if (e.type == EventType.MouseDrag && _activeSliderLabel == label)
+            {
+                float clampedX = Mathf.Clamp(e.mousePosition.x, sliderRect.x, sliderRect.xMax);
+                float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, clampedX);
+                float rawValue = Mathf.Lerp(min, max, newPercent);
+
+                target = Mathf.Round(rawValue * 10f) / 10f; 
+
+                e.Use();
+            }
+
+            // Value box
             string valueStr = target.ToString("0.00");
-
-            // Border + background
             float borderSize = 2f;
-            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
-            DrawSolidColorRect(borderRect, new Color(0.2f, 0.6f, 1f)); // Accent border
-            DrawSolidColorRect(valueRect, Color.black); // Inner background
+            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize,
+                valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
+            DrawSolidColorRect(borderRect, new Color(0.2f, 0.6f, 1f));
+            DrawSolidColorRect(valueRect, Color.black);
 
-            // Draw value label
-            GUIStyle valueLabelStyle = new GUIStyle(labelStyle);
-            valueLabelStyle.alignment = TextAnchor.MiddleCenter;
-            valueLabelStyle.normal.textColor = Color.white;
+            GUIStyle valueLabelStyle = new GUIStyle(Menu.labelStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
+            };
             GUI.Label(valueRect, valueStr, valueLabelStyle);
         }
+
+
 
         public static bool ModernButton(string label, float width = 200f, float height = 30f)
         {

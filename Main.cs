@@ -10,7 +10,7 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.0", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.5", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -102,14 +102,14 @@ namespace rowemod
             MelonCoroutines.Start(LoadRoweLogo());
             
             //disable test mod in game
-            foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
+            /*foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
             {
                 if (obj.name == "TestRoweMod" || obj.name == "TestRoweMod(Clone)")
                 {
                     obj.SetActive(false);
                     Log.Msg($"Disabled: {obj.name}");
                 }
-            }
+            }*/
             
             if (sceneName.Contains("TheShop"))
             {
@@ -123,6 +123,7 @@ namespace rowemod
                 Custom.UpdateAllPresets();
                 
                 MelonCoroutines.Start(DelayedLoadPreset());
+                
             }
 
             // Reload assets from cached bundles
