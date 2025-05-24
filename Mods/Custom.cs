@@ -502,7 +502,7 @@ namespace rowemod.Mods
             }
 
             Material newMaterial = newBundle.LoadAsset<Material>(assetNames[0]);
-
+            
             // Disable decal receiving for HDRP materials
             if (newMaterial != null)
             {

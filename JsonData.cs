@@ -71,6 +71,10 @@ namespace rowemod
         public Dictionary<string, string> bikeMaterials { get; set; } = new Dictionary<string, string>();
         public string? lastLoadedPresetCharacter { get; set; }
         public string? lastLoadedPresetBike { get; set; }
+        public float barRotationAngle { get; set; }
+        public float seatHeight { get; set; }   
+        public float seatRotationX { get; set; }
+        
         // Camera
         public float camLerp { get; set; }
         public float fovValue { get; set; }

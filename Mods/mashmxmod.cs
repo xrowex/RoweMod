@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 
 namespace rowemod;
 
-public class mashmxmod
+public class ReplayMod
 {
     public void Update()
     {

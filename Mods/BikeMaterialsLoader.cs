@@ -22,48 +22,6 @@ namespace rowemod.Mods
         private static Dictionary<string, Dictionary<string, Texture2D>> _categoryPreviews = new Dictionary<string, Dictionary<string, Texture2D>>();
         private static Dictionary<string, Texture2D> _materialPreviews = new Dictionary<string, Texture2D>();
 
-        /*public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
-            new Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)>
-            {
-                { "Bars", ("Bars", new List<EquipSlotVehicle>()) },
-                { "Bar End", ("Bar Ends", new List<EquipSlotVehicle>()) },
-                { "BB", ("Bottom Bracket", new List<EquipSlotVehicle>()) },
-                { "Chain", ("Chain", new List<EquipSlotVehicle>()) },
-                { "Crank Arm", ("Crank Arm", new List<EquipSlotVehicle>()) },
-                { "Forks", ("Forks", new List<EquipSlotVehicle>()) },
-                { "Frame", ("Frame", new List<EquipSlotVehicle>()) },
-                { "Grip", ("Grips", new List<EquipSlotVehicle>()) },
-                { "Guard", ("Hub Guards", new List<EquipSlotVehicle>()) },
-                { "Headset", ("Headsets", new List<EquipSlotVehicle>()) },
-                { "Hub", ("Hubs", new List<EquipSlotVehicle>()) },
-                { "Hub_Front", ("Front Hub", new List<EquipSlotVehicle>()) },
-                { "Hub_Rear", ("Rear Hub", new List<EquipSlotVehicle>()) },
-                { "Pedal", ("Pedals", new List<EquipSlotVehicle>()) },
-                { "BMX_Peg_FrontLeft", ("Front Left Peg", new List<EquipSlotVehicle>()) },
-                { "BMX_Peg_FrontRight", ("Front Right Peg", new List<EquipSlotVehicle>()) },
-                { "BMX_Peg_RearLeft", ("Rear Left Peg", new List<EquipSlotVehicle>()) },
-                { "BMX_Peg_RearRight", ("Rear Right Peg", new List<EquipSlotVehicle>()) },
-                { "BMX_Peg", ("Pegs", new List<EquipSlotVehicle>()) },
-                { "BMX_Nipples", ("Nipples", new List<EquipSlotVehicle>()) },
-                { "BMX_Nipples_Front", ("Front Nipples", new List<EquipSlotVehicle>()) },
-                { "BMX_Nipples_Rear", ("Rear Nipples", new List<EquipSlotVehicle>()) },
-                { "BMX_Rim_Front", ("Front Rim", new List<EquipSlotVehicle>()) },
-                { "BMX_Rim_Rear", ("Rear Rim", new List<EquipSlotVehicle>()) },
-                { "BMX_Rim", ("Rims", new List<EquipSlotVehicle>()) },
-                { "Seat", ("Seats", new List<EquipSlotVehicle>()) },
-                { "SeatClamp", ("Seat Clamp", new List<EquipSlotVehicle>()) },
-                { "Seat Post", ("Seat Posts", new List<EquipSlotVehicle>()) },
-                { "BMX_Spokes_Front", ("Front Spokes", new List<EquipSlotVehicle>()) },
-                { "BMX_Spokes_Rear", ("Rear Spokes", new List<EquipSlotVehicle>()) },
-                { "BMX_Spokes", ("Spokes", new List<EquipSlotVehicle>()) },
-                { "Sprocket", ("Sprockets", new List<EquipSlotVehicle>()) },
-                { "Stem", ("Stems", new List<EquipSlotVehicle>()) },
-                { "StemBolt", ("Stem Bolts", new List<EquipSlotVehicle>()) },
-                { "Stem Cap", ("Stem Caps", new List<EquipSlotVehicle>()) },
-                { "BMX_Tire_Front", ("Front Tire", new List<EquipSlotVehicle>()) },
-                { "BMX_Tire_Rear", ("Rear Tire", new List<EquipSlotVehicle>()) },
-                { "BMX_Tire", ("Tires", new List<EquipSlotVehicle>()) },
-            };*/
         public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
     new Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)>
     {
@@ -168,16 +126,6 @@ namespace rowemod.Mods
                             }
                         }
 
-                        /*if (buttonRect.Contains(Event.current.mousePosition))
-                        {
-                            hoveredMaterial = materialName;
-                            hoveredPreview = GetMaterialPreview(materialFile);
-                        }
-                        else if (hoveredMaterial == materialName)
-                        {
-                            hoveredMaterial = null;
-                            hoveredPreview = null;
-                        }*/
                         GUILayout.EndHorizontal();
                     }
                 }
@@ -258,93 +206,6 @@ namespace rowemod.Mods
             Log.Msg("BikeMaterialsLoader initialization complete.");
         }
 
-        /*private static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
-        {
-            Log.Msg("Listing all EquipSlotVehicle names:");
-            foreach (var slot in equipSlotVehicles)
-            {
-                Log.Msg($" - {slot.gameObject.name}");
-            }
-
-            if (equipSlotVehicles.Length == 0)
-            {
-                Log.Warning("No EquipSlotVehicle components found in rMBCharacter.");
-                return;
-            }
-
-            int slotsCategorized = 0;
-
-            foreach (var slot in equipSlotVehicles)
-            {
-                Log.Msg($"Checking slot: {slot.gameObject.name}");
-
-                bool isFront = slot.gameObject.name.Contains("Front", StringComparison.OrdinalIgnoreCase);
-                bool isPeg = slot.gameObject.name.Contains("Peg", StringComparison.OrdinalIgnoreCase);
-
-                foreach (var category in categories.Keys)
-                {
-                    if (slot.gameObject.name.Contains(category, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Specific Peg Handling
-                        if (isPeg)
-                        {
-                            // Find the most specific peg category first
-                            var specificPegCategory = categories.Keys
-                                .Where(c => c.StartsWith("BMX_Peg_", StringComparison.OrdinalIgnoreCase) 
-                                         && slot.gameObject.name.Contains(c, StringComparison.OrdinalIgnoreCase))
-                                .OrderByDescending(c => c.Length) // Prioritize longer (more specific) matches
-                                .FirstOrDefault();
-
-                            if (!string.IsNullOrEmpty(specificPegCategory))
-                            {
-                                categories[specificPegCategory].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to '{categories[specificPegCategory].displayName}'.");
-                                categories["BMX_Peg"].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to 'Pegs'.");
-                                
-                            }
-                            else
-                            {
-                                // If no specific peg category is found, default to general Pegs category
-                                categories["BMX_Peg"].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to 'Pegs'.");
-                            }
-                        }
-                        else if (isFront && category.StartsWith("BMX_", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string wheelType = GetWheelType(slot.gameObject);
-
-                            if (wheelType == "Back Wheel")
-                            {
-                                string rearCategory = category.Replace("Front", "Rear");
-                                if (categories.ContainsKey(rearCategory))
-                                {
-                                    categories[rearCategory].slots.Add(slot);
-                                    Log.Msg($"Assigned '{slot.gameObject.name}' to '{rearCategory}'.");
-                                }
-
-                                categories[category.Replace("_Front", "")].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to general '{category.Replace("_Front", "")}' category.");
-                            }
-                            else
-                            {
-                                categories[category].slots.Add(slot);
-                                Log.Msg($"Assigned '{slot.gameObject.name}' to '{categories[category].displayName}'.");
-                            }
-                        }
-                        else
-                        {
-                            categories[category].slots.Add(slot);
-                            Log.Msg($"Categorized slot '{slot.gameObject.name}' under '{categories[category].displayName}'.");
-                        }
-
-                        slotsCategorized++;
-                        break;
-                    }
-                }
-            }
-            Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
-        }*/
         public static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
         {
             Log.Msg("Listing all EquipSlotVehicle names:");
@@ -509,67 +370,6 @@ namespace rowemod.Mods
 
 
 
-        /*private static Texture2D GetMaterialPreview(string materialPath)
-        {
-            if (materialPreviews.TryGetValue(materialPath, out Texture2D cachedPreview))
-            {
-                //Log.Msg($"Using cached preview for {materialPath}");
-                return cachedPreview;
-            }
-
-            try
-            {
-                //Log.Msg($"Attempting to load preview for {materialPath}");
-                string folderPath = Path.GetDirectoryName(materialPath);
-                string materialName = Path.GetFileNameWithoutExtension(materialPath);
-
-                // Look for image files matching the material name
-                string[] imageFiles = Directory.GetFiles(folderPath, $"{materialName}.*")
-                    .Where(file => file.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                                   file.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-
-                if (imageFiles.Length > 0)
-                {
-                    //Log.Msg($"Found image file for preview: {imageFiles[0]}");
-                    byte[] imageData = File.ReadAllBytes(imageFiles[0]);
-                    Texture2D imageTexture = new Texture2D(2, 2);
-                    if (imageTexture.LoadImage(imageData))
-                    {
-                        //Log.Msg($"Loaded image preview for {materialName}");
-                        materialPreviews[materialPath] = imageTexture;
-                        return imageTexture;
-                    }
-                    else
-                    {
-                        Log.Warning($"Failed to load image data for {imageFiles[0]}");
-                    }
-                }
-
-                // Attempt to generate a texture from the material
-                Material material = LoadMaterialFromFile(materialPath);
-                if (material == null)
-                {
-                    Log.Warning($"Material could not be loaded for {materialPath}");
-                    return null;
-                }
-
-                Texture2D baseMapTexture = material.HasProperty("_BaseMap") && material.GetTexture("_BaseMap") is Texture2D baseMap
-                    ? ResizeTexture(baseMap, 250, 250)
-                    : CreateColorTexture(material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : Color.gray, 250, 250);
-
-                //Log.Msg($"Generated preview texture for {materialName}");
-                materialPreviews[materialPath] = baseMapTexture;
-                return baseMapTexture;
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error generating material preview for '{materialPath}': {ex.Message}");
-                return null;
-            }
-        }*/
-
-
 
 
         public static System.Collections.IEnumerator DelayedApplySavedMaterials()
@@ -610,31 +410,6 @@ namespace rowemod.Mods
             }
         }
 
-        private static Texture2D ResizeTexture(Texture2D original, int width, int height)
-        {
-            RenderTexture renderTexture = RenderTexture.GetTemporary(width, height);
-            RenderTexture.active = renderTexture;
-
-            Graphics.Blit(original, renderTexture);
-
-            Texture2D resizedTexture = new Texture2D(width, height);
-            resizedTexture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            resizedTexture.Apply();
-
-            RenderTexture.active = null;
-            RenderTexture.ReleaseTemporary(renderTexture);
-
-            return resizedTexture;
-        }
-
-        private static Texture2D CreateColorTexture(Color color, int width, int height)
-        {
-            Texture2D texture = new Texture2D(width, height);
-            Color[] pixels = Enumerable.Repeat(color, width * height).ToArray();
-            texture.SetPixels(pixels);
-            texture.Apply();
-            return texture;
-        }
 
         private static Material LoadMaterialFromFile(string materialPath)
         {
@@ -667,49 +442,6 @@ namespace rowemod.Mods
         }
 
 
-        /*private static void ApplyMaterialToCategory(string category, Material material, string materialPath)
-        {
-            if (!categories.ContainsKey(category))
-            {
-                Log.Warning($"Category '{category}' does not exist.");
-                return;
-            }
-
-            Log.Msg($"Applying material '{material.name}' to category '{category}'");
-
-            foreach (var slot in categories[category].slots)
-            {
-                if (slot._equipItem == null)
-                {
-                    Log.Warning($"EquipItem in category '{category}' is null.");
-                    continue;
-                }
-
-                Renderer[] renderers = slot._equipItem.GetComponentsInChildren<MeshRenderer>(true);
-                if (renderers.Length == 0)
-                {
-                    Log.Warning($"No renderers found in category '{category}'.");
-                    continue;
-                }
-
-                foreach (var renderer in renderers)
-                {
-                    Log.Msg($"Applying material '{material.name}' to renderer '{renderer.name}'.");
-
-                    Material[] mats = renderer.materials; // get a copy
-                    for (int i = 0; i < mats.Length; i++)
-                    {
-                        mats[i] = new Material(material); // Assign new material instance
-                    }
-                    renderer.materials = mats; // Apply the modified array
-                    renderer.material = material; // Assign the new material to the renderer
-                }
-            }
-            scrollOffset = 0;
-            // Update the saved config
-            Config.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
-            Config.Save();
-        }*/
         private static void ApplyMaterialToCategory(string category, Material material, string materialPath)
         {
             if (!categories.ContainsKey(category))

@@ -130,7 +130,9 @@ namespace rowemod
         public static string? eyesMaterialPath = _defaultEyesMaterialPath;
 
         public static string customSessionMarker = "None";
-
+        private static float barRotationAngle = DefaultBarRotationAngle;
+        private static float seatHeight = DefaultSeatHeight;   
+        private static float seatRotationX = DefaultSeatRotationX; 
         public static Dictionary<string, string> bikeMaterials { get; set; } = new Dictionary<string, string>();
         public static string lastLoadedPresetCharacter = "None"; // Default to None
         public static string lastLoadedPresetBike = "None"; // Default to None
@@ -239,7 +241,10 @@ namespace rowemod
                 tpCameraPitch,
                 tpFovValue,
                 customSessionMarker,
-                droneEmitterToggle
+                droneEmitterToggle,
+                barRotationAngle,
+                seatHeight,
+                seatRotationX,
             });
 
             File.WriteAllText(cfgFile, contents);
@@ -317,104 +322,13 @@ namespace rowemod
             tpFovValue = jsonData.tpFovValue;
             customSessionMarker = jsonData.customSessionMarker;
             droneEmitterToggle = jsonData.droneEmitterToggle;
+            barRotationAngle = jsonData.barRotationAngle;
+            seatHeight = jsonData.seatHeight;
+            seatRotationX = jsonData.seatRotationX;
         }
         
-        /*public static void SaveCurrentLoadedItems()
-        {
-            if (Memory.physicsDrivenCharacter == null)
-            {
-                Log.Error("SaveCurrentLoadedItems: physicsDrivenCharacter is null!");
-                return;
-            }
 
-            Transform charRoot = Memory.physicsDrivenCharacter.transform;
-            
-            foreach (var entry in slotNameMap)
-            {
-                Slot slot = entry.Key;
-                string slotObjectName = entry.Value;
-
-                // Determine full path based on parent structure
-                string fullPath = "Physics Skeleton/" + slotObjectName;
-                if (slotObjectName == "Hat_EquipSlot" || slotObjectName == "Hair_EquipSlot" || slotObjectName == "Eyes_EquipSlot")
-                {
-                    fullPath = "Physics Skeleton/HeadGear/" + slotObjectName;
-                }
-
-                Transform slotTransform = charRoot.Find(fullPath);
-                if (slotTransform == null)
-                {
-                    Log.Warning($"SaveCurrentLoadedItems: Slot '{fullPath}' not found!");
-                    continue;
-                }
-
-                // Get the current model name (mesh name)
-                string modelName = GetModelName(slotTransform);
-                string materialName = GetMaterialName(slotTransform);
-
-                // Save to Config using the correct slot
-                switch (slot)
-                {
-                    case Slot.Body:
-                        Config.DefaultBodyModelPath = modelName;
-                        Config.DefaultBodyMaterialPath = materialName;
-                        break;
-                    case Slot.Top:
-                        Config.DefaultTopModelPath = modelName;
-                        Config.DefaultTopMaterialPath = materialName;
-                        break;
-                    case Slot.Gloves:
-                        Config.DefaultGlovesModelPath = modelName;
-                        Config.DefaultGlovesMaterialPath = materialName;
-                        break;
-                    case Slot.Bottoms:
-                        Config.DefaultBottomsModelPath = modelName;
-                        Config.DefaultBottomsMaterialPath = materialName;
-                        break;
-                    case Slot.Socks:
-                        Config.DefaultSocksModelPath = modelName;
-                        Config.DefaultSocksMaterialPath = materialName;
-                        break;
-                    case Slot.Shoes:
-                        Config.DefaultShoesModelPath = modelName;
-                        Config.DefaultShoesMaterialPath = materialName;
-                        break;
-                    case Slot.Bust:
-                        Config.DefaultBustModelPath = modelName;
-                        Config.DefaultBustMaterialPath = materialName;
-                        break;
-                    case Slot.Hat:
-                        Config.DefaultHatModelPath = modelName;
-                        Config.DefaultHatMaterialPath = materialName;
-                        break;
-                    case Slot.Hair:
-                        Config.DefaultHairModelPath = modelName;
-                        Config.DefaultHairMaterialPath = materialName;
-                        break;
-                    case Slot.Eyes:
-                        Config.DefaultEyesModelPath = modelName;
-                        Config.DefaultEyesMaterialPath = materialName;
-                        break;
-                }
-            }
-
-            Log.Msg("Saved current loaded items as defaults.");
-        }*/
-
-        // Gets the model (mesh) name from the slot
-        private static string GetModelName(Transform slotTransform)
-        {
-            MeshFilter meshFilter = slotTransform.GetComponentInChildren<MeshFilter>();
-            return meshFilter != null && meshFilter.sharedMesh != null ? meshFilter.sharedMesh.name : "UnknownModel";
-        }
-
-        // Gets the material name from the slot
-        private static string GetMaterialName(Transform slotTransform)
-        {
-            Renderer renderer = slotTransform.GetComponentInChildren<Renderer>();
-            return renderer != null && renderer.sharedMaterial != null ? renderer.sharedMaterial.name : "UnknownMaterial";
-        }
-
+       
 
         public static void ResetPhysicsTab()
         {
@@ -471,7 +385,7 @@ namespace rowemod
         public static void ResetBikeMaterialsTab()
         {
             bikeMaterials.Clear();
-
+            
         }
 
         public static void ResetMiscTab()

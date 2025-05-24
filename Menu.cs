@@ -282,23 +282,31 @@ namespace rowemod
                 {
                     switch (currentTab)
                     {
-                        case Tab.Physics: ResetPhysicsTab(); break;
+                        case Tab.Physics:
+                            ResetPhysicsTab();
+                            break;
+
                         case Tab.Bike:
                             LoadAllAssetBundles();
                             Log.Msg("Bike Tab reset!");
-                                break;
-                        case Tab.Character: ResetCharacterTab(); break;
+                            break;
+
+                        case Tab.Character: 
+                            ResetCharacterTab(); 
+                            break;
+
                         case Tab.BikeMaterials:
                             CategorizeEquipSlots(equipSlotVehicles);
-                            ResetBikeMaterialsTab(); 
+                            ResetBikeMaterialsTab();
                             break;
-                        case Tab.Misc: 
-                            ResetMiscTab(); 
+                        case Tab.Misc:
+                            ResetMiscTab();
                             break;
-                        case Tab.Marker: 
-                                Memory.ReloadAssetsFromCachedBundles();
+                        case Tab.Marker:
+                            Memory.ReloadAssetsFromCachedBundles();
                             break;
                     }
+
                     ResetSliderTextValues();
                 }
                 GUILayout.EndVertical();

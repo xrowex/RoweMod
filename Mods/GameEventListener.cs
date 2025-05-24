@@ -104,6 +104,7 @@ namespace rowemod
         {
             Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
             Memory.FindObjects(Memory.physicsDrivenCharacter);
+            BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
         }
         private void OnPlayerResetAtMarker()
         {

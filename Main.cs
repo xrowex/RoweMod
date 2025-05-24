@@ -123,7 +123,7 @@ namespace rowemod
                 Custom.UpdateAllPresets();
                 
                 MelonCoroutines.Start(DelayedLoadPreset());
-                
+                MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             }
 
             // Reload assets from cached bundles
