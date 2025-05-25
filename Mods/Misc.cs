@@ -47,14 +47,18 @@ namespace rowemod.Mods
                         }
                     }
                 }
+
+                // Added for FreeCam collider toggle feature
+                if (freeCamCollider != null)
+                {
+                    freeCamCollider.enabled = !bDisableFreeCamCollider;
+                }
             }
             catch (Exception e)
             {
                 Console.WriteLine(e);
                 throw;
             }
-            
-
         }
     }
 }

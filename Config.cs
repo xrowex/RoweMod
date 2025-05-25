@@ -61,7 +61,6 @@ namespace rowemod
         private static readonly Vector3 DefaultCamOffset = new Vector3(-0.35f, 0.65f, -2.92f);
         private static readonly bool DefaultFpvCamera = false;
         
-        
         private static readonly float DefaultTpRecenterSpeed = 90f;
         private static readonly Vector3 DefaultTpCameraOffset = new Vector3(0f, -0.1f, -3f);
         private static readonly float DefaultTpCameraPitch = 15f;
@@ -78,6 +77,9 @@ namespace rowemod
         private static readonly float DefaultMenuAccentG = 0.2f;
         private static readonly float DefaultMenuAccentB = 0.6f;
         private static readonly float DefaultSloMoTimer = 1.0f;
+
+        // Added for FreeCam collider toggle feature
+        private static readonly bool DefaultBDisableFreeCamCollider = false;
 
         // Physics variables
         public static bool bBreakBike = DefaultBBreakBike;
@@ -103,8 +105,6 @@ namespace rowemod
         public static float quickSpinMultiplier = DefaultQuickSpinMultiplier;
         public static float sideHopPower = DefaultSideHopPower;
         public static float vertAssistCorrectionStrength = 30f; 
-
-
 
         // Custom model and material paths
         public static bool bHideHelmet = DefaultBHideHelmet;
@@ -149,8 +149,6 @@ namespace rowemod
         public static float tpCameraPitch = DefaultTpCameraPitch;
         public static float tpFovValue = DefaultTpFovValue;
 
-
-
         // Misc variables
         public static bool bNeverBail = DefaultBNeverBail;
         public static bool bShowHUD = DefaultBShowHUD;
@@ -164,10 +162,11 @@ namespace rowemod
         public static float menuAccentB = DefaultMenuAccentB;
         public static float sloMoTimer = DefaultSloMoTimer;
 
+        // Added for FreeCam collider toggle feature
+        public static bool bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
+
         public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "rowemod");
         public static string cfgFile { get; } = Path.Combine(modFolder, "cfg.json");
-
-
 
         public static void Save()
         {
@@ -245,12 +244,13 @@ namespace rowemod
                 barRotationAngle,
                 seatHeight,
                 seatRotationX,
+                // Added for FreeCam collider toggle feature
+                bDisableFreeCamCollider
             });
 
             File.WriteAllText(cfgFile, contents);
             //Log.Msg("Config saved successfully.");
         }
-
 
         public static void Load()
         {
@@ -287,7 +287,7 @@ namespace rowemod
             bottomsMaterialPath = MakeAbsolutePath(jsonData.bottomsMaterialPath);
             socksModelPath = MakeAbsolutePath(jsonData.socksModelPath);
             socksMaterialPath = MakeAbsolutePath(jsonData.socksMaterialPath);
-            shoesModelPath = MakeAbsolutePath(jsonData.shoesModelPath);
+            shoesModelPath = MakeAbsolutePath(jsonData.socksModelPath);
             shoesMaterialPath = MakeAbsolutePath(jsonData.shoesMaterialPath);
             bustModelPath = MakeAbsolutePath(jsonData.bustModelPath);
             bustMaterialPath = MakeAbsolutePath(jsonData.bustMaterialPath);
@@ -325,10 +325,9 @@ namespace rowemod
             barRotationAngle = jsonData.barRotationAngle;
             seatHeight = jsonData.seatHeight;
             seatRotationX = jsonData.seatRotationX;
+            // Added for FreeCam collider toggle feature
+            bDisableFreeCamCollider = jsonData.bDisableFreeCamCollider;
         }
-        
-
-       
 
         public static void ResetPhysicsTab()
         {
@@ -366,9 +365,9 @@ namespace rowemod
             shoesModelPath = _defaultShoesModelPath;
             shoesMaterialPath = _defaultShoesMaterialPath;
             bustModelPath = _defaultBustModelPath;
-            bustMaterialPath = _defaultBustMaterialPath;
+            bustMaterialPath = _defaultBustModelPath;
             hatModelPath = _defaultHatModelPath;
-            hatMaterialPath = _defaultHatMaterialPath;
+            hatMaterialPath = _defaultHatModelPath;
             hairModelPath = _defaultHairModelPath;
             hairMaterialPath = _defaultHairMaterialPath;
             eyesModelPath = _defaultEyesModelPath;
@@ -400,9 +399,9 @@ namespace rowemod
             menuAccentR = DefaultMenuAccentR;
             menuAccentG = DefaultMenuAccentG;
             menuAccentB = DefaultMenuAccentB;
-            
+            // Added for FreeCam collider toggle feature
+            bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
         }
-
 
         public static string MakeRelativePath(string fullPath)
         {
@@ -447,7 +446,6 @@ namespace rowemod
 
             return MakeRelativePath(path);
         }
-
 
     }
 }

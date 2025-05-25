@@ -55,7 +55,6 @@ namespace rowemod
         public string? bottomsMaterialPath { get; set; }
         public string? socksModelPath { get; set; }
         public string? socksMaterialPath { get; set; }
-        
         public string? shoesModelPath { get; set; }
         public string? shoesMaterialPath { get; set; }
         public string? bustModelPath { get; set; }
@@ -93,7 +92,7 @@ namespace rowemod
         public float menuAccentB { get; set; }
         public float sloMoTimer { get; set; }
 
-        
+        // Added for FreeCam collider toggle feature
+        public bool bDisableFreeCamCollider { get; set; }
     }
-    
 }

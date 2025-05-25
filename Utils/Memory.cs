@@ -25,6 +25,7 @@ using Camera = UnityEngine.Camera;
 using Object = UnityEngine.Object;
 using Il2CppMashBox.Development.RandD.IAP;
 using PlayerInputBehaviour = Il2CppMashBox.BMX_Physics_Development.NewShit.PlayerInputBehaviour;
+using Il2CppMashBox.Addons.ReplaySystem; // Added for FreeCam collider toggle feature
 
 namespace rowemod.Utils
 {
@@ -99,7 +100,11 @@ namespace rowemod.Utils
 
         public static TeleportRelay teleportRelay;
         public static PhysicsPropHandBehaviour physicsPropHandBehaviour;
-        
+
+        // Added for FreeCam collider toggle feature
+        public static FreeCam freeCam;
+        public static SphereCollider freeCamCollider;
+
         public static void FindObjects(GameObject player)
         {
             Log.Msg("FindObjects called...");
@@ -420,6 +425,35 @@ namespace rowemod.Utils
             {
                 Log.Error($"Exception while finding Haptic Feedback Manager: {ex.Message}");
             }
+
+            // Added for FreeCam collider toggle feature
+            try
+            {
+                Log.Msg("Starting to find FreeCam and its child SphereCollider...");
+                freeCam = GameObject.FindObjectOfType<FreeCam>(true);
+                if (freeCam != null)
+                {
+                    Log.Msg($"FreeCam component found: {freeCam.name}");
+                    freeCamCollider = freeCam.GetComponentInChildren<SphereCollider>(true);
+                    if (freeCamCollider != null)
+                    {
+                        Log.Msg($"FreeCam child SphereCollider found on: {freeCamCollider.gameObject.name}");
+                        freeCamCollider.enabled = !bDisableFreeCamCollider; // Apply initial state
+                    }
+                    else
+                    {
+                        Log.Warning("No SphereCollider found on FreeCam's child GameObjects.");
+                    }
+                }
+                else
+                {
+                    Log.Warning("FreeCam component not found in scene.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Exception while finding FreeCam or child SphereCollider: {ex.Message}");
+            }
             
             Log.Msg("Running GrabTrickData()");
             TrickMods.GrabTrickData();
@@ -481,7 +515,6 @@ namespace rowemod.Utils
                 {
                     Log.Msg($"Found asset in bundle: {assetName}");
                 
-
                     if (assetName.EndsWith(".prefab"))
                     {
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
@@ -547,8 +580,6 @@ namespace rowemod.Utils
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
                         if (asset != null)
                         {
-
-
                             prefabList.Add(asset);
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
                             if (asset.name.Contains("Marker"))
@@ -697,7 +728,6 @@ namespace rowemod.Utils
             GUILayout.Space(10);
         }
 
-
         private static void TryReplaceBars(GameObject newBarsPrefab)
         {
             try
@@ -731,7 +761,6 @@ namespace rowemod.Utils
                 Log.Error($"[Bars] Error swapping bars: {ex.Message}");
             }
         }
-
 
         private static int selectedFrameIndex = 0;
         private static bool frameListInitialized = false;
@@ -805,7 +834,6 @@ namespace rowemod.Utils
                     return;
                 }
 
-
                 var frameSlot = frameObj.GetComponent<EquipSlotVehicle>();
                 if (frameSlot == null)
                 {
@@ -825,7 +853,6 @@ namespace rowemod.Utils
                 Log.Error($"[Frames] Exception while replacing frame: {ex.Message}");
             }
         }
-
 
         public static bool GetGameObject(string name, ref GameObject obj, bool bSometimesNull = false)
         {

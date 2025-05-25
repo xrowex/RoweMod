@@ -73,7 +73,6 @@ namespace rowemod
         public static List<UnityEngine.Rendering.Volume> cachedVolumes = new List<UnityEngine.Rendering.Volume>();
         private static Texture2D logoTexture;
 
-
         //-------------------------------------------------------------------
         // MENU & TAB LOGIC
         //-------------------------------------------------------------------
@@ -161,6 +160,8 @@ namespace rowemod
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
                         ModernToggle("Hide Helmet", ref bHideHelmet);
+                        // Added for FreeCam collider toggle feature
+                        ModernToggle("Disable FreeCam Collider", ref bDisableFreeCamCollider);
                         /*GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Slider("Menu Color R", ref menuAccentR, 0f, 1f);
                         Slider("Menu Color G", ref menuAccentG, 0f, 1f);
@@ -188,9 +189,6 @@ namespace rowemod
                         GUILayout.Box("Current Selected Marker: " + (Config.customSessionMarker ?? "None"), labelStyle);
                         break;
                     /*case Tab.Premium:
-                        
-
-
                         break;*/
                 }
             }
@@ -203,6 +201,24 @@ namespace rowemod
         //-------------------------------------------------------------------
         // SCROLL & TABS
         //-------------------------------------------------------------------
+
+        // Added to fix CS0103 error for missing HandleScrolling method
+        private static void HandleScrolling()
+        {
+            try
+            {
+                if (Event.current?.type == EventType.ScrollWheel)
+                {
+                    scrollOffset += Event.current.delta.y * 10f;
+                    scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
+                    Event.current.Use();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error in HandleScrolling: {ex.Message}");
+            }
+        }
 
         private static void DrawScrollableContent()
         {
@@ -318,24 +334,6 @@ namespace rowemod
             }
         }
 
-
-        public static void HandleScrolling()
-        {
-            try
-            {
-                if (Event.current?.type == EventType.ScrollWheel)
-                {
-                    scrollOffset += Event.current.delta.y * 10f;
-                    scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
-                    Event.current.Use();
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in HandleScrolling: {ex.Message}");
-            }
-        }
-
         //-------------------------------------------------------------------
         // TAB SWITCHING
         //-------------------------------------------------------------------
@@ -409,9 +407,6 @@ namespace rowemod
                 //Color accentBaseColor = new Color(0.8176f, 0.3078f, 0.0412f);
                // Color accentHoverBaseColor = accentBaseColor * 1.35f;
                 //Color activeTabColor = accentBaseColor * 2f; // Slightly different for active tab
-                
-                
-
                 
                 Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10,1,Color.black);
                 Texture2D roundedButtonHover = MakeRoundedTex(20, 40, accentHoverBaseColor, 10, 1, Color.black);
@@ -555,7 +550,6 @@ namespace rowemod
         // GRAPHICS
         //-------------------------------------------------------------------
 
-
         public static void DrawGraphicsSettings()
         {
             try
@@ -583,8 +577,6 @@ namespace rowemod
                 Log.Error($"Error in DrawGraphicsSettings: {ex.Message}");
             }
         }
-
-        
 
         //-------------------------------------------------------------------
         // SLIDER & GUI METHODS
@@ -732,7 +724,6 @@ namespace rowemod
             GUI.color = oldColor;
         }
 
-
         private static string _activeSliderLabel = null;
 
         public static void ModernSlider(string label, ref float target, float min, float max)
@@ -805,8 +796,6 @@ namespace rowemod
             GUI.Label(valueRect, valueStr, valueLabelStyle);
         }
 
-
-
         public static bool ModernButton(string label, float width = 200f, float height = 30f)
         {
             Rect buttonRect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false), GUILayout.Height(height));
@@ -840,7 +829,6 @@ namespace rowemod
 
             return false;
         }
-
 
         public static IEnumerator LoadRoweLogo()
         {
