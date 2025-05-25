@@ -32,7 +32,6 @@ namespace rowemod
         public float quickSpinMultiplier { get; set; }
         public bool bFpvCamera { get; set; }
         
-        
         // Third Person Camera
         public bool bUseOldCam { get; set; }
         public Vector3 tpCameraOffset { get; set; }
@@ -66,7 +65,6 @@ namespace rowemod
         public string? eyesModelPath { get; set; }
         public string? eyesMaterialPath { get; set; }
 
-
         public Dictionary<string, string> bikeMaterials { get; set; } = new Dictionary<string, string>();
         public string? lastLoadedPresetCharacter { get; set; }
         public string? lastLoadedPresetBike { get; set; }
@@ -94,5 +92,8 @@ namespace rowemod
 
         // Added for FreeCam collider toggle feature
         public bool bDisableFreeCamCollider { get; set; }
+
+        // Added for Drone collider toggle feature
+        public bool bDisableDroneCollider { get; set; }
     }
 }

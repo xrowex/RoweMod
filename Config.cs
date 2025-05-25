@@ -81,6 +81,9 @@ namespace rowemod
         // Added for FreeCam collider toggle feature
         private static readonly bool DefaultBDisableFreeCamCollider = false;
 
+        // Added for Drone collider toggle feature
+        private static readonly bool DefaultBDisableDroneCollider = false;
+
         // Physics variables
         public static bool bBreakBike = DefaultBBreakBike;
         public static bool bDisableLevelInAir = DefaultBDisableLevelInAir;
@@ -165,6 +168,9 @@ namespace rowemod
         // Added for FreeCam collider toggle feature
         public static bool bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
 
+        // Added for Drone collider toggle feature
+        public static bool bDisableDroneCollider = DefaultBDisableDroneCollider;
+
         public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "rowemod");
         public static string cfgFile { get; } = Path.Combine(modFolder, "cfg.json");
 
@@ -245,7 +251,9 @@ namespace rowemod
                 seatHeight,
                 seatRotationX,
                 // Added for FreeCam collider toggle feature
-                bDisableFreeCamCollider
+                bDisableFreeCamCollider,
+                // Added for Drone collider toggle feature
+                bDisableDroneCollider
             });
 
             File.WriteAllText(cfgFile, contents);
@@ -287,7 +295,7 @@ namespace rowemod
             bottomsMaterialPath = MakeAbsolutePath(jsonData.bottomsMaterialPath);
             socksModelPath = MakeAbsolutePath(jsonData.socksModelPath);
             socksMaterialPath = MakeAbsolutePath(jsonData.socksMaterialPath);
-            shoesModelPath = MakeAbsolutePath(jsonData.socksModelPath);
+            shoesModelPath = MakeAbsolutePath(jsonData.shoesModelPath);
             shoesMaterialPath = MakeAbsolutePath(jsonData.shoesMaterialPath);
             bustModelPath = MakeAbsolutePath(jsonData.bustModelPath);
             bustMaterialPath = MakeAbsolutePath(jsonData.bustMaterialPath);
@@ -327,6 +335,8 @@ namespace rowemod
             seatRotationX = jsonData.seatRotationX;
             // Added for FreeCam collider toggle feature
             bDisableFreeCamCollider = jsonData.bDisableFreeCamCollider;
+            // Added for Drone collider toggle feature
+            bDisableDroneCollider = jsonData.bDisableDroneCollider;
         }
 
         public static void ResetPhysicsTab()
@@ -347,7 +357,6 @@ namespace rowemod
             manualAngle = DefaultManualAngle;
             noseManualAngle = DefaultNoseManualAngle;
             quickSpinMultiplier = DefaultQuickSpinMultiplier;
-            
         }
 
         public static void ResetCharacterTab()
@@ -365,11 +374,11 @@ namespace rowemod
             shoesModelPath = _defaultShoesModelPath;
             shoesMaterialPath = _defaultShoesMaterialPath;
             bustModelPath = _defaultBustModelPath;
-            bustMaterialPath = _defaultBustModelPath;
+            bustMaterialPath = _defaultBustMaterialPath;
             hatModelPath = _defaultHatModelPath;
             hatMaterialPath = _defaultHatModelPath;
             hairModelPath = _defaultHairModelPath;
-            hairMaterialPath = _defaultHairMaterialPath;
+            hairMaterialPath = _defaultHairModelPath;
             eyesModelPath = _defaultEyesModelPath;
             eyesMaterialPath = _defaultEyesMaterialPath;
             RoweCustomCharacter.rCharacterManager.ChangeData(RoweCustomCharacter.defaultCharacterData);
@@ -384,7 +393,6 @@ namespace rowemod
         public static void ResetBikeMaterialsTab()
         {
             bikeMaterials.Clear();
-            
         }
 
         public static void ResetMiscTab()
@@ -401,6 +409,8 @@ namespace rowemod
             menuAccentB = DefaultMenuAccentB;
             // Added for FreeCam collider toggle feature
             bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
+            // Added for Drone collider toggle feature
+            bDisableDroneCollider = DefaultBDisableDroneCollider;
         }
 
         public static string MakeRelativePath(string fullPath)
@@ -446,6 +456,5 @@ namespace rowemod
 
             return MakeRelativePath(path);
         }
-
     }
 }

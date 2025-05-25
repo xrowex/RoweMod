@@ -6,7 +6,7 @@ using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
 using static rowemod.Config;
 using UnityEngine;
 using Il2CppMashBox.Addons.SlowMotionSystem;
-using Il2CppMashBox.Addons.ProtoDrone;
+using Il2CppMashBox.Addons.ProtoDrone; // Correct namespace for DroneController
 using UnityEngine.Events;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 using Il2CppMashBox.Character;
@@ -25,7 +25,7 @@ using Camera = UnityEngine.Camera;
 using Object = UnityEngine.Object;
 using Il2CppMashBox.Development.RandD.IAP;
 using PlayerInputBehaviour = Il2CppMashBox.BMX_Physics_Development.NewShit.PlayerInputBehaviour;
-using Il2CppMashBox.Addons.ReplaySystem; // Added for FreeCam collider toggle feature
+using Il2CppMashBox.Addons.ReplaySystem;
 
 namespace rowemod.Utils
 {
@@ -42,7 +42,6 @@ namespace rowemod.Utils
         public static GameObject helmet;
         public static GameObject bmxCameraTarget;
         public static GameObject sportsVehicleCamera;
-        
         
         public static GameObject physicsDrivenCharacter;
         public static GameObject rPhysicsSkeleton;
@@ -88,7 +87,6 @@ namespace rowemod.Utils
         public static List<MeshRenderer> allDroneMeshRenderers = new List<MeshRenderer>();
         public static EquipSlotVehicle[] equipSlots;
         public static Joint[] joints;
-        public static DroneManager droneManager;
         public static PhysicsBasedEventEmitter[] droneEmitters;
         public static CustomizableEntity customizableEntity;
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
@@ -104,6 +102,9 @@ namespace rowemod.Utils
         // Added for FreeCam collider toggle feature
         public static FreeCam freeCam;
         public static SphereCollider freeCamCollider;
+
+        // Added for Drone collider toggle feature: Store all colliders from all drones
+        public static List<Collider> droneColliders = new List<Collider>();
 
         public static void FindObjects(GameObject player)
         {
@@ -271,19 +272,29 @@ namespace rowemod.Utils
             try
             {
                 Log.Msg("Starting to find all drones...");
-    
-                // Get all DroneController components under rMBCharacter
-                var dronesComponents = rMbCharacter.GetComponentsInChildren<DroneController>(true);
-    
-                if (dronesComponents.Length > 0)
+
+                // First try: Get DroneController components under rMBCharacter
+                var dronesComponents = rMbCharacter != null
+                    ? rMbCharacter.GetComponentsInChildren<Il2CppMashBox.Addons.ProtoDrone.DroneController>(true)
+                    : Array.Empty<Il2CppMashBox.Addons.ProtoDrone.DroneController>();
+
+                // Fallback: Search scene-wide if none found under rMBCharacter
+                if (dronesComponents == null || dronesComponents.Length == 0)
+                {
+                    Log.Warning("No DroneController components found under rMBCharacter. Attempting scene-wide search...");
+                    dronesComponents = GameObject.FindObjectsOfType<Il2CppMashBox.Addons.ProtoDrone.DroneController>(true);
+                }
+
+                if (dronesComponents != null && dronesComponents.Length > 0)
                 {
                     Log.Msg($"Found {dronesComponents.Length} DroneController components.");
 
                     // Store all drone GameObjects in the drones array
                     drones = dronesComponents.Select(d => d.gameObject).ToArray();
-                    foreach (var droneGameObject in drones)
+                    for (int i = 0; i < drones.Length; i++)
                     {
-                        Log.Msg($"Processing drone: {droneGameObject.name}");
+                        var droneGameObject = drones[i];
+                        Log.Msg($"Processing drone [{i}]: {droneGameObject.name} (Active: {droneGameObject.activeInHierarchy}, Path: {GetGameObjectPath(droneGameObject)})");
 
                         // Get MeshRenderers for the drone
                         droneMeshRenderers = droneGameObject.GetComponentsInChildren<MeshRenderer>(true);
@@ -305,13 +316,39 @@ namespace rowemod.Utils
                             
                         // Store a reference to the PhysicsBasedEventEmitter
                         droneEmitters = droneGameObject.GetComponentsInChildren<PhysicsBasedEventEmitter>();
+
+                        // Added for Drone collider toggle feature: Find all Colliders on this drone
+                        var colliders = droneGameObject.GetComponentsInChildren<Collider>(true);
+                        if (colliders.Length > 0)
+                        {
+                            Log.Msg($"Found {colliders.Length} Collider components on drone '{droneGameObject.name}':");
+                            foreach (var collider in colliders)
+                            {
+                                Log.Msg($"  - Collider on: {collider.gameObject.name} (Type: {collider.GetType().Name}, Enabled: {collider.enabled})");
+                                // Reversed logic: true enables colliders, false disables
+                                collider.enabled = bDisableDroneCollider;
+                                droneColliders.Add(collider);
+                            }
+                        }
+                        else
+                        {
+                            Log.Warning($"No Collider components found on drone: {droneGameObject.name}");
+                            // Log child hierarchy for debugging
+                            Log.Msg($"Child hierarchy for drone '{droneGameObject.name}':");
+                            foreach (Transform child in droneGameObject.GetComponentsInChildren<Transform>(true))
+                            {
+                                var collider = child.GetComponent<Collider>();
+                                Log.Msg($"  - {child.name} (Active: {child.gameObject.activeInHierarchy}, Collider: {(collider != null ? collider.GetType().Name : "None")})");
+                            }
+                        }
                     }
                 }
                 else
                 {
-                    Log.Warning("No drones found in rMBCharacter.");
+                    Log.Warning("No DroneController components found in scene.");
                 }
                 Log.Msg($"Total MeshRenderer components across all drones: {allDroneMeshRenderers.Count}");
+                Log.Msg($"Total Collider components found across all drones: {droneColliders.Count}");
             }
             catch (Exception ex)
             {
@@ -360,8 +397,6 @@ namespace rowemod.Utils
                 {
                     Log.Error("BMXCMCameraTarget component not found in BMX Camera Target.");
                 }
-
-               
             }
             catch (Exception ex)
             {
@@ -468,6 +503,19 @@ namespace rowemod.Utils
             //Mods.Misc.Update();
         }
 
+        // Helper method to get GameObject path for logging
+        private static string GetGameObjectPath(GameObject obj)
+        {
+            string path = obj.name;
+            Transform parent = obj.transform.parent;
+            while (parent != null)
+            {
+                path = parent.name + "/" + path;
+                parent = parent.parent;
+            }
+            return path;
+        }
+
         // Prefab variables
         public static List<GameObject> prefabList = new List<GameObject>();
         public static List<GameObject> sessionMarkers = new List<GameObject>();
@@ -511,37 +559,37 @@ namespace rowemod.Utils
                 Log.Msg($"Successfully loaded AssetBundle from: {bundlePath}");
             
                 string[] assetNames = bundle.GetAllAssetNames();
-                foreach (var assetName in assetNames)
-                {
-                    Log.Msg($"Found asset in bundle: {assetName}");
+            foreach (var assetName in assetNames)
+            {
+                Log.Msg($"Found asset in bundle: {assetName}");
                 
-                    if (assetName.EndsWith(".prefab"))
+                if (assetName.EndsWith(".prefab"))
+                {
+                    GameObject asset = bundle.LoadAsset<GameObject>(assetName);
+                    if (asset != null)
                     {
-                        GameObject asset = bundle.LoadAsset<GameObject>(assetName);
-                        if (asset != null)
+                        if (asset.name.ToLower().Contains("bar"))
                         {
-                            if (asset.name.ToLower().Contains("bar"))
-                            {
-                                prefabToBundleMap[asset] = Path.GetFileName(bundlePath); 
-                            }
-                            prefabList.Add(asset);
-                            Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
-                            if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
-                            {
-                                sessionMarkers.Add(asset);
-                                Log.Msg($"Added Marker prefab: {asset.name}");
+                            prefabToBundleMap[asset] = Path.GetFileName(bundlePath); 
+                        }
+                        prefabList.Add(asset);
+                        Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
+                        if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            sessionMarkers.Add(asset);
+                            Log.Msg($"Added Marker prefab: {asset.name}");
             
-                                // Check if this is the last saved marker
-                                if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
-                                {
-                                    newSessionMarker = asset;
-                                    Log.Msg($"Loaded custom session marker from config: {newSessionMarker.name}");
-                                }
+                            // Check if this is the last saved marker
+                            if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
+                            {
+                                newSessionMarker = asset;
+                                Log.Msg($"Loaded custom session marker from config: {newSessionMarker.name}");
                             }
                         }
                     }
                 }
             }
+        }
                         
             if (loadedBundles.Count == 0)
             {
@@ -808,7 +856,7 @@ namespace rowemod.Utils
             if (Menu.ModernButton("Apply Selected Frame", 150f))
             {
                 Log.Msg($"[Frames] Apply button clicked. Attempting to apply: {framePrefabs[selectedFrameIndex].name}");
-                TryReplaceFrame(framePrefabs[selectedFrameIndex]);
+                TryReplaceFrame(barPrefabs[selectedFrameIndex]);
             }
         }
 

@@ -150,6 +150,8 @@ namespace rowemod
                         Mods.Misc.Update();
                         ModernToggle("Toggle Drone Body", ref droneBodyToggle);
                         ModernToggle("Toggle Drone Sound", ref droneEmitterToggle);
+                        // Updated text and position for Drone collider toggle
+                        ModernToggle("Toggle Drone Colliders", ref bDisableDroneCollider);
                         ModernSlider("Drone Mass", ref droneMass, 2f, 1000f);
                         break;
 
@@ -160,7 +162,7 @@ namespace rowemod
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
                         ModernToggle("Hide Helmet", ref bHideHelmet);
-                        // Added for FreeCam collider toggle feature
+                        // FreeCam collider toggle remains in Misc tab
                         ModernToggle("Disable FreeCam Collider", ref bDisableFreeCamCollider);
                         /*GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
                         Slider("Menu Color R", ref menuAccentR, 0f, 1f);
@@ -202,7 +204,6 @@ namespace rowemod
         // SCROLL & TABS
         //-------------------------------------------------------------------
 
-        // Added to fix CS0103 error for missing HandleScrolling method
         private static void HandleScrolling()
         {
             try
@@ -394,21 +395,13 @@ namespace rowemod
 
                 // Window Style
                 windowStyle = new GUIStyle(GUI.skin.window);
-                //Texture2D backgroundTexture = MakeTex(2, 2, new Color(0, 0, 0, 0.9f));
-                
                 Color accentBaseColor = new Color(0.2f, 0.6f, 1f); // Same as toggle
                 Color accentHoverBaseColor = new Color(0.3f, 0.7f, 1.2f); // Slightly lighter on hover
                 Color activeTabColor = new Color(0.4f, 0.8f, 1.4f); // Brighter for active tab
                 
                 Texture2D backgroundTexture = MakeRoundedTex(900, 800, new Color(0, 0, 0, 0.9f), 10, 4, accentBaseColor);
-
                 Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(1f, 1f, 1f, 1f));
-                
-                //Color accentBaseColor = new Color(0.8176f, 0.3078f, 0.0412f);
-               // Color accentHoverBaseColor = accentBaseColor * 1.35f;
-                //Color activeTabColor = accentBaseColor * 2f; // Slightly different for active tab
-                
-                Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10,1,Color.black);
+                Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10, 1, Color.black);
                 Texture2D roundedButtonHover = MakeRoundedTex(20, 40, accentHoverBaseColor, 10, 1, Color.black);
                 Texture2D activeTabBackground = MakeRoundedTex(20, 40, activeTabColor, 10, 1, Color.black);
                 Texture2D accentColor = MakeTex(2, 2, accentBaseColor);
@@ -641,7 +634,6 @@ namespace rowemod
             }
         }
 
-       
         public static bool Toggle(string text, ref bool value)
         {
             try
@@ -661,6 +653,7 @@ namespace rowemod
                 return value;
             }
         }
+
         private static Dictionary<string, float> toggleAnimationState = new Dictionary<string, float>();
 
         public static bool ModernToggle(string label, ref bool value)
