@@ -6,6 +6,8 @@ namespace rowemod.Mods
 {
     public static class Misc
     {
+        
+        
         public static void Update()
         {
             try

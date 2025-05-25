@@ -316,7 +316,23 @@ namespace rowemod.Utils
                             
                         // Store a reference to the PhysicsBasedEventEmitter
                         droneEmitters = droneGameObject.GetComponentsInChildren<PhysicsBasedEventEmitter>();
-
+                        
+                        
+                        TempDroneCycler[] tempDroneCyclers = droneGameObject.GetComponentsInChildren<TempDroneCycler>();
+                        if (tempDroneCyclers != null && tempDroneCyclers.Length > 0)
+                        {
+                            foreach (var cycler in tempDroneCyclers)
+                            {
+                                var cyclerColliders = cycler.GetComponentsInChildren<Collider>();
+                                foreach (var collider in cyclerColliders)
+                                {
+                                    collider.enabled = bDisableDroneCollider;
+                                    droneColliders.Add(collider);
+                                }
+                            }
+                            Log.Msg($"Found and configured {tempDroneCyclers.Length} TempDroneCycler components");
+                        }
+                        
                         // Added for Drone collider toggle feature: Find all Colliders on this drone
                         var colliders = droneGameObject.GetComponentsInChildren<Collider>(true);
                         if (colliders.Length > 0)
@@ -874,7 +890,7 @@ namespace rowemod.Utils
 
                 var frameObj = rMbCharacter.transform
                     .GetComponentsInChildren<Transform>(true)
-                    .FirstOrDefault(t => t.name == "Frame" && t.GetComponent<EquipSlotVehicle>() != null);
+                    .FirstOrDefault(t => t.name.ToLower() == "frame" && t.GetComponent<EquipSlotVehicle>() != null);
 
                 if (frameObj == null)
                 {

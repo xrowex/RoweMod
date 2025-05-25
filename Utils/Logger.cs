@@ -21,7 +21,7 @@ namespace rowemod.Utils
         static string _moduleName = Assembly.GetExecutingAssembly().GetName().Name;
 
         // toggle for console logs
-        static bool _bDebug = false;
+        static bool _bDebug = true;
 
         static MelonLogger.Instance _loggerInstance = new MelonLogger.Instance(_moduleName);
         static MelonLogger.Instance _warningInstance = new MelonLogger.Instance(_moduleName);
