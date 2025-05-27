@@ -605,7 +605,7 @@ namespace rowemod.Utils
                     }
                 }
             }
-        }
+            }
                         
             if (loadedBundles.Count == 0)
             {
@@ -784,6 +784,7 @@ namespace rowemod.Utils
                 {
                     selectedBarIndex = i;
                     TryReplaceBars(barPrefabs[selectedBarIndex]);
+                    PartTweaker.FindParts();
                     Log.Msg($"[Bars] Selected bar index: {selectedBarIndex}, name: {barNames[i]}");
                 }
             }
@@ -834,7 +835,7 @@ namespace rowemod.Utils
 
         public static void DrawBmxFramesSelector()
         {
-            if (!frameListInitialized == true || framePrefabs.Count == 0)
+            if (!frameListInitialized || framePrefabs.Count == 0)
             {
                 Log.Msg("[Frames] (Re)building frame prefab list...");
                 framePrefabs = Memory.prefabList
@@ -864,17 +865,16 @@ namespace rowemod.Utils
                 {
                     selectedFrameIndex = i;
                     Log.Msg($"[Frames] Selected frame index: {selectedFrameIndex}, name: {frameNames[i]}");
+
+                    // Apply frame immediately on selection
+                    TryReplaceFrame(framePrefabs[selectedFrameIndex]);
+                    PartTweaker.FindParts();
                 }
             }
             GUILayout.EndScrollView();
 
-            GUILayout.Space(5);
-            if (Menu.ModernButton("Apply Selected Frame", 150f))
-            {
-                Log.Msg($"[Frames] Apply button clicked. Attempting to apply: {framePrefabs[selectedFrameIndex].name}");
-                TryReplaceFrame(barPrefabs[selectedFrameIndex]);
-            }
         }
+
 
         private static void TryReplaceFrame(GameObject newFramePrefab)
         {

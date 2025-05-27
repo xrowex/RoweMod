@@ -132,7 +132,7 @@ namespace rowemod
                         GUILayout.EndHorizontal();
 
                         Memory.DrawBmxBarsSelector();
-                        //Memory.DrawBmxFramesSelector();
+                        Memory.DrawBmxFramesSelector();
                         break;
                     case Tab.Tricks:
                         TrickMods.DrawTrickMenu();
@@ -164,14 +164,14 @@ namespace rowemod
                         ModernToggle("Hide Helmet", ref bHideHelmet);
                         // FreeCam collider toggle remains in Misc tab
                         ModernToggle("Disable FreeCam Collider", ref bDisableFreeCamCollider);
-                        /*GUILayout.Box("", coloredBoxStyle, GUILayout.Height(5), GUILayout.ExpandWidth(true));
-                        Slider("Menu Color R", ref menuAccentR, 0f, 1f);
-                        Slider("Menu Color G", ref menuAccentG, 0f, 1f);
-                        Slider("Menu Color B", ref menuAccentB, 0f, 1f);
+                        
+                        ModernSlider("Menu Color R", ref menuAccentR, 0f, 1f);
+                        ModernSlider("Menu Color G", ref menuAccentG, 0f, 1f);
+                        ModernSlider("Menu Color B", ref menuAccentB, 0f, 1f);
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
-                        }*/
+                        }
                         break;
 
                     case Tab.Graphics:
@@ -304,7 +304,9 @@ namespace rowemod
                             break;
 
                         case Tab.Bike:
-                            LoadAllAssetBundles();
+                            //LoadAllAssetBundles();
+                            PartTweaker.FindParts();
+                            //ReloadAssetsFromCachedBundles();
                             Log.Msg("Bike Tab reset!");
                             break;
 
@@ -395,7 +397,8 @@ namespace rowemod
 
                 // Window Style
                 windowStyle = new GUIStyle(GUI.skin.window);
-                Color accentBaseColor = new Color(0.2f, 0.6f, 1f); // Same as toggle
+                //Color accentBaseColor = new Color(0.2f, 0.6f, 1f); // Same as toggle
+                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Same as toggle
                 Color accentHoverBaseColor = new Color(0.3f, 0.7f, 1.2f); // Slightly lighter on hover
                 Color activeTabColor = new Color(0.4f, 0.8f, 1.4f); // Brighter for active tab
                 
@@ -768,7 +771,7 @@ namespace rowemod
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, clampedX);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
 
-                target = Mathf.Round(rawValue * 10f) / 10f; 
+                target = Mathf.Round(rawValue * 100f) / 100f; 
 
                 e.Use();
             }

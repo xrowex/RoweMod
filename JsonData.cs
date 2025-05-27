@@ -71,7 +71,7 @@ namespace rowemod
         public float barRotationAngle { get; set; }
         public float seatHeight { get; set; }   
         public float seatRotationX { get; set; }
-        
+        public float pegLength { get; set; }
         // Camera
         public float camLerp { get; set; }
         public float fovValue { get; set; }

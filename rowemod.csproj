@@ -466,6 +466,7 @@
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\Custom.cs" />
+		<Compile Include="Mods\DanceDisable.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\mashmxmod.cs" />
 		<Compile Include="Mods\Misc.cs" />

@@ -33,6 +33,7 @@ namespace rowemod
         private static readonly float DefaultBarRotationAngle = 0f;
         private static readonly float DefaultSeatHeight = 0.15f;
         private static readonly float DefaultSeatRotationX = 330f;
+        private static readonly float DefaultPegLength = 1f; 
 
         private static readonly bool DefaultBHideHelmet = true;
         private static string? _defaultBodyModelPath = null;
@@ -133,9 +134,10 @@ namespace rowemod
         public static string? eyesMaterialPath = _defaultEyesMaterialPath;
 
         public static string customSessionMarker = "None";
-        private static float barRotationAngle = DefaultBarRotationAngle;
-        private static float seatHeight = DefaultSeatHeight;   
-        private static float seatRotationX = DefaultSeatRotationX; 
+        public static float barRotationAngle = DefaultBarRotationAngle;
+        public static float seatHeight = DefaultSeatHeight;
+        public static float seatRotationX = DefaultSeatRotationX; 
+        public static float pegLength = DefaultPegLength; 
         public static Dictionary<string, string> bikeMaterials { get; set; } = new Dictionary<string, string>();
         public static string lastLoadedPresetCharacter = "None"; // Default to None
         public static string lastLoadedPresetBike = "None"; // Default to None
@@ -250,6 +252,7 @@ namespace rowemod
                 barRotationAngle,
                 seatHeight,
                 seatRotationX,
+                pegLength,
                 // Added for FreeCam collider toggle feature
                 bDisableFreeCamCollider,
                 // Added for Drone collider toggle feature
@@ -333,6 +336,7 @@ namespace rowemod
             barRotationAngle = jsonData.barRotationAngle;
             seatHeight = jsonData.seatHeight;
             seatRotationX = jsonData.seatRotationX;
+            pegLength = jsonData.pegLength;
             // Added for FreeCam collider toggle feature
             bDisableFreeCamCollider = jsonData.bDisableFreeCamCollider;
             // Added for Drone collider toggle feature
