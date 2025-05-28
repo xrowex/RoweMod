@@ -323,11 +323,14 @@ namespace rowemod.Utils
                         {
                             foreach (var cycler in tempDroneCyclers)
                             {
-                                var cyclerColliders = cycler.GetComponentsInChildren<Collider>();
-                                foreach (var collider in cyclerColliders)
+                                foreach(var drone in cycler._drones)
                                 {
-                                    collider.enabled = bDisableDroneCollider;
-                                    droneColliders.Add(collider);
+                                    var collider = drone.GetComponent<Collider>();
+                                    if(collider != null)
+                                    {
+                                        collider.enabled = bDisableDroneCollider;
+                                        droneColliders.Add(collider); 
+                                    }
                                 }
                             }
                             Log.Msg($"Found and configured {tempDroneCyclers.Length} TempDroneCycler components");

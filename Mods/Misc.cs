@@ -55,7 +55,7 @@ namespace rowemod.Mods
                 {
                     freeCamCollider.enabled = !bDisableFreeCamCollider;
                 }
-
+                
                 // Added for Drone collider toggle feature: Toggle all drone colliders (for some reason theres multiple -shrug-)
                 foreach (var collider in droneColliders)
                 {
