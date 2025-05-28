@@ -286,14 +286,6 @@ namespace rowemod
 
                 GUILayout.Space(100);
                 GUILayout.BeginVertical();
-                /*if (GUILayout.Button("<b>Snap</b>", highQualityButtonStyle, GUILayout.Width(tabWidth-15), GUILayout.Height(tabHeight-15)))
-                {
-                    if (customizableEntity != null)
-                    {
-                        customizableEntity.RelaySnap();
-                        Log.Msg("RelaySnap() called...");
-                    }
-                }*/
 
                 if (GUILayout.Button("<b>RESET\nTAB</b>", highQualityButtonStyle, GUILayout.Width(tabWidth - 15), GUILayout.Height(tabHeight)))
                 {
@@ -318,9 +310,11 @@ namespace rowemod
                             CategorizeEquipSlots(equipSlotVehicles);
                             ResetBikeMaterialsTab();
                             break;
+                        
                         case Tab.Misc:
                             ResetMiscTab();
                             break;
+                        
                         case Tab.Marker:
                             Memory.ReloadAssetsFromCachedBundles();
                             break;
@@ -395,13 +389,22 @@ namespace rowemod
                 // Removed stylesInitialized check to allow style updates
                 stylesInitialized = true;
 
-                // Window Style
-                windowStyle = new GUIStyle(GUI.skin.window);
-                //Color accentBaseColor = new Color(0.2f, 0.6f, 1f); // Same as toggle
-                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Same as toggle
-                Color accentHoverBaseColor = new Color(0.3f, 0.7f, 1.2f); // Slightly lighter on hover
-                Color activeTabColor = new Color(0.4f, 0.8f, 1.4f); // Brighter for active tab
-                
+                // Define base accent color from Config
+                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB);
+                // Derive hover color (brighter: increase RGB by 0.1, clamp to 1)
+                Color accentHoverBaseColor = new Color(
+                    Mathf.Min(accentBaseColor.r + 0.1f, 1f),
+                    Mathf.Min(accentBaseColor.g + 0.1f, 1f),
+                    Mathf.Min(accentBaseColor.b + 0.1f, 1f)
+                );
+                // Derive active tab color (even brighter: increase by 0.2)
+                Color activeTabColor = new Color(
+                    Mathf.Min(accentBaseColor.r + 0.2f, 1f),
+                    Mathf.Min(accentBaseColor.g + 0.2f, 1f),
+                    Mathf.Min(accentBaseColor.b + 0.2f, 1f)
+                );
+
+                // Create textures for styles
                 Texture2D backgroundTexture = MakeRoundedTex(900, 800, new Color(0, 0, 0, 0.9f), 10, 4, accentBaseColor);
                 Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(1f, 1f, 1f, 1f));
                 Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10, 1, Color.black);
@@ -409,6 +412,8 @@ namespace rowemod
                 Texture2D activeTabBackground = MakeRoundedTex(20, 40, activeTabColor, 10, 1, Color.black);
                 Texture2D accentColor = MakeTex(2, 2, accentBaseColor);
 
+                // Window Style
+                windowStyle = new GUIStyle(GUI.skin.window);
                 windowStyle.normal.background = backgroundTexture;
                 windowStyle.onNormal.background = backgroundTexture;
                 windowStyle.hover.background = backgroundTexture;
@@ -685,7 +690,7 @@ namespace rowemod
             toggleAnimationState[label] = Mathf.Lerp(toggleAnimationState[label], target, 0.2f);
 
             // Draw background
-            Color onColor = new Color(0.2f, 0.6f, 1f);
+            Color onColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Use Config accent color
             Color offColor = new Color(0.3f, 0.3f, 0.3f);
             DrawSolidColorRect(toggleRect, Color.Lerp(offColor, onColor, toggleAnimationState[label]));
 
@@ -714,9 +719,13 @@ namespace rowemod
 
         private static void DrawSolidColorRect(Rect rect, Color color)
         {
+            // Store the current GUI color
             Color oldColor = GUI.color;
+            // Set the GUI color to the specified color
             GUI.color = color;
+            // Draw the texture with the specified color
             GUI.DrawTexture(rect, GetWhiteTexture());
+            // Restore the original GUI color
             GUI.color = oldColor;
         }
 
@@ -724,33 +733,40 @@ namespace rowemod
 
         public static void ModernSlider(string label, ref float target, float min, float max)
         {
+            // Define dimensions for the slider UI
             float height = 25f;
             float labelWidth = 150f;
             float valueBoxWidth = 50f;
             float spacing = 15f;
             float sliderWidth = Menu.windowRect.width - labelWidth - valueBoxWidth - spacing * 4;
 
-            Rect fullRect = GUILayoutUtility.GetRect(Menu.windowRect.width - 30f, height, GUILayout.ExpandWidth(true),
-                GUILayout.Height(height));
+            // Create the layout rectangle for the slider
+            Rect fullRect = GUILayoutUtility.GetRect(
+                Menu.windowRect.width - 30f, height,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(height)
+            );
 
+            // Define rectangles for label, slider, and value box
             Rect labelRect = new Rect(fullRect.x, fullRect.y, labelWidth, height);
             Rect sliderRect = new Rect(fullRect.x + labelWidth + spacing, fullRect.y + 6, sliderWidth, height - 12f);
-            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y,
-                valueBoxWidth, height);
+            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y, valueBoxWidth, height);
 
+            // Draw the label
             GUI.Label(labelRect, label, Menu.labelStyle);
 
-            // Slider background and fill
+            // Draw slider background and fill
             DrawSolidColorRect(sliderRect, new Color(0.25f, 0.25f, 0.25f));
             float percent = Mathf.InverseLerp(min, max, target);
             Rect fillRect = new Rect(sliderRect.x, sliderRect.y, sliderRect.width * percent, sliderRect.height);
-            DrawSolidColorRect(fillRect, new Color(0.2f, 0.6f, 1f));
+            DrawSolidColorRect(fillRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
 
-            // Thumb
+            // Draw thumb
             float thumbX = Mathf.Lerp(sliderRect.x, sliderRect.xMax - 10f, percent);
             Rect thumbRect = new Rect(thumbX - 5f, sliderRect.y - 2f, 10f, sliderRect.height + 4f);
-            DrawSolidColorRect(thumbRect, Color.white);
+            DrawSolidColorRect(thumbRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
 
+            // Handle input events
             Event e = Event.current;
 
             if (e.type == EventType.MouseDown && sliderRect.Contains(e.mousePosition))
@@ -771,17 +787,16 @@ namespace rowemod
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, clampedX);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
 
-                target = Mathf.Round(rawValue * 100f) / 100f; 
+                target = Mathf.Round(rawValue * 100f) / 100f;
 
                 e.Use();
             }
 
-            // Value box
+            // Draw value box
             string valueStr = target.ToString("0.00");
             float borderSize = 2f;
-            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize,
-                valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
-            DrawSolidColorRect(borderRect, new Color(0.2f, 0.6f, 1f));
+            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
+            DrawSolidColorRect(borderRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
             DrawSolidColorRect(valueRect, Color.black);
 
             GUIStyle valueLabelStyle = new GUIStyle(Menu.labelStyle)
@@ -800,8 +815,12 @@ namespace rowemod
             bool isHovering = buttonRect.Contains(Event.current.mousePosition);
 
             // Colors
-            Color baseColor = new Color(0.2f, 0.6f, 1f);      // Accent blue
-            Color hoverColor = new Color(0.3f, 0.7f, 1.2f);   // Brighter blue
+            Color baseColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Use Config accent color
+            Color hoverColor = new Color(
+                Mathf.Min(baseColor.r + 0.1f, 1f),
+                Mathf.Min(baseColor.g + 0.1f, 1f),
+                Mathf.Min(baseColor.b + 0.1f, 1f)
+            );
             Color backgroundColor = isHovering ? hoverColor : baseColor;
 
             // Draw rounded background
