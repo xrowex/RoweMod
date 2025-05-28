@@ -6,7 +6,7 @@ using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
 using static rowemod.Config;
 using UnityEngine;
 using Il2CppMashBox.Addons.SlowMotionSystem;
-using Il2CppMashBox.Addons.ProtoDrone; // Correct namespace for DroneController
+using Il2CppMashBox.Addons.ProtoDrone;
 using UnityEngine.Events;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 using Il2CppMashBox.Character;
@@ -103,7 +103,7 @@ namespace rowemod.Utils
         public static FreeCam freeCam;
         public static SphereCollider freeCamCollider;
 
-        // Added for Drone collider toggle feature: Store all colliders from all drones
+        // Drone Colliders
         public static List<Collider> droneColliders = new List<Collider>();
 
         public static void FindObjects(GameObject player)
@@ -152,7 +152,6 @@ namespace rowemod.Utils
                     CharacterManager characterManager = rMbCharacter.GetComponentInChildren<CharacterManager>();
                     
                     playerInputBehaviour = rMbCharacter.GetComponentInChildren<PlayerInputBehaviour>();
-                    //physicsPropHandBehaviour = characterManager._physicsPropHandBehaviour;
 
                     equipSlots = rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
                     if (equipSlots.Length > 0)
@@ -272,108 +271,13 @@ namespace rowemod.Utils
             try
             {
                 Log.Msg("Starting to find all drones...");
-
-                // First try: Get DroneController components under rMBCharacter
-                var dronesComponents = rMbCharacter != null
-                    ? rMbCharacter.GetComponentsInChildren<Il2CppMashBox.Addons.ProtoDrone.DroneController>(true)
-                    : Array.Empty<Il2CppMashBox.Addons.ProtoDrone.DroneController>();
-
-                // Fallback: Search scene-wide if none found under rMBCharacter
-                if (dronesComponents == null || dronesComponents.Length == 0)
-                {
-                    Log.Warning("No DroneController components found under rMBCharacter. Attempting scene-wide search...");
-                    dronesComponents = GameObject.FindObjectsOfType<Il2CppMashBox.Addons.ProtoDrone.DroneController>(true);
-                }
-
-                if (dronesComponents != null && dronesComponents.Length > 0)
-                {
-                    Log.Msg($"Found {dronesComponents.Length} DroneController components.");
-
-                    // Store all drone GameObjects in the drones array
-                    drones = dronesComponents.Select(d => d.gameObject).ToArray();
-                    for (int i = 0; i < drones.Length; i++)
-                    {
-                        var droneGameObject = drones[i];
-                        Log.Msg($"Processing drone [{i}]: {droneGameObject.name} (Active: {droneGameObject.activeInHierarchy}, Path: {GetGameObjectPath(droneGameObject)})");
-
-                        // Get MeshRenderers for the drone
-                        droneMeshRenderers = droneGameObject.GetComponentsInChildren<MeshRenderer>(true);
-                        Log.Msg(droneMeshRenderers.Length > 0
-                            ? $"Drone '{droneGameObject.name}' has {droneMeshRenderers.Length} MeshRenderer components."
-                            : $"Drone '{droneGameObject.name}' has no MeshRenderer components.");
-                        
-                        if (droneMeshRenderers.Length > 0)
-                        {
-                            allDroneMeshRenderers.AddRange(droneMeshRenderers);
-                        }
-
-                        // Get Rigidbody for the drone
-                        droneRb = droneGameObject.GetComponentInChildren<Rigidbody>();
-                        if (droneRb != null)
-                            Log.Msg($"Drone '{droneGameObject.name}' has a Rigidbody component.");
-                        else
-                            Log.Warning($"Drone '{droneGameObject.name}' does not have a Rigidbody component.");
-                            
-                        // Store a reference to the PhysicsBasedEventEmitter
-                        droneEmitters = droneGameObject.GetComponentsInChildren<PhysicsBasedEventEmitter>();
-                        
-                        
-                        TempDroneCycler[] tempDroneCyclers = droneGameObject.GetComponentsInChildren<TempDroneCycler>();
-                        if (tempDroneCyclers != null && tempDroneCyclers.Length > 0)
-                        {
-                            foreach (var cycler in tempDroneCyclers)
-                            {
-                                foreach(var drone in cycler._drones)
-                                {
-                                    var collider = drone.GetComponent<Collider>();
-                                    if(collider != null)
-                                    {
-                                        collider.enabled = bDisableDroneCollider;
-                                        droneColliders.Add(collider); 
-                                    }
-                                }
-                            }
-                            Log.Msg($"Found and configured {tempDroneCyclers.Length} TempDroneCycler components");
-                        }
-                        
-                        // Added for Drone collider toggle feature: Find all Colliders on this drone
-                        var colliders = droneGameObject.GetComponentsInChildren<Collider>(true);
-                        if (colliders.Length > 0)
-                        {
-                            Log.Msg($"Found {colliders.Length} Collider components on drone '{droneGameObject.name}':");
-                            foreach (var collider in colliders)
-                            {
-                                Log.Msg($"  - Collider on: {collider.gameObject.name} (Type: {collider.GetType().Name}, Enabled: {collider.enabled})");
-                                // Reversed logic: true enables colliders, false disables
-                                collider.enabled = bDisableDroneCollider;
-                                droneColliders.Add(collider);
-                            }
-                        }
-                        else
-                        {
-                            Log.Warning($"No Collider components found on drone: {droneGameObject.name}");
-                            // Log child hierarchy for debugging
-                            Log.Msg($"Child hierarchy for drone '{droneGameObject.name}':");
-                            foreach (Transform child in droneGameObject.GetComponentsInChildren<Transform>(true))
-                            {
-                                var collider = child.GetComponent<Collider>();
-                                Log.Msg($"  - {child.name} (Active: {child.gameObject.activeInHierarchy}, Collider: {(collider != null ? collider.GetType().Name : "None")})");
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    Log.Warning("No DroneController components found in scene.");
-                }
-                Log.Msg($"Total MeshRenderer components across all drones: {allDroneMeshRenderers.Count}");
-                Log.Msg($"Total Collider components found across all drones: {droneColliders.Count}");
+                RefreshDroneComponents();
+                Log.Msg("Initial drone component refresh completed.");
             }
             catch (Exception ex)
             {
                 Log.Error($"Exception while finding drones: {ex.Message}");
             }
-
             // Find vehicle changer
             try
             {
@@ -480,7 +384,7 @@ namespace rowemod.Utils
                 Log.Error($"Exception while finding Haptic Feedback Manager: {ex.Message}");
             }
 
-            // Added for FreeCam collider toggle feature
+            // FreeCam collider toggle
             try
             {
                 Log.Msg("Starting to find FreeCam and its child SphereCollider...");
@@ -492,7 +396,7 @@ namespace rowemod.Utils
                     if (freeCamCollider != null)
                     {
                         Log.Msg($"FreeCam child SphereCollider found on: {freeCamCollider.gameObject.name}");
-                        freeCamCollider.enabled = !bDisableFreeCamCollider; // Apply initial state
+                        freeCamCollider.enabled = !bDisableFreeCamCollider;
                     }
                     else
                     {
@@ -519,7 +423,122 @@ namespace rowemod.Utils
             Custom.LoadPreset(lastLoadedPresetCharacter);
             
             Mods.Physics.Update();
-            //Mods.Misc.Update();
+        }
+
+        // New: Refresh drone components when toggles are used
+        public static void RefreshDroneComponents()
+        {
+            try
+            {
+                Log.Msg("Refreshing drone components via DroneController...");
+
+                // Clear existing collections
+                droneColliders.Clear();
+                allDroneMeshRenderers.Clear();
+                drones = Array.Empty<GameObject>();
+                droneEmitters = Array.Empty<PhysicsBasedEventEmitter>();
+                droneRb = null;
+
+                // Find all DroneController components
+                var droneControllers = GameObject.FindObjectsOfType<DroneController>(true);
+                Log.Msg($"Found {droneControllers?.Length ?? 0} DroneController components in scene.");
+
+                if (droneControllers != null && droneControllers.Length > 0)
+                {
+                    // Select active drones (prefer active GameObjects)
+                    var activeDrones = droneControllers
+                        .Where(c => c != null && c.gameObject != null && c.gameObject.activeInHierarchy)
+                        .Select(c => c.gameObject)
+                        .Distinct()
+                        .ToList();
+
+                    if (activeDrones.Count == 0)
+                    {
+                        Log.Warning("No active DroneController GameObjects found, including inactive drones.");
+                        activeDrones = droneControllers
+                            .Where(c => c != null && c.gameObject != null)
+                            .Select(c => c.gameObject)
+                            .Distinct()
+                            .ToList();
+                    }
+
+                    drones = activeDrones.ToArray();
+                    Log.Msg($"Total unique drones found: {drones.Length}");
+
+                    // Process the first active drone (or first available)
+                    if (drones.Length > 0)
+                    {
+                        var drone = drones[0];
+                        Log.Msg($"Processing primary drone: {drone.name} (Active: {drone.activeInHierarchy}, Path: {GetGameObjectPath(drone)})");
+
+                        // Get MeshRenderers
+                        droneMeshRenderers = drone.GetComponentsInChildren<MeshRenderer>(true);
+                        if (droneMeshRenderers.Length > 0)
+                        {
+                            allDroneMeshRenderers.AddRange(droneMeshRenderers.Where(r => r != null));
+                            Log.Msg($"Found {droneMeshRenderers.Length} MeshRenderer components on drone {drone.name}.");
+                        }
+                        else
+                        {
+                            Log.Warning($"No MeshRenderer components found on drone {drone.name}.");
+                        }
+
+                        // Get PhysicsBasedEventEmitters
+                        droneEmitters = drone.GetComponentsInChildren<PhysicsBasedEventEmitter>(true);
+                        if (droneEmitters.Length > 0)
+                        {
+                            Log.Msg($"Found {droneEmitters.Length} PhysicsBasedEventEmitter components on drone {drone.name}.");
+                        }
+                        else
+                        {
+                            Log.Warning($"No PhysicsBasedEventEmitter components found on drone {drone.name}.");
+                        }
+
+                        // Get Colliders
+                        var colliders = drone.GetComponentsInChildren<Collider>(true);
+                        if (colliders.Length > 0)
+                        {
+                            Log.Msg($"Found {colliders.Length} Collider components on drone {drone.name}:");
+                            foreach (var collider in colliders)
+                            {
+                                if (collider != null)
+                                {
+                                    Log.Msg($"  - Collider on: {collider.gameObject.name} (Type: {collider.GetType().Name}, Enabled: {collider.enabled})");
+                                    collider.enabled = bDisableDroneCollider;
+                                    droneColliders.Add(collider);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Log.Warning($"No Collider components found on drone {drone.name}.");
+                        }
+
+                        // Get Rigidbody
+                        droneRb = drone.GetComponentInChildren<Rigidbody>(true);
+                        if (droneRb != null)
+                        {
+                            Log.Msg($"Found Rigidbody on drone {drone.name}.");
+                        }
+                        else
+                        {
+                            Log.Warning($"No Rigidbody found on drone {drone.name}.");
+                        }
+                    }
+
+                    Log.Msg($"Total MeshRenderer components: {allDroneMeshRenderers.Count}");
+                    Log.Msg($"Total PhysicsBasedEventEmitter components: {droneEmitters.Length}");
+                    Log.Msg($"Total Collider components: {droneColliders.Count}");
+                }
+                else
+                {
+                    Log.Warning("No DroneController components found in scene.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Exception while refreshing drone components: {ex.Message}");
+            }
         }
 
         // Helper method to get GameObject path for logging
@@ -578,36 +597,36 @@ namespace rowemod.Utils
                 Log.Msg($"Successfully loaded AssetBundle from: {bundlePath}");
             
                 string[] assetNames = bundle.GetAllAssetNames();
-            foreach (var assetName in assetNames)
-            {
-                Log.Msg($"Found asset in bundle: {assetName}");
-                
-                if (assetName.EndsWith(".prefab"))
+                foreach (var assetName in assetNames)
                 {
-                    GameObject asset = bundle.LoadAsset<GameObject>(assetName);
-                    if (asset != null)
+                    Log.Msg($"Found asset in bundle: {assetName}");
+                    
+                    if (assetName.EndsWith(".prefab"))
                     {
-                        if (asset.name.ToLower().Contains("bar"))
+                        GameObject asset = bundle.LoadAsset<GameObject>(assetName);
+                        if (asset != null)
                         {
-                            prefabToBundleMap[asset] = Path.GetFileName(bundlePath); 
-                        }
-                        prefabList.Add(asset);
-                        Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
-                        if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            sessionMarkers.Add(asset);
-                            Log.Msg($"Added Marker prefab: {asset.name}");
-            
-                            // Check if this is the last saved marker
-                            if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
+                            if (asset.name.ToLower().Contains("bar"))
                             {
-                                newSessionMarker = asset;
-                                Log.Msg($"Loaded custom session marker from config: {newSessionMarker.name}");
+                                prefabToBundleMap[asset] = Path.GetFileName(bundlePath);
+                            }
+                            prefabList.Add(asset);
+                            Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
+                            if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                sessionMarkers.Add(asset);
+                                Log.Msg($"Added Marker prefab: {asset.name}");
+            
+                                // Check if this is the last saved marker
+                                if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
+                                {
+                                    newSessionMarker = asset;
+                                    Log.Msg($"Loaded custom session marker from config: {newSessionMarker.name}");
+                                }
                             }
                         }
                     }
                 }
-            }
             }
                         
             if (loadedBundles.Count == 0)

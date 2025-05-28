@@ -73,6 +73,9 @@ namespace rowemod
         public static List<UnityEngine.Rendering.Volume> cachedVolumes = new List<UnityEngine.Rendering.Volume>();
         private static Texture2D logoTexture;
 
+        // Cache for circular knob texture
+        private static Texture2D _circleTex;
+
         //-------------------------------------------------------------------
         // MENU & TAB LOGIC
         //-------------------------------------------------------------------
@@ -112,16 +115,25 @@ namespace rowemod
                         Mods.Physics.Update();
                         GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernToggle("Spin Assist", ref bSpinAssist);
+                        GUILayout.Space(10); // Add spacing after toggle
                         ModernToggle("Drifting", ref bDriftAbility);
+                        GUILayout.Space(10); // Add spacing after toggle
                         ModernSlider("Gravity", ref gravity, 0f, 30f);
+                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Small Hop Force", ref smallHopForce, 0f, 25f);
+                        GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernSlider("Pump Force", ref pumpForce, 0f, 30f);
+                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
+                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Steer Damping", ref steerDamp, 1f, 5f);
+                        GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 50f);
+                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Max Manual Angle", ref manualAngle, 10f, 50f);
+                        GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         break;
                     case Tab.Bike:
@@ -149,25 +161,36 @@ namespace rowemod
                     case Tab.Drone:
                         Mods.Misc.Update();
                         ModernToggle("Toggle Drone Body", ref droneBodyToggle);
+                        GUILayout.Space(10); // Add spacing after toggle
                         ModernToggle("Toggle Drone Sound", ref droneEmitterToggle);
+                        GUILayout.Space(10); // Add spacing after toggle
                         // Updated text and position for Drone collider toggle
                         ModernToggle("Toggle Drone Colliders", ref bDisableDroneCollider);
+                        GUILayout.Space(10); // Add spacing after toggle
                         ModernSlider("Drone Mass", ref droneMass, 2f, 1000f);
+                        GUILayout.Space(10); // Add spacing after slider
                         break;
 
                     case Tab.Misc:
                         Mods.Misc.Update();
                         ModernToggle("No Bail", ref bNeverBail);
+                        GUILayout.Space(10); // Add spacing after toggle
                         ModernToggle("Vibration", ref bVibration);
+                        GUILayout.Space(10); // Add spacing after toggle
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
                         ModernToggle("Hide Helmet", ref bHideHelmet);
+                        GUILayout.Space(10); // Add spacing after toggle
                         // FreeCam collider toggle remains in Misc tab
-                        ModernToggle("Disable FreeCam Collider", ref bDisableFreeCamCollider);
+                        ModernToggle("Disable Replay Cam Collider", ref bDisableFreeCamCollider);
+                        GUILayout.Space(10); // Add spacing after toggle
                         
                         ModernSlider("Menu Color R", ref menuAccentR, 0f, 1f);
+                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Menu Color G", ref menuAccentG, 0f, 1f);
+                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Menu Color B", ref menuAccentB, 0f, 1f);
+                        GUILayout.Space(10); // Add spacing after slider
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
@@ -286,14 +309,6 @@ namespace rowemod
 
                 GUILayout.Space(100);
                 GUILayout.BeginVertical();
-                /*if (GUILayout.Button("<b>Snap</b>", highQualityButtonStyle, GUILayout.Width(tabWidth-15), GUILayout.Height(tabHeight-15)))
-                {
-                    if (customizableEntity != null)
-                    {
-                        customizableEntity.RelaySnap();
-                        Log.Msg("RelaySnap() called...");
-                    }
-                }*/
 
                 if (GUILayout.Button("<b>RESET\nTAB</b>", highQualityButtonStyle, GUILayout.Width(tabWidth - 15), GUILayout.Height(tabHeight)))
                 {
@@ -318,9 +333,11 @@ namespace rowemod
                             CategorizeEquipSlots(equipSlotVehicles);
                             ResetBikeMaterialsTab();
                             break;
+                        
                         case Tab.Misc:
                             ResetMiscTab();
                             break;
+                        
                         case Tab.Marker:
                             Memory.ReloadAssetsFromCachedBundles();
                             break;
@@ -395,13 +412,22 @@ namespace rowemod
                 // Removed stylesInitialized check to allow style updates
                 stylesInitialized = true;
 
-                // Window Style
-                windowStyle = new GUIStyle(GUI.skin.window);
-                //Color accentBaseColor = new Color(0.2f, 0.6f, 1f); // Same as toggle
-                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Same as toggle
-                Color accentHoverBaseColor = new Color(0.3f, 0.7f, 1.2f); // Slightly lighter on hover
-                Color activeTabColor = new Color(0.4f, 0.8f, 1.4f); // Brighter for active tab
-                
+                // Define base accent color from Config
+                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB);
+                // Derive hover color (brighter: increase RGB by 0.1, clamp to 1)
+                Color accentHoverBaseColor = new Color(
+                    Mathf.Min(accentBaseColor.r + 0.1f, 1f),
+                    Mathf.Min(accentBaseColor.g + 0.1f, 1f),
+                    Mathf.Min(accentBaseColor.b + 0.1f, 1f)
+                );
+                // Derive active tab color (even brighter: increase by 0.2)
+                Color activeTabColor = new Color(
+                    Mathf.Min(accentBaseColor.r + 0.2f, 1f),
+                    Mathf.Min(accentBaseColor.g + 0.2f, 1f),
+                    Mathf.Min(accentBaseColor.b + 0.2f, 1f)
+                );
+
+                // Create textures for styles
                 Texture2D backgroundTexture = MakeRoundedTex(900, 800, new Color(0, 0, 0, 0.9f), 10, 4, accentBaseColor);
                 Texture2D backgroundTextureSelected = MakeTex(2, 2, new Color(1f, 1f, 1f, 1f));
                 Texture2D roundedButtonNormal = MakeRoundedTex(20, 40, accentBaseColor, 10, 1, Color.black);
@@ -409,6 +435,8 @@ namespace rowemod
                 Texture2D activeTabBackground = MakeRoundedTex(20, 40, activeTabColor, 10, 1, Color.black);
                 Texture2D accentColor = MakeTex(2, 2, accentBaseColor);
 
+                // Window Style
+                windowStyle = new GUIStyle(GUI.skin.window);
                 windowStyle.normal.background = backgroundTexture;
                 windowStyle.onNormal.background = backgroundTexture;
                 windowStyle.hover.background = backgroundTexture;
@@ -542,6 +570,94 @@ namespace rowemod
             }
         }
 
+        // Create a capsule-shaped texture for toggle switches
+        public static Texture2D MakeCapsuleTex(int width, int height, Color fillColor, int borderThickness = 2, Color? borderColor = null)
+        {
+            try
+            {
+                Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                Color[] colors = new Color[width * height];
+
+                Color finalBorderColor = borderColor ?? Color.black;
+                // Use half the height as radius for capsule ends
+                int radius = height / 2;
+
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        // Check distance from left and right capsule ends
+                        float distLeft = Vector2.Distance(new Vector2(x, y), new Vector2(radius, height / 2));
+                        float distRight = Vector2.Distance(new Vector2(x, y), new Vector2(width - radius - 1, height / 2));
+
+                        bool outsideCapsule =
+                            (x < radius && distLeft > radius) ||
+                            (x >= width - radius && distRight > radius);
+
+                        bool isBorder =
+                            x < borderThickness || x >= width - borderThickness ||
+                            y < borderThickness || y >= height - borderThickness ||
+                            (x < radius && distLeft > radius - borderThickness && distLeft <= radius) ||
+                            (x >= width - radius && distRight > radius - borderThickness && distRight <= radius);
+
+                        colors[y * width + x] = outsideCapsule
+                            ? new Color(0, 0, 0, 0)
+                            : isBorder
+                                ? finalBorderColor
+                                : fillColor;
+                    }
+                }
+
+                tex.SetPixels(colors);
+                tex.Apply();
+                return tex;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error in MakeCapsuleTex: {ex.Message}");
+                return null;
+            }
+        }
+
+        // Create a circular texture for toggle knobs
+        public static Texture2D MakeCircleTex(int size, Color fillColor, int borderThickness = 1, Color? borderColor = null)
+        {
+            try
+            {
+                Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                Color[] colors = new Color[size * size];
+
+                Color finalBorderColor = borderColor ?? Color.black;
+                int radius = size / 2;
+                Vector2 center = new Vector2(radius, radius);
+
+                for (int y = 0; y < size; y++)
+                {
+                    for (int x = 0; x < size; x++)
+                    {
+                        float distance = Vector2.Distance(new Vector2(x, y), center);
+                        bool outsideCircle = distance > radius;
+                        bool isBorder = !outsideCircle && distance > radius - borderThickness;
+
+                        colors[y * size + x] = outsideCircle
+                            ? new Color(0, 0, 0, 0)
+                            : isBorder
+                                ? finalBorderColor
+                                : fillColor;
+                    }
+                }
+
+                tex.SetPixels(colors);
+                tex.Apply();
+                return tex;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error in MakeCircleTex: {ex.Message}");
+                return null;
+            }
+        }
+
         //-------------------------------------------------------------------
         // GRAPHICS
         //-------------------------------------------------------------------
@@ -661,40 +777,48 @@ namespace rowemod
 
         public static bool ModernToggle(string label, ref bool value)
         {
+            // Define toggle dimensions
             float width = 50f;
             float height = 25f;
-            float knobSize = 20f;
-            float padding = 2f;
+            float knobSize = 18f;
+            float padding = 3.5f;
 
+            // Create layout rectangle
             Rect fullRect = GUILayoutUtility.GetRect(windowRect.width - 30f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
 
+            // Define label and toggle rectangles
             Rect labelRect = new Rect(fullRect.x, fullRect.y, fullRect.width - width - 10f, height);
             Rect toggleRect = new Rect(fullRect.x + fullRect.width - width, fullRect.y, width, height);
 
+            // Initialize animation state
             if (!toggleAnimationState.ContainsKey(label))
                 toggleAnimationState[label] = value ? 1f : 0f;
 
+            // Handle click events
             if (Event.current.type == EventType.MouseDown && toggleRect.Contains(Event.current.mousePosition))
             {
                 value = !value;
                 Event.current.Use();
             }
 
-            // Animate
+            // Animate toggle
             float target = value ? 1f : 0f;
             toggleAnimationState[label] = Mathf.Lerp(toggleAnimationState[label], target, 0.2f);
 
-            // Draw background
-            Color onColor = new Color(0.2f, 0.6f, 1f);
+            // Draw capsule-shaped background
+            Color onColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Use Config accent color
             Color offColor = new Color(0.3f, 0.3f, 0.3f);
-            DrawSolidColorRect(toggleRect, Color.Lerp(offColor, onColor, toggleAnimationState[label]));
+            Texture2D toggleTex = MakeCapsuleTex((int)width, (int)height, Color.Lerp(offColor, onColor, toggleAnimationState[label]), 2, Color.black);
+            GUI.DrawTexture(toggleRect, toggleTex);
 
-            // Draw knob
+            // Draw circular knob using a circle texture
             float knobX = Mathf.Lerp(toggleRect.x + padding, toggleRect.x + toggleRect.width - knobSize - padding, toggleAnimationState[label]);
             Rect knobRect = new Rect(knobX, toggleRect.y + padding, knobSize, knobSize);
-            DrawSolidColorRect(knobRect, Color.white);
+            if (_circleTex == null)
+                _circleTex = MakeCircleTex((int)knobSize, Color.white, 1, Color.black);
+            GUI.DrawTexture(knobRect, _circleTex);
 
-            // Draw label on the left
+            // Draw label
             GUI.Label(labelRect, label, labelStyle);
 
             return value;
@@ -714,9 +838,13 @@ namespace rowemod
 
         private static void DrawSolidColorRect(Rect rect, Color color)
         {
+            // Store the current GUI color
             Color oldColor = GUI.color;
+            // Set the GUI color to the specified color
             GUI.color = color;
+            // Draw the texture with the specified color
             GUI.DrawTexture(rect, GetWhiteTexture());
+            // Restore the original GUI color
             GUI.color = oldColor;
         }
 
@@ -724,33 +852,44 @@ namespace rowemod
 
         public static void ModernSlider(string label, ref float target, float min, float max)
         {
+            // Define dimensions for the slider UI
             float height = 25f;
             float labelWidth = 150f;
             float valueBoxWidth = 50f;
             float spacing = 15f;
             float sliderWidth = Menu.windowRect.width - labelWidth - valueBoxWidth - spacing * 4;
+            float thumbWidth = 10f; // Width of the thumb rectangle
 
-            Rect fullRect = GUILayoutUtility.GetRect(Menu.windowRect.width - 30f, height, GUILayout.ExpandWidth(true),
-                GUILayout.Height(height));
+            // Create the layout rectangle for the slider
+            Rect fullRect = GUILayoutUtility.GetRect(
+                Menu.windowRect.width - 30f, height,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(height)
+            );
 
+            // Define rectangles for label, slider, and value box
             Rect labelRect = new Rect(fullRect.x, fullRect.y, labelWidth, height);
             Rect sliderRect = new Rect(fullRect.x + labelWidth + spacing, fullRect.y + 6, sliderWidth, height - 12f);
-            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y,
-                valueBoxWidth, height);
+            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y, valueBoxWidth, height);
 
+            // Draw the label
             GUI.Label(labelRect, label, Menu.labelStyle);
 
-            // Slider background and fill
+            // Draw slider background
             DrawSolidColorRect(sliderRect, new Color(0.25f, 0.25f, 0.25f));
+
+            // Calculate fill width to cover the entire track at max position
             float percent = Mathf.InverseLerp(min, max, target);
-            Rect fillRect = new Rect(sliderRect.x, sliderRect.y, sliderRect.width * percent, sliderRect.height);
-            DrawSolidColorRect(fillRect, new Color(0.2f, 0.6f, 1f));
+            float fillWidth = percent == 1f ? sliderRect.width : (percent * sliderRect.width); // Full width at max
+            Rect fillRect = new Rect(sliderRect.x, sliderRect.y, fillWidth, sliderRect.height);
+            DrawSolidColorRect(fillRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
 
-            // Thumb
-            float thumbX = Mathf.Lerp(sliderRect.x, sliderRect.xMax - 10f, percent);
-            Rect thumbRect = new Rect(thumbX - 5f, sliderRect.y - 2f, 10f, sliderRect.height + 4f);
-            DrawSolidColorRect(thumbRect, Color.white);
+            // Draw thumb, right-aligned to the fill
+            float thumbX = sliderRect.x + fillWidth; // Right edge of fill
+            Rect thumbRect = new Rect(thumbX - thumbWidth, sliderRect.y - 2f, thumbWidth, sliderRect.height + 4f);
+            DrawSolidColorRect(thumbRect, Color.white); // Use white for thumb
 
+            // Handle input events
             Event e = Event.current;
 
             if (e.type == EventType.MouseDown && sliderRect.Contains(e.mousePosition))
@@ -771,17 +910,16 @@ namespace rowemod
                 float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, clampedX);
                 float rawValue = Mathf.Lerp(min, max, newPercent);
 
-                target = Mathf.Round(rawValue * 100f) / 100f; 
+                target = Mathf.Round(rawValue * 100f) / 100f;
 
                 e.Use();
             }
 
-            // Value box
+            // Draw value box
             string valueStr = target.ToString("0.00");
             float borderSize = 2f;
-            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize,
-                valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
-            DrawSolidColorRect(borderRect, new Color(0.2f, 0.6f, 1f));
+            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
+            DrawSolidColorRect(borderRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
             DrawSolidColorRect(valueRect, Color.black);
 
             GUIStyle valueLabelStyle = new GUIStyle(Menu.labelStyle)
@@ -800,8 +938,12 @@ namespace rowemod
             bool isHovering = buttonRect.Contains(Event.current.mousePosition);
 
             // Colors
-            Color baseColor = new Color(0.2f, 0.6f, 1f);      // Accent blue
-            Color hoverColor = new Color(0.3f, 0.7f, 1.2f);   // Brighter blue
+            Color baseColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Use Config accent color
+            Color hoverColor = new Color(
+                Mathf.Min(baseColor.r + 0.1f, 1f),
+                Mathf.Min(baseColor.g + 0.1f, 1f),
+                Mathf.Min(baseColor.b + 0.1f, 1f)
+            );
             Color backgroundColor = isHovering ? hoverColor : baseColor;
 
             // Draw rounded background
