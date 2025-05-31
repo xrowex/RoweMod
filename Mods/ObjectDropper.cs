@@ -74,6 +74,9 @@ namespace rowemod.Mods
                     return;
                 }
 
+                // Refreshing references to get latest drone/character position
+                RefreshReferences();
+
                 // Finding the selected prefab
                 GameObject prefabToSpawn = dropperPrefabs.FirstOrDefault(p => p != null && p.name == selectedPrefabName);
                 if (prefabToSpawn == null)
@@ -262,16 +265,13 @@ namespace rowemod.Mods
         }
 
         // Spawn an object at the appropriate position with raycast to ground
-        public static void SpawnObject(GameObject prefab)
+        private static void SpawnObject(GameObject prefab)
         {
             if (prefab == null)
             {
                 Log.Error("Cannot spawn null prefab.");
                 return;
             }
-
-            // Refreshing references to ensure latest positions
-            RefreshReferences();
 
             // Determining spawn position and rotation
             Vector3 spawnPosition;
@@ -355,8 +355,16 @@ namespace rowemod.Mods
             GUILayout.Label($"Current Selected Object: {(selectedPrefabName ?? "None")}", Menu.labelStyle);
         }
 
+        // Reset the Dropper tab to default state
+        public static void ResetTab()
+        {
+            // Resetting selected prefab to null
+            selectedPrefabName = null;
+            Log.Msg("Object Dropper tab reset: Selected prefab set to None.");
+        }
+
         // Delete all spawned objects
-        public static void DeleteAllSpawnedObjects()
+        private static void DeleteAllSpawnedObjects()
         {
             // Destroying all tracked spawned objects
             int count = spawnedObjects.Count;

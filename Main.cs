@@ -155,12 +155,14 @@ namespace rowemod
         {
             if (playableSceneLoaded && rMbCharacter)
             {
+                // Updating ObjectDropper regardless of menu state
+                ObjectDropper.Update();
+
                 HandleMenuToggle();
                 if (isOpen)
                 {
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    ObjectDropper.Update();
                 }
             }
         } 

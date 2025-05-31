@@ -350,8 +350,8 @@ namespace rowemod
                             break;
                         
                         case Tab.Dropper:
-                            ObjectDropper.DeleteAllSpawnedObjects();
-                            Log.Msg("Dropper Tab reset: All spawned objects deleted.");
+                            ObjectDropper.ResetTab();
+                            Log.Msg("Dropper Tab reset!");
                             break;
                     }
 
