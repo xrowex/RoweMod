@@ -10,7 +10,7 @@ namespace rowemod.Mods
 {
     public static class ObjectDropper
     {
-        // List to track spawned objects for deletion
+        // List to track spawned objects for deletion, capped at 20
         private static readonly List<GameObject> spawnedObjects = new List<GameObject>();
         
         // Cache for drone and character transforms
@@ -26,7 +26,10 @@ namespace rowemod.Mods
         // Selected prefab name for spawning, initially null
         private static string selectedPrefabName = null;
 
-        // Start dropper, find and load prefabs
+        // Maximum number of spawned objects allowed
+        private const int MaxSpawnedObjects = 20;
+
+        // Initialize the dropper by finding references and loading prefabs
         public static void Initialize()
         {
             Log.Msg("Initializing ObjectDropper...");
@@ -116,139 +119,73 @@ namespace rowemod.Mods
                 }
                 else
                 {
-                    Log.Warning("Character controller not found in rMbCharacter.");
                     characterTransform = Memory.rMbCharacter.transform;
+                    Log.Warning("Character controller not found in rMbCharacter.");
                 }
             }
             else
             {
-                Log.Error("rMbCharacter is null, cannot find character transform.");
                 characterTransform = null;
+                Log.Error("rMbCharacter is null, cannot find character transform.");
             }
         }
 
-        // Load markers from the Bundles folder
+        // Load prefabs from memory class
         private static void LoadDropperPrefabs()
         {
-            // Clearing existing prefabs to avoid duplicates
-            dropperPrefabs.Clear();
-            Log.Msg($"Attempting to load marker prefabs from: {Memory.bundlesFolderPath}");
-
-            // Checking if Bundles folder exists
-            if (!Directory.Exists(Memory.bundlesFolderPath))
+            // Skipping reload if prefabs are already loaded
+            if (dropperPrefabs != null && dropperPrefabs.Count > 0)
             {
-                Log.Error($"Bundles folder does not exist at: {Memory.bundlesFolderPath}");
+                Log.Msg($"Skipping prefab reload, {dropperPrefabs.Count} marker prefabs already loaded.");
                 return;
             }
 
-            // Listing files in Bundles folder for debugging
-            string[] bundleFiles = Directory.GetFiles(Memory.bundlesFolderPath, "*", SearchOption.AllDirectories);
-            Log.Msg($"Found {bundleFiles.Length} files in Bundles folder.");
-            foreach (var file in bundleFiles)
+            // Clearing existing prefabs to avoid duplicates
+            dropperPrefabs.Clear();
+            Log.Msg($"Attempting to load marker prefabs from Memory.loadedBundles.");
+
+            if (Memory.loadedBundles == null || Memory.loadedBundles.Count == 0)
             {
-                Log.Msg($"File: {file}");
+                Log.Error("Memory.loadedBundles is empty or null. Ensure bundles are loaded in Memory.cs.");
+                return;
             }
 
-            // Trying to use Memory.loadedBundles first
-            bool loadedFromMemory = false;
-            if (Memory.loadedBundles != null && Memory.loadedBundles.Count > 0)
+            // Iterating over loaded bundles
+            Log.Msg($"Memory.loadedBundles contains {Memory.loadedBundles.Count} bundles.");
+            foreach (AssetBundle bundle in Memory.loadedBundles)
             {
-                Log.Msg($"Memory.loadedBundles contains {Memory.loadedBundles.Count} bundles.");
-                foreach (AssetBundle bundle in Memory.loadedBundles)
+                if (bundle == null)
                 {
-                    if (bundle == null)
-                    {
-                        Log.Warning("Found null AssetBundle in Memory.loadedBundles, skipping.");
-                        continue;
-                    }
-
-                    // Getting asset names from bundle
-                    string[] assetNames = bundle.GetAllAssetNames();
-                    Log.Msg($"Bundle contains {assetNames.Length} assets.");
-                    foreach (var assetName in assetNames)
-                    {
-                        Log.Msg($"Processing asset: {assetName}");
-                        if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) &&
-                            assetName.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            try
-                            {
-                                GameObject asset = bundle.LoadAsset<GameObject>(assetName);
-                                if (asset != null)
-                                {
-                                    dropperPrefabs.Add(asset);
-                                    Log.Msg($"[ObjectDropper] Loaded marker prefab: {asset.name}");
-                                    loadedFromMemory = true;
-                                }
-                                else
-                                {
-                                    Log.Warning($"Failed to load marker prefab asset: {assetName}");
-                                }
-                            }
-                            catch (System.Exception ex)
-                            {
-                                Log.Error($"Error loading marker prefab {assetName}: {ex.Message}");
-                            }
-                        }
-                    }
+                    Log.Warning("Found null AssetBundle in Memory.loadedBundles, skipping.");
+                    continue;
                 }
-            }
-            else
-            {
-                Log.Warning("Memory.loadedBundles is empty or null.");
-            }
 
-            // Fallback: Load bundles directly if Memory.loadedBundles failed
-            if (!loadedFromMemory)
-            {
-                Log.Msg("Falling back to direct bundle loading for ObjectDropper.");
-                foreach (string bundlePath in bundleFiles)
+                // Getting asset names from bundle
+                string[] assetNames = bundle.GetAllAssetNames();
+                Log.Msg($"Bundle contains {assetNames.Length} assets.");
+                foreach (var assetName in assetNames)
                 {
-                    Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
-                    try
+                    Log.Msg($"Processing asset: {assetName}");
+                    if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) &&
+                        assetName.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        AssetBundle bundle = AssetBundle.LoadFromFile(bundlePath);
-                        if (bundle == null)
+                        try
                         {
-                            Log.Warning($"Failed to load AssetBundle from: {bundlePath}. Skipping file.");
-                            continue;
-                        }
-
-                        // Processing assets in the bundle
-                        string[] assetNames = bundle.GetAllAssetNames();
-                        Log.Msg($"Bundle contains {assetNames.Length} assets.");
-                        foreach (var assetName in assetNames)
-                        {
-                            Log.Msg($"Processing asset: {assetName}");
-                            if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) &&
-                                assetName.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
+                            GameObject asset = bundle.LoadAsset<GameObject>(assetName);
+                            if (asset != null)
                             {
-                                try
-                                {
-                                    GameObject asset = bundle.LoadAsset<GameObject>(assetName);
-                                    if (asset != null)
-                                    {
-                                        dropperPrefabs.Add(asset);
-                                        Log.Msg($"[ObjectDropper] Loaded marker prefab: {asset.name}");
-                                    }
-                                    else
-                                    {
-                                        Log.Warning($"Failed to load marker prefab asset: {assetName}");
-                                    }
-                                }
-                                catch (System.Exception ex)
-                                {
-                                    Log.Error($"Error loading marker prefab {assetName}: {ex.Message}");
-                                }
+                                dropperPrefabs.Add(asset);
+                                Log.Msg($"[ObjectDropper] Loaded marker prefab: {asset.name}");
+                            }
+                            else
+                            {
+                                Log.Warning($"Failed to load marker prefab asset: {assetName}");
                             }
                         }
-
-                        // Unloading bundle to free memory (false keeps loaded assets)
-                        bundle.Unload(false);
-                    }
-                    catch (System.Exception ex)
-                    {
-                        Log.Error($"Error loading bundle {bundlePath}: {ex.Message}");
+                        catch (System.Exception ex)
+                        {
+                            Log.Error($"Error loading marker prefab {assetName}: {ex.Message}");
+                        }
                     }
                 }
             }
@@ -271,6 +208,19 @@ namespace rowemod.Mods
             {
                 Log.Error("Cannot spawn null prefab.");
                 return;
+            }
+
+            // Checking if spawned objects exceed the limit
+            if (spawnedObjects.Count >= MaxSpawnedObjects)
+            {
+                // Removing the oldest object (first in the list)
+                GameObject oldestObject = spawnedObjects[0];
+                if (oldestObject != null)
+                {
+                    UnityEngine.Object.Destroy(oldestObject);
+                    Log.Msg($"Destroyed oldest spawned object: {oldestObject.name} to stay within {MaxSpawnedObjects} limit.");
+                }
+                spawnedObjects.RemoveAt(0);
             }
 
             // Determining spawn position and rotation
