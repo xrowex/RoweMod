@@ -26,6 +26,7 @@ namespace rowemod
 {
     public static class Menu
     {
+        // Defining the tabs available in the menu
         public enum Tab
         {
             Physics,
@@ -37,12 +38,13 @@ namespace rowemod
             Misc,
             Graphics,
             Marker,
-            //Premium
+            Dropper,
+            //Premium,
         }
 
         // Menu Variables
         public static bool isOpen = false;
-        public static Rect windowRect = new Rect(500f, 150f, 900f, 800f);
+        public static Rect windowRect = new Rect(500f, 150f, 1000f, 800f);
         public static Vector2 previousWindowPosition = Vector2.zero;
         public static Vector2 scrollPosition = Vector2.zero;
         public static bool inModelsTab = false;
@@ -213,8 +215,12 @@ namespace rowemod
                         }
                         GUILayout.Box("Current Selected Marker: " + (Config.customSessionMarker ?? "None"), labelStyle);
                         break;
-                    /*case Tab.Premium:
-                        break;*/
+                    // Adding case for the new Dropper tab
+                    case Tab.Dropper:
+                        ObjectDropper.DrawDropperTab();
+                        break;
+                    //case Tab.Premium:
+                    //    break;
                 }
             }
             catch (Exception ex)
@@ -295,7 +301,8 @@ namespace rowemod
                     ("Drone", Tab.Drone),
                     ("Misc", Tab.Misc),
                     ("Graphics", Tab.Graphics),
-                    ("Marker", Tab.Marker)
+                    ("Marker", Tab.Marker),
+                    ("Dropper", Tab.Dropper),
                 };
 
                 foreach (var (label, tab) in tabs)
@@ -340,6 +347,11 @@ namespace rowemod
                         
                         case Tab.Marker:
                             Memory.ReloadAssetsFromCachedBundles();
+                            break;
+                        
+                        case Tab.Dropper:
+                            ObjectDropper.DeleteAllSpawnedObjects();
+                            Log.Msg("Dropper Tab reset: All spawned objects deleted.");
                             break;
                     }
 

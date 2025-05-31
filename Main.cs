@@ -10,14 +10,14 @@ using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.7", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.8", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "1.9.7";
+        public const string ModVersion = "1.9.8";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
@@ -82,6 +82,8 @@ namespace rowemod
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
 
+            // Initializing ObjectDropper
+            ObjectDropper.Initialize();
         }
         
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -129,6 +131,8 @@ namespace rowemod
             // Reload assets from cached bundles
             Memory.ReloadAssetsFromCachedBundles();
 
+            // Re-initialize ObjectDropper on scene load
+            ObjectDropper.Initialize();
         }
         
         private IEnumerator DelayedLoadPreset()
@@ -156,6 +160,7 @@ namespace rowemod
                 {
                     Mods.Physics.Update();
                     Mods.Misc.Update();
+                    ObjectDropper.Update();
                 }
             }
         } 

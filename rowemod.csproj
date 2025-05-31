@@ -470,6 +470,7 @@
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\mashmxmod.cs" />
 		<Compile Include="Mods\Misc.cs" />
+		<Compile Include="Mods\ObjectDropper.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\Patches\ActiveRagdollBehaviourPatches.cs" />
 		<Compile Include="Mods\Patches\TestDeathPatches.cs" />
