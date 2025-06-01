@@ -28,18 +28,24 @@ namespace rowemod.Mods
         // Selected prefab name for spawning, initially null for "none"
         private static string selectedPrefabName = null;
 
+        // Selected object for deletion, initially null
+        private static GameObject selectedObject = null;
+        private static List<Material> originalMaterials = new List<Material>(); // Store original materials for highlight restoration
+
         // Maximum number of spawned objects allowed
         private const int MaxSpawnedObjects = 20;
 
-        // Scroll position for prefab button list
-        private static Vector2 scrollPosition = Vector2.zero;
+        // Scroll positions for UI lists
+        private static Vector2 scrollPosition = Vector2.zero; // Prefab list
+        private static Vector2 objectsScrollPosition = Vector2.zero; // Spawned objects list
 
         // Initialize the dropper by finding references and loading prefabs
         public static void Initialize()
         {
+            // Logging initialization start
             Log.Msg("Initializing ObjectDropper...");
 
-            // Using all layers (idk if these are enabled, so select all)
+            // Using all layers due to limited layer support in the game
             groundLayerMask = ~0; // Include all layers
             Log.Msg("Ground layer mask initialized to all layers (~0).");
 
@@ -47,9 +53,10 @@ namespace rowemod.Mods
             LoadDropperPrefabs();
         }
 
-        // Update method to handle object spawning input
+        // Update method to handle object spawning
         public static void Update()
         {
+            // Handle object spawning
             if (Input.GetKeyDown(KeyCode.O))
             {
                 if (dropperPrefabs == null || dropperPrefabs.Count == 0)
@@ -191,6 +198,82 @@ namespace rowemod.Mods
             }
         }
 
+        // Select a spawned object via UI and apply highlighting
+        private static void SelectObject(GameObject obj)
+        {
+            // Clear current selection
+            ClearSelection();
+
+            if (obj != null && spawnedObjects.Contains(obj))
+            {
+                selectedObject = obj;
+                // Store original materials and apply highlight
+                Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+                originalMaterials.Clear();
+                foreach (Renderer renderer in renderers)
+                {
+                    originalMaterials.AddRange(renderer.materials);
+                    foreach (Material mat in renderer.materials)
+                    {
+                        mat.color = Color.red; // Highlight with red tint
+                    }
+                }
+                Log.Msg($"Selected spawned object via UI: {selectedObject.name}");
+            }
+            else
+            {
+                Log.Warning("Selected object is null or not a spawned object.");
+            }
+        }
+
+        // Clear the current object selection and restore materials
+        private static void ClearSelection()
+        {
+            if (selectedObject != null)
+            {
+                // Restore original materials
+                Renderer[] renderers = selectedObject.GetComponentsInChildren<Renderer>();
+                int materialIndex = 0;
+                foreach (Renderer renderer in renderers)
+                {
+                    Material[] materials = renderer.materials;
+                    for (int i = 0; i < materials.Length && materialIndex < originalMaterials.Count; i++)
+                    {
+                        materials[i].color = originalMaterials[materialIndex].color;
+                        materialIndex++;
+                    }
+                    renderer.materials = materials;
+                }
+                Log.Msg($"Deselected object: {selectedObject.name}");
+                selectedObject = null;
+                originalMaterials.Clear();
+            }
+        }
+
+        // Delete the selected object
+        private static void DeleteSelectedObject()
+        {
+            if (selectedObject == null)
+            {
+                Log.Warning("No object selected to delete.");
+                return;
+            }
+
+            if (spawnedObjects.Contains(selectedObject))
+            {
+                UnityEngine.Object.Destroy(selectedObject);
+                spawnedObjects.Remove(selectedObject);
+                Log.Msg($"Deleted selected object: {selectedObject.name}");
+                selectedObject = null;
+                originalMaterials.Clear();
+            }
+            else
+            {
+                Log.Warning($"Selected object {selectedObject.name} is no longer valid.");
+                ClearSelection();
+            }
+        }
+
         // Spawn an object at the appropriate position with raycast to ground
         private static void SpawnObject(GameObject prefab)
         {
@@ -215,21 +298,22 @@ namespace rowemod.Mods
 
             // Determining spawn position and rotation
             Vector3 spawnPosition;
-            Quaternion spawnRotation;
+            float sourceYRotation;
             bool isDrone = false;
             
             if (droneTransform != null && droneTransform.gameObject.activeInHierarchy)
             {
                 spawnPosition = droneTransform.position;
-                spawnRotation = Quaternion.Euler(0f, droneTransform.eulerAngles.y, 0f);
+                sourceYRotation = droneTransform.eulerAngles.y;
                 isDrone = true;
                 Log.Msg($"Using drone position for spawn: {spawnPosition}");
             }
             else if (characterTransform != null)
             {
-                spawnPosition = characterTransform.position;
-                spawnRotation = Quaternion.Euler(0f, characterTransform.eulerAngles.y, 0f);
-                Log.Msg($"Drone inactive, using character position for spawn: {spawnPosition}");
+                // Offset spawn position 2 meters in front of character
+                spawnPosition = characterTransform.position + characterTransform.forward * 2f;
+                sourceYRotation = characterTransform.eulerAngles.y;
+                Log.Msg($"Using character forward position for spawn: {spawnPosition}");
             }
             else
             {
@@ -238,19 +322,35 @@ namespace rowemod.Mods
             }
 
             // Performing raycast to find ground using UnityEngine.Physics
-            Vector3 raycastOrigin = spawnPosition + Vector3.up * 2f; // Start 2 units above
-            float raycastDistance = 100f; // Distance to cover drone altitude
+            Vector3 raycastOrigin = spawnPosition + Vector3.up * (isDrone ? 2f : 5f); // 2m for drone, 5m for character
+            float raycastDistance = 100f; // Distance to cover drone/character altitude
+            Quaternion spawnRotation = Quaternion.Euler(0f, sourceYRotation, 0f); // Default upright rotation
             if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance, groundLayerMask))
             {
-                // Check if hit is likely a non-ground collider (e.g., Y > 2)
-                if (hit.point.y > 2f && isDrone)
+                // Check if hit is likely a non-ground collider (e.g., Y > 2 or Y < spawnPosition.y - 2)
+                if (hit.point.y > spawnPosition.y + 2f || hit.point.y < spawnPosition.y - 2f)
                 {
                     // Perform secondary raycast from a lower origin to find terrain
-                    Vector3 secondaryOrigin = new Vector3(spawnPosition.x, 2f, spawnPosition.z); // Start near ground level
+                    Vector3 secondaryOrigin = new Vector3(spawnPosition.x, spawnPosition.y + 2f, spawnPosition.z);
                     if (UnityEngine.Physics.Raycast(secondaryOrigin, Vector3.down, out RaycastHit secondaryHit, raycastDistance, groundLayerMask))
                     {
                         spawnPosition = secondaryHit.point;
-                        Log.Msg($"Secondary raycast hit ground at: {secondaryHit.point}, collider: {secondaryHit.collider.gameObject.name}, layer: {LayerMask.LayerToName(secondaryHit.collider.gameObject.layer)}, distance: {secondaryHit.distance}");
+                        // Validate normal (upward-facing) and align rotation
+                        Vector3 normal = secondaryHit.normal.normalized;
+                        if (normal.y > 0.5f) // Ensure normal is mostly upward
+                        {
+                            spawnRotation = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, sourceYRotation, 0f);
+                            // Limit tilt to 45 degrees
+                            Vector3 euler = spawnRotation.eulerAngles;
+                            euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -45f, 45f);
+                            euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -45f, 45f);
+                            spawnRotation = Quaternion.Euler(euler);
+                            Log.Msg($"Secondary raycast hit ground at: {secondaryHit.point}, collider: {secondaryHit.collider.gameObject.name}, layer: {LayerMask.LayerToName(secondaryHit.collider.gameObject.layer)}, distance: {secondaryHit.distance}, normal: {normal}, rotation: {spawnRotation.eulerAngles}");
+                        }
+                        else
+                        {
+                            Log.Warning($"Secondary raycast normal invalid: {normal}. Using default rotation.");
+                        }
                     }
                     else
                     {
@@ -262,7 +362,21 @@ namespace rowemod.Mods
                 else
                 {
                     spawnPosition = hit.point;
-                    Log.Msg($"Raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}");
+                    // Validate normal and align rotation
+                    Vector3 normal = hit.normal.normalized;
+                    if (normal.y > 0.5f)
+                    {
+                        spawnRotation = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, sourceYRotation, 0f);
+                        Vector3 euler = spawnRotation.eulerAngles;
+                        euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -45f, 45f);
+                        euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -45f, 45f);
+                        spawnRotation = Quaternion.Euler(euler);
+                        Log.Msg($"Primary raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}, normal: {normal}, rotation: {spawnRotation.eulerAngles}");
+                    }
+                    else
+                    {
+                        Log.Warning($"Primary raycast normal invalid: {normal}. Using default rotation.");
+                    }
                 }
             }
             else
@@ -270,7 +384,7 @@ namespace rowemod.Mods
                 // Fallback to Y=0 if primary raycast fails
                 Log.Warning($"Primary raycast did not hit ground from {raycastOrigin} within {raycastDistance} units.");
                 spawnPosition.y = 0f;
-                Log.Msg($"Using fallback ground position: {spawnPosition}");
+                Log.Msg($"Using fallback ground position: {spawnPosition}, rotation: {spawnRotation.eulerAngles}");
             }
 
             // Instantiating the object
@@ -289,6 +403,30 @@ namespace rowemod.Mods
         // Draw the UI for the Dropper tab
         public static void DrawDropperTab()
         {
+            // Handle scroll wheel events for local scroll views
+            Event currentEvent = Event.current;
+            if (currentEvent != null && currentEvent.type == EventType.ScrollWheel)
+            {
+                Vector2 mousePos = new Vector2(currentEvent.mousePosition.x, Screen.height - currentEvent.mousePosition.y);
+                
+                // Placeholder for layout rects
+                Rect prefabScrollRect = GUILayoutUtility.GetLastRect();
+                Rect objectsScrollRect = prefabScrollRect;
+
+                // Prefab list scroll view
+                prefabScrollRect = GUILayoutUtility.GetRect(0, 100f, GUILayout.ExpandWidth(true));
+                if (prefabScrollRect.Contains(mousePos))
+                {
+                    scrollPosition.y += currentEvent.delta.y * 10f;
+                    scrollPosition.y = Mathf.Max(0f, scrollPosition.y);
+                    currentEvent.Use();
+                    Log.Msg("Scrolling prefab list.");
+                }
+
+                // Spawned objects scroll view (updated after drawing)
+                Rect placeholderRect = GUILayoutUtility.GetRect(0, 100f, GUILayout.ExpandWidth(true));
+            }
+
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
             
@@ -299,9 +437,8 @@ namespace rowemod.Mods
             }
 
             // Adding scroll view for prefab buttons
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200f));
-
-            // Listing cached prefab names for selection
+            GUILayout.Label("Available Prefabs:", Menu.labelStyle);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(100f));
             foreach (string prefabName in prefabNames)
             {
                 if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle))
@@ -311,7 +448,40 @@ namespace rowemod.Mods
                     Log.Msg($"Selected prefab: {selectedPrefabName}");
                 }
             }
+            GUILayout.EndScrollView();
 
+            // Adding scroll view for spawned objects
+            GUILayout.Space(10);
+            GUILayout.Label("Spawned Objects:", Menu.labelStyle);
+            objectsScrollPosition = GUILayout.BeginScrollView(objectsScrollPosition, GUILayout.Height(100f));
+            if (currentEvent != null && currentEvent.type == EventType.ScrollWheel)
+            {
+                Rect objectsScrollRect = GUILayoutUtility.GetLastRect();
+                Vector2 mousePos = new Vector2(currentEvent.mousePosition.x, Screen.height - currentEvent.mousePosition.y);
+                if (objectsScrollRect.Contains(mousePos))
+                {
+                    objectsScrollPosition.y += currentEvent.delta.y * 10f;
+                    objectsScrollPosition.y = Mathf.Max(0f, objectsScrollPosition.y);
+                    currentEvent.Use();
+                    Log.Msg("Scrolling spawned objects list.");
+                }
+            }
+            if (spawnedObjects.Count == 0)
+            {
+                GUILayout.Label("No objects spawned.", Menu.labelStyle);
+            }
+            else
+            {
+                for (int i = 0; i < spawnedObjects.Count; i++)
+                {
+                    GameObject obj = spawnedObjects[i];
+                    string label = obj != null ? $"Object {i + 1}: {obj.name}" : $"Object {i + 1}: (Destroyed)";
+                    if (GUILayout.Button(label, Menu.highQualityButtonStyle))
+                    {
+                        SelectObject(obj);
+                    }
+                }
+            }
             GUILayout.EndScrollView();
 
             GUILayout.Space(10);
@@ -321,21 +491,32 @@ namespace rowemod.Mods
                 DeleteAllSpawnedObjects();
             }
 
-            // Displaying currently selected prefab
-            GUILayout.Label($"Current Selected Object: {(selectedPrefabName ?? "None")}", Menu.labelStyle);
+            // Adding button to delete selected object
+            if (GUILayout.Button("<b>Delete Selected Object</b>", Menu.highQualityButtonStyle))
+            {
+                DeleteSelectedObject();
+            }
+
+            // Displaying currently selected prefab and object
+            GUILayout.Label($"Current Selected Prefab: {(selectedPrefabName ?? "None")}", Menu.labelStyle);
+            GUILayout.Label($"Current Selected Object: {(selectedObject != null ? selectedObject.name : "None")}", Menu.labelStyle);
         }
 
         // Reset the Dropper tab to default state
         public static void ResetTab()
         {
-            // Resetting selected prefab to null
+            // Resetting selected prefab and object to null
             selectedPrefabName = null;
-            Log.Msg("Object Dropper tab reset: Selected prefab set to None.");
+            ClearSelection();
+            Log.Msg("Object Dropper tab reset: Selected prefab and object set to None.");
         }
 
         // Delete all spawned objects
         private static void DeleteAllSpawnedObjects()
         {
+            // Clear current selection to avoid referencing destroyed objects
+            ClearSelection();
+
             // Destroying all tracked spawned objects
             int count = spawnedObjects.Count;
             foreach (var obj in spawnedObjects)
