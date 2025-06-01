@@ -35,10 +35,6 @@ namespace rowemod.Mods
         // Maximum number of spawned objects allowed
         private const int MaxSpawnedObjects = 20;
 
-        // Scroll positions for UI lists
-        private static Vector2 scrollPosition = Vector2.zero; // Prefab list
-        private static Vector2 objectsScrollPosition = Vector2.zero; // Spawned objects list
-
         // Initialize the dropper by finding references and loading prefabs
         public static void Initialize()
         {
@@ -403,30 +399,6 @@ namespace rowemod.Mods
         // Draw the UI for the Dropper tab
         public static void DrawDropperTab()
         {
-            // Handle scroll wheel events for local scroll views
-            Event currentEvent = Event.current;
-            if (currentEvent != null && currentEvent.type == EventType.ScrollWheel)
-            {
-                Vector2 mousePos = new Vector2(currentEvent.mousePosition.x, Screen.height - currentEvent.mousePosition.y);
-                
-                // Placeholder for layout rects
-                Rect prefabScrollRect = GUILayoutUtility.GetLastRect();
-                Rect objectsScrollRect = prefabScrollRect;
-
-                // Prefab list scroll view
-                prefabScrollRect = GUILayoutUtility.GetRect(0, 100f, GUILayout.ExpandWidth(true));
-                if (prefabScrollRect.Contains(mousePos))
-                {
-                    scrollPosition.y += currentEvent.delta.y * 10f;
-                    scrollPosition.y = Mathf.Max(0f, scrollPosition.y);
-                    currentEvent.Use();
-                    Log.Msg("Scrolling prefab list.");
-                }
-
-                // Spawned objects scroll view (updated after drawing)
-                Rect placeholderRect = GUILayoutUtility.GetRect(0, 100f, GUILayout.ExpandWidth(true));
-            }
-
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
             
@@ -436,9 +408,8 @@ namespace rowemod.Mods
                 return;
             }
 
-            // Adding scroll view for prefab buttons
+            // Adding prefab buttons
             GUILayout.Label("Available Prefabs:", Menu.labelStyle);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(100f));
             foreach (string prefabName in prefabNames)
             {
                 if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle))
@@ -448,24 +419,10 @@ namespace rowemod.Mods
                     Log.Msg($"Selected prefab: {selectedPrefabName}");
                 }
             }
-            GUILayout.EndScrollView();
 
-            // Adding scroll view for spawned objects
+            // Adding spawned objects list
             GUILayout.Space(10);
             GUILayout.Label("Spawned Objects:", Menu.labelStyle);
-            objectsScrollPosition = GUILayout.BeginScrollView(objectsScrollPosition, GUILayout.Height(100f));
-            if (currentEvent != null && currentEvent.type == EventType.ScrollWheel)
-            {
-                Rect objectsScrollRect = GUILayoutUtility.GetLastRect();
-                Vector2 mousePos = new Vector2(currentEvent.mousePosition.x, Screen.height - currentEvent.mousePosition.y);
-                if (objectsScrollRect.Contains(mousePos))
-                {
-                    objectsScrollPosition.y += currentEvent.delta.y * 10f;
-                    objectsScrollPosition.y = Mathf.Max(0f, objectsScrollPosition.y);
-                    currentEvent.Use();
-                    Log.Msg("Scrolling spawned objects list.");
-                }
-            }
             if (spawnedObjects.Count == 0)
             {
                 GUILayout.Label("No objects spawned.", Menu.labelStyle);
@@ -482,7 +439,6 @@ namespace rowemod.Mods
                     }
                 }
             }
-            GUILayout.EndScrollView();
 
             GUILayout.Space(10);
             // Adding button to delete all spawned objects
