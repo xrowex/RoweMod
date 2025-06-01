@@ -25,12 +25,25 @@ namespace rowemod.Mods
         // Selected prefab name for spawning, initially null for "none"
         private static string selectedPrefabName = null;
 
-        // List to track multiple selected objects for deletion
+        // List to track multiple selected objects for deletion or transformation
         private static readonly List<GameObject> selectedObjects = new List<GameObject>();
         private static readonly Dictionary<GameObject, List<Material>> originalMaterialsMap = new Dictionary<GameObject, List<Material>>();
 
         // Maximum number of spawned objects allowed
         private const int MaxSpawnedObjects = 20;
+
+        // Cached GUI styles and textures for toggles
+        private static GUIStyle toggleOnStyle;
+        private static GUIStyle toggleOffStyle;
+        private static Texture2D toggleOnNormalTexture;
+        private static Texture2D toggleOnHoverTexture;
+        private static Texture2D toggleOffNormalTexture;
+        private static Texture2D toggleOffHoverTexture;
+        private static Color lastMenuAccentColor;
+
+        // Transform adjustment offsets for selected objects
+        private static Vector3 positionOffset = Vector3.zero;
+        private static Vector3 rotationOffset = Vector3.zero;
 
         // Initialize the dropper by finding references and loading prefabs
         public static void Initialize()
@@ -38,8 +51,72 @@ namespace rowemod.Mods
             // Logging initialization start
             Log.Msg("Initializing ObjectDropper...");
 
+            // Initialize cached GUI styles and textures
+            InitializeToggleStyles();
+
             RefreshReferences();
             LoadDropperPrefabs();
+        }
+
+        // Initialize or update cached GUI styles and textures for toggles
+        private static void InitializeToggleStyles()
+        {
+            // Create or update textures if menu accent color has changed
+            Color currentMenuAccentColor = new Color(Config.menuAccentR, Config.menuAccentG, Config.menuAccentB);
+            if (toggleOnNormalTexture == null || lastMenuAccentColor != currentMenuAccentColor)
+            {
+                // ON state textures (red)
+                toggleOnNormalTexture = Menu.MakeRoundedTex(128, 32, Color.red, 10, 1, Color.black);
+                toggleOnHoverTexture = Menu.MakeRoundedTex(128, 32, new Color(
+                    Mathf.Min(1f, 1f), // Red hover: slightly brighter
+                    Mathf.Min(0.1f, 1f),
+                    Mathf.Min(0.1f, 1f)), 10, 1, Color.black);
+
+                // OFF state textures (menu accent color)
+                toggleOffNormalTexture = Menu.MakeRoundedTex(128, 32, currentMenuAccentColor, 10, 1, Color.black);
+                toggleOffHoverTexture = Menu.MakeRoundedTex(128, 32, new Color(
+                    Mathf.Min(currentMenuAccentColor.r + 0.1f, 1f),
+                    Mathf.Min(currentMenuAccentColor.g + 0.1f, 1f),
+                    Mathf.Min(currentMenuAccentColor.b + 0.1f, 1f)), 10, 1, Color.black);
+
+                // Create GUI styles with exact highQualityButtonStyle properties
+                toggleOnStyle = new GUIStyle(Menu.highQualityButtonStyle)
+                {
+                    normal = { background = toggleOnNormalTexture, textColor = Color.white },
+                    hover = { background = toggleOnHoverTexture, textColor = Color.yellow },
+                    active = { background = toggleOnHoverTexture, textColor = Color.green },
+                    fontSize = 12,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    border = new RectOffset(10, 10, 10, 10),
+                    padding = Menu.highQualityButtonStyle.padding,
+                    margin = Menu.highQualityButtonStyle.margin,
+                    overflow = Menu.highQualityButtonStyle.overflow,
+                    contentOffset = new Vector2(0, 0), // Center text vertically
+                    stretchWidth = false,
+                    stretchHeight = false
+                };
+
+                toggleOffStyle = new GUIStyle(Menu.highQualityButtonStyle)
+                {
+                    normal = { background = toggleOffNormalTexture, textColor = Color.white },
+                    hover = { background = toggleOffHoverTexture, textColor = Color.yellow },
+                    active = { background = toggleOffHoverTexture, textColor = Color.green },
+                    fontSize = 12,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    border = new RectOffset(10, 10, 10, 10),
+                    padding = Menu.highQualityButtonStyle.padding,
+                    margin = Menu.highQualityButtonStyle.margin,
+                    overflow = Menu.highQualityButtonStyle.overflow,
+                    contentOffset = new Vector2(0, 0), // Center text vertically
+                    stretchWidth = false,
+                    stretchHeight = false
+                };
+
+                lastMenuAccentColor = currentMenuAccentColor;
+                Log.Msg("Initialized toggle styles and textures.");
+            }
         }
 
         // Update method to handle object spawning
@@ -229,7 +306,7 @@ namespace rowemod.Mods
                         for (int i = 0; i < materials.Length; i++)
                         {
                             Material highlightMat = new Material(materials[i]);
-                            highlightMat.color = Color.green;
+                            highlightMat.color = Color.green; // Highlight with green tint
                             materials[i] = highlightMat;
                         }
                         renderer.materials = materials;
@@ -268,6 +345,10 @@ namespace rowemod.Mods
             }
             selectedObjects.Clear();
             originalMaterialsMap.Clear();
+
+            // Reset transform offsets when clearing selection
+            positionOffset = Vector3.zero;
+            rotationOffset = Vector3.zero;
         }
 
         // Delete all selected objects
@@ -293,6 +374,33 @@ namespace rowemod.Mods
             }
             selectedObjects.Clear();
             Log.Msg($"Deleted {deletedCount} selected objects.");
+
+            // Reset transform offsets after deletion
+            positionOffset = Vector3.zero;
+            rotationOffset = Vector3.zero;
+        }
+
+        // Apply transform offsets to all selected objects
+        private static void ApplyTransformOffsets(Vector3 posOffset, Vector3 rotOffset)
+        {
+            if (selectedObjects.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var obj in selectedObjects)
+            {
+                if (obj != null)
+                {
+                    // Apply position offset
+                    obj.transform.position += posOffset;
+
+                    // Apply rotation offset (in Euler angles)
+                    Vector3 currentEuler = obj.transform.eulerAngles;
+                    currentEuler += rotOffset;
+                    obj.transform.eulerAngles = currentEuler;
+                }
+            }
         }
 
         // Spawn an object at the appropriate position with raycast to ground
@@ -324,8 +432,8 @@ namespace rowemod.Mods
             
             if (droneTransform != null && droneTransform.gameObject.activeInHierarchy)
             {
-                // Start spawn position 0.1 meter(s) below the drone
-                spawnPosition = droneTransform.position - Vector3.up * 0.2f;
+                // Start spawn position 0.3 meter(s) below the drone
+                spawnPosition = droneTransform.position - Vector3.up * 0.3f;
                 sourceYRotation = droneTransform.eulerAngles.y;
                 isDrone = true;
                 Log.Msg($"Using position below drone for spawn: {spawnPosition}");
@@ -344,8 +452,8 @@ namespace rowemod.Mods
             }
 
             // Performing raycast to find ground using UnityEngine.Physics
-            Vector3 raycastOrigin = spawnPosition;
-            float raycastDistance = 100f; // Distance to cover drone/character altitude
+            Vector3 raycastOrigin = spawnPosition - Vector3.up * 0.3f; // Start raycast 0.3m below spawn position (avoid colliders)
+            float raycastDistance = 1000f; // Distance to cover drone/character altitude
             Quaternion spawnRotation = Quaternion.Euler(0f, sourceYRotation, 0f); // Default upright rotation
             if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance))
             {
@@ -362,10 +470,10 @@ namespace rowemod.Mods
                         if (normal.y > 0.5f) // Ensure normal is mostly upward
                         {
                             spawnRotation = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, sourceYRotation, 0f);
-                            // Limit tilt to 60 degrees
+                            // Limit tilt to 85 degrees
                             Vector3 euler = spawnRotation.eulerAngles;
-                            euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -60f, 60f);
-                            euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -60f, 60f);
+                            euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -85f, 85f);
+                            euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -85f, 85f);
                             spawnRotation = Quaternion.Euler(euler);
                             Log.Msg($"Secondary raycast hit ground at: {secondaryHit.point}, collider: {secondaryHit.collider.gameObject.name}, layer: {LayerMask.LayerToName(secondaryHit.collider.gameObject.layer)}, distance: {secondaryHit.distance}, normal: {normal}, rotation: {spawnRotation.eulerAngles}");
                         }
@@ -390,8 +498,8 @@ namespace rowemod.Mods
                     {
                         spawnRotation = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, sourceYRotation, 0f);
                         Vector3 euler = spawnRotation.eulerAngles;
-                        euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -60f, 60f);
-                        euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -60f, 60f);
+                        euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -85f, 85f);
+                        euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -85f, 85f);
                         spawnRotation = Quaternion.Euler(euler);
                         Log.Msg($"Primary raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}, normal: {normal}, rotation: {spawnRotation.eulerAngles}");
                     }
@@ -425,6 +533,9 @@ namespace rowemod.Mods
         // Draw the UI for the Dropper tab
         public static void DrawDropperTab()
         {
+            // Update toggle styles if menu accent color has changed
+            InitializeToggleStyles();
+
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
             
@@ -438,15 +549,15 @@ namespace rowemod.Mods
             GUILayout.Label("Available Prefabs:", Menu.labelStyle);
             foreach (string prefabName in prefabNames)
             {
-                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle))
+                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(800f), GUILayout.Height(30f)))
                 {
-                    // Setting selected prefab without spawning
+                    // Setting selected prefab
                     selectedPrefabName = prefabName;
                     Log.Msg($"Selected prefab: {selectedPrefabName}");
                 }
             }
 
-            // Adding spawned objects list
+            // Adding spawned objects list with custom button-based toggles
             GUILayout.Space(10);
             GUILayout.Label("Spawned Objects:", Menu.labelStyle);
             if (spawnedObjects.Count == 0)
@@ -462,33 +573,89 @@ namespace rowemod.Mods
                     if (obj == null) continue;
 
                     bool isSelected = selectedObjects.Contains(obj);
-                    GUIStyle toggleStyle = new GUIStyle(Menu.highQualityButtonStyle);
-                    
-                    // Set background color based on toggle state
-                    Color backgroundColor = isSelected ? Color.red : new Color(Config.menuAccentR, Config.menuAccentG, Config.menuAccentB);
-                    toggleStyle.normal.background = Menu.MakeRoundedTex(20, 40, backgroundColor, 10, 1, Color.black);
-                    toggleStyle.hover.background = Menu.MakeRoundedTex(20, 40, new Color(
-                        Mathf.Min(backgroundColor.r + 0.1f, 1f),
-                        Mathf.Min(backgroundColor.g + 0.1f, 1f),
-                        Mathf.Min(backgroundColor.b + 0.1f, 1f)), 10, 1, Color.black);
-                    toggleStyle.active.background = toggleStyle.hover.background;
+                    GUIStyle toggleStyle = isSelected ? toggleOnStyle : toggleOffStyle;
 
-                    if (GUILayout.Button(label, toggleStyle))
+                    if (GUILayout.Button(label, toggleStyle, GUILayout.Width(800f), GUILayout.Height(30f)))
                     {
                         ToggleObjectSelection(obj);
                     }
                 }
             }
 
+            // Adding transform controls for selected objects
+            if (selectedObjects.Count > 0)
+            {
+                GUILayout.Space(10);
+                GUILayout.Box("Transform Controls", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+
+                // Position sliders with live updates
+                Vector3 prevPositionOffset = positionOffset;
+                Menu.ModernSlider("Position Left/Right", ref positionOffset.x, -5f, 5f);
+                if (positionOffset.x != prevPositionOffset.x)
+                {
+                    ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
+                    if (positionOffset.x == 0f) positionOffset.x = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Position X by {positionOffset.x - prevPositionOffset.x} for selected objects.");
+                }
+
+                prevPositionOffset = positionOffset;
+                Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
+                if (positionOffset.y != prevPositionOffset.y)
+                {
+                    ApplyTransformOffsets(new Vector3(0, positionOffset.y - prevPositionOffset.y, 0), Vector3.zero);
+                    if (positionOffset.y == 0f) positionOffset.y = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Position Y by {positionOffset.y - prevPositionOffset.y} for selected objects.");
+                }
+
+                prevPositionOffset = positionOffset;
+                Menu.ModernSlider("Position Forward/Backward", ref positionOffset.z, -5f, 5f);
+                if (positionOffset.z != prevPositionOffset.z)
+                {
+                    ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);
+                    if (positionOffset.z == 0f) positionOffset.z = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Position Z by {positionOffset.z - prevPositionOffset.z} for selected objects.");
+                }
+                GUILayout.Space(5);
+
+                // Rotation sliders with live updates
+                Vector3 prevRotationOffset = rotationOffset;
+                Menu.ModernSlider("Rotation X", ref rotationOffset.x, -180f, 180f);
+                if (rotationOffset.x != prevRotationOffset.x)
+                {
+                    ApplyTransformOffsets(Vector3.zero, new Vector3(rotationOffset.x - prevRotationOffset.x, 0, 0));
+                    if (rotationOffset.x == 0f) rotationOffset.x = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Rotation X by {rotationOffset.x - prevRotationOffset.x} for selected objects.");
+                }
+
+                prevRotationOffset = rotationOffset;
+                Menu.ModernSlider("Rotation Y", ref rotationOffset.y, -180f, 180f);
+                if (rotationOffset.y != prevRotationOffset.y)
+                {
+                    ApplyTransformOffsets(Vector3.zero, new Vector3(0, rotationOffset.y - prevRotationOffset.y, 0));
+                    if (rotationOffset.y == 0f) rotationOffset.y = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Rotation Y by {rotationOffset.y - prevRotationOffset.y} for selected objects.");
+                }
+
+                prevRotationOffset = rotationOffset;
+                Menu.ModernSlider("Rotation Z", ref rotationOffset.z, -180f, 180f);
+                if (rotationOffset.z != prevRotationOffset.z)
+                {
+                    ApplyTransformOffsets(Vector3.zero, new Vector3(0, 0, rotationOffset.z - prevRotationOffset.z));
+                    if (rotationOffset.z == 0f) rotationOffset.z = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Rotation Z by {rotationOffset.z - prevRotationOffset.z} for selected objects.");
+                }
+                GUILayout.Space(5);
+            }
+
             GUILayout.Space(10);
             // Adding button to delete all spawned objects
-            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle))
+            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
             {
                 DeleteAllSpawnedObjects();
             }
 
             // Adding button to delete selected objects
-            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle))
+            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
             {
                 DeleteSelectedObjects();
             }
