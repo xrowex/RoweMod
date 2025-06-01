@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.CharacterController;
 using System.Linq;
-using System.IO;
 
 namespace rowemod.Mods
 {
@@ -23,38 +22,26 @@ namespace rowemod.Mods
         // Prefabs same as session markers
         private static List<GameObject> dropperPrefabs = new List<GameObject>();
         
-        // Selected prefab name for spawning, initially null
+        // Cached list of prefab names for UI rendering
+        private static List<string> prefabNames = new List<string>();
+        
+        // Selected prefab name for spawning, initially null for "none"
         private static string selectedPrefabName = null;
 
         // Maximum number of spawned objects allowed
         private const int MaxSpawnedObjects = 20;
+
+        // Scroll position for prefab button list
+        private static Vector2 scrollPosition = Vector2.zero;
 
         // Initialize the dropper by finding references and loading prefabs
         public static void Initialize()
         {
             Log.Msg("Initializing ObjectDropper...");
 
-            // using "default" layer now, until mash maybe enables actual layers
-            try
-            {
-                int defaultLayer = LayerMask.NameToLayer("Default");
-                if (defaultLayer != -1)
-                {
-                    groundLayerMask = 1 << defaultLayer;
-                    Log.Msg("Ground layer mask initialized to Default layer.");
-                }
-                else
-                {
-                    groundLayerMask = 1 << 0; // Fallback to layer 0
-                    Log.Warning("Default layer not found, using layer 0 as fallback.");
-                }
-            }
-            catch (System.Exception ex)
-            {
-                Log.Error($"Failed to initialize ground layer mask: {ex.Message}");
-                groundLayerMask = 1 << 0; // Fallback to layer 0
-                Log.Warning("Using layer 0 as fallback for ground layer mask.");
-            }
+            // Using all layers (idk if these are enabled, so select all)
+            groundLayerMask = ~0; // Include all layers
+            Log.Msg("Ground layer mask initialized to all layers (~0).");
 
             RefreshReferences();
             LoadDropperPrefabs();
@@ -74,6 +61,14 @@ namespace rowemod.Mods
                 if (string.IsNullOrEmpty(selectedPrefabName))
                 {
                     Log.Warning("No prefab selected. Please select a prefab in the Object Dropper menu.");
+                    return;
+                }
+
+                // Validating selected prefab is still available
+                if (!dropperPrefabs.Any(p => p != null && p.name == selectedPrefabName))
+                {
+                    Log.Warning($"Selected prefab '{selectedPrefabName}' is no longer valid. Clearing selection.");
+                    selectedPrefabName = null;
                     return;
                 }
 
@@ -130,19 +125,13 @@ namespace rowemod.Mods
             }
         }
 
-        // Load prefabs from memory class
+        // Load prefabs from Memory.loadedBundles
         private static void LoadDropperPrefabs()
         {
-            // Skipping reload if prefabs are already loaded
-            if (dropperPrefabs != null && dropperPrefabs.Count > 0)
-            {
-                Log.Msg($"Skipping prefab reload, {dropperPrefabs.Count} marker prefabs already loaded.");
-                return;
-            }
-
-            // Clearing existing prefabs to avoid duplicates
+            // Clearing existing prefabs and names to ensure fresh references
             dropperPrefabs.Clear();
-            Log.Msg($"Attempting to load marker prefabs from Memory.loadedBundles.");
+            prefabNames.Clear();
+            Log.Msg($"Loading marker prefabs from Memory.loadedBundles.");
 
             if (Memory.loadedBundles == null || Memory.loadedBundles.Count == 0)
             {
@@ -175,6 +164,7 @@ namespace rowemod.Mods
                             if (asset != null)
                             {
                                 dropperPrefabs.Add(asset);
+                                prefabNames.Add(asset.name);
                                 Log.Msg($"[ObjectDropper] Loaded marker prefab: {asset.name}");
                             }
                             else
@@ -226,18 +216,20 @@ namespace rowemod.Mods
             // Determining spawn position and rotation
             Vector3 spawnPosition;
             Quaternion spawnRotation;
+            bool isDrone = false;
             
             if (droneTransform != null && droneTransform.gameObject.activeInHierarchy)
             {
                 spawnPosition = droneTransform.position;
                 spawnRotation = Quaternion.Euler(0f, droneTransform.eulerAngles.y, 0f);
-                Log.Msg("Using drone position for spawn.");
+                isDrone = true;
+                Log.Msg($"Using drone position for spawn: {spawnPosition}");
             }
             else if (characterTransform != null)
             {
                 spawnPosition = characterTransform.position;
                 spawnRotation = Quaternion.Euler(0f, characterTransform.eulerAngles.y, 0f);
-                Log.Msg("Drone inactive, using character position for spawn.");
+                Log.Msg($"Drone inactive, using character position for spawn: {spawnPosition}");
             }
             else
             {
@@ -246,16 +238,39 @@ namespace rowemod.Mods
             }
 
             // Performing raycast to find ground using UnityEngine.Physics
-            Vector3 raycastOrigin = spawnPosition + Vector3.up * 10f; // Start 10 units above
-            if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, 20f, groundLayerMask))
+            Vector3 raycastOrigin = spawnPosition + Vector3.up * 2f; // Start 2 units above
+            float raycastDistance = 100f; // Distance to cover drone altitude
+            if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance, groundLayerMask))
             {
-                spawnPosition = hit.point + Vector3.up * 0.1f; // Slightly above ground to avoid clipping
-                Log.Msg($"Raycast hit ground at: {hit.point}");
+                // Check if hit is likely a non-ground collider (e.g., Y > 2)
+                if (hit.point.y > 2f && isDrone)
+                {
+                    // Perform secondary raycast from a lower origin to find terrain
+                    Vector3 secondaryOrigin = new Vector3(spawnPosition.x, 2f, spawnPosition.z); // Start near ground level
+                    if (UnityEngine.Physics.Raycast(secondaryOrigin, Vector3.down, out RaycastHit secondaryHit, raycastDistance, groundLayerMask))
+                    {
+                        spawnPosition = secondaryHit.point;
+                        Log.Msg($"Secondary raycast hit ground at: {secondaryHit.point}, collider: {secondaryHit.collider.gameObject.name}, layer: {LayerMask.LayerToName(secondaryHit.collider.gameObject.layer)}, distance: {secondaryHit.distance}");
+                    }
+                    else
+                    {
+                        // Fallback to Y=0 if secondary raycast fails
+                        spawnPosition.y = 0f;
+                        Log.Warning($"Secondary raycast did not hit ground from {secondaryOrigin} within {raycastDistance} units. Using fallback position: {spawnPosition}");
+                    }
+                }
+                else
+                {
+                    spawnPosition = hit.point;
+                    Log.Msg($"Raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}");
+                }
             }
             else
             {
-                Log.Warning("Raycast did not hit ground, using original Y position.");
-                spawnPosition.y += 0.1f; // Small offset to avoid ground clipping
+                // Fallback to Y=0 if primary raycast fails
+                Log.Warning($"Primary raycast did not hit ground from {raycastOrigin} within {raycastDistance} units.");
+                spawnPosition.y = 0f;
+                Log.Msg($"Using fallback ground position: {spawnPosition}");
             }
 
             // Instantiating the object
@@ -277,22 +292,27 @@ namespace rowemod.Mods
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
             
-            if (dropperPrefabs == null || dropperPrefabs.Count == 0)
+            if (prefabNames == null || prefabNames.Count == 0)
             {
                 GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
                 return;
             }
 
-            // Listing available prefabs for selection
-            foreach (GameObject prefab in dropperPrefabs.Where(p => p != null))
+            // Adding scroll view for prefab buttons
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200f));
+
+            // Listing cached prefab names for selection
+            foreach (string prefabName in prefabNames)
             {
-                if (GUILayout.Button(prefab.name, Menu.highQualityButtonStyle))
+                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle))
                 {
                     // Setting selected prefab without spawning
-                    selectedPrefabName = prefab.name;
+                    selectedPrefabName = prefabName;
                     Log.Msg($"Selected prefab: {selectedPrefabName}");
                 }
             }
+
+            GUILayout.EndScrollView();
 
             GUILayout.Space(10);
             // Adding button to delete all spawned objects
