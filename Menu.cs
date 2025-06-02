@@ -137,6 +137,8 @@ namespace rowemod
                         ModernSlider("Max Manual Angle", ref manualAngle, 10f, 50f);
                         GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        ModernToggle("No Bail", ref bNeverBail);
+                        GUILayout.Space(10); // Add spacing after toggle
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
@@ -175,8 +177,6 @@ namespace rowemod
 
                     case Tab.Misc:
                         Mods.Misc.Update();
-                        ModernToggle("No Bail", ref bNeverBail);
-                        GUILayout.Space(10); // Add spacing after toggle
                         ModernToggle("Vibration", ref bVibration);
                         GUILayout.Space(10); // Add spacing after toggle
                         if (hapticFeedBack != null)
@@ -285,10 +285,12 @@ namespace rowemod
         {
             try
             {
-                GUILayout.BeginHorizontal();
+                // Begin a group to position all tabs precisely, increased height to prevent clipping
+                GUI.BeginGroup(new Rect(0, 0, windowRect.width, 60f));
 
                 float tabHeight = 30f; // Matches rounded button height
-                float tabWidth = 80f; // Adjust as needed for spacing
+                float tabWidth = 80f; // Width for each tab button
+                float yPosition = 30f;
 
                 // Define tab labels and corresponding enum values
                 (string label, Tab tab)[] tabs = new[]
@@ -305,19 +307,28 @@ namespace rowemod
                     ("Dropper", Tab.Dropper),
                 };
 
-                foreach (var (label, tab) in tabs)
+                // Draw tab buttons with precise Rect positioning
+                for (int i = 0; i < tabs.Length; i++)
                 {
+                    var (label, tab) = tabs[i];
                     GUIStyle buttonStyle = currentTab == tab ? activeTabButtonStyle : highQualityButtonStyle;
-                    if (GUILayout.Button($"<b>{label}</b>", buttonStyle, GUILayout.Width(tabWidth), GUILayout.Height(tabHeight)))
+                    Rect tabRect = new Rect(10f + i * (tabWidth + 5f), yPosition, tabWidth, tabHeight);
+                    if (GUI.Button(tabRect, $"<b>{label}</b>", buttonStyle))
                     {
                         SetCurrentTab(tab);
                     }
                 }
 
-                GUILayout.Space(100);
-                GUILayout.BeginVertical();
-
-                if (GUILayout.Button("<b>RESET\nTAB</b>", highQualityButtonStyle, GUILayout.Width(tabWidth - 15), GUILayout.Height(tabHeight)))
+                // Draw "Reset Tab" button in top-right corner
+                float resetButtonWidth = 80f;
+                float resetButtonHeight = 30f;
+                Rect resetButtonRect = new Rect(
+                    windowRect.width - resetButtonWidth - 10f,
+                    yPosition,
+                    resetButtonWidth,
+                    resetButtonHeight
+                );
+                if (GUI.Button(resetButtonRect, "<b>RESET\nTAB</b>", highQualityButtonStyle))
                 {
                     switch (currentTab)
                     {
@@ -357,8 +368,8 @@ namespace rowemod
 
                     ResetSliderTextValues();
                 }
-                GUILayout.EndVertical();
-                GUILayout.EndHorizontal();
+
+                GUI.EndGroup();
             }
             catch (Exception ex)
             {

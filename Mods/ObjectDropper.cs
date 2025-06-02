@@ -63,15 +63,15 @@ namespace rowemod.Mods
             if (toggleOnNormalTexture == null || lastMenuAccentColor != currentMenuAccentColor)
             {
                 // ON state textures (red)
-                toggleOnNormalTexture = Menu.MakeRoundedTex(128, 32, Color.red, 10, 1, Color.black);
-                toggleOnHoverTexture = Menu.MakeRoundedTex(128, 32, new Color(
+                toggleOnNormalTexture = Menu.MakeRoundedTex(128, 20, Color.red, 10, 1, Color.black);
+                toggleOnHoverTexture = Menu.MakeRoundedTex(128, 20, new Color(
                     Mathf.Min(1f, 1f), // Red hover: slightly brighter
                     Mathf.Min(0.1f, 1f),
                     Mathf.Min(0.1f, 1f)), 10, 1, Color.black);
 
                 // OFF state textures (menu accent color)
-                toggleOffNormalTexture = Menu.MakeRoundedTex(128, 32, currentMenuAccentColor, 10, 1, Color.black);
-                toggleOffHoverTexture = Menu.MakeRoundedTex(128, 32, new Color(
+                toggleOffNormalTexture = Menu.MakeRoundedTex(128, 20, currentMenuAccentColor, 10, 1, Color.black);
+                toggleOffHoverTexture = Menu.MakeRoundedTex(128, 20, new Color(
                     Mathf.Min(currentMenuAccentColor.r + 0.1f, 1f),
                     Mathf.Min(currentMenuAccentColor.g + 0.1f, 1f),
                     Mathf.Min(currentMenuAccentColor.b + 0.1f, 1f)), 10, 1, Color.black);
@@ -330,29 +330,6 @@ namespace rowemod.Mods
             rotationOffset = Vector3.zero;
         }
 
-        // Apply transform offsets to all selected objects
-        private static void ApplyTransformOffsets(Vector3 posOffset, Vector3 rotOffset)
-        {
-            if (selectedObjects.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var obj in selectedObjects)
-            {
-                if (obj != null)
-                {
-                    // Apply position offset
-                    obj.transform.position += posOffset;
-
-                    // Apply rotation offset (in Euler angles)
-                    Vector3 currentEuler = obj.transform.eulerAngles;
-                    currentEuler += rotOffset;
-                    obj.transform.eulerAngles = currentEuler;
-                }
-            }
-        }
-
         // Spawn an object at the appropriate position with raycast to ground
         private static void SpawnObject(GameObject prefab)
         {
@@ -502,7 +479,7 @@ namespace rowemod.Mods
             GUILayout.Label("Available Prefabs:", Menu.labelStyle);
             foreach (string prefabName in Memory.dropperPrefabNames)
             {
-                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(800f), GUILayout.Height(30f)))
+                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
                 {
                     // Setting selected prefab
                     selectedPrefabName = prefabName;
@@ -510,8 +487,12 @@ namespace rowemod.Mods
                 }
             }
 
-            // Adding spawned objects list with custom button-based toggles
+            // Moved Delete buttons to be vertically placed right of Spawned Objects list
             GUILayout.Space(10);
+            GUILayout.BeginHorizontal();
+            
+            // Left column: Spawned Objects list
+            GUILayout.BeginVertical(GUILayout.Width(500f));
             GUILayout.Label("Spawned Objects:", Menu.labelStyle);
             if (spawnedObjects.Count == 0)
             {
@@ -530,12 +511,33 @@ namespace rowemod.Mods
                     bool isSelected = selectedObjects.Contains(obj);
                     GUIStyle toggleStyle = isSelected ? toggleOnStyle : toggleOffStyle;
 
-                    if (GUILayout.Button(label, toggleStyle, GUILayout.Width(800f), GUILayout.Height(30f)))
+                    if (GUILayout.Button(label, toggleStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
                     {
                         ToggleObjectSelection(obj);
                     }
                 }
             }
+            GUILayout.EndVertical();
+
+            // Right column: Delete buttons stacked vertically, right-aligned and spaced down
+            GUILayout.BeginVertical(GUILayout.Width(300f));
+            GUILayout.Space(30); // Space to align with first Spawned Objects toggle button
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace(); // Right-align buttons
+            GUILayout.BeginVertical();
+            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
+            {
+                DeleteAllSpawnedObjects();
+            }
+            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
+            {
+                DeleteSelectedObjects();
+            }
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+            
+            GUILayout.EndHorizontal();
 
             // Adding transform controls for selected objects
             if (selectedObjects.Count > 0)
@@ -603,19 +605,6 @@ namespace rowemod.Mods
                 GUILayout.Space(5);
             }
 
-            GUILayout.Space(10);
-            // Adding button to delete all spawned objects
-            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
-            {
-                DeleteAllSpawnedObjects();
-            }
-
-            // Adding button to delete selected objects
-            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
-            {
-                DeleteSelectedObjects();
-            }
-
             // Displaying currently selected prefab and number of selected objects
             GUILayout.Label($"Current Selected Prefab: {(selectedPrefabName ?? "None")}", Menu.labelStyle);
             GUILayout.Label($"Selected Objects: {selectedObjects.Count}", Menu.labelStyle);
@@ -647,6 +636,29 @@ namespace rowemod.Mods
             }
             spawnedObjects.Clear();
             Log.Msg($"Deleted {count} spawned objects.");
+        }
+
+        // Apply transform offsets to all selected objects
+        private static void ApplyTransformOffsets(Vector3 posOffset, Vector3 rotOffset)
+        {
+            if (selectedObjects.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var obj in selectedObjects)
+            {
+                if (obj != null)
+                {
+                    // Apply position offset
+                    obj.transform.position += posOffset;
+
+                    // Apply rotation offset (in Euler angles)
+                    Vector3 currentEuler = obj.transform.eulerAngles;
+                    currentEuler += rotOffset;
+                    obj.transform.eulerAngles = currentEuler;
+                }
+            }
         }
     }
 }
