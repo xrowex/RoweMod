@@ -1,9 +1,7 @@
 using UnityEngine;
 using rowemod.Utils;
-using System.Collections.Generic;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.CharacterController;
-using System.Linq;
 
 namespace rowemod.Mods
 {
@@ -16,12 +14,6 @@ namespace rowemod.Mods
         private static Transform droneTransform;
         private static Transform characterTransform;
         
-        // Prefabs same as session markers
-        private static List<GameObject> dropperPrefabs = new List<GameObject>();
-        
-        // Cached list of prefab names for UI rendering
-        private static List<string> prefabNames = new List<string>();
-        
         // Selected prefab name for spawning, initially null for "none"
         private static string selectedPrefabName = null;
 
@@ -30,7 +22,7 @@ namespace rowemod.Mods
         private static readonly Dictionary<GameObject, List<Material>> originalMaterialsMap = new Dictionary<GameObject, List<Material>>();
 
         // Maximum number of spawned objects allowed
-        private const int MaxSpawnedObjects = 20;
+        private static readonly int MaxSpawnedObjects = 20;
 
         // Cached GUI styles and textures for toggles
         private static GUIStyle toggleOnStyle;
@@ -45,7 +37,13 @@ namespace rowemod.Mods
         private static Vector3 positionOffset = Vector3.zero;
         private static Vector3 rotationOffset = Vector3.zero;
 
-        // Initialize the dropper by finding references and loading prefabs
+        // Track menu state for deselection on toggle
+        private static bool wasMenuOpen = false;
+
+        // Layer mask for ground raycasts
+        private static readonly LayerMask groundLayerMask = 1 << 0; // Default layer
+
+        // Initialize the dropper by finding references
         public static void Initialize()
         {
             // Logging initialization start
@@ -55,7 +53,6 @@ namespace rowemod.Mods
             InitializeToggleStyles();
 
             RefreshReferences();
-            LoadDropperPrefabs();
         }
 
         // Initialize or update cached GUI styles and textures for toggles
@@ -119,13 +116,13 @@ namespace rowemod.Mods
             }
         }
 
-        // Update method to handle object spawning
+        // Update method to handle object spawning and menu toggle deselection
         public static void Update()
         {
             // Handle object spawning
             if (Input.GetKeyDown(KeyCode.O))
             {
-                if (dropperPrefabs == null || dropperPrefabs.Count == 0)
+                if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)
                 {
                     Log.Warning("No prefabs available to spawn in ObjectDropper.");
                     return;
@@ -138,7 +135,7 @@ namespace rowemod.Mods
                 }
 
                 // Validating selected prefab is still available
-                if (!dropperPrefabs.Any(p => p != null && p.name == selectedPrefabName))
+                if (!Memory.dropperPrefabNames.Contains(selectedPrefabName))
                 {
                     Log.Warning($"Selected prefab '{selectedPrefabName}' is no longer valid. Clearing selection.");
                     selectedPrefabName = null;
@@ -148,15 +145,34 @@ namespace rowemod.Mods
                 // Refreshing references to get latest drone/character position
                 RefreshReferences();
 
-                // Finding the selected prefab
-                GameObject prefabToSpawn = dropperPrefabs.FirstOrDefault(p => p != null && p.name == selectedPrefabName);
-                if (prefabToSpawn == null)
+                // Finding the selected prefab by matching display name
+                int prefabIndex = Memory.dropperPrefabNames.IndexOf(selectedPrefabName);
+                if (prefabIndex < 0 || prefabIndex >= Memory.dropperPrefabs.Count)
                 {
                     Log.Error($"Selected prefab '{selectedPrefabName}' not found or invalid.");
                     return;
                 }
+
+                GameObject prefabToSpawn = Memory.dropperPrefabs[prefabIndex];
+                if (prefabToSpawn == null)
+                {
+                    Log.Error($"Selected prefab '{selectedPrefabName}' is null.");
+                    return;
+                }
                 
                 SpawnObject(prefabToSpawn);
+            }
+
+            // Deselect objects on menu toggle
+            bool isMenuOpen = Menu.isOpen;
+            if (isMenuOpen != wasMenuOpen)
+            {
+                if (selectedObjects.Count > 0)
+                {
+                    ClearSelection();
+                    Log.Msg("Deselected all objects due to menu toggle.");
+                }
+                wasMenuOpen = isMenuOpen;
             }
         }
 
@@ -195,72 +211,6 @@ namespace rowemod.Mods
             {
                 characterTransform = null;
                 Log.Error("rMbCharacter is null, cannot find character transform.");
-            }
-        }
-
-        // Load prefabs from Memory.loadedBundles
-        private static void LoadDropperPrefabs()
-        {
-            // Clearing existing prefabs and names to ensure fresh references
-            dropperPrefabs.Clear();
-            prefabNames.Clear();
-            Log.Msg($"Loading marker prefabs from Memory.loadedBundles.");
-
-            if (Memory.loadedBundles == null || Memory.loadedBundles.Count == 0)
-            {
-                Log.Error("Memory.loadedBundles is empty or null. Ensure bundles are loaded in Memory.cs.");
-                return;
-            }
-
-            // Iterating over loaded bundles
-            Log.Msg($"Memory.loadedBundles contains {Memory.loadedBundles.Count} bundles.");
-            foreach (AssetBundle bundle in Memory.loadedBundles)
-            {
-                if (bundle == null)
-                {
-                    Log.Warning("Found null AssetBundle in Memory.loadedBundles, skipping.");
-                    continue;
-                }
-
-                // Getting asset names from bundle
-                string[] assetNames = bundle.GetAllAssetNames();
-                Log.Msg($"Bundle contains {assetNames.Length} assets.");
-                foreach (var assetName in assetNames)
-                {
-                    Log.Msg($"Processing asset: {assetName}");
-                    if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) &&
-                        assetName.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        try
-                        {
-                            GameObject asset = bundle.LoadAsset<GameObject>(assetName);
-                            if (asset != null)
-                            {
-                                dropperPrefabs.Add(asset);
-                                prefabNames.Add(asset.name);
-                                Log.Msg($"[ObjectDropper] Loaded marker prefab: {asset.name}");
-                            }
-                            else
-                            {
-                                Log.Warning($"Failed to load marker prefab asset: {assetName}");
-                            }
-                        }
-                        catch (System.Exception ex)
-                        {
-                            Log.Error($"Error loading marker prefab {assetName}: {ex.Message}");
-                        }
-                    }
-                }
-            }
-
-            // Logging final prefab count
-            if (dropperPrefabs.Count == 0)
-            {
-                Log.Error("No marker prefabs loaded for ObjectDropper. Check Bundles folder for prefabs containing 'marker' in their name.");
-            }
-            else
-            {
-                Log.Msg($"Loaded {dropperPrefabs.Count} marker prefabs for ObjectDropper.");
             }
         }
 
@@ -425,97 +375,100 @@ namespace rowemod.Mods
                 spawnedObjects.RemoveAt(0);
             }
 
-            // Determining spawn position and rotation
-            Vector3 spawnPosition;
+            // Determining raycast origin and rotation
+            Vector3 raycastOrigin;
             float sourceYRotation;
             bool isDrone = false;
             
             if (droneTransform != null && droneTransform.gameObject.activeInHierarchy)
             {
-                // Start spawn position 0.3 meter(s) below the drone
-                spawnPosition = droneTransform.position - Vector3.up * 0.3f;
+                // Raycast starts 0.3 meter(s) below the drone
+                raycastOrigin = droneTransform.position - Vector3.up * 0.3f;
                 sourceYRotation = droneTransform.eulerAngles.y;
                 isDrone = true;
-                Log.Msg($"Using position below drone for spawn: {spawnPosition}");
+                Log.Msg($"Raycast starting 0.3m below drone at: {raycastOrigin}");
             }
             else if (characterTransform != null)
             {
-                // Offset spawn position 1 meter(s) in front of character
-                spawnPosition = characterTransform.position + characterTransform.forward * 1f;
+                // Raycast starts 1 meter(s) in front of character
+                raycastOrigin = characterTransform.position + characterTransform.forward * 1f;
                 sourceYRotation = characterTransform.eulerAngles.y;
-                Log.Msg($"Using character forward position for spawn: {spawnPosition}");
+                Log.Msg($"Raycast starting 1m in front of character at: {raycastOrigin}");
             }
             else
             {
-                Log.Error("No valid spawn position (both drone and character unavailable).");
+                Log.Error("No valid raycast origin (both drone and character unavailable).");
                 return;
             }
 
-            // Performing raycast to find ground using UnityEngine.Physics
-            Vector3 raycastOrigin = spawnPosition - Vector3.up * 0.3f; // Start raycast 0.3m below spawn position (avoid colliders)
+            // Performing initial raycast to find ground and rotation
             float raycastDistance = 1000f; // Distance to cover drone/character altitude
             Quaternion spawnRotation = Quaternion.Euler(0f, sourceYRotation, 0f); // Default upright rotation
-            if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance))
+            Vector3 spawnPosition;
+            Vector3 groundNormal = Vector3.up;
+
+            if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance, groundLayerMask))
             {
-                // Check if hit is likely a non-ground collider (e.g., Y > 2 or Y < spawnPosition.y - 2)
-                if (hit.point.y > spawnPosition.y + 2f || hit.point.y < spawnPosition.y - 2f)
+                spawnPosition = hit.point;
+                // Validate normal and align rotation
+                groundNormal = hit.normal.normalized;
+                if (groundNormal.y > 0.0872f) // Allow slopes up to ~85 degrees (cos(85°))
                 {
-                    // Perform secondary raycast from a lower origin to find terrain
-                    Vector3 secondaryOrigin = new Vector3(spawnPosition.x, spawnPosition.y + 1f, spawnPosition.z);
-                    if (UnityEngine.Physics.Raycast(secondaryOrigin, Vector3.down, out RaycastHit secondaryHit, raycastDistance))
+                    // Align object up direction with surface normal, forward with source Y-rotation
+                    Vector3 forward = Quaternion.Euler(0f, sourceYRotation, 0f) * Vector3.forward;
+                    // Project forward onto plane perpendicular to normal to avoid twisting
+                    forward = Vector3.ProjectOnPlane(forward, groundNormal).normalized;
+                    spawnRotation = Quaternion.LookRotation(forward, groundNormal);
+                    Log.Msg($"Initial raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}, normal: {groundNormal}, rotation: {spawnRotation.eulerAngles}");
+                }
+                else
+                {
+                    Log.Warning($"Initial raycast normal too steep: {groundNormal} (y={groundNormal.y}). Using default rotation.");
+                }
+            }
+            else
+            {
+                // Fallback to Y=0 at raycast origin's X/Z position
+                spawnPosition = new Vector3(raycastOrigin.x, 0f, raycastOrigin.z);
+                Log.Warning($"Initial raycast did not hit ground from {raycastOrigin} within {raycastDistance} units. Using fallback position: {spawnPosition}");
+            }
+
+            // Calculate bottom offset at safe position
+            float bottomOffset = 0f;
+            GameObject tempObject = UnityEngine.Object.Instantiate(prefab, Vector3.zero, spawnRotation);
+            Renderer[] renderers = tempObject.GetComponentsInChildren<Renderer>();
+            Collider[] colliders = tempObject.GetComponentsInChildren<Collider>();
+            if (renderers.Length > 0 || colliders.Length > 0)
+            {
+                Bounds combinedBounds = new Bounds(Vector3.zero, Vector3.zero);
+                if (renderers.Length > 0)
+                {
+                    foreach (Renderer renderer in renderers)
                     {
-                        spawnPosition = secondaryHit.point;
-                        // Validate normal (upward-facing) and align rotation
-                        Vector3 normal = secondaryHit.normal.normalized;
-                        if (normal.y > 0.5f) // Ensure normal is mostly upward
-                        {
-                            spawnRotation = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, sourceYRotation, 0f);
-                            // Limit tilt to 85 degrees
-                            Vector3 euler = spawnRotation.eulerAngles;
-                            euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -85f, 85f);
-                            euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -85f, 85f);
-                            spawnRotation = Quaternion.Euler(euler);
-                            Log.Msg($"Secondary raycast hit ground at: {secondaryHit.point}, collider: {secondaryHit.collider.gameObject.name}, layer: {LayerMask.LayerToName(secondaryHit.collider.gameObject.layer)}, distance: {secondaryHit.distance}, normal: {normal}, rotation: {spawnRotation.eulerAngles}");
-                        }
-                        else
-                        {
-                            Log.Warning($"Secondary raycast normal invalid: {normal}. Using default rotation.");
-                        }
-                    }
-                    else
-                    {
-                        // Fallback to Y=0 if secondary raycast fails
-                        spawnPosition.y = 0f;
-                        Log.Warning($"Secondary raycast did not hit ground from {secondaryOrigin} within {raycastDistance} units. Using fallback position: {spawnPosition}");
+                        combinedBounds.Encapsulate(renderer.bounds);
                     }
                 }
                 else
                 {
-                    spawnPosition = hit.point;
-                    // Validate normal and align rotation
-                    Vector3 normal = hit.normal.normalized;
-                    if (normal.y > 0.5f)
+                    foreach (Collider collider in colliders)
                     {
-                        spawnRotation = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, sourceYRotation, 0f);
-                        Vector3 euler = spawnRotation.eulerAngles;
-                        euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -85f, 85f);
-                        euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -85f, 85f);
-                        spawnRotation = Quaternion.Euler(euler);
-                        Log.Msg($"Primary raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}, normal: {normal}, rotation: {spawnRotation.eulerAngles}");
-                    }
-                    else
-                    {
-                        Log.Warning($"Primary raycast normal invalid: {normal}. Using default rotation.");
+                        combinedBounds.Encapsulate(collider.bounds);
                     }
                 }
+
+                // Calculate offset from origin to bottom in world space
+                bottomOffset = -combinedBounds.min.y; // Distance from origin to bottom
+                Log.Msg($"Bottom offset (origin to bottom): {bottomOffset}");
             }
             else
             {
-                // Fallback to Y=0 if primary raycast fails
-                Log.Warning($"Primary raycast did not hit ground from {raycastOrigin} within {raycastDistance} units.");
-                spawnPosition.y = 0f;
-                Log.Msg($"Using fallback ground position: {spawnPosition}, rotation: {spawnRotation.eulerAngles}");
+                Log.Warning($"Prefab {prefab.name} has no renderers or colliders, using unadjusted spawn position.");
             }
+            UnityEngine.Object.Destroy(tempObject);
+
+            // Adjust spawn position to align bottom with ground
+            spawnPosition.y += bottomOffset;
+            Log.Msg($"Adjusted spawn position by bottom offset: {bottomOffset}, new position: {spawnPosition}");
 
             // Instantiating the object
             GameObject spawnedObject = UnityEngine.Object.Instantiate(prefab, spawnPosition, spawnRotation);
@@ -539,7 +492,7 @@ namespace rowemod.Mods
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
             
-            if (prefabNames == null || prefabNames.Count == 0)
+            if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames.Count == 0)
             {
                 GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
                 return;
@@ -547,7 +500,7 @@ namespace rowemod.Mods
 
             // Adding prefab buttons
             GUILayout.Label("Available Prefabs:", Menu.labelStyle);
-            foreach (string prefabName in prefabNames)
+            foreach (string prefabName in Memory.dropperPrefabNames)
             {
                 if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(800f), GUILayout.Height(30f)))
                 {
@@ -569,7 +522,9 @@ namespace rowemod.Mods
                 for (int i = 0; i < spawnedObjects.Count; i++)
                 {
                     GameObject obj = spawnedObjects[i];
-                    string label = obj != null ? $"Object {i + 1}: {obj.name}" : $"Object {i + 1}: (Destroyed)";
+                    // Use the prefab display name from Memory.dropperPrefabNames based on the prefab's name
+                    string displayName = Memory.dropperPrefabNames.FirstOrDefault(name => obj != null && obj.name.Contains(name)) ?? obj?.name ?? "(Destroyed)";
+                    string label = obj != null ? $"Object {i + 1}: {displayName}" : $"Object {i + 1}: (Destroyed)";
                     if (obj == null) continue;
 
                     bool isSelected = selectedObjects.Contains(obj);
@@ -590,7 +545,8 @@ namespace rowemod.Mods
 
                 // Position sliders with live updates
                 Vector3 prevPositionOffset = positionOffset;
-                Menu.ModernSlider("Position Left/Right", ref positionOffset.x, -5f, 5f);
+                
+                Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
                 if (positionOffset.x != prevPositionOffset.x)
                 {
                     ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
@@ -608,7 +564,7 @@ namespace rowemod.Mods
                 }
 
                 prevPositionOffset = positionOffset;
-                Menu.ModernSlider("Position Forward/Backward", ref positionOffset.z, -5f, 5f);
+                Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
                 if (positionOffset.z != prevPositionOffset.z)
                 {
                     ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);

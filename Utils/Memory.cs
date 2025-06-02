@@ -26,6 +26,7 @@ using Object = UnityEngine.Object;
 using Il2CppMashBox.Development.RandD.IAP;
 using PlayerInputBehaviour = Il2CppMashBox.BMX_Physics_Development.NewShit.PlayerInputBehaviour;
 using Il2CppMashBox.Addons.ReplaySystem;
+using System.IO;
 
 namespace rowemod.Utils
 {
@@ -252,7 +253,7 @@ namespace rowemod.Utils
 
                     Log.Msg("Completed finding components under rMBCharacter.");
                 }
-                catch (Exception ex)
+                catch (System.Exception ex)
                 {
                     Log.Error($"Exception while finding components: {ex.Message}");
                 }
@@ -274,7 +275,7 @@ namespace rowemod.Utils
                 RefreshDroneComponents();
                 Log.Msg("Initial drone component refresh completed.");
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while finding drones: {ex.Message}");
             }
@@ -287,7 +288,7 @@ namespace rowemod.Utils
                     ? "TestVehicleChanger component found in Vehicle Changer."
                     : "TestVehicleChanger component not found in Vehicle Changer.");
             } 
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while finding vehicle changer: {ex.Message}");
             }
@@ -301,7 +302,7 @@ namespace rowemod.Utils
                     ? "Helmet GameObject found under Human Temp."
                     : "Helmet GameObject not found under Human Temp.");
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while finding helmet: {ex.Message}");
             }
@@ -321,7 +322,7 @@ namespace rowemod.Utils
                     Log.Error("BMXCMCameraTarget component not found in BMX Camera Target.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while finding camera components: {ex.Message}");
             }
@@ -379,7 +380,7 @@ namespace rowemod.Utils
                     Log.Warning("Haptic Feedback Manager not found.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while finding Haptic Feedback Manager: {ex.Message}");
             }
@@ -408,7 +409,7 @@ namespace rowemod.Utils
                     Log.Warning("FreeCam component not found in scene.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while finding FreeCam or child SphereCollider: {ex.Message}");
             }
@@ -435,8 +436,8 @@ namespace rowemod.Utils
                 // Clear existing collections
                 droneColliders.Clear();
                 allDroneMeshRenderers.Clear();
-                drones = Array.Empty<GameObject>();
-                droneEmitters = Array.Empty<PhysicsBasedEventEmitter>();
+                drones = System.Array.Empty<GameObject>();
+                droneEmitters = System.Array.Empty<PhysicsBasedEventEmitter>();
                 droneRb = null;
 
                 // Find all DroneController components
@@ -535,7 +536,7 @@ namespace rowemod.Utils
                     Log.Warning("No DroneController components found in scene.");
                 }
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"Exception while refreshing drone components: {ex.Message}");
             }
@@ -557,7 +558,9 @@ namespace rowemod.Utils
         // Prefab variables
         public static List<GameObject> prefabList = new List<GameObject>();
         public static List<GameObject> sessionMarkers = new List<GameObject>();
+        public static List<GameObject> dropperPrefabs = new List<GameObject>();
         public static List<string> prefabNames = new List<string>();
+        public static List<string> dropperPrefabNames = new List<string>();
         public static string bundlesFolderPath = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Mods\\rowemod\\Bundles");
         public static AssetBundle loadedBundle;
         public static List<AssetBundle> loadedBundles = new List<AssetBundle>();
@@ -567,8 +570,6 @@ namespace rowemod.Utils
 
         public static void LoadAllAssetBundles()
         {
-            string rootPath = Path.GetDirectoryName(Application.dataPath);
-            
             Log.Msg($"Looking for AssetBundles in: {bundlesFolderPath}");
             
             string[] bundleFiles = Directory.GetFiles(bundlesFolderPath);
@@ -579,12 +580,16 @@ namespace rowemod.Utils
             }
             
             // Clear existing lists to avoid duplicates
-            
             prefabList.Clear();
             sessionMarkers.Clear();
+            dropperPrefabs.Clear();
             loadedBundles.Clear();
+            prefabNames.Clear();
+            dropperPrefabNames.Clear();
+
             foreach (string bundlePath in bundleFiles)
             {
+                string fileName = Path.GetFileNameWithoutExtension(bundlePath).ToLower();
                 Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
                 AssetBundle bundle = AssetBundle.LoadFromFile(bundlePath);
                 if (bundle == null)
@@ -601,18 +606,23 @@ namespace rowemod.Utils
                 {
                     Log.Msg($"Found asset in bundle: {assetName}");
                     
-                    if (assetName.EndsWith(".prefab"))
+                    // Handle marker prefabs
+                    if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                     {
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
                         if (asset != null)
                         {
+                            // Handle general prefabs
                             if (asset.name.ToLower().Contains("bar"))
                             {
                                 prefabToBundleMap[asset] = Path.GetFileName(bundlePath);
                             }
                             prefabList.Add(asset);
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
-                            if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0)
+
+                            // Handle session markers
+                            if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                                !fileName.Contains("bar"))
                             {
                                 sessionMarkers.Add(asset);
                                 Log.Msg($"Added Marker prefab: {asset.name}");
@@ -624,6 +634,26 @@ namespace rowemod.Utils
                                     Log.Msg($"Loaded custom session marker from config: {newSessionMarker.name}");
                                 }
                             }
+
+                            // Handle dropper prefabs
+                            if (fileName.StartsWith("dropper_") && !fileName.Contains("bar"))
+                            {
+                                string displayName = fileName.Substring("dropper_".Length);
+                                if (!string.IsNullOrEmpty(displayName))
+                                {
+                                    dropperPrefabs.Add(asset);
+                                    dropperPrefabNames.Add(displayName);
+                                    Log.Msg($"[Dropper] Loaded dropper prefab: {asset.name} (display name: {displayName})");
+                                }
+                                else
+                                {
+                                    Log.Warning($"Skipping dropper prefab {asset.name}: empty display name after removing 'dropper_' prefix.");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Log.Warning($"Failed to load prefab asset: {assetName}");
                         }
                     }
                 }
@@ -636,6 +666,8 @@ namespace rowemod.Utils
             else
             {
                 Log.Msg($"Successfully loaded {loadedBundles.Count} AssetBundles.");
+                Log.Msg($"Loaded {sessionMarkers.Count} session marker prefabs.");
+                Log.Msg($"Loaded {dropperPrefabs.Count} dropper prefabs.");
             }
         }
         
@@ -646,8 +678,11 @@ namespace rowemod.Utils
             // Clear existing lists to avoid duplicates
             prefabList.Clear();
             sessionMarkers.Clear();
+            dropperPrefabs.Clear();
             barListInitialized = false;
             frameListInitialized = false;
+            prefabNames.Clear();
+            dropperPrefabNames.Clear();
 
             foreach (AssetBundle bundle in loadedBundles)
             {
@@ -657,18 +692,28 @@ namespace rowemod.Utils
                     continue;
                 }
                 string[] assetNames = bundle.GetAllAssetNames();
+                string bundlePath = bundle.name; // Note: bundle.name may not be reliable, using for logging
+                string fileName = Path.GetFileNameWithoutExtension(bundlePath).ToLower();
                 foreach (var assetName in assetNames)
                 {
                     Log.Msg($"Processing cached asset: {assetName}");
 
-                    if (assetName.EndsWith(".prefab"))
+                    // Handle marker prefabs
+                    if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                     {
                         GameObject asset = bundle.LoadAsset<GameObject>(assetName);
                         if (asset != null)
                         {
+                            // Handle general prefabs
                             prefabList.Add(asset);
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
-                            if (asset.name.Contains("Marker"))
+                            if (asset.name.ToLower().Contains("bar"))
+                            {
+                                prefabToBundleMap[asset] = Path.GetFileName(bundlePath);
+                            }
+
+                            // Handle session markers
+                            if (asset.name.Contains("Marker") && !fileName.Contains("bar"))
                             {
                                 sessionMarkers.Add(asset);
                                 Log.Msg($"Added Marker prefab from cache: {asset.name}");
@@ -678,6 +723,18 @@ namespace rowemod.Utils
                                 {
                                     newSessionMarker = asset;
                                     Log.Msg($"Loaded custom session marker from cache: {newSessionMarker.name}");
+                                }
+                            }
+
+                            // Handle dropper prefabs
+                            if (fileName.StartsWith("dropper_") && !fileName.Contains("bar"))
+                            {
+                                string displayName = fileName.Substring("dropper_".Length);
+                                if (!string.IsNullOrEmpty(displayName))
+                                {
+                                    dropperPrefabs.Add(asset);
+                                    dropperPrefabNames.Add(displayName);
+                                    Log.Msg($"[Dropper] Loaded dropper prefab from cache: {asset.name} (display name: {displayName})");
                                 }
                             }
                         }
@@ -692,6 +749,8 @@ namespace rowemod.Utils
             else
             {
                 Log.Msg($"Successfully reloaded {prefabList.Count} prefabs from cached AssetBundles.");
+                Log.Msg($"Reloaded {sessionMarkers.Count} session marker prefabs.");
+                Log.Msg($"Reloaded {dropperPrefabs.Count} dropper prefabs.");
             }
 
             // Reapply session marker if needed
@@ -779,7 +838,6 @@ namespace rowemod.Utils
                     .Where(p => p != null && p.name.ToLower().Contains("bar"))
                     .ToList();
 
-                //barNames = barPrefabs.Select(p => p.name).ToArray();
                 barNames = barPrefabs.Select(p =>
                 {
                     string bundleName = prefabToBundleMap.TryGetValue(p, out var bundle) ? bundle : "UnknownBundle";
@@ -843,7 +901,7 @@ namespace rowemod.Utils
                 Log.Msg($"[Bars] Successfully switched bars to: {newBarsPrefab.name}");
                 Config.bikeMaterials.Remove("Bars");
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"[Bars] Error swapping bars: {ex.Message}");
             }
@@ -897,7 +955,6 @@ namespace rowemod.Utils
 
         }
 
-
         private static void TryReplaceFrame(GameObject newFramePrefab)
         {
             try
@@ -934,7 +991,7 @@ namespace rowemod.Utils
                 Log.Msg($"[Frames] Successfully replaced frame with: {newFramePrefab.name}");
                 Config.bikeMaterials.Remove("Frame");
             }
-            catch (Exception ex)
+            catch (System.Exception ex)
             {
                 Log.Error($"[Frames] Exception while replacing frame: {ex.Message}");
             }
