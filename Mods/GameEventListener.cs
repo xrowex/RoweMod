@@ -54,7 +54,7 @@ namespace rowemod
                 
             }
 
-            //PLAYER SPAWNN
+            // PLAYER SPAWN
             if (_localGameplayHumanSpawnEvent == null)
             {
                 Log.Error("PlayerSpawnEvent is null!");
