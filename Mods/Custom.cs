@@ -131,7 +131,10 @@ namespace rowemod.Mods
                     };
                     ClothingPreset.SavePreset(defaultPreset);
                 }
-                availablePresets.Add(defaultPreset.Name);
+                if (!availablePresets.Contains(defaultPreset.Name))
+                {
+                    availablePresets.Add(defaultPreset.Name);
+                }
 
                 if (availablePresets.Count > 0)
                 {
