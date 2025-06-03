@@ -2,6 +2,7 @@ using UnityEngine;
 using rowemod.Utils;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.CharacterController;
+using Object = UnityEngine.Object;
 
 namespace rowemod.Mods
 {
@@ -42,6 +43,11 @@ namespace rowemod.Mods
 
         // Layer mask for ground raycasts
         private static readonly LayerMask groundLayerMask = 1 << 0; // Default layer
+        //preview
+        private static GameObject previewObject;
+        private static Material previewMaterial;
+        private static float previewYRotation = 0f;
+        private static UnityEngine.Camera activeCamera;
 
         // Initialize the dropper by finding references
         public static void Initialize()
@@ -88,7 +94,6 @@ namespace rowemod.Mods
                     border = new RectOffset(10, 10, 10, 10),
                     padding = Menu.highQualityButtonStyle.padding,
                     margin = Menu.highQualityButtonStyle.margin,
-                    overflow = Menu.highQualityButtonStyle.overflow,
                     contentOffset = new Vector2(0, 0), // Center text vertically
                     stretchWidth = false,
                     stretchHeight = false
@@ -120,8 +125,11 @@ namespace rowemod.Mods
         public static void Update()
         {
             // Handle object spawning
-            if (Input.GetKeyDown(KeyCode.O))
+            if (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper && Input.GetMouseButtonDown(0))
             {
+                Config.bDisableDroneCollider = true;
+                if (IsMouseOverUI()) return;
+
                 if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)
                 {
                     Log.Warning("No prefabs available to spawn in ObjectDropper.");
@@ -134,7 +142,6 @@ namespace rowemod.Mods
                     return;
                 }
 
-                // Validating selected prefab is still available
                 if (!Memory.dropperPrefabNames.Contains(selectedPrefabName))
                 {
                     Log.Warning($"Selected prefab '{selectedPrefabName}' is no longer valid. Clearing selection.");
@@ -142,26 +149,50 @@ namespace rowemod.Mods
                     return;
                 }
 
-                // Refreshing references to get latest drone/character position
-                RefreshReferences();
-
-                // Finding the selected prefab by matching display name
                 int prefabIndex = Memory.dropperPrefabNames.IndexOf(selectedPrefabName);
                 if (prefabIndex < 0 || prefabIndex >= Memory.dropperPrefabs.Count)
                 {
                     Log.Error($"Selected prefab '{selectedPrefabName}' not found or invalid.");
                     return;
                 }
-
-                GameObject prefabToSpawn = Memory.dropperPrefabs[prefabIndex];
-                if (prefabToSpawn == null)
-                {
-                    Log.Error($"Selected prefab '{selectedPrefabName}' is null.");
-                    return;
-                }
                 
-                SpawnObject(prefabToSpawn);
+                GameObject prefabToSpawn = Memory.dropperPrefabs[prefabIndex];
+
+                // Use the same logic as the preview placement
+                Ray ray = activeCamera.ScreenPointToRay(Input.mousePosition);
+                int placementMask = groundLayerMask & ~(1 << 31); // exclude preview layer
+                if (UnityEngine.Physics.Raycast(ray, out RaycastHit hit, 100f, placementMask))
+                {
+                    Quaternion rotation = Quaternion.LookRotation(Vector3.forward, hit.normal) * Quaternion.Euler(0f, previewYRotation, 0f);
+                    Vector3 euler = rotation.eulerAngles;
+                    euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -45f, 45f);
+                    euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -45f, 45f);
+                    rotation = Quaternion.Euler(euler);
+
+                    Vector3 position = hit.point;
+
+                    float bottomOffset = 0f;
+                    GameObject temp = Object.Instantiate(prefabToSpawn, Vector3.zero, rotation);
+                    var renderers = temp.GetComponentsInChildren<Renderer>();
+                    if (renderers.Length > 0)
+                    {
+                        Bounds bounds = renderers[0].bounds;
+                        foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+                        bottomOffset = -bounds.min.y;
+                    }
+                    Object.Destroy(temp);
+                    position.y += bottomOffset;
+
+                    GameObject spawned = Object.Instantiate(prefabToSpawn, position, rotation);
+                    spawnedObjects.Add(spawned);
+                    Log.Msg($"Spawned object under mouse at {position}, rotation: {rotation.eulerAngles}");
+                }
+                else
+                {
+                    Log.Warning("Raycast under mouse did not hit ground.");
+                }
             }
+
 
             // Deselect objects on menu toggle
             bool isMenuOpen = Menu.isOpen;
@@ -170,10 +201,93 @@ namespace rowemod.Mods
                 if (selectedObjects.Count > 0)
                 {
                     ClearSelection();
+                    UnityEngine.Object.Destroy(previewObject);
+                    previewObject = null;
                     Log.Msg("Deselected all objects due to menu toggle.");
                 }
                 wasMenuOpen = isMenuOpen;
             }
+            // Scroll to rotate preview
+            float scrollDelta = Input.mouseScrollDelta.y;
+            if (scrollDelta != 0f)
+            {
+                previewYRotation += scrollDelta * 5f;
+                previewYRotation %= 360f;
+            }
+
+            // Refresh camera
+            if (activeCamera == null)
+            {
+                var brain = GameObject.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
+                if (brain != null && brain.gameObject.TryGetComponent(out UnityEngine.Camera cam))
+                {
+                    activeCamera = cam;
+                    Log.Msg($"Active camera assigned: {cam.name}");
+                }
+            }
+
+            // Update preview position/rotation
+            // Disable preview object if not on Dropper tab
+            if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper )
+            {
+                if (previewObject != null && previewObject.activeSelf)
+                    previewObject.SetActive(false);
+            }
+            else
+            {
+                if (previewObject != null && !previewObject.activeSelf)
+                    previewObject.SetActive(true);
+
+                if (activeCamera != null && previewObject != null)
+                {
+                    Ray ray = activeCamera.ScreenPointToRay(Input.mousePosition);
+                    int placementMask = groundLayerMask & ~(1 << 31); // exclude preview layer
+                    if (UnityEngine.Physics.Raycast(ray, out RaycastHit hit, 100f, placementMask))
+                    {
+                        Vector3 normal = hit.normal;
+                        Quaternion rot = Quaternion.LookRotation(Vector3.forward, normal) * Quaternion.Euler(0f, previewYRotation, 0f);
+
+                        Vector3 euler = rot.eulerAngles;
+                        euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -45f, 45f);
+                        euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -45f, 45f);
+
+                        // Calculate bottom offset
+                        float bottomOffset = 0f;
+                        var renderers = previewObject.GetComponentsInChildren<Renderer>();
+                        if (renderers.Length > 0)
+                        {
+                            Bounds bounds = renderers[0].bounds;
+                            foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+                            bottomOffset = -bounds.min.y + previewObject.transform.position.y; // <-- world space offset
+                        }
+
+                        Vector3 adjustedPosition = hit.point;
+                        adjustedPosition.y += bottomOffset;
+
+                        previewObject.transform.position = adjustedPosition;
+                        previewObject.transform.rotation = Quaternion.Euler(euler);
+
+                    }
+                }
+            }
+
+
+        }
+        private static bool IsMouseOverUI()
+        {
+            // Convert GUI space to screen space for your windowRect
+            Rect screenRect = new Rect(
+                Menu.windowRect.x,
+                Menu.windowRect.y,
+                Menu.windowRect.width,
+                Menu.windowRect.height
+            );
+
+            // Flip Y since GUI and Screen have different origins
+            float flippedY = Screen.height - Input.mousePosition.y;
+            Vector2 mousePos = new Vector2(Input.mousePosition.x, flippedY);
+
+            return screenRect.Contains(mousePos);
         }
 
         // Refresh references to drone and character
@@ -387,6 +501,7 @@ namespace rowemod.Mods
             if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance, groundLayerMask))
             {
                 spawnPosition = hit.point;
+
                 // Validate normal and align rotation
                 groundNormal = hit.normal.normalized;
                 if (groundNormal.y > 0.0872f) // Allow slopes up to ~85 degrees (cos(85°))
@@ -481,9 +596,17 @@ namespace rowemod.Mods
             {
                 if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
                 {
-                    // Setting selected prefab
                     selectedPrefabName = prefabName;
                     Log.Msg($"Selected prefab: {selectedPrefabName}");
+
+                    int index = Memory.dropperPrefabNames.IndexOf(prefabName);
+                    if (index >= 0 && index < Memory.dropperPrefabs.Count)
+                    {
+                        var prefab = Memory.dropperPrefabs[index];
+                        CreatePreviewMaterial();
+                        BuildPreviewObject(prefab);
+                    }
+
                 }
             }
 
@@ -660,5 +783,59 @@ namespace rowemod.Mods
                 }
             }
         }
+        private static void CreatePreviewMaterial()
+        {
+            if (previewMaterial != null) return;
+
+            Shader shader = Shader.Find("HDRP/Lit");
+            if (shader == null)
+            {
+                Log.Error("HDRP/Lit shader not found. Cannot create preview material.");
+                return;
+            }
+
+            previewMaterial = new Material(shader);
+            previewMaterial.SetFloat("_SurfaceType", 1); // Transparent
+            previewMaterial.SetFloat("_BlendMode", 0);
+            previewMaterial.SetFloat("_ZWrite", 0);
+            previewMaterial.SetFloat("_AlphaCutoffEnable", 0);
+            previewMaterial.SetFloat("_CullMode", 2);
+            previewMaterial.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0.3f));
+        }
+
+        private static void BuildPreviewObject(GameObject prefab)
+        {
+            if (previewObject != null)
+                UnityEngine.Object.Destroy(previewObject);
+
+            previewObject = UnityEngine.Object.Instantiate(prefab);
+            foreach (var renderer in previewObject.GetComponentsInChildren<Renderer>())
+                renderer.material = previewMaterial;
+
+            // ⛔ Disable physics so preview doesn't move or collide
+            foreach (var rb in previewObject.GetComponentsInChildren<Rigidbody>())
+            {
+                rb.isKinematic = true;
+                rb.detectCollisions = false;
+            }
+
+            // ⛔ Disable all colliders to prevent raycast interference
+            foreach (var collider in previewObject.GetComponentsInChildren<Collider>())
+            {
+                collider.enabled = false;
+            }
+
+            // ✅ Optional: Put preview object on a separate layer (like 31)
+            int previewLayer = 31; // Make sure layer 31 is defined in your project
+            previewObject.layer = previewLayer;
+            foreach (Transform child in previewObject.GetComponentsInChildren<Transform>(true))
+            {
+                child.gameObject.layer = previewLayer;
+            }
+
+            previewObject.name = "[Preview] " + prefab.name;
+        }
+
+
     }
 }

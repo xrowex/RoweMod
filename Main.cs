@@ -183,7 +183,7 @@ namespace rowemod
         
         private void HandleMenuToggle()
         {
-            if (Input.GetKeyDown(KeyCode.N))
+            if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.N))
             {
                 isOpen = !isOpen;
                 try

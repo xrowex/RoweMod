@@ -34,6 +34,7 @@ namespace rowemod
             Tricks,
             Character,
             BikeMaterials,
+            MX,
             Drone,
             Misc,
             Graphics,
@@ -74,7 +75,12 @@ namespace rowemod
         public static List<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData> cachedHDRCameras = new List<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>();
         public static List<UnityEngine.Rendering.Volume> cachedVolumes = new List<UnityEngine.Rendering.Volume>();
         private static Texture2D logoTexture;
-
+        private static float mxTopSpeed = 100f;
+        private static float mxAcceleration = 10f;
+        private static bool hasInitializedMxSettings = false;
+        private static float mxChassisMass = 50f;
+        private static float mxAccelerationForce = 10f;
+        private static float mxTerminalVelocity = 80f;
         // Cache for circular knob texture
         private static Texture2D _circleTex;
 
@@ -161,7 +167,53 @@ namespace rowemod
                     case Tab.BikeMaterials:
                         BikeMaterialsLoader.DrawBikeMaterialsTabUI();
                         break;
+                    case Tab.MX:
+                        if (!hasInitializedMxSettings)
+                        {
+                            Log.Msg("Initializing MX Vehicle Settings...");
+                            MotorVehicleUtils.FindMxVehicleSettings();
+                            var mx = MotorVehicleUtils.mxVehicleSettings;
+                            if (mx != null)
+                            {
+                                mxTopSpeed = mx.TopSpeed;
+                                mxChassisMass = mx.ChassisMass;
+                                mxAccelerationForce = mx.AccelerationForce;
+                                mxTerminalVelocity = mx.TerminalVelocity;
+                                //Log.Msg($"MX Settings Found - Top Speed: {mxTopSpeed}, Acceleration: {mxAcceleration}");
+                            }
+                            else
+                            {
+                                Log.Error("No MX Vehicle Settings found during initialization.");
+                            }
+                            hasInitializedMxSettings = true;
+                        }
 
+                        if (MotorVehicleUtils.mxVehicleSettings != null)
+                        {
+                            GUILayout.Box("MX Vehicle Tuning", coloredBoxStyle);
+
+                            GUILayout.Space(10);
+                            ModernSlider("Top Speed", ref mxTopSpeed, 5f, 30000f);
+                            ModernSlider("Chassis Mass", ref mxChassisMass, 1f, 500f);
+                            ModernSlider("Acceleration Force", ref mxAccelerationForce, 1f, 1000f);
+                            ModernSlider("Terminal Velocity", ref mxTerminalVelocity, 10f, 3000f);
+
+                            var mx = MotorVehicleUtils.mxVehicleSettings;
+                            mx.TopSpeed = mxTopSpeed;
+                            mx.ChassisMass = mxChassisMass;
+                            mx.AccelerationForce = mxAccelerationForce;
+                            mx.TerminalVelocity = mxTerminalVelocity;
+
+                            //Log.Msg($"Updated MX Settings - Top Speed: {mxTopSpeed}, AccelerationForce: {mxAccelerationForce}");
+                        }
+                        else
+                        {
+                            GUILayout.Label("No MX vehicle found.", labelStyle);
+                            Log.Error("No MX Vehicle available to display settings.");
+                        }
+                        break;
+
+                    
                     case Tab.Drone:
                         Mods.Misc.Update();
                         ModernToggle("Toggle Drone Body", ref droneBodyToggle);
@@ -299,6 +351,7 @@ namespace rowemod
                     //("Tricks", Tab.Tricks),
                     ("Bike", Tab.Bike),
                     ("Materials", Tab.BikeMaterials),
+                    ("MX", Tab.MX),
                     ("Character", Tab.Character),
                     ("Drone", Tab.Drone),
                     ("Misc", Tab.Misc),
@@ -351,7 +404,9 @@ namespace rowemod
                             CategorizeEquipSlots(equipSlotVehicles);
                             ResetBikeMaterialsTab();
                             break;
-                        
+                        case Tab.MX:
+                            hasInitializedMxSettings = false;
+                            break;
                         case Tab.Misc:
                             ResetMiscTab();
                             break;
@@ -496,7 +551,8 @@ namespace rowemod
                 coloredBoxStyle = new GUIStyle(GUI.skin.box);
                 coloredBoxStyle.normal.background = accentColor;
                 coloredBoxStyle.normal.textColor = Color.black;
-                coloredBoxStyle.fontSize = 13;
+                coloredBoxStyle.fontSize = 14;
+                coloredBoxStyle.fixedWidth = 140;
                 coloredBoxStyle.fixedHeight = 24;
 
                 // High-Quality Button Style
