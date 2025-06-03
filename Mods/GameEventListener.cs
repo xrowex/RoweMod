@@ -92,7 +92,7 @@ namespace rowemod
             Log.Msg("GameEvent_TitleLoop_TransitionTrigger_OpenReplay found! Subscribing to event...");
             UnityAction closeReplayAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseReplay);
-            _playerResetAtMarker.OnRaise.AddListener(closeReplayAction);
+            _playerCloseReplay.OnRaise.AddListener(closeReplayAction);
 
         }
         private void OnAnyGameEvent(string eventName)
