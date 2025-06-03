@@ -28,6 +28,7 @@ public class SteamUserManager
     {
         using (HttpClient client = new HttpClient())
         {
+            client.Timeout = TimeSpan.FromSeconds(5);
             string url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={DefaultAPIKey}&steamids={steamId}";
             try
             {
@@ -47,6 +48,7 @@ public class SteamUserManager
     {
         using (HttpClient client = new HttpClient())
         {
+            client.Timeout = TimeSpan.FromSeconds(5);
             string url = $"{DefaultBanCheckUrl}?steamid={steamId}";
 
             try
@@ -77,6 +79,7 @@ public class SteamUserManager
     {
         using (HttpClient client = new HttpClient())
         {
+            client.Timeout = TimeSpan.FromSeconds(5);
             string url = $"{DefaultLOGUrl}?steamid={steamId}&username={Uri.EscapeDataString(username)}"; // Ensure proper encoding
         
             try
