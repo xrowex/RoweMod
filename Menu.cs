@@ -872,6 +872,8 @@ namespace rowemod
         }
 
         private static string _activeSliderLabel = null;
+        // Dictionary to store text input for each slider
+        private static Dictionary<string, string> _sliderTextInputs = new Dictionary<string, string>();
 
         public static void ModernSlider(string label, ref float target, float min, float max)
         {
@@ -912,7 +914,7 @@ namespace rowemod
             Rect thumbRect = new Rect(thumbX - thumbWidth, sliderRect.y - 2f, thumbWidth, sliderRect.height + 4f);
             DrawSolidColorRect(thumbRect, Color.white); // Use white for thumb
 
-            // Handle input events
+            // Handle slider drag events
             Event e = Event.current;
 
             if (e.type == EventType.MouseDown && sliderRect.Contains(e.mousePosition))
@@ -934,25 +936,77 @@ namespace rowemod
                 float rawValue = Mathf.Lerp(min, max, newPercent);
 
                 target = Mathf.Round(rawValue * 100f) / 100f;
-
+                // Update text input to reflect slider change
+                _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Sync text field with slider value
                 e.Use();
             }
 
-            // Draw value box
-            string valueStr = target.ToString("0.00");
+            // Draw value box with text input
             float borderSize = 2f;
             Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
             DrawSolidColorRect(borderRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
             DrawSolidColorRect(valueRect, Color.black);
 
-            GUIStyle valueLabelStyle = new GUIStyle(Menu.labelStyle)
+            // Initialize text input if not set
+            if (!_sliderTextInputs.ContainsKey(label))
+            {
+                _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Set initial text to current value
+            }
+
+            // Set control name for focus tracking
+            string controlName = $"SliderTextField_{label}";
+            GUI.SetNextControlName(controlName);
+
+            // Create text field style to match current label
+            GUIStyle textFieldStyle = new GUIStyle(GUI.skin.textField)
             {
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
+                fontSize = Menu.labelStyle.fontSize,
+                font = Menu.labelStyle.font,
+                normal = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
+                focused = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
+                hover = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
+                active = { textColor = Color.white, background = MakeTex(2, 2, Color.black) }
             };
-            GUI.Label(valueRect, valueStr, valueLabelStyle);
-        }
 
+            // Draw text field
+            string newText = GUI.TextField(valueRect, _sliderTextInputs[label], textFieldStyle);
+            _sliderTextInputs[label] = newText; // Comment: Update stored text with user input
+
+            // Handle text input submission
+            bool isFocused = GUI.GetNameOfFocusedControl() == controlName;
+            if (isFocused && (Keyboard.current?.enterKey.wasPressedThisFrame == true || Keyboard.current?.numpadEnterKey.wasPressedThisFrame == true))
+            {
+                if (float.TryParse(newText, out float parsedValue))
+                {
+                    // Clamp to min/max
+                    parsedValue = Mathf.Clamp(parsedValue, min, max);
+                    target = parsedValue;
+                    _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Update text to clamped value
+                    Log.Msg($"Updated {label} to {target} via text input.");
+                }
+                else
+                {
+                    _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Revert to last valid value on invalid input
+                    Log.Warning($"Invalid input for {label}: '{newText}'. Reverted to {target}.");
+                }
+                GUI.FocusControl(null); // Comment: Clear focus after submission
+            }
+            else if (!isFocused && e.type == EventType.MouseDown && !valueRect.Contains(e.mousePosition))
+            {
+                // On losing focus (click outside), validate and clamp
+                if (float.TryParse(newText, out float parsedValue))
+                {
+                    parsedValue = Mathf.Clamp(parsedValue, min, max);
+                    target = parsedValue;
+                    _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Update text to clamped value on focus loss
+                }
+                else
+                {
+                    _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Revert to last valid value on invalid input
+                }
+            }
+        }
         public static bool ModernButton(string label, float width = 200f, float height = 30f)
         {
             Rect buttonRect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false), GUILayout.Height(height));
