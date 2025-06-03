@@ -49,10 +49,29 @@ namespace rowemod.Mods
             // Logging initialization start
             Log.Msg("Initializing ObjectDropper...");
 
+            // Clear spawned objects to prevent stale references after scene change
+            ClearSpawnedObjects();
+
             // Initialize cached GUI styles and textures
             InitializeToggleStyles();
 
             RefreshReferences();
+        }
+
+        // Clear all spawned objects to ensure no stale references
+        private static void ClearSpawnedObjects()
+        {
+            foreach (var obj in spawnedObjects.ToList())
+            {
+                if (obj != null)
+                {
+                    UnityEngine.Object.Destroy(obj);
+                }
+            }
+            spawnedObjects.Clear();
+            selectedObjects.Clear();
+            originalMaterialsMap.Clear();
+            Log.Msg("Cleared all spawned objects on initialization.");
         }
 
         // Initialize or update cached GUI styles and textures for toggles
@@ -468,30 +487,28 @@ namespace rowemod.Mods
 
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-            
-            if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames.Count == 0)
+
+            // Adding prefab buttons, conditional on prefab availability
+            if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)
             {
                 GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
-                return;
             }
-
-            // Adding prefab buttons
-            GUILayout.Label("Available Prefabs:", Menu.labelStyle);
-            foreach (string prefabName in Memory.dropperPrefabNames)
+            else
             {
-                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
+                GUILayout.Label("Available Prefabs:", Menu.labelStyle);
+                foreach (string prefabName in Memory.dropperPrefabNames)
                 {
-                    // Setting selected prefab
-                    selectedPrefabName = prefabName;
-                    Log.Msg($"Selected prefab: {selectedPrefabName}");
+                    if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
+                    {
+                        // Setting selected prefab
+                        selectedPrefabName = prefabName;
+                        Log.Msg($"Selected prefab: {selectedPrefabName}");
+                    }
                 }
             }
 
-            // Moved Delete buttons to be vertically placed right of Spawned Objects list
+            // Display spawned objects list
             GUILayout.Space(10);
-            GUILayout.BeginHorizontal();
-            
-            // Left column: Spawned Objects list
             GUILayout.BeginVertical(GUILayout.Width(500f));
             GUILayout.Label("Spawned Objects:", Menu.labelStyle);
             if (spawnedObjects.Count == 0)
@@ -517,14 +534,9 @@ namespace rowemod.Mods
                     }
                 }
             }
-            GUILayout.EndVertical();
 
-            // Right column: Delete buttons stacked vertically, right-aligned and spaced down
-            GUILayout.BeginVertical(GUILayout.Width(300f));
-            GUILayout.Space(30); // Space to align with first Spawned Objects toggle button
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace(); // Right-align buttons
-            GUILayout.BeginVertical();
+            // Delete buttons (always shown, below the spawned objects list)
+            GUILayout.Space(10);
             if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
             {
                 DeleteAllSpawnedObjects();
@@ -534,10 +546,6 @@ namespace rowemod.Mods
                 DeleteSelectedObjects();
             }
             GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-            
-            GUILayout.EndHorizontal();
 
             // Adding transform controls for selected objects
             if (selectedObjects.Count > 0)
@@ -581,7 +589,7 @@ namespace rowemod.Mods
                 if (rotationOffset.x != prevRotationOffset.x)
                 {
                     ApplyTransformOffsets(Vector3.zero, new Vector3(rotationOffset.x - prevRotationOffset.x, 0, 0));
-                    if (rotationOffset.x == 0f) rotationOffset.x = 0f; // Reset to zero if slider is at zero
+                    if (rotationOffset.x == 0f) rotationOffset.x = 0f;
                     Log.Msg($"Live-updated Rotation X by {rotationOffset.x - prevRotationOffset.x} for selected objects.");
                 }
 
@@ -627,7 +635,7 @@ namespace rowemod.Mods
 
             // Destroying all tracked spawned objects
             int count = spawnedObjects.Count;
-            foreach (var obj in spawnedObjects)
+            foreach (var obj in spawnedObjects.ToList())
             {
                 if (obj != null)
                 {
