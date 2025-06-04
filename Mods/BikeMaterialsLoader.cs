@@ -208,15 +208,15 @@ namespace rowemod.Mods
 
         public static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
         {
-            Log.Msg("Listing all EquipSlotVehicle names:");
+            //Log.Msg("Listing all EquipSlotVehicle names:");
             foreach (var slot in equipSlotVehicles)
             {
-                Log.Msg($" - {slot.gameObject.name}");
+                //Log.Msg($" - {slot.gameObject.name}");
             }
 
             if (equipSlotVehicles.Length == 0)
             {
-                Log.Warning("No EquipSlotVehicle components found in rMBCharacter.");
+                //Log.Warning("No EquipSlotVehicle components found in rMBCharacter.");
                 return;
             }
 
@@ -225,7 +225,7 @@ namespace rowemod.Mods
             foreach (var slot in equipSlotVehicles)
             {
                 string slotName = slot.gameObject.name;
-                Log.Msg($"Checking slot: {slotName}");
+                //Log.Msg($"Checking slot: {slotName}");
 
                 bool isPeg = slotName.Contains("Peg", StringComparison.OrdinalIgnoreCase);
                 string wheelType = GetWheelType(slot.gameObject);
@@ -247,13 +247,13 @@ namespace rowemod.Mods
                         if (categories.ContainsKey(frontKey))
                         {
                             categories[frontKey].slots.Add(slot);
-                            Log.Msg($"Assigned '{slotName}' to '{frontKey}'.");
+                            //Log.Msg($"Assigned '{slotName}' to '{frontKey}'.");
                         }
 
                         if (categories.ContainsKey(baseName))
                         {
                             categories[baseName].slots.Add(slot);
-                            Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
+                            //Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
                         }
                     }
                     else if (isBack)
@@ -262,27 +262,27 @@ namespace rowemod.Mods
                         if (categories.ContainsKey(rearKey))
                         {
                             categories[rearKey].slots.Add(slot);
-                            Log.Msg($"Assigned '{slotName}' to '{rearKey}'.");
+                            //Log.Msg($"Assigned '{slotName}' to '{rearKey}'.");
                         }
 
                         if (categories.ContainsKey(baseName))
                         {
                             categories[baseName].slots.Add(slot);
-                            Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
+                            //Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
                         }
                     }
 
                     else if (categories.ContainsKey(baseName))
                     {
                         categories[baseName].slots.Add(slot);
-                        Log.Msg($"Assigned '{slotName}' to generic '{baseName}' category.");
+                        //Log.Msg($"Assigned '{slotName}' to generic '{baseName}' category.");
                     }
 
                     // Add to 'Pegs' if applicable
                     if (isPeg && categories.ContainsKey("BMX_Peg"))
                     {
                         categories["BMX_Peg"].slots.Add(slot);
-                        Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
+                        //Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
                     }
 
                     slotsCategorized++;
@@ -301,13 +301,13 @@ namespace rowemod.Mods
                     if (!string.IsNullOrEmpty(specificPegCategory))
                     {
                         categories[specificPegCategory].slots.Add(slot);
-                        Log.Msg($"Assigned '{slotName}' to '{categories[specificPegCategory].displayName}'.");
+                        //Log.Msg($"Assigned '{slotName}' to '{categories[specificPegCategory].displayName}'.");
                     }
 
                     if (categories.ContainsKey("BMX_Peg"))
                     {
                         categories["BMX_Peg"].slots.Add(slot);
-                        Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
+                        //Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
                     }
 
                     slotsCategorized++;
@@ -320,14 +320,14 @@ namespace rowemod.Mods
                     if (slotName.Contains(category, StringComparison.OrdinalIgnoreCase))
                     {
                         categories[category].slots.Add(slot);
-                        Log.Msg($"Categorized slot '{slotName}' under '{categories[category].displayName}'.");
+                        //Log.Msg($"Categorized slot '{slotName}' under '{categories[category].displayName}'.");
                         slotsCategorized++;
                         break;
                     }
                 }
             }
 
-            Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
+            //Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
         }
 
 
@@ -338,33 +338,33 @@ namespace rowemod.Mods
         private static string GetWheelType(GameObject obj)
         {
             Transform current = obj.transform;
-            Log.Msg($"🔍 Checking wheel type for: {obj.name}");
+            //Log.Msg($"🔍 Checking wheel type for: {obj.name}");
 
             while (current != null)
             {
-                Log.Msg($"   ↳ Checking parent: {current.name}");
+                //Log.Msg($"   ↳ Checking parent: {current.name}");
 
                 string parentName = current.name.ToLowerInvariant();
                 if (parentName.Contains("front"))
                 {
-                    Log.Msg($"   ✅ '{obj.name}' belongs to the FRONT wheel (found '{current.name}').");
+                    //Log.Msg($"   ✅ '{obj.name}' belongs to the FRONT wheel (found '{current.name}').");
                     return "Front Wheel";
                 }
                 if (parentName.Contains("back"))
                 {
-                    Log.Msg($"   ✅ '{obj.name}' belongs to the REAR wheel (found '{current.name}').");
+                    //Log.Msg($"   ✅ '{obj.name}' belongs to the REAR wheel (found '{current.name}').");
                     return "Back Wheel";
                 }
                 if (parentName.Contains("rear"))
                 {
-                    Log.Msg($"   ✅ '{obj.name}' belongs to the REAR wheel (found '{current.name}').");
+                    //Log.Msg($"   ✅ '{obj.name}' belongs to the REAR wheel (found '{current.name}').");
                     return "Back Wheel";
                 }
 
                 current = current.parent;
             }
 
-            Log.Warning($"⚠ '{obj.name}' does NOT belong to a known wheel type! No valid parent found.");
+            //Log.Warning($"⚠ '{obj.name}' does NOT belong to a known wheel type! No valid parent found.");
             return "Unknown";
         }
 

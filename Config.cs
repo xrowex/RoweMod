@@ -37,7 +37,6 @@ namespace rowemod
         private static readonly float DefaultSeatRotationX = 330f;
         private static readonly float DefaultPegLength = 1f; 
 
-        private static readonly bool DefaultBHideHelmet = true;
         private static readonly string DefaultBodyModelPath = null;
         private static readonly string DefaultBodyMaterialPath = null;
         private static readonly string DefaultTopModelPath = null;
@@ -113,7 +112,6 @@ namespace rowemod
         public static float vertAssistCorrectionStrength = 30f; 
 
         // Custom model and material paths
-        public static bool bHideHelmet = DefaultBHideHelmet;
         public static string bodyModelPath = DefaultBodyModelPath;
         public static string bodyMaterialPath = DefaultBodyMaterialPath;
         public static string topModelPath = DefaultTopModelPath;
@@ -170,6 +168,8 @@ namespace rowemod
         public static float menuAccentB = DefaultMenuAccentB;
         public static float sloMoTimer = DefaultSloMoTimer;
 
+        public static bool disableEmoteOnBike = false;
+
         // Added for FreeCam collider toggle feature
         public static bool bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
 
@@ -209,7 +209,6 @@ namespace rowemod
                     breakForce,
                     manualAngle,
                     noseManualAngle,
-                    bHideHelmet,
                     bodyModelPath = SafeMakeRelativePath(bodyModelPath),
                     bodyMaterialPath = SafeMakeRelativePath(bodyMaterialPath),
                     topModelPath = SafeMakeRelativePath(topModelPath),
@@ -310,7 +309,6 @@ namespace rowemod
                 breakForce = jsonData.breakForce;
                 manualAngle = jsonData.manualAngle;
                 noseManualAngle = jsonData.noseManualAngle;
-                bHideHelmet = jsonData.bHideHelmet;
                 bodyModelPath = MakeAbsolutePath(jsonData.bodyModelPath);
                 bodyMaterialPath = MakeAbsolutePath(jsonData.bodyMaterialPath);
                 topModelPath = MakeAbsolutePath(jsonData.topModelPath);
@@ -434,7 +432,6 @@ namespace rowemod
         // Reset misc tab settings to defaults
         public static void ResetMiscTab()
         {
-            bHideHelmet = DefaultBHideHelmet;
             bNeverBail = DefaultBNeverBail;
             bShowHUD = DefaultBShowHUD;
             bDiscoMode = DefaultBDiscoMode;

@@ -43,7 +43,6 @@ namespace rowemod
         public string? customSessionMarker { get; set; }
         
         // Custom model and material paths
-        public bool bHideHelmet { get; set; }
         public string? bodyModelPath { get; set; }
         public string? bodyMaterialPath { get; set; }
         public string? topModelPath { get; set; }

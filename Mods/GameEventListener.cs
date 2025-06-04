@@ -3,7 +3,9 @@ using MelonLoader;
 using rowemod.Utils;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.InputSystem;
 using Physics = UnityEngine.Physics;
+using static rowemod.Mods.Misc;
 
 namespace rowemod.Mods
 {
@@ -139,6 +141,8 @@ namespace rowemod.Mods
             MotorVehicleUtils.FindMxVehicleSettings();
         }
 
+        
+
         private void OnPlayerSpawned()
         {
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
@@ -152,6 +156,8 @@ namespace rowemod.Mods
 
             // Log the type to see what IL2CPP actually thinks it is.
             Log.Msg($"_extraEventDataUnityObject Type: {unityObj.GetType().FullName}");
+
+            ToggleEmoteInput();
 
             // If you have TryCast in your environment:
             var go = unityObj.TryCast<GameObject>();

@@ -75,12 +75,6 @@
 		<Reference Include="Il2CppMGShaders">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMGShaders.dll</HintPath>
 		</Reference>
-		<Reference Include="Il2Cppmodio.UI">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2Cppmodio.UI.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2Cppmodio.UnityPlugin">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2Cppmodio.UnityPlugin.dll</HintPath>
-		</Reference>
 		<Reference Include="Il2CppMono.Security">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMono.Security.dll</HintPath>
 		</Reference>
@@ -92,9 +86,6 @@
 		</Reference>
 		<Reference Include="Il2CppNewtonsoft.Json">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppNewtonsoft.Json.dll</HintPath>
-		</Reference>
-		<Reference Include="Il2CppNobi.UiRoundedCorners">
-			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppNobi.UiRoundedCorners.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2CppPhoton3Unity3D">
 			<HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppPhoton3Unity3D.dll</HintPath>
@@ -466,7 +457,6 @@
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\Custom.cs" />
-		<Compile Include="Mods\DanceDisable.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\MotorVehicleUtils.cs" />

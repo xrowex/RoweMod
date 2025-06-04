@@ -1,13 +1,30 @@
-﻿using rowemod.Utils;
+﻿using Il2CppMashBox.Core.Runtime.Input;
+using MelonLoader;
+using rowemod.Utils;
 using UnityEngine;
-using static rowemod.Utils.Memory;
+using UnityEngine.InputSystem;
 using static rowemod.Config;
+using static rowemod.Utils.Memory;
 
 namespace rowemod.Mods
 {
     public static class Misc
     {
         private static bool lastDisableDroneCollider = bDisableDroneCollider;
+
+        public static void ToggleEmoteInput()
+        {
+            InputActionAsset[] ias = Resources.FindObjectsOfTypeAll<InputActionAsset>();
+            foreach(InputActionAsset ia in ias)
+            {
+                if(ia.name == "MashBox_Freerun_InputActions")
+                {
+                    ia.actionMaps[0].m_Actions[5] = null;
+                    break;
+                }
+            }
+        }
+
 
         public static void Update()
         {
@@ -61,12 +78,6 @@ namespace rowemod.Mods
                             collider.enabled = bDisableDroneCollider;
                         }
                     }
-                }
-
-                // Update Helmet Visibility
-                if (helmet != null)
-                {
-                    helmet.active = !bHideHelmet;
                 }
 
                 // Update FreeCam Collider

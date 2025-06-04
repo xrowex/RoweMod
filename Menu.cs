@@ -123,28 +123,18 @@ namespace rowemod
                         Mods.Physics.Update();
                         GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernToggle("Spin Assist", ref bSpinAssist);
-                        GUILayout.Space(10); // Add spacing after toggle
                         ModernToggle("Drifting", ref bDriftAbility);
-                        GUILayout.Space(10); // Add spacing after toggle
                         ModernSlider("Gravity", ref gravity, 0f, 30f);
-                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Small Hop Force", ref smallHopForce, 0f, 25f);
-                        GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernSlider("Pump Force", ref pumpForce, 0f, 30f);
-                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
-                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Steer Damping", ref steerDamp, 1f, 5f);
-                        GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 50f);
-                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Max Manual Angle", ref manualAngle, 10f, 50f);
-                        GUILayout.Space(10); // Add spacing after slider
                         GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernToggle("No Bail", ref bNeverBail);
-                        GUILayout.Space(10); // Add spacing after toggle
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
@@ -217,34 +207,24 @@ namespace rowemod
                     case Tab.Drone:
                         Mods.Misc.Update();
                         ModernToggle("Toggle Drone Body", ref droneBodyToggle);
-                        GUILayout.Space(10); // Add spacing after toggle
                         ModernToggle("Toggle Drone Sound", ref droneEmitterToggle);
-                        GUILayout.Space(10); // Add spacing after toggle
                         // Updated text and position for Drone collider toggle
                         ModernToggle("Toggle Drone Colliders", ref bDisableDroneCollider);
-                        GUILayout.Space(10); // Add spacing after toggle
                         ModernSlider("Drone Mass", ref droneMass, 2f, 1000f);
-                        GUILayout.Space(10); // Add spacing after slider
                         break;
 
                     case Tab.Misc:
                         Mods.Misc.Update();
                         ModernToggle("Vibration", ref bVibration);
-                        GUILayout.Space(10); // Add spacing after toggle
                         if (hapticFeedBack != null)
                             hapticFeedBack.SetActive(bVibration);
-                        ModernToggle("Hide Helmet", ref bHideHelmet);
-                        GUILayout.Space(10); // Add spacing after toggle
+                        ModernToggle("Disable Emote On Bike", ref disableEmoteOnBike);
                         // FreeCam collider toggle remains in Misc tab
                         ModernToggle("Disable Replay Cam Collider", ref bDisableFreeCamCollider);
-                        GUILayout.Space(10); // Add spacing after toggle
                         
                         ModernSlider("Menu Color R", ref menuAccentR, 0f, 1f);
-                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Menu Color G", ref menuAccentG, 0f, 1f);
-                        GUILayout.Space(10); // Add spacing after slider
                         ModernSlider("Menu Color B", ref menuAccentB, 0f, 1f);
-                        GUILayout.Space(10); // Add spacing after slider
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
@@ -888,6 +868,7 @@ namespace rowemod
 
             // Draw label
             GUI.Label(labelRect, label, labelStyle);
+            GUILayout.Space(10); // Add spacing after toggle
 
             return value;
         }
@@ -1051,6 +1032,7 @@ namespace rowemod
                     _sliderTextInputs[label] = target.ToString("0.00"); // Comment: Revert to last valid value on invalid input
                 }
             }
+            GUILayout.Space(10); // Add spacing after slider
         }
         public static bool ModernButton(string label, float width = 200f, float height = 30f)
         {
