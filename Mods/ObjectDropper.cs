@@ -10,11 +10,11 @@ namespace rowemod.Mods
     {
         // List to track spawned objects for deletion, capped at 20
         private static readonly List<GameObject> spawnedObjects = new List<GameObject>();
-        
+
         // Cache for drone and character transforms
         private static Transform droneTransform;
         private static Transform characterTransform;
-        
+
         // Selected prefab name for spawning, initially null for "none"
         private static string selectedPrefabName = null;
 
@@ -43,7 +43,8 @@ namespace rowemod.Mods
 
         // Layer mask for ground raycasts
         private static readonly LayerMask groundLayerMask = 1 << 0; // Default layer
-        //preview
+
+        // Preview
         private static GameObject previewObject;
         private static Material previewMaterial;
         private static float previewYRotation = 0f;
@@ -155,19 +156,45 @@ namespace rowemod.Mods
                     Log.Error($"Selected prefab '{selectedPrefabName}' not found or invalid.");
                     return;
                 }
-                
+
                 GameObject prefabToSpawn = Memory.dropperPrefabs[prefabIndex];
 
-                // Use the same logic as the preview placement
+                // Check if spawned objects exceed the limit
+                if (spawnedObjects.Count >= MaxSpawnedObjects)
+                {
+                    // Remove the oldest object
+                    GameObject oldestObject = spawnedObjects[0];
+                    if (oldestObject != null)
+                    {
+                        UnityEngine.Object.Destroy(oldestObject);
+                        Log.Msg($"Destroyed oldest spawned object: {oldestObject.name} to stay within {MaxSpawnedObjects} limit.");
+                    }
+                    spawnedObjects.RemoveAt(0);
+                }
+
+                // Use mouse raycast for placement
                 Ray ray = activeCamera.ScreenPointToRay(Input.mousePosition);
-                int placementMask = groundLayerMask & ~(1 << 31); // exclude preview layer
+                int placementMask = groundLayerMask & ~(1 << 31); // Exclude preview layer
                 if (UnityEngine.Physics.Raycast(ray, out RaycastHit hit, 100f, placementMask))
                 {
-                    Quaternion rotation = Quaternion.LookRotation(Vector3.forward, hit.normal) * Quaternion.Euler(0f, previewYRotation, 0f);
-                    Vector3 euler = rotation.eulerAngles;
-                    euler.x = Mathf.Clamp(euler.x > 180f ? euler.x - 360f : euler.x, -45f, 45f);
-                    euler.z = Mathf.Clamp(euler.z > 180f ? euler.z - 360f : euler.z, -45f, 45f);
-                    rotation = Quaternion.Euler(euler);
+                    Vector3 groundNormal = hit.normal.normalized;
+                    Quaternion rotation;
+
+                    // Check if slope is within 85 degrees (cos(85°) ≈ 0.0872)
+                    if (groundNormal.y > 0.0872f)
+                    {
+                        // Align with normal, using previewYRotation for forward direction
+                        Vector3 forward = Quaternion.Euler(0f, previewYRotation, 0f) * Vector3.forward;
+                        forward = Vector3.ProjectOnPlane(forward, groundNormal).normalized;
+                        rotation = Quaternion.LookRotation(forward, groundNormal);
+                        Log.Msg($"Mouse raycast hit ground with normal: {groundNormal}, rotation: {rotation.eulerAngles}");
+                    }
+                    else
+                    {
+                        // Fallback to flat rotation with previewYRotation
+                        rotation = Quaternion.Euler(0f, previewYRotation, 0f);
+                        Log.Warning($"Mouse raycast normal too steep: {groundNormal} (y={groundNormal.y}). Using flat rotation.");
+                    }
 
                     Vector3 position = hit.point;
 
@@ -193,7 +220,6 @@ namespace rowemod.Mods
                 }
             }
 
-
             // Deselect objects on menu toggle
             bool isMenuOpen = Menu.isOpen;
             if (isMenuOpen != wasMenuOpen)
@@ -207,6 +233,7 @@ namespace rowemod.Mods
                 }
                 wasMenuOpen = isMenuOpen;
             }
+
             // Scroll to rotate preview
             float scrollDelta = Input.mouseScrollDelta.y;
             if (scrollDelta != 0f)
@@ -228,7 +255,7 @@ namespace rowemod.Mods
 
             // Update preview position/rotation
             // Disable preview object if not on Dropper tab
-            if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper )
+            if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper)
             {
                 if (previewObject != null && previewObject.activeSelf)
                     previewObject.SetActive(false);
@@ -241,7 +268,7 @@ namespace rowemod.Mods
                 if (activeCamera != null && previewObject != null)
                 {
                     Ray ray = activeCamera.ScreenPointToRay(Input.mousePosition);
-                    int placementMask = groundLayerMask & ~(1 << 31); // exclude preview layer
+                    int placementMask = groundLayerMask & ~(1 << 31); // Exclude preview layer
                     if (UnityEngine.Physics.Raycast(ray, out RaycastHit hit, 100f, placementMask))
                     {
                         Vector3 normal = hit.normal;
@@ -258,7 +285,7 @@ namespace rowemod.Mods
                         {
                             Bounds bounds = renderers[0].bounds;
                             foreach (var r in renderers) bounds.Encapsulate(r.bounds);
-                            bottomOffset = -bounds.min.y + previewObject.transform.position.y; // <-- world space offset
+                            bottomOffset = -bounds.min.y + previewObject.transform.position.y; // World space offset
                         }
 
                         Vector3 adjustedPosition = hit.point;
@@ -266,13 +293,11 @@ namespace rowemod.Mods
 
                         previewObject.transform.position = adjustedPosition;
                         previewObject.transform.rotation = Quaternion.Euler(euler);
-
                     }
                 }
             }
-
-
         }
+
         private static bool IsMouseOverUI()
         {
             // Convert GUI space to screen space for your windowRect
@@ -470,7 +495,7 @@ namespace rowemod.Mods
             Vector3 raycastOrigin;
             float sourceYRotation;
             bool isDrone = false;
-            
+
             if (droneTransform != null && droneTransform.gameObject.activeInHierarchy)
             {
                 // Raycast starts 0.3 meter(s) below the drone
@@ -583,7 +608,7 @@ namespace rowemod.Mods
 
             // Displaying header for Object Dropper tab
             GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-            
+
             if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames.Count == 0)
             {
                 GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
@@ -606,14 +631,13 @@ namespace rowemod.Mods
                         CreatePreviewMaterial();
                         BuildPreviewObject(prefab);
                     }
-
                 }
             }
 
             // Moved Delete buttons to be vertically placed right of Spawned Objects list
             GUILayout.Space(10);
             GUILayout.BeginHorizontal();
-            
+
             // Left column: Spawned Objects list
             GUILayout.BeginVertical(GUILayout.Width(500f));
             GUILayout.Label("Spawned Objects:", Menu.labelStyle);
@@ -659,7 +683,7 @@ namespace rowemod.Mods
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
-            
+
             GUILayout.EndHorizontal();
 
             // Adding transform controls for selected objects
@@ -670,7 +694,7 @@ namespace rowemod.Mods
 
                 // Position sliders with live updates
                 Vector3 prevPositionOffset = positionOffset;
-                
+
                 Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
                 if (positionOffset.x != prevPositionOffset.x)
                 {
@@ -783,6 +807,7 @@ namespace rowemod.Mods
                 }
             }
         }
+
         private static void CreatePreviewMaterial()
         {
             if (previewMaterial != null) return;
@@ -812,20 +837,20 @@ namespace rowemod.Mods
             foreach (var renderer in previewObject.GetComponentsInChildren<Renderer>())
                 renderer.material = previewMaterial;
 
-            // ⛔ Disable physics so preview doesn't move or collide
+            // Disable physics so preview doesn't move or collide
             foreach (var rb in previewObject.GetComponentsInChildren<Rigidbody>())
             {
                 rb.isKinematic = true;
                 rb.detectCollisions = false;
             }
 
-            // ⛔ Disable all colliders to prevent raycast interference
+            // Disable all colliders to prevent raycast interference
             foreach (var collider in previewObject.GetComponentsInChildren<Collider>())
             {
                 collider.enabled = false;
             }
 
-            // ✅ Optional: Put preview object on a separate layer (like 31)
+            // Optional: Put preview object on a separate layer (like 31)
             int previewLayer = 31; // Make sure layer 31 is defined in your project
             previewObject.layer = previewLayer;
             foreach (Transform child in previewObject.GetComponentsInChildren<Transform>(true))
@@ -835,7 +860,5 @@ namespace rowemod.Mods
 
             previewObject.name = "[Preview] " + prefab.name;
         }
-
-
     }
 }
