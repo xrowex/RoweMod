@@ -221,7 +221,6 @@ namespace rowemod.Mods
         private void OnTitleLoopGameplayEnter()
         {
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
-            Memory.FindObjects(Memory.physicsDrivenCharacter);
             // Delayed bike materials load to bypass shop load
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             
