@@ -113,7 +113,7 @@ namespace rowemod
                 }
             }*/
             
-            if (sceneName.Contains("TheShop"))
+            /*if (sceneName.Contains("TheShop"))
             {
                 RoweCustomCharacter.GetDefaultCharacter();
 
@@ -126,7 +126,7 @@ namespace rowemod
                 
                 MelonCoroutines.Start(DelayedLoadPreset());
                 MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-            }
+            }*/
 
             // Reload assets from cached bundles
             Memory.ReloadAssetsFromCachedBundles();
@@ -183,7 +183,7 @@ namespace rowemod
         
         private void HandleMenuToggle()
         {
-            if (Input.GetKeyDown(KeyCode.N))
+            if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.N))
             {
                 isOpen = !isOpen;
                 try

@@ -34,6 +34,7 @@ namespace rowemod
             Tricks,
             Character,
             BikeMaterials,
+            MX,
             Drone,
             Misc,
             Graphics,
@@ -74,7 +75,12 @@ namespace rowemod
         public static List<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData> cachedHDRCameras = new List<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>();
         public static List<UnityEngine.Rendering.Volume> cachedVolumes = new List<UnityEngine.Rendering.Volume>();
         private static Texture2D logoTexture;
-
+        private static float mxTopSpeed = 100f;
+        private static float mxAcceleration = 10f;
+        private static bool hasInitializedMxSettings = false;
+        private static float mxChassisMass = 50f;
+        private static float mxAccelerationForce = 10f;
+        private static float mxTerminalVelocity = 80f;
         // Cache for circular knob texture
         private static Texture2D _circleTex;
 
@@ -161,7 +167,53 @@ namespace rowemod
                     case Tab.BikeMaterials:
                         BikeMaterialsLoader.DrawBikeMaterialsTabUI();
                         break;
+                    case Tab.MX:
+                        if (!hasInitializedMxSettings)
+                        {
+                            Log.Msg("Initializing MX Vehicle Settings...");
+                            MotorVehicleUtils.FindMxVehicleSettings();
+                            var mx = MotorVehicleUtils.mxVehicleSettings;
+                            if (mx != null)
+                            {
+                                mxTopSpeed = mx.TopSpeed;
+                                mxChassisMass = mx.ChassisMass;
+                                mxAccelerationForce = mx.AccelerationForce;
+                                mxTerminalVelocity = mx.TerminalVelocity;
+                                //Log.Msg($"MX Settings Found - Top Speed: {mxTopSpeed}, Acceleration: {mxAcceleration}");
+                            }
+                            else
+                            {
+                                Log.Error("No MX Vehicle Settings found during initialization.");
+                            }
+                            hasInitializedMxSettings = true;
+                        }
 
+                        if (MotorVehicleUtils.mxVehicleSettings != null)
+                        {
+                            GUILayout.Box("MX Vehicle Tuning", coloredBoxStyle);
+
+                            GUILayout.Space(10);
+                            ModernSlider("Top Speed", ref mxTopSpeed, 5f, 30000f);
+                            ModernSlider("Chassis Mass", ref mxChassisMass, 1f, 500f);
+                            ModernSlider("Acceleration Force", ref mxAccelerationForce, 1f, 1000f);
+                            ModernSlider("Terminal Velocity", ref mxTerminalVelocity, 10f, 3000f);
+
+                            var mx = MotorVehicleUtils.mxVehicleSettings;
+                            mx.TopSpeed = mxTopSpeed;
+                            mx.ChassisMass = mxChassisMass;
+                            mx.AccelerationForce = mxAccelerationForce;
+                            mx.TerminalVelocity = mxTerminalVelocity;
+
+                            //Log.Msg($"Updated MX Settings - Top Speed: {mxTopSpeed}, AccelerationForce: {mxAccelerationForce}");
+                        }
+                        else
+                        {
+                            GUILayout.Label("No MX vehicle found.", labelStyle);
+                            Log.Error("No MX Vehicle available to display settings.");
+                        }
+                        break;
+
+                    
                     case Tab.Drone:
                         Mods.Misc.Update();
                         ModernToggle("Toggle Drone Body", ref droneBodyToggle);
@@ -283,98 +335,95 @@ namespace rowemod
 
         private static void DrawTabs()
         {
-            try
+
+            // Begin a group to position all tabs precisely, increased height to prevent clipping
+            GUI.BeginGroup(new Rect(0, 0, windowRect.width, 60f));
+
+            float tabHeight = 30f; // Matches rounded button height
+            float tabWidth = 80f; // Width for each tab button
+            float yPosition = 30f;
+
+            // Define tab labels and corresponding enum values
+            (string label, Tab tab)[] tabs = new[]
             {
-                // Begin a group to position all tabs precisely, increased height to prevent clipping
-                GUI.BeginGroup(new Rect(0, 0, windowRect.width, 60f));
+                ("Physics", Tab.Physics),
+                //("Tricks", Tab.Tricks),
+                ("Bike", Tab.Bike),
+                ("Materials", Tab.BikeMaterials),
+                ("MX", Tab.MX),
+                ("Character", Tab.Character),
+                ("Drone", Tab.Drone),
+                ("Misc", Tab.Misc),
+                ("Graphics", Tab.Graphics),
+                ("Marker", Tab.Marker),
+                ("Dropper", Tab.Dropper),
+            };
 
-                float tabHeight = 30f; // Matches rounded button height
-                float tabWidth = 80f; // Width for each tab button
-                float yPosition = 30f;
-
-                // Define tab labels and corresponding enum values
-                (string label, Tab tab)[] tabs = new[]
+            // Draw tab buttons with precise Rect positioning
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                var (label, tab) = tabs[i];
+                GUIStyle buttonStyle = currentTab == tab ? activeTabButtonStyle : highQualityButtonStyle;
+                Rect tabRect = new Rect(10f + i * (tabWidth + 5f), yPosition, tabWidth, tabHeight);
+                if (GUI.Button(tabRect, $"<b>{label}</b>", buttonStyle))
                 {
-                    ("Physics", Tab.Physics),
-                    //("Tricks", Tab.Tricks),
-                    ("Bike", Tab.Bike),
-                    ("Materials", Tab.BikeMaterials),
-                    ("Character", Tab.Character),
-                    ("Drone", Tab.Drone),
-                    ("Misc", Tab.Misc),
-                    ("Graphics", Tab.Graphics),
-                    ("Marker", Tab.Marker),
-                    ("Dropper", Tab.Dropper),
-                };
+                    SetCurrentTab(tab);
+                }
+            }
 
-                // Draw tab buttons with precise Rect positioning
-                for (int i = 0; i < tabs.Length; i++)
+            // Draw "Reset Tab" button in top-right corner
+            float resetButtonWidth = 80f;
+            float resetButtonHeight = 30f;
+            Rect resetButtonRect = new Rect(
+                windowRect.width - resetButtonWidth - 10f,
+                yPosition,
+                resetButtonWidth,
+                resetButtonHeight
+            );
+            if (GUI.Button(resetButtonRect, "<b>RESET\nTAB</b>", highQualityButtonStyle))
+            {
+                switch (currentTab)
                 {
-                    var (label, tab) = tabs[i];
-                    GUIStyle buttonStyle = currentTab == tab ? activeTabButtonStyle : highQualityButtonStyle;
-                    Rect tabRect = new Rect(10f + i * (tabWidth + 5f), yPosition, tabWidth, tabHeight);
-                    if (GUI.Button(tabRect, $"<b>{label}</b>", buttonStyle))
-                    {
-                        SetCurrentTab(tab);
-                    }
+                    case Tab.Physics:
+                        ResetPhysicsTab();
+                        break;
+
+                    case Tab.Bike:
+                        //LoadAllAssetBundles();
+                        PartTweaker.FindParts();
+                        //ReloadAssetsFromCachedBundles();
+                        Log.Msg("Bike Tab reset!");
+                        break;
+
+                    case Tab.Character:
+                        ResetCharacterTab();
+                        break;
+
+                    case Tab.BikeMaterials:
+                        CategorizeEquipSlots(equipSlotVehicles);
+                        ResetBikeMaterialsTab();
+                        break;
+                    case Tab.MX:
+                        hasInitializedMxSettings = false;
+                        break;
+                    case Tab.Misc:
+                        ResetMiscTab();
+                        break;
+
+                    case Tab.Marker:
+                        Memory.ReloadAssetsFromCachedBundles();
+                        break;
+
+                    case Tab.Dropper:
+                        ObjectDropper.ResetTab();
+                        Log.Msg("Dropper Tab reset!");
+                        break;
                 }
 
-                // Draw "Reset Tab" button in top-right corner
-                float resetButtonWidth = 80f;
-                float resetButtonHeight = 30f;
-                Rect resetButtonRect = new Rect(
-                    windowRect.width - resetButtonWidth - 10f,
-                    yPosition,
-                    resetButtonWidth,
-                    resetButtonHeight
-                );
-                if (GUI.Button(resetButtonRect, "<b>RESET\nTAB</b>", highQualityButtonStyle))
-                {
-                    switch (currentTab)
-                    {
-                        case Tab.Physics:
-                            ResetPhysicsTab();
-                            break;
-
-                        case Tab.Bike:
-                            //LoadAllAssetBundles();
-                            PartTweaker.FindParts();
-                            //ReloadAssetsFromCachedBundles();
-                            Log.Msg("Bike Tab reset!");
-                            break;
-
-                        case Tab.Character: 
-                            ResetCharacterTab(); 
-                            break;
-
-                        case Tab.BikeMaterials:
-                            CategorizeEquipSlots(equipSlotVehicles);
-                            ResetBikeMaterialsTab();
-                            break;
-                        
-                        case Tab.Misc:
-                            ResetMiscTab();
-                            break;
-                        
-                        case Tab.Marker:
-                            Memory.ReloadAssetsFromCachedBundles();
-                            break;
-                        
-                        case Tab.Dropper:
-                            ObjectDropper.ResetTab();
-                            Log.Msg("Dropper Tab reset!");
-                            break;
-                    }
-
-                    ResetSliderTextValues();
-                }
-
-                GUI.EndGroup();
+                ResetSliderTextValues();
             }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in DrawTabs: {ex.Message}");
-            }
+
+            GUI.EndGroup();
         }
 
         //-------------------------------------------------------------------
@@ -397,31 +446,26 @@ namespace rowemod
 
         public static void ResetSliderTextValues()
         {
-            try
-            {
-                sliderTextValues.Clear();
-                sliderFieldJustFocused.Clear();
 
-                // Physics Tab Sliders
-                sliderTextValues["Gravity"] = gravity.ToString("F2");
-                sliderTextValues["Small Hop Force"] = smallHopForce.ToString("F2");
-                sliderTextValues["Pump Force"] = pumpForce.ToString("F2");
-                sliderTextValues["Spin Speed Multiplier"] = spinTorque.ToString("F2");
-                sliderTextValues["Steer Damping"] = steerDamp.ToString("F2");
-                sliderTextValues["Max Nose Manual Angle"] = noseManualAngle.ToString("F2");
-                sliderTextValues["Max Manual Angle"] = manualAngle.ToString("F2");
+            sliderTextValues.Clear();
+            sliderFieldJustFocused.Clear();
 
-                // Misc Tab Sliders
-                sliderTextValues["Slo Motion Timer"] = sloMoTimer.ToString("F2");
-                sliderTextValues["Drone Mass"] = droneMass.ToString("F2");
-                sliderTextValues["Menu Color R"] = menuAccentR.ToString("F2");
-                sliderTextValues["Menu Color G"] = menuAccentG.ToString("F2");
-                sliderTextValues["Menu Color B"] = menuAccentB.ToString("F2");
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in ResetSliderTextValues: {ex.Message}");
-            }
+            // Physics Tab Sliders
+            sliderTextValues["Gravity"] = gravity.ToString("F2");
+            sliderTextValues["Small Hop Force"] = smallHopForce.ToString("F2");
+            sliderTextValues["Pump Force"] = pumpForce.ToString("F2");
+            sliderTextValues["Spin Speed Multiplier"] = spinTorque.ToString("F2");
+            sliderTextValues["Steer Damping"] = steerDamp.ToString("F2");
+            sliderTextValues["Max Nose Manual Angle"] = noseManualAngle.ToString("F2");
+            sliderTextValues["Max Manual Angle"] = manualAngle.ToString("F2");
+
+            // Misc Tab Sliders
+            sliderTextValues["Slo Motion Timer"] = sloMoTimer.ToString("F2");
+            sliderTextValues["Drone Mass"] = droneMass.ToString("F2");
+            sliderTextValues["Menu Color R"] = menuAccentR.ToString("F2");
+            sliderTextValues["Menu Color G"] = menuAccentG.ToString("F2");
+            sliderTextValues["Menu Color B"] = menuAccentB.ToString("F2");
+
         }
 
         //-------------------------------------------------------------------
@@ -496,7 +540,8 @@ namespace rowemod
                 coloredBoxStyle = new GUIStyle(GUI.skin.box);
                 coloredBoxStyle.normal.background = accentColor;
                 coloredBoxStyle.normal.textColor = Color.black;
-                coloredBoxStyle.fontSize = 13;
+                coloredBoxStyle.fontSize = 14;
+                coloredBoxStyle.fixedWidth = 140;
                 coloredBoxStyle.fixedHeight = 24;
 
                 // High-Quality Button Style

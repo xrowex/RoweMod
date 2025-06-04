@@ -1,11 +1,11 @@
 ﻿using Il2CppMashBox.Core.Runtime.Events;
-using UnityEngine;
+using MelonLoader;
 using rowemod.Utils;
+using UnityEngine;
 using UnityEngine.Events;
-using rowemod.Mods;
 using Physics = UnityEngine.Physics;
 
-namespace rowemod
+namespace rowemod.Mods
 {
     public class GameEventListener
     {
@@ -13,6 +13,7 @@ namespace rowemod
         private GameEvent _localMenuHumanSpawnEvent;
         private GameEvent _playerResetAtMarker;
         private GameEvent _playerCloseReplay;
+        private GameEvent _titleLoopGameplayEnter;
         public void Initialize()
         {
             // Find the existing GameEvent instance
@@ -22,12 +23,12 @@ namespace rowemod
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
-                
+
                 UnityAction genericListener = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(() => OnAnyGameEvent(ev.name));
                 ev.OnRaise.AddListener(genericListener);
-                
+
                 Log.Msg(ev.name);
-                if(ev.name.Contains("GameEvent_OnResetAtMarker"))
+                if (ev.name.Contains("GameEvent_OnResetAtMarker"))
                 {
                     _playerResetAtMarker = ev;
                 }
@@ -47,11 +48,12 @@ namespace rowemod
                 {
                     _playerCloseReplay = ev;
                 }
-                if (ev.name.Contains("GameEvent_LocalMenuHumanSpawned"))
+
+                if (ev.name.Contains("GameEvent_TitleLoop_Gameplay_OnEnter"))
                 {
-                    _localMenuHumanSpawnEvent = ev;
+                    _titleLoopGameplayEnter = ev;
                 }
-                
+
             }
 
             //PLAYER SPAWNN
@@ -64,8 +66,18 @@ namespace rowemod
             Log.Msg("GameEvent_MainPlayerHumanSpawned found! Subscribing to event...");
             UnityAction action = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerSpawned);
             _localGameplayHumanSpawnEvent.OnRaise.AddListener(action);
-            
-            
+
+            //MENU PLAYER SPAWN
+            if (_localMenuHumanSpawnEvent == null)
+            {
+                Log.Error("MenuPlayerSpawnEvent is null!");
+                return;
+            }
+
+            Log.Msg("GameEvent_LocalMenuHumanSpawned found! Subscribing to event...");
+            UnityAction menuAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnMenuPlayerSpawned);
+            _localMenuHumanSpawnEvent.OnRaise.AddListener(menuAction);
+
 
 
             //RESET AT MARKER
@@ -73,8 +85,8 @@ namespace rowemod
             {
                 Log.Error("PlayerResetAtMarker is null!");
                 return;
-            }   
-            
+            }
+
             Log.Msg("GameEvent_OnResetAtMarker found! Subscribing to event...");
             UnityAction resetAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
@@ -94,6 +106,20 @@ namespace rowemod
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseReplay);
             _playerCloseReplay.OnRaise.AddListener(closeReplayAction);
 
+            //GAMEPLAY ENTER
+            if (_titleLoopGameplayEnter == null)
+            {
+                Log.Error("titleLoopGameplayEnter is null!");
+                return;
+            }
+
+            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter found! Subscribing to event...");
+            UnityAction gameplayEnterAction =
+                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnTitleLoopGameplayEnter);
+            _titleLoopGameplayEnter.OnRaise.AddListener(gameplayEnterAction);
+
+
+
         }
         private void OnAnyGameEvent(string eventName)
         {
@@ -109,7 +135,8 @@ namespace rowemod
         private void OnPlayerResetAtMarker()
         {
             Misc.Update();
-            Mods.Physics.Update();
+            Physics.Update();
+            MotorVehicleUtils.FindMxVehicleSettings();
         }
 
         private void OnPlayerSpawned()
@@ -137,8 +164,9 @@ namespace rowemod
                 Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
-                
-                
+                MotorVehicleUtils.FindMxVehicleSettings();
+
+
                 // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.customSessionMarker))
                 {
@@ -162,11 +190,42 @@ namespace rowemod
                         Log.Warning("sessionMarkers list is null.");
                     }
                 }
-                
+
 
             }
         }
 
+        private void OnMenuPlayerSpawned()
+        {
+            Log.Msg("GameEvent_LocalMenuHumanSpawned triggered!");
+
+            var unityObj = _localMenuHumanSpawnEvent._extraEventDataUnityObject;
+            if (unityObj == null)
+            {
+                Log.Error("Menu player object is null in event data!");
+                return;
+            }
+
+            var go = unityObj.TryCast<GameObject>();
+            if (go != null)
+            {
+                Log.Msg($"Menu Player Spawned: {go.name}");
+                Memory.physicsDrivenCharacter = go;
+                Memory.rMbCharacter = go.transform.parent?.gameObject;
+                Memory.FindObjects(go);
+                PartTweaker.FindParts();
+                MotorVehicleUtils.FindMxVehicleSettings();
+            }
+        }
+
+        private void OnTitleLoopGameplayEnter()
+        {
+            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
+            // Delayed bike materials load to bypass shop load
+            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+            
+            Custom.LoadPreset(Config.lastLoadedPresetCharacter);
+        }
 
     }
 }
