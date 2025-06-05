@@ -402,6 +402,9 @@ namespace rowemod.Utils
             Custom.LoadPreset(lastLoadedPresetCharacter);
 
             Mods.Physics.Update();
+            
+            // Initializing ObjectDropper
+            ObjectDropper.Initialize();
         }
 
         // New: Refresh drone components when toggles are used

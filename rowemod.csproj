@@ -463,6 +463,7 @@
 		<Compile Include="Mods\ObjectDropper.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\Patches\ActiveRagdollBehaviourPatches.cs" />
+		<Compile Include="Mods\Patches\InterpolateFovPatch.cs" />
 		<Compile Include="Mods\Patches\TestDeathPatches.cs" />
 		<Compile Include="Mods\Physics.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />

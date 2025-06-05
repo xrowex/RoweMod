@@ -58,112 +58,111 @@ namespace rowemod.Mods
 
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
-        
-      
+
+
         public static void DrawCharacterTab()
         {
-            try
+
+            GUILayout.BeginHorizontal();
+
+            GUILayout.BeginVertical(GUILayout.Width(125));
+            foreach (Slot slot in Enum.GetValues(typeof(Slot)))
             {
                 GUILayout.BeginHorizontal();
 
-                GUILayout.BeginVertical(GUILayout.Width(125));
-                foreach (Slot slot in Enum.GetValues(typeof(Slot)))
+                // Initialize toggle state if not set
+                if (!_slotVisibility.ContainsKey(slot))
                 {
-                    GUILayout.BeginHorizontal(); 
-
-                    // Initialize toggle state if not set
-                    if (!_slotVisibility.ContainsKey(slot))
-                    {
-                        _slotVisibility[slot] = true; // Default to visible
-                    }
-
-                    // Toggle button (placed to the left of the slot button)
-                    bool newState = GUILayout.Toggle(_slotVisibility[slot], "", GUILayout.Width(20));
-                    if (newState != _slotVisibility[slot])
-                    {
-                        _slotVisibility[slot] = newState;
-                        ToggleSlotVisibility(slot, newState);
-                    }
-
-                    // Slot button
-                    if (GUILayout.Button($"<b>{slot.ToString()}</b>", Menu.highQualityButtonStyle))
-                    {
-                        Menu.currentSlot = slot;
-                        Menu.inModelsTab = true;
-                    }
-
-                    GUILayout.EndHorizontal(); // End row
-                }
-                GUILayout.EndVertical();
-
-                ListCharacterBundles(currentSlot);
-                GUILayout.EndHorizontal();
-                GUILayout.Label("Presets", Menu.labelStyle);
-
-                // Text field to enter new preset name
-                _newPresetName = GUILayout.TextField(_newPresetName, 25);
-
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle))
-                {
-                    if (!string.IsNullOrWhiteSpace(_newPresetName))
-                    {
-                        SaveCurrentPreset(_newPresetName);
-                        _newPresetName = ""; // Clear input field after saving
-                        GUI.FocusControl(null);
-                    }
+                    _slotVisibility[slot] = true; // Default to visible
                 }
 
-                List<string> availablePresets = ClothingPreset.GetAvailablePresets();
-
-                ClothingPreset defaultPreset = ClothingPreset.LoadPreset("DefaultPreset");
-                if (defaultPreset == null || 
-                    defaultPreset.ModelPaths == null || 
-                    defaultPreset.MaterialPaths == null || 
-                    defaultPreset.ModelPaths.Count > 0 || 
-                    defaultPreset.MaterialPaths.Count > 0)
+                // Toggle button (placed to the left of the slot button)
+                bool newState = GUILayout.Toggle(_slotVisibility[slot], "", GUILayout.Width(20));
+                if (newState != _slotVisibility[slot])
                 {
-                    defaultPreset = new ClothingPreset 
-                    { 
-                        Name = "DefaultPreset", 
-                        ModelPaths = new Dictionary<Slot, string>(), 
-                        MaterialPaths = new Dictionary<Slot, string>() 
-                    };
-                    ClothingPreset.SavePreset(defaultPreset);
+                    _slotVisibility[slot] = newState;
+                    ToggleSlotVisibility(slot, newState);
                 }
-                availablePresets.Add(defaultPreset.Name);
+
+                // Slot button
+                if (GUILayout.Button($"<b>{slot.ToString()}</b>", Menu.highQualityButtonStyle))
+                {
+                    Menu.currentSlot = slot;
+                    Menu.inModelsTab = true;
+                }
+
+                GUILayout.EndHorizontal(); // End row
+            }
+
+            GUILayout.EndVertical();
+
+            ListCharacterBundles(currentSlot);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Presets", Menu.labelStyle);
+
+            // Text field to enter new preset name
+            _newPresetName = GUILayout.TextField(_newPresetName, 25);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle))
+            {
+                if (!string.IsNullOrWhiteSpace(_newPresetName))
+                {
+                    SaveCurrentPreset(_newPresetName);
+                    _newPresetName = ""; // Clear input field after saving
+                    GUI.FocusControl(null);
+                }
+            }
+
+            List<string> availablePresets = ClothingPreset.GetAvailablePresets();
+
+            ClothingPreset defaultPreset = ClothingPreset.LoadPreset("DefaultPreset");
+            if (defaultPreset == null ||
+                defaultPreset.ModelPaths == null ||
+                defaultPreset.MaterialPaths == null ||
+                defaultPreset.ModelPaths.Count > 0 ||
+                defaultPreset.MaterialPaths.Count > 0)
+            {
+                defaultPreset = new ClothingPreset
+                {
+                    Name = "DefaultPreset",
+                    ModelPaths = new Dictionary<Slot, string>(),
+                    MaterialPaths = new Dictionary<Slot, string>()
+                };
+                ClothingPreset.SavePreset(defaultPreset);
+            }
+
+            availablePresets.Add(defaultPreset.Name);
+
+            if (availablePresets.Count > 0)
+            {
+                _selectedPresetIndex = Mathf.Clamp(_selectedPresetIndex, 0, availablePresets.Count - 1);
+
+                if (availablePresets.Count == 1)
+                {
+                    _selectedPresetIndex = 0;
+                    LoadPreset(availablePresets[0]);
+                }
 
                 if (availablePresets.Count > 0)
                 {
-                    _selectedPresetIndex = Mathf.Clamp(_selectedPresetIndex, 0, availablePresets.Count - 1);
-
-                    if (availablePresets.Count == 1)
+                    GUILayout.BeginVertical();
+                    for (int i = 0; i < availablePresets.Count; i++)
                     {
-                        _selectedPresetIndex = 0;
-                        LoadPreset(availablePresets[0]);
-                    }
-
-                    if (availablePresets.Count > 0)
-                    {
-                        GUILayout.BeginVertical();
-                        for (int i = 0; i < availablePresets.Count; i++)
+                        if (GUILayout.Button(availablePresets[i], Menu.highQualityButtonStyle))
                         {
-                            if (GUILayout.Button(availablePresets[i], Menu.highQualityButtonStyle))
-                            {
-                                _selectedPresetIndex = i;
-                                LoadPreset(availablePresets[_selectedPresetIndex]);
-                            }
+                            _selectedPresetIndex = i;
+                            LoadPreset(availablePresets[_selectedPresetIndex]);
                         }
-                        GUILayout.EndVertical();
                     }
+
+                    GUILayout.EndVertical();
                 }
-                GUILayout.EndHorizontal();
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"An error occurred in DrawCharacterTab: {ex.Message}");
-            }
-        }
+
+            GUILayout.EndHorizontal();
+        
+    }
 
         private static Dictionary<Slot, GameObject> _slotObjects = new Dictionary<Slot, GameObject>();
 

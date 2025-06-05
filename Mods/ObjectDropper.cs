@@ -57,6 +57,7 @@ namespace rowemod.Mods
             Log.Msg("Initializing ObjectDropper...");
 
             // Initialize cached GUI styles and textures
+            
             InitializeToggleStyles();
 
             RefreshReferences();

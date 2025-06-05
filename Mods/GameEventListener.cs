@@ -131,8 +131,10 @@ namespace rowemod.Mods
         private void OnPlayerCloseReplay()
         {
             Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
+            /*
             Memory.FindObjects(Memory.physicsDrivenCharacter);
-            BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
+            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+            */
         }
         private void OnPlayerResetAtMarker()
         {
@@ -229,8 +231,7 @@ namespace rowemod.Mods
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
             // Delayed bike materials load to bypass shop load
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-            
-            Custom.LoadPreset(Config.lastLoadedPresetCharacter);
+            //Memory.FindObjects(Memory.physicsDrivenCharacter);
         }
 
     }

@@ -76,14 +76,14 @@ namespace rowemod
 
             Log.Msg("Starting Bundle loading...");
             Memory.LoadAllAssetBundles();
-
+            
             // Set up event listener
             Log.Msg("Starting game event listener...");
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
 
-            // Initializing ObjectDropper
-            ObjectDropper.Initialize();
+            
+            
         }
         
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)

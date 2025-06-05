@@ -21,6 +21,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
+using rowemod.Patches;
 
 namespace rowemod
 {
@@ -83,6 +84,12 @@ namespace rowemod
         private static float mxTerminalVelocity = 80f;
         // Cache for circular knob texture
         private static Texture2D _circleTex;
+        
+        
+        private static string fovInput = "60";
+        private static float fovInputValue = 60f;
+        static float GetReplayTime() => FovTracker.fovTrack?.GetLastTimeStamp() ?? 0f;
+
 
         //-------------------------------------------------------------------
         // MENU & TAB LOGIC
@@ -229,6 +236,23 @@ namespace rowemod
                         {
                             InitializeStyles();
                         }
+                        GUILayout.Label("Manual FOV Override", coloredBoxStyle);
+
+// Float field to type in desired FOV
+                        fovInput = GUILayout.TextField(fovInput.ToString(), GUILayout.Width(100));
+                        if (float.TryParse(fovInput, out float parsedFOV))
+                        {
+                            fovInputValue = parsedFOV;
+                        }
+
+// Button to set FOV at current replay time
+                        if (GUILayout.Button("Set FOV Keyframe", GUILayout.Width(150)))
+                        {
+                            float time = GetReplayTime(); // 👈 You need to grab the current time from replay somehow
+                            FovTracker.fovTrack?.AddKey(time, fovInputValue);
+                            MelonLoader.MelonLogger.Msg($"[FOV] Manually set keyframe at {time} with FOV {fovInputValue}");
+                        }
+
                         break;
 
                     case Tab.Graphics:
