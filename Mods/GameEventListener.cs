@@ -159,7 +159,7 @@ namespace rowemod.Mods
             // Log the type to see what IL2CPP actually thinks it is.
             Log.Msg($"_extraEventDataUnityObject Type: {unityObj.GetType().FullName}");
 
-            ToggleEmoteInput();
+            
 
             // If you have TryCast in your environment:
             var go = unityObj.TryCast<GameObject>();
@@ -173,7 +173,7 @@ namespace rowemod.Mods
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
                 MotorVehicleUtils.FindMxVehicleSettings();
-
+                ToggleEmoteInput();
 
                 // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.customSessionMarker))

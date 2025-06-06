@@ -93,6 +93,7 @@ namespace rowemod.Utils
         public static GameEvent playerSpawned;
         public static TeleportRelay teleportRelay;
         public static PhysicsPropHandBehaviour physicsPropHandBehaviour;
+        
         public static FreeCam freeCam;
         public static SphereCollider freeCamCollider;
         // Drone Colliders
@@ -217,18 +218,6 @@ namespace rowemod.Utils
                         Log.Msg("DriftAbility component found in BMXChassis.");
                     else
                         Log.Error("DriftAbility component not found in BMXChassis.");
-
-                    joints = rMbCharacter.GetComponentsInChildren<Joint>(true);
-                    if (joints.Length > 0)
-                        Log.Msg($"Found {joints.Length} Joint components in BMXChassis.");
-                    else
-                        Log.Error("No Joint components found in BMXChassis.");
-
-                    roweTimeInterpolator = rMbCharacter.GetComponentInChildren<TimeInterpolator>();
-                    if (roweTimeInterpolator != null)
-                        Log.Msg("TimeInterpolator component found in Time Interpolator.");
-                    else
-                        Log.Error("TimeInterpolator component not found in Time Interpolator.");
 
                     vehicleSettingsInstances = Resources.FindObjectsOfTypeAll<MotorVehicleSettings>();
                     if (vehicleSettingsInstances != null && vehicleSettingsInstances.Length > 0)

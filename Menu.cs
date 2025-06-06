@@ -21,7 +21,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
-using rowemod.Patches;
 
 namespace rowemod
 {
@@ -87,7 +86,6 @@ namespace rowemod
         
         private static string fovInput = "60";
         private static float fovInputValue = 60f;
-        static float GetReplayTime() => FovTracker.fovTrack?.GetLastTimeStamp() ?? 0f;
 
 
         //-------------------------------------------------------------------
@@ -189,10 +187,10 @@ namespace rowemod
                             GUILayout.Box("MX Vehicle Tuning", coloredBoxStyle);
 
                             GUILayout.Space(10);
-                            ModernSlider("Top Speed", ref mxTopSpeed, 5f, 30000f);
+                            ModernSlider("Speed", ref mxTopSpeed, 5f, 30000f);
                             ModernSlider("Chassis Mass", ref mxChassisMass, 1f, 500f);
                             ModernSlider("Acceleration Force", ref mxAccelerationForce, 1f, 1000f);
-                            ModernSlider("Terminal Velocity", ref mxTerminalVelocity, 10f, 3000f);
+                            ModernSlider("Top speed", ref mxTerminalVelocity, 10f, 3000f);
 
                             var mx = MotorVehicleUtils.mxVehicleSettings;
                             mx.TopSpeed = mxTopSpeed;
@@ -234,22 +232,6 @@ namespace rowemod
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             InitializeStyles();
-                        }
-                        GUILayout.Label("Manual FOV Override", coloredBoxStyle);
-
-// Float field to type in desired FOV
-                        fovInput = GUILayout.TextField(fovInput.ToString(), GUILayout.Width(100));
-                        if (float.TryParse(fovInput, out float parsedFOV))
-                        {
-                            fovInputValue = parsedFOV;
-                        }
-
-// Button to set FOV at current replay time
-                        if (GUILayout.Button("Set FOV Keyframe", GUILayout.Width(150)))
-                        {
-                            float time = GetReplayTime(); // 👈 You need to grab the current time from replay somehow
-                            FovTracker.fovTrack?.AddKey(time, fovInputValue);
-                            MelonLoader.MelonLogger.Msg($"[FOV] Manually set keyframe at {time} with FOV {fovInputValue}");
                         }
 
                         break;
