@@ -41,7 +41,6 @@ namespace rowemod
             Graphics,
             Marker,
             Dropper,
-            Premium,
         }
 
         // Menu Variables
@@ -275,10 +274,6 @@ namespace rowemod
                     case Tab.Dropper:
                         ObjectDropper.DrawDropperTab();
                         break;
-                    case Tab.Premium:
-                        GUILayout.Box("Premium Features", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        GUILayout.Label("Premium-only settings will appear here.", labelStyle);
-                        break;
                 }
             }
             catch (Exception ex)
@@ -363,7 +358,6 @@ namespace rowemod
                 ("Graphics", Tab.Graphics),
                 ("Marker", Tab.Marker),
                 ("Dropper", Tab.Dropper),
-                ("Premium", Tab.Premium),
             };
 
             // Draw tab buttons with precise Rect positioning
@@ -424,9 +418,6 @@ namespace rowemod
                     case Tab.Dropper:
                         ObjectDropper.ResetTab();
                         Log.Msg("Dropper Tab reset!");
-                        break;
-                    case Tab.Premium:
-                        Log.Msg("Premium Tab reset!");
                         break;
                 }
 
