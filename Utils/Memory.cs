@@ -243,12 +243,7 @@ namespace rowemod.Utils
                 Log.Error("rMBCharacter is null! Cannot search within it.");
             }
 
-            // Hop heights
-            vehicleSettingsInstances = Resources.FindObjectsOfTypeAll<MotorVehicleSettings>();
-            Log.Msg(vehicleSettingsInstances != null && vehicleSettingsInstances.Length > 0
-                ? $"Found {vehicleSettingsInstances.Length} MotorVehicleSettings instances."
-                : "No MotorVehicleSettings instances found.");
-
+           
             try
             {
                 Log.Msg("Starting to find all drones...");
