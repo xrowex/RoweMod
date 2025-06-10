@@ -9,13 +9,14 @@ using static rowemod.Mods.Misc;
 
 namespace rowemod.Mods
 {
-    public class GameEventListener
+    public class GameEventListener : MelonMod
     {
         private GameEvent _localGameplayHumanSpawnEvent;
         private GameEvent _localMenuHumanSpawnEvent;
         private GameEvent _playerResetAtMarker;
         private GameEvent _playerCloseReplay;
         private GameEvent _titleLoopGameplayEnter;
+
         public void Initialize()
         {
             // Find the existing GameEvent instance
@@ -26,7 +27,8 @@ namespace rowemod.Mods
             foreach (var ev in allEvents)
             {
 
-                UnityAction genericListener = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(() => OnAnyGameEvent(ev.name));
+                UnityAction genericListener =
+                    Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(() => OnAnyGameEvent(ev.name));
                 ev.OnRaise.AddListener(genericListener);
 
                 Log.Msg(ev.name);
@@ -38,7 +40,6 @@ namespace rowemod.Mods
                 if (ev.name.Contains("LocalGameplayHumanSpawned"))
                 {
                     _localGameplayHumanSpawnEvent = ev;
-                    break;
                 }
 
                 if (ev.name.Contains("LocalMenuHumanSpawned"))
@@ -77,7 +78,8 @@ namespace rowemod.Mods
             }
 
             Log.Msg("GameEvent_LocalMenuHumanSpawned found! Subscribing to event...");
-            UnityAction menuAction = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnMenuPlayerSpawned);
+            UnityAction menuAction =
+                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnMenuPlayerSpawned);
             _localMenuHumanSpawnEvent.OnRaise.AddListener(menuAction);
 
 
@@ -123,6 +125,7 @@ namespace rowemod.Mods
 
 
         }
+
         private void OnAnyGameEvent(string eventName)
         {
             Log.Msg($"[GameEventListener] Event raised: {eventName}");
@@ -136,6 +139,7 @@ namespace rowemod.Mods
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             */
         }
+
         private void OnPlayerResetAtMarker()
         {
             Misc.Update();
@@ -143,7 +147,16 @@ namespace rowemod.Mods
             MotorVehicleUtils.FindMxVehicleSettings();
         }
 
-        
+
+        private void OnTitleLoopOnExitMainMenu()
+        {
+
+        }
+
+        private void OnTitleLoopTitleScreenExit()
+        {
+
+        }
 
         private void OnPlayerSpawned()
         {
@@ -159,7 +172,7 @@ namespace rowemod.Mods
             // Log the type to see what IL2CPP actually thinks it is.
             Log.Msg($"_extraEventDataUnityObject Type: {unityObj.GetType().FullName}");
 
-            
+
 
             // If you have TryCast in your environment:
             var go = unityObj.TryCast<GameObject>();
@@ -190,7 +203,8 @@ namespace rowemod.Mods
                         }
                         else
                         {
-                            Log.Warning($"Saved session marker '{Config.customSessionMarker}' not found in loaded assets.");
+                            Log.Warning(
+                                $"Saved session marker '{Config.customSessionMarker}' not found in loaded assets.");
                         }
                     }
                     else
@@ -198,8 +212,6 @@ namespace rowemod.Mods
                         Log.Warning("sessionMarkers list is null.");
                     }
                 }
-
-
             }
         }
 
@@ -231,8 +243,25 @@ namespace rowemod.Mods
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
             // Delayed bike materials load to bypass shop load
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+
+            MelonCoroutines.Start(DelayedPartReload());
             //Memory.FindObjects(Memory.physicsDrivenCharacter);
         }
 
+        private System.Collections.IEnumerator DelayedPartReload()
+        {
+            yield return new WaitForSeconds(1f);
+            
+            if (Memory.lastEquippedBars != null)
+                Memory.TryReplaceBars(Memory.lastEquippedBars);
+
+            if (Memory.lastEquippedFrame != null)
+                Memory.TryReplaceFrame(Memory.lastEquippedFrame);
+
+            PartTweaker.FindParts();
+            yield return null;
+        }
     }
+
 }
+

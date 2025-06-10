@@ -2,6 +2,7 @@ using UnityEngine;
 using rowemod.Utils;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.CharacterController;
+using Il2CppMashBox.Addons.ReplaySystem;
 using Object = UnityEngine.Object;
 
 namespace rowemod.Mods
@@ -590,6 +591,13 @@ namespace rowemod.Mods
 
             // Instantiating the object
             GameObject spawnedObject = UnityEngine.Object.Instantiate(prefab, spawnPosition, spawnRotation);
+            
+            if (spawnedObject != null && spawnedObject.GetComponent<Rigidbody>() != null)
+            {
+                spawnedObject.AddComponent<RecordableBody>();
+                Log.Msg($"Added RecordableBody to {spawnedObject.name} as it has a Rigidbody component");
+            }
+            
             if (spawnedObject != null)
             {
                 spawnedObjects.Add(spawnedObject);

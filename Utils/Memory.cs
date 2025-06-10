@@ -45,7 +45,11 @@ namespace rowemod.Utils
 
         // HUD
         public static Test mashBucksHUD;
-
+        
+        //Custom models
+        public static GameObject lastEquippedBars;
+        public static GameObject lastEquippedFrame;
+        
         // Camera
         public static Camera roweCam;
         public static BMXCMCameraTarget camTarget;
@@ -854,7 +858,7 @@ namespace rowemod.Utils
             GUILayout.Space(10); // Add spacing after buttons for consistency
         }
 
-        private static void TryReplaceBars(GameObject newBarsPrefab)
+        public static void TryReplaceBars(GameObject newBarsPrefab)
         {
             try
             {
@@ -880,6 +884,7 @@ namespace rowemod.Utils
 
                 frontBars.InstantiateItem(newBarsPrefab);
                 frontBars.GetComponent<Anchor>()?.SnapToAnchor();
+                lastEquippedBars = newBarsPrefab;
 
                 Log.Msg($"[Bars] Successfully switched bars to: {newBarsPrefab.name}");
                 Config.bikeMaterials.Remove("Bars");
@@ -938,7 +943,7 @@ namespace rowemod.Utils
             GUILayout.EndScrollView();
         }
 
-        private static void TryReplaceFrame(GameObject newFramePrefab)
+        public static void TryReplaceFrame(GameObject newFramePrefab)
         {
             try
             {
@@ -970,6 +975,8 @@ namespace rowemod.Utils
                 Log.Msg($"[Frames] Found Frame EquipSlot. Replacing with: {newFramePrefab.name}");
                 frameSlot.InstantiateItem(newFramePrefab);
                 frameSlot.GetComponent<Anchor>()?.SnapToAnchor();
+                lastEquippedFrame = newFramePrefab;
+                
                 Log.Msg($"[Frames] Successfully replaced frame with: {newFramePrefab.name}");
                 Config.bikeMaterials.Remove("Frame");
             }

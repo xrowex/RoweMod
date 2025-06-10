@@ -8,6 +8,7 @@ using rowemod.Mods;
 using Log = rowemod.Utils.Log;
 using System.Collections;
 using Il2CppMashBox.Character.Scripts;
+using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppSteamworks;
 
 [assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.8", "rowe & nolew & holo", null)]
@@ -27,6 +28,7 @@ namespace rowemod
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
+           
         }
 
         public override void OnLateInitializeMelon()
@@ -72,16 +74,16 @@ namespace rowemod
                 Log.Msg($"Failed to save configuration: {ex.Message}");
             }
 
-
-
-            Log.Msg("Starting Bundle loading...");
-            Memory.LoadAllAssetBundles();
-            
             // Set up event listener
             Log.Msg("Starting game event listener...");
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
 
+            Log.Msg("Starting Bundle loading...");
+            Memory.LoadAllAssetBundles();
+            
+            
+            
             
             
         }
@@ -100,8 +102,12 @@ namespace rowemod
             //We set styles to false to reload each time scene is initialized
             stylesInitialized = false;
             
+            
+            
+            
             //load rowe logo
             MelonCoroutines.Start(LoadRoweLogo());
+
             
             //disable test mod in game
             /*foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
