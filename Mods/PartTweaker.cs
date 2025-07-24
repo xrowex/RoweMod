@@ -102,7 +102,7 @@ namespace rowemod.Mods
                     seatHeight,
                     seatPostAnchor.localPosition.z
                 );
-                Config.seatHeight = seatHeight;
+                Config.bike.seatHeight = seatHeight;
 
                 GUILayout.Space(10);
                 GUILayout.Label("Seat Tilt", Menu.coloredBoxStyle);
@@ -113,7 +113,7 @@ namespace rowemod.Mods
                     // Update seat tilt  
                     Quaternion newRotation = Quaternion.Euler(seatRotationX % 360f, 0f, 0f);
                     seatAnchor.localRotation = newRotation;
-                    Config.seatRotationX = seatRotationX;
+                    Config.bike.seatPitch = seatRotationX;
 
                 }
                 else
@@ -130,7 +130,7 @@ namespace rowemod.Mods
                 GUILayout.Label("Bars Rotation", Menu.coloredBoxStyle);
                 Menu.ModernSlider("Rotation", ref barRotationAngle, -45f, 45f);
                 barsAnchor.localRotation = Quaternion.Euler(barRotationAngle, 0f, 0f);
-                Config.barRotationAngle = barRotationAngle;
+                Config.bike.barPitch = barRotationAngle;
 
                 Memory.customizableEntity.RelaySnap();
             }
@@ -143,7 +143,7 @@ namespace rowemod.Mods
                 {
                     peg.localScale = new Vector3(pegLength, peg.localScale.y, peg.localScale.z);
                 }
-                Config.pegLength = pegLength;
+                Config.bike.pegLength = pegLength;
             }
         }
     }

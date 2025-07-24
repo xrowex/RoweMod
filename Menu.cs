@@ -35,7 +35,6 @@ namespace rowemod
             Character,
             BikeMaterials,
             MX,
-            Drone,
             Misc,
             Graphics,
             Marker,
@@ -64,6 +63,18 @@ namespace rowemod
         public static GUIStyle coloredBoxStyle;
         public static GUIStyle highQualityButtonStyle;
         public static GUIStyle activeTabButtonStyle;
+        // Texture caches for styles
+        private static Texture2D backgroundTexture;
+        private static Texture2D roundedButtonNormal;
+        private static Texture2D roundedButtonHover;
+        private static Texture2D activeTabBackground;
+        private static Texture2D accentColorTexture;
+        private static Texture2D sliderBackground;
+        private static Texture2D sliderFill;
+        private static Texture2D sliderThumb;
+        private static Texture2D toggleBackground;
+        
+        public static GUIStyle textFieldStyle;
         public static bool stylesInitialized = false;
 
         // Dictionaries and caches
@@ -126,19 +137,17 @@ namespace rowemod
                     case Tab.Physics:
                         Mods.Physics.Update();
                         GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernToggle("Spin Assist", ref bSpinAssist);
-                        ModernToggle("Drifting", ref bDriftAbility);
-                        ModernSlider("Gravity", ref gravity, 0f, 30f);
-                        ModernSlider("Small Hop Force", ref smallHopForce, 0f, 25f);
+                        ModernToggle("Spin Assist", ref physics.spinAssist);
+                        ModernToggle("Drifting", ref physics.driftAbility);
+                        ModernSlider("Gravity", ref physics.gravity, 0f, 30f);
+                        ModernSlider("Small Hop Force", ref physics.smallHopForce, 0f, 25f);
                         GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernSlider("Pump Force", ref pumpForce, 0f, 30f);
-                        ModernSlider("Spin Speed Multiplier", ref spinTorque, 0f, 10f);
-                        ModernSlider("Steer Damping", ref steerDamp, 1f, 5f);
+                        ModernSlider("Pump Force", ref physics.pumpForce, 0f, 30f);
+                        ModernSlider("Spin Speed Multiplier", ref physics.spinMultiplier, 0f, 10f);
+                        ModernSlider("Steer Damping", ref physics.steerDamp, 1f, 5f);
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernSlider("Max Nose Manual Angle", ref noseManualAngle, 10f, 50f);
-                        ModernSlider("Max Manual Angle", ref manualAngle, 10f, 50f);
-                        GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernToggle("No Bail", ref bNeverBail);
+                        ModernSlider("Max Nose Manual Angle", ref physics.noseManualAngle, 10f, 50f);
+                        ModernSlider("Max Manual Angle", ref physics.manualAngle, 10f, 50f);
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
@@ -208,32 +217,22 @@ namespace rowemod
                         break;
 
                     
-                    case Tab.Drone:
-                        Mods.Misc.Update();
-                        ModernToggle("Toggle Drone Body", ref droneBodyToggle);
-                        ModernToggle("Toggle Drone Sound", ref droneEmitterToggle);
-                        // Updated text and position for Drone collider toggle
-                        ModernToggle("Toggle Drone Colliders", ref bDisableDroneCollider);
-                        ModernSlider("Drone Mass", ref droneMass, 2f, 1000f);
-                        break;
-
                     case Tab.Misc:
-                        Mods.Misc.Update();
-                        ModernToggle("Vibration", ref bVibration);
-                        if (hapticFeedBack != null)
-                            hapticFeedBack.SetActive(bVibration);
-                        ModernToggle("Disable Emote On Bike", ref disableEmoteOnBike);
-                        // FreeCam collider toggle remains in Misc tab
-                        ModernToggle("Disable Replay Cam Collider", ref bDisableFreeCamCollider);
-                        
-                        ModernSlider("Menu Color R", ref menuAccentR, 0f, 1f);
-                        ModernSlider("Menu Color G", ref menuAccentG, 0f, 1f);
-                        ModernSlider("Menu Color B", ref menuAccentB, 0f, 1f);
+                        GUILayout.Box("Drone", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
+                        ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
+                        ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
+                        ModernSlider("Drone Mass", ref misc.droneMass, 2f, 1000f);
+                        GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        ModernToggle("No Bail", ref misc.neverBail);
+                        ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
+                        ModernSlider("Menu Color R", ref misc.menuAccentR,  0f, 1f);
+                        ModernSlider("Menu Color G", ref misc.menuAccentG, 0f, 1f);
+                        ModernSlider("Menu Color B", ref misc.menuAccentB, 0f, 1f);
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
-                            InitializeStyles();
+                            stylesInitialized = false;
                         }
-
                         break;
 
                     case Tab.Graphics:
@@ -247,10 +246,10 @@ namespace rowemod
                             if (GUILayout.Button(marker.name, highQualityButtonStyle))
                             {
                                 ReplaceSessionMarkerWithPrefab(marker);
-                                Config.customSessionMarker = marker.name;
+                                Config.misc.customSessionMarker = marker.name;
                             }
                         }
-                        GUILayout.Box("Current Selected Marker: " + (Config.customSessionMarker ?? "None"), labelStyle);
+                        GUILayout.Box("Current Selected Marker: " + (Config.misc.customSessionMarker ?? "None"), labelStyle);
                         break;
                     // Adding case for the new Dropper tab
                     case Tab.Dropper:
@@ -335,7 +334,6 @@ namespace rowemod
                 ("Materials", Tab.BikeMaterials),
                 ("MX", Tab.MX),
                 ("Character", Tab.Character),
-                ("Drone", Tab.Drone),
                 ("Misc", Tab.Misc),
                 ("Graphics", Tab.Graphics),
                 ("Marker", Tab.Marker),
@@ -434,20 +432,19 @@ namespace rowemod
             sliderFieldJustFocused.Clear();
 
             // Physics Tab Sliders
-            sliderTextValues["Gravity"] = gravity.ToString("F2");
-            sliderTextValues["Small Hop Force"] = smallHopForce.ToString("F2");
-            sliderTextValues["Pump Force"] = pumpForce.ToString("F2");
-            sliderTextValues["Spin Speed Multiplier"] = spinTorque.ToString("F2");
-            sliderTextValues["Steer Damping"] = steerDamp.ToString("F2");
-            sliderTextValues["Max Nose Manual Angle"] = noseManualAngle.ToString("F2");
-            sliderTextValues["Max Manual Angle"] = manualAngle.ToString("F2");
+            sliderTextValues["Gravity"] = physics.gravity.ToString("F2");
+            sliderTextValues["Small Hop Force"] = physics.smallHopForce.ToString("F2");
+            sliderTextValues["Pump Force"] = physics.pumpForce.ToString("F2");
+            sliderTextValues["Spin Speed Multiplier"] = physics.spinMultiplier.ToString("F2");
+            sliderTextValues["Steer Damping"] = physics.steerDamp.ToString("F2");
+            sliderTextValues["Max Nose Manual Angle"] = physics.noseManualAngle.ToString("F2");
+            sliderTextValues["Max Manual Angle"] = physics.manualAngle.ToString("F2");
 
             // Misc Tab Sliders
-            sliderTextValues["Slo Motion Timer"] = sloMoTimer.ToString("F2");
-            sliderTextValues["Drone Mass"] = droneMass.ToString("F2");
-            sliderTextValues["Menu Color R"] = menuAccentR.ToString("F2");
-            sliderTextValues["Menu Color G"] = menuAccentG.ToString("F2");
-            sliderTextValues["Menu Color B"] = menuAccentB.ToString("F2");
+            sliderTextValues["Drone Mass"] = misc.droneMass.ToString("F2");
+            sliderTextValues["Menu Color R"] = misc.menuAccentR.ToString("F2");
+            sliderTextValues["Menu Color G"] = misc.menuAccentG.ToString("F2");
+            sliderTextValues["Menu Color B"] = misc.menuAccentB.ToString("F2");
 
         }
 
@@ -463,7 +460,7 @@ namespace rowemod
                 stylesInitialized = true;
 
                 // Define base accent color from Config
-                Color accentBaseColor = new Color(menuAccentR, menuAccentG, menuAccentB);
+                Color accentBaseColor = new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB);
                 // Derive hover color (brighter: increase RGB by 0.1, clamp to 1)
                 Color accentHoverBaseColor = new Color(
                     Mathf.Min(accentBaseColor.r + 0.1f, 1f),
@@ -548,6 +545,17 @@ namespace rowemod
                 activeTabButtonStyle.normal.textColor = Color.white;
                 activeTabButtonStyle.hover.textColor = Color.yellow;
                 activeTabButtonStyle.active.textColor = Color.green;
+                
+                textFieldStyle = new GUIStyle(GUI.skin.textField)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = labelStyle.fontSize,
+                    font = labelStyle.font,
+                    normal = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
+                    focused = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
+                    hover = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
+                    active = { textColor = Color.white, background = MakeTex(2, 2, Color.black) }
+                };
             }
             catch (Exception ex)
             {
@@ -745,63 +753,134 @@ namespace rowemod
         // SLIDER & GUI METHODS
         //-------------------------------------------------------------------
 
-        public static void Slider(string label, ref float target, float min, float max, float sliderWidth = 400f, float defaultValue = 1f)
+       public static void Slider(string label, ref float target, float defaultVal, float min, float max)
         {
-            try
+            // Define dimensions for the slider UI
+            float height = 25f;
+            float labelWidth = 150f;
+            float valueBoxWidth = 50f;
+            float buttonWidth = 60f; // Width for the Default button
+            float spacing = 15f;
+            float sliderWidth = windowRect.width - labelWidth - valueBoxWidth - buttonWidth - spacing * 5;
+            float thumbWidth = 10f; // Width of the thumb rectangle
+
+            // Create the layout rectangle for the slider
+            Rect fullRect = GUILayoutUtility.GetRect(
+                windowRect.width - 30f, height,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(height)
+            );
+
+            // Define rectangles for label, slider, value box, and default button
+            Rect labelRect = new Rect(fullRect.x, fullRect.y, labelWidth, height);
+            Rect sliderRect = new Rect(fullRect.x + labelWidth + spacing, fullRect.y + 6, sliderWidth, height - 12f);
+            Rect valueRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing, fullRect.y, valueBoxWidth, height);
+            Rect buttonRect = new Rect(fullRect.x + labelWidth + spacing + sliderWidth + spacing * 2 + valueBoxWidth, fullRect.y, buttonWidth, height);
+
+            // Draw the label
+            GUI.Label(labelRect, label, labelStyle);
+
+            // Cache slider textures
+            if (sliderBackground == null)
+                sliderBackground = MakeTex((int)sliderRect.width, (int)sliderRect.height, new Color(0.25f, 0.25f, 0.25f));
+            if (sliderFill == null)
+                sliderFill = MakeTex((int)sliderRect.width, (int)sliderRect.height, new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB));
+            if (sliderThumb == null)
+                sliderThumb = MakeTex((int)thumbWidth, (int)(sliderRect.height + 4f), Color.white);
+
+            GUI.DrawTexture(sliderRect, sliderBackground);
+
+            float percent = Mathf.InverseLerp(min, max, target);
+            float fillWidth = percent == 1f ? sliderRect.width : percent * sliderRect.width;
+            Rect fillRect = new Rect(sliderRect.x, sliderRect.y, fillWidth, sliderRect.height);
+            GUI.DrawTexture(fillRect, sliderFill);
+
+            float thumbX = sliderRect.x + fillWidth;
+            Rect thumbRect = new Rect(thumbX - thumbWidth, sliderRect.y - 2f, thumbWidth, sliderRect.height + 4f);
+            GUI.DrawTexture(thumbRect, sliderThumb);
+
+            Event e = Event.current;
+
+            if (e.type == EventType.MouseDown && sliderRect.Contains(e.mousePosition))
             {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"{label} = {target:F2}", labelStyle);
-                float newSliderValue = GUILayout.HorizontalSlider(target, min, max, horizontalSliderStyle, horizontalSliderThumbStyle, GUILayout.Width(sliderWidth));
-                string controlName = "SliderTextField_" + label;
-                GUI.SetNextControlName(controlName);
+                _activeSliderLabel = label;
+                e.Use();
+            }
 
-                if (!sliderTextValues.ContainsKey(label))
-                    sliderTextValues[label] = target.ToString("F2");
-                if (!sliderFieldJustFocused.ContainsKey(label))
-                    sliderFieldJustFocused[label] = false;
+            if (e.type == EventType.MouseUp && _activeSliderLabel == label)
+            {
+                _activeSliderLabel = null;
+                e.Use();
+            }
 
-                string currentText = sliderTextValues[label];
-                string newText = GUILayout.TextField(currentText, GUILayout.Width(50));
-                bool isFocused = GUI.GetNameOfFocusedControl() == controlName;
+            if (e.type == EventType.MouseDrag && _activeSliderLabel == label)
+            {
+                float clampedX = Mathf.Clamp(e.mousePosition.x, sliderRect.x, sliderRect.xMax);
+                float newPercent = Mathf.InverseLerp(sliderRect.x, sliderRect.xMax, clampedX);
+                float rawValue = Mathf.Lerp(min, max, newPercent);
 
-                if (isFocused && !sliderFieldJustFocused[label])
+                target = Mathf.Round(rawValue * 100f) / 100f;
+                _sliderTextInputs[label] = target.ToString("0.00");
+                e.Use();
+            }
+
+            // Draw value box with text input
+            float borderSize = 2f;
+            Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
+            DrawSolidColorRect(borderRect, new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB));
+            DrawSolidColorRect(valueRect, Color.black);
+
+            // Initialize text input if not set
+            if (!_sliderTextInputs.ContainsKey(label))
+            {
+                _sliderTextInputs[label] = target.ToString("0.00");
+            }
+
+            // Set control name for focus tracking
+            string controlName = $"SliderTextField_{label}";
+            GUI.SetNextControlName(controlName);
+
+            // Draw text field
+            string newText = GUI.TextField(valueRect, _sliderTextInputs[label], textFieldStyle);
+            _sliderTextInputs[label] = newText;
+            bool isFocused = GUI.GetNameOfFocusedControl() == controlName;
+            if (isFocused && (Keyboard.current?.enterKey.wasPressedThisFrame == true || Keyboard.current?.numpadEnterKey.wasPressedThisFrame == true))
+            {
+                if (float.TryParse(newText, out float parsedValue))
                 {
-                    newText = "";
-                    sliderFieldJustFocused[label] = true;
-                }
-
-                if (isFocused && (Keyboard.current?.enterKey.isPressed == true || Keyboard.current?.numpadEnterKey.isPressed == true))
-                {
-                    if (float.TryParse(newText, out float parsedValue))
-                    {
-                        parsedValue = Mathf.Clamp(parsedValue, min, max);
-                        target = parsedValue;
-                        sliderTextValues[label] = parsedValue.ToString("F2");
-                    }
-                    else
-                    {
-                        sliderTextValues[label] = target.ToString("F2");
-                    }
-                    GUI.FocusControl(null);
-                    sliderFieldJustFocused[label] = false;
+                    // Clamp to min/max
+                    target = Mathf.Clamp(parsedValue, min, max);
+                    _sliderTextInputs[label] = target.ToString("0.00");
+                    Log.Msg($"Updated {label} to {target} via text input.");
                 }
                 else
                 {
-                    sliderTextValues[label] = newText;
+                    _sliderTextInputs[label] = target.ToString("0.00");
+                    Log.Warning($"Invalid input for {label}: '{newText}'. Reverted to {target}.");
                 }
-
-                GUILayout.EndHorizontal();
-
-                if (!isFocused && !Mathf.Approximately(target, newSliderValue))
-                {
-                    target = newSliderValue;
-                    sliderTextValues[label] = target.ToString("F2");
-                }
+                GUI.FocusControl(null);
             }
-            catch (Exception ex)
+            else if (!isFocused && e.type == EventType.MouseDown && !valueRect.Contains(e.mousePosition))
             {
-                Log.Error($"Error in Slider: {ex.Message}");
+                // On losing focus (click outside), validate and clamp
+                if (float.TryParse(newText, out float parsedValue))
+                {
+                    target = Mathf.Clamp(parsedValue, min, max);
+                    _sliderTextInputs[label] = target.ToString("0.00");
+                }
+                else
+                {
+                    _sliderTextInputs[label] = target.ToString("0.00");
+                }
             }
+
+            // Draw Default button and handle click
+            if (GUI.Button(buttonRect, "RESET", highQualityButtonStyle))
+            {
+                target = defaultVal;
+                _sliderTextInputs[label] = target.ToString("0.00");
+            }
+            GUILayout.Space(10);
         }
 
         public static bool Toggle(string text, ref bool value)
@@ -857,7 +936,7 @@ namespace rowemod
             toggleAnimationState[label] = Mathf.Lerp(toggleAnimationState[label], target, 0.2f);
 
             // Draw capsule-shaped background
-            Color onColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Use Config accent color
+            Color onColor = new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB); // Use Config accent color
             Color offColor = new Color(0.3f, 0.3f, 0.3f);
             Texture2D toggleTex = MakeCapsuleTex((int)width, (int)height, Color.Lerp(offColor, onColor, toggleAnimationState[label]), 2, Color.black);
             GUI.DrawTexture(toggleRect, toggleTex);
@@ -936,7 +1015,7 @@ namespace rowemod
             float percent = Mathf.InverseLerp(min, max, target);
             float fillWidth = percent == 1f ? sliderRect.width : (percent * sliderRect.width); // Full width at max
             Rect fillRect = new Rect(sliderRect.x, sliderRect.y, fillWidth, sliderRect.height);
-            DrawSolidColorRect(fillRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
+            DrawSolidColorRect(fillRect, new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB)); // Use Config accent color
 
             // Draw thumb, right-aligned to the fill
             float thumbX = sliderRect.x + fillWidth; // Right edge of fill
@@ -973,7 +1052,7 @@ namespace rowemod
             // Draw value box with text input
             float borderSize = 2f;
             Rect borderRect = new Rect(valueRect.x - borderSize, valueRect.y - borderSize, valueRect.width + borderSize * 2, valueRect.height + borderSize * 2);
-            DrawSolidColorRect(borderRect, new Color(menuAccentR, menuAccentG, menuAccentB)); // Use Config accent color
+            DrawSolidColorRect(borderRect, new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB)); // Use Config accent color
             DrawSolidColorRect(valueRect, Color.black);
 
             // Initialize text input if not set
@@ -985,18 +1064,6 @@ namespace rowemod
             // Set control name for focus tracking
             string controlName = $"SliderTextField_{label}";
             GUI.SetNextControlName(controlName);
-
-            // Create text field style to match current label
-            GUIStyle textFieldStyle = new GUIStyle(GUI.skin.textField)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = Menu.labelStyle.fontSize,
-                font = Menu.labelStyle.font,
-                normal = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
-                focused = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
-                hover = { textColor = Color.white, background = MakeTex(2, 2, Color.black) },
-                active = { textColor = Color.white, background = MakeTex(2, 2, Color.black) }
-            };
 
             // Draw text field
             string newText = GUI.TextField(valueRect, _sliderTextInputs[label], textFieldStyle);
@@ -1045,7 +1112,7 @@ namespace rowemod
             bool isHovering = buttonRect.Contains(Event.current.mousePosition);
 
             // Colors
-            Color baseColor = new Color(menuAccentR, menuAccentG, menuAccentB); // Use Config accent color
+            Color baseColor = new Color(misc.menuAccentR, misc.menuAccentG, misc.menuAccentB); // Use Config accent color
             Color hoverColor = new Color(
                 Mathf.Min(baseColor.r + 0.1f, 1f),
                 Mathf.Min(baseColor.g + 0.1f, 1f),

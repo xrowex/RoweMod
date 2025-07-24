@@ -1,28 +1,30 @@
-﻿using rowemod.Utils;
+﻿using MelonLoader.Utils;
 using Newtonsoft.Json;
-using static rowemod.Mods.Custom;
-using MelonLoader.Utils;
+using rowemod.Mods;
+using rowemod.Utils;
+using UnityEngine;
 
 namespace rowemod.Mods
 {
-
     public class ClothingPreset
     {
         public string Name;
-        public Dictionary<Slot, string> ModelPaths = new Dictionary<Slot, string>();
-        public Dictionary<Slot, string> MaterialPaths = new Dictionary<Slot, string>();
+        public Dictionary<Custom.Slot, string> ModelPaths = new Dictionary<Custom.Slot, string>();
+        public Dictionary<Custom.Slot, string> MaterialPaths = new Dictionary<Custom.Slot, string>();
+        public Dictionary<Custom.Slot, bool> SlotVisibility = new Dictionary<Custom.Slot, bool>();
 
         public static string presetDirectory => Path.Combine(MelonEnvironment.ModsDirectory, "rowemod", "Presets");
 
-        public static void SavePreset(ClothingPreset preset)
+        public static void Save(ClothingPreset preset)
         {
+            preset.PopulateSlotVisibility();
+            
             string filePath = Path.Combine(presetDirectory, $"{preset.Name}.json");
             File.WriteAllText(filePath, JsonConvert.SerializeObject(preset, Formatting.Indented));
-
             Log.Msg($"Preset '{preset.Name}' saved.");
         }
 
-        public static ClothingPreset? LoadPreset(string presetName)
+        public static ClothingPreset Load(string presetName)
         {
             string filePath = Path.Combine(presetDirectory, $"{presetName}.json");
             if (!File.Exists(filePath))
@@ -31,7 +33,13 @@ namespace rowemod.Mods
                 return null;
             }
 
-            return JsonConvert.DeserializeObject<ClothingPreset>(File.ReadAllText(filePath));
+            var preset = JsonConvert.DeserializeObject<ClothingPreset>(File.ReadAllText(filePath));
+
+            // Backward compatibility
+            if (preset.SlotVisibility == null)
+                preset.SlotVisibility = new Dictionary<Custom.Slot, bool>();
+
+            return preset;
         }
 
         public static List<string> GetAvailablePresets()
@@ -46,5 +54,18 @@ namespace rowemod.Mods
             }
             return presets;
         }
+
+        /// <summary>
+        /// Fills SlotVisibility based on current in-game equipped objects.
+        /// </summary>
+        public void PopulateSlotVisibility()
+        {
+            foreach (Custom.Slot slot in Enum.GetValues(typeof(Custom.Slot)))
+            {
+                GameObject go = Custom.GetSlotObject(slot); 
+                SlotVisibility[slot] = go?.activeSelf ?? true;
+            }
+        }
+        
     }
 }

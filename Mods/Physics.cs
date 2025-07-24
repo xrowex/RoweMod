@@ -10,13 +10,13 @@ namespace rowemod.Mods
     {
         public static void Update()
         {
-            UnityEngine.Physics.gravity = new Vector3(0f, -gravity, 0f);
+            UnityEngine.Physics.gravity = new Vector3(0f, -physics.gravity, 0f);
         
             if (rMbCharacter != null)
             {
                 if (spinSystem != null)
                 {
-                    spinSystem._torqueMult = spinTorque;
+                    spinSystem._torqueMult = physics.spinMultiplier;
                 }
                 else
                 {
@@ -25,7 +25,7 @@ namespace rowemod.Mods
                 
                 if (driftAbility != null)
                 {
-                    driftAbility.enabled = bDriftAbility;
+                    driftAbility.enabled = physics.driftAbility;
                 }
                 else
                 {
@@ -34,10 +34,10 @@ namespace rowemod.Mods
 
                 if (vehicleController != null)
                 {
-                    vehicleController._airSpinAssist = bSpinAssist;
-                    vehicleController._steerDampRate = steerDamp;
-                    vehicleController._mannyAngle = manualAngle;
-                    vehicleController._noseyAngle = noseManualAngle;
+                    vehicleController._airSpinAssist = physics.spinAssist;
+                    vehicleController._steerDampRate = physics.steerDamp;
+                    vehicleController._mannyAngle = physics.manualAngle;
+                    vehicleController._noseyAngle = physics.noseManualAngle;
                 }
                 else
                 {
@@ -46,7 +46,7 @@ namespace rowemod.Mods
 
                 if (pumpSystem != null)
                 {
-                    pumpSystem._pumpForce = pumpForce;
+                    pumpSystem._pumpForce = physics.pumpForce;
                 }
                 else
                 {
@@ -60,8 +60,8 @@ namespace rowemod.Mods
             {
                 try
                 {
-                    vehicleInstance.JumpSettings.JumpVelocity[0] = smallHopForce;
-                    vehicleInstance.JumpSettings.JumpVelocity[1] = smallHopForce;
+                    vehicleInstance.JumpSettings.JumpVelocity[0] = physics.smallHopForce;
+                    vehicleInstance.JumpSettings.JumpVelocity[1] = physics.smallHopForce;
                     //vehicleInstance.JumpSettings.JumpVelocity[2] = hopForce;
                 }
                 catch (Exception ex)

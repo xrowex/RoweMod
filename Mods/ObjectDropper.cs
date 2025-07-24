@@ -3,6 +3,7 @@ using rowemod.Utils;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ReplaySystem;
+using rowemod;
 using Object = UnityEngine.Object;
 
 namespace rowemod.Mods
@@ -68,7 +69,7 @@ namespace rowemod.Mods
         private static void InitializeToggleStyles()
         {
             // Create or update textures if menu accent color has changed
-            Color currentMenuAccentColor = new Color(Config.menuAccentR, Config.menuAccentG, Config.menuAccentB);
+            Color currentMenuAccentColor = new Color(Config.misc.menuAccentR, Config.misc.menuAccentG, Config.misc.menuAccentB);
             if (toggleOnNormalTexture == null || lastMenuAccentColor != currentMenuAccentColor)
             {
                 // ON state textures (red)
@@ -130,7 +131,7 @@ namespace rowemod.Mods
             // Handle object spawning
             if (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper && Input.GetMouseButtonDown(0))
             {
-                Config.bDisableDroneCollider = true;
+                Config.misc.disableDroneCollider = true;
                 if (IsMouseOverUI()) return;
 
                 if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)

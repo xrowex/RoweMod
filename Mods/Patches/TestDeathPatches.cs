@@ -13,7 +13,7 @@ namespace rowemod.Mods.Patches
             public static bool Prefix(TestDeath __instance)
             {
                 if (Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current != null) return true;
-                return !Config.bNeverBail;
+                return !Config.misc.neverBail;
             }
         }
 
@@ -24,7 +24,7 @@ namespace rowemod.Mods.Patches
             {
                 
                 if (Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current != null) return true;
-                return !Config.bNeverBail;
+                return !Config.misc.neverBail;
             }
         }
     }

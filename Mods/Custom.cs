@@ -1,8 +1,10 @@
 ﻿using Il2CppMashBox.Character.Scripts;
+using rowemod;
+using rowemod.Mods;
 using rowemod.Utils;
 using UnityEngine;
-using static rowemod.Menu;
 using static rowemod.Utils.Memory;
+using static rowemod.Menu;
 
 namespace rowemod.Mods
 {
@@ -50,7 +52,8 @@ namespace rowemod.Mods
             Path.GetDirectoryName(typeof(Custom).Assembly.Location),
             @"rowemod\Character"
         );
-        private static Dictionary<Slot, bool> _slotVisibility = new Dictionary<Slot, bool>();
+
+        public static Dictionary<Slot, bool> _slotVisibility = new Dictionary<Slot, bool>();
 
         public static bool inModelsTab = true;
         static Dictionary<Slot, string> _selectedModelDirectories = new Dictionary<Slot, string>();
@@ -116,7 +119,7 @@ namespace rowemod.Mods
 
             List<string> availablePresets = ClothingPreset.GetAvailablePresets();
 
-            ClothingPreset defaultPreset = ClothingPreset.LoadPreset("DefaultPreset");
+            ClothingPreset defaultPreset = ClothingPreset.Load("DefaultPreset");
             if (defaultPreset == null ||
                 defaultPreset.ModelPaths == null ||
                 defaultPreset.MaterialPaths == null ||
@@ -129,7 +132,7 @@ namespace rowemod.Mods
                     ModelPaths = new Dictionary<Slot, string>(),
                     MaterialPaths = new Dictionary<Slot, string>()
                 };
-                ClothingPreset.SavePreset(defaultPreset);
+                ClothingPreset.Save(defaultPreset);
             }
 
             availablePresets.Add(defaultPreset.Name);
@@ -166,7 +169,7 @@ namespace rowemod.Mods
 
         private static Dictionary<Slot, GameObject> _slotObjects = new Dictionary<Slot, GameObject>();
 
-        private static void ToggleSlotVisibility(Slot slot, bool isVisible)
+        public static void ToggleSlotVisibility(Slot slot, bool isVisible)
         {
             // Ensure the slot exists in the dictionary
             if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
@@ -333,16 +336,16 @@ namespace rowemod.Mods
             string relPath = Config.MakeRelativePath(newBundlePath);
             switch (slot)
             {
-                case Slot.Body: Config.bodyModelPath = relPath; break;
-                case Slot.Top: Config.topModelPath = relPath; break;
-                case Slot.Gloves: Config.glovesModelPath = relPath; break;
-                case Slot.Bottoms: Config.bottomsModelPath = relPath; break;
-                case Slot.Socks: Config.socksModelPath = relPath; break;
-                case Slot.Shoes: Config.shoesModelPath = relPath; break;
-                case Slot.Bust: Config.bustModelPath = relPath; break;
-                case Slot.Hat: Config.hatModelPath = relPath; break;
-                case Slot.Hair: Config.hairModelPath = relPath; break;
-                case Slot.Eyes: Config.eyesModelPath = relPath; break;
+                case Slot.Body: Config.character.bodyModelPath = relPath; break;
+                case Slot.Top: Config.character.topModelPath = relPath; break;
+                case Slot.Gloves: Config.character.glovesModelPath = relPath; break;
+                case Slot.Bottoms: Config.character.bottomsModelPath = relPath; break;
+                case Slot.Socks: Config.character.socksModelPath = relPath; break;
+                case Slot.Shoes: Config.character.shoesModelPath = relPath; break;
+                case Slot.Bust: Config.character.bustModelPath = relPath; break;
+                case Slot.Hat: Config.character.hatModelPath = relPath; break;
+                case Slot.Hair: Config.character.hairModelPath = relPath; break;
+                case Slot.Eyes: Config.character.eyesModelPath = relPath; break;
             }
 
             // **Use the dictionary** to find which child name we should look for.
@@ -473,16 +476,16 @@ namespace rowemod.Mods
             // Set the user’s config so you can persist the material path
             switch (slot)
             {
-                case Slot.Body: Config.bodyMaterialPath = relativePath; break;
-                case Slot.Top: Config.topMaterialPath = relativePath; break;
-                case Slot.Gloves: Config.glovesMaterialPath = relativePath; break;
-                case Slot.Bottoms: Config.bottomsMaterialPath = relativePath; break;
-                case Slot.Socks: Config.socksMaterialPath = relativePath; break;
-                case Slot.Shoes: Config.shoesMaterialPath = relativePath; break;
-                case Slot.Bust: Config.bustMaterialPath = relativePath; break;
-                case Slot.Hat: Config.hatMaterialPath = relativePath; break;
-                case Slot.Hair: Config.hairMaterialPath = relativePath; break;
-                case Slot.Eyes: Config.eyesMaterialPath = relativePath; break;
+                case Slot.Body: Config.character.bodyMaterialPath = relativePath; break;
+                case Slot.Top: Config.character.topMaterialPath = relativePath; break;
+                case Slot.Gloves: Config.character.glovesMaterialPath = relativePath; break;
+                case Slot.Bottoms: Config.character.bottomsMaterialPath = relativePath; break;
+                case Slot.Socks: Config.character.socksMaterialPath = relativePath; break;
+                case Slot.Shoes: Config.character.shoesMaterialPath = relativePath; break;
+                case Slot.Bust: Config.character.bustMaterialPath = relativePath; break;
+                case Slot.Hat: Config.character.hatMaterialPath = relativePath; break;
+                case Slot.Hair: Config.character.hairMaterialPath = relativePath; break;
+                case Slot.Eyes: Config.character.eyesMaterialPath = relativePath; break;
             }
 
             var newBundle = AssetBundle.LoadFromFile(absolutePath);
@@ -528,37 +531,37 @@ namespace rowemod.Mods
             ClothingPreset preset = new ClothingPreset { Name = presetName };
 
             // Model paths -> relative
-            preset.ModelPaths[Slot.Body] = Config.MakeRelativePath(Config.bodyModelPath);
-            preset.ModelPaths[Slot.Top] = Config.MakeRelativePath(Config.topModelPath);
-            preset.ModelPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.bottomsModelPath);
-            preset.ModelPaths[Slot.Gloves] = Config.MakeRelativePath(Config.glovesModelPath);
-            preset.ModelPaths[Slot.Socks] = Config.MakeRelativePath(Config.socksModelPath);
-            preset.ModelPaths[Slot.Shoes] = Config.MakeRelativePath(Config.shoesModelPath);
-            preset.ModelPaths[Slot.Bust] = Config.MakeRelativePath(Config.bustModelPath);
-            preset.ModelPaths[Slot.Hat] = Config.MakeRelativePath(Config.hatModelPath);
-            preset.ModelPaths[Slot.Hair] = Config.MakeRelativePath(Config.hairModelPath);
-            preset.ModelPaths[Slot.Eyes] = Config.MakeRelativePath(Config.eyesModelPath);
+            preset.ModelPaths[Slot.Body] = Config.MakeRelativePath(Config.character.bodyModelPath);
+            preset.ModelPaths[Slot.Top] = Config.MakeRelativePath(Config.character.topModelPath);
+            preset.ModelPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.character.bottomsModelPath);
+            preset.ModelPaths[Slot.Gloves] = Config.MakeRelativePath(Config.character.glovesModelPath);
+            preset.ModelPaths[Slot.Socks] = Config.MakeRelativePath(Config.character.socksModelPath);
+            preset.ModelPaths[Slot.Shoes] = Config.MakeRelativePath(Config.character.shoesModelPath);
+            preset.ModelPaths[Slot.Bust] = Config.MakeRelativePath(Config.character.bustModelPath);
+            preset.ModelPaths[Slot.Hat] = Config.MakeRelativePath(Config.character.hatModelPath);
+            preset.ModelPaths[Slot.Hair] = Config.MakeRelativePath(Config.character.hairModelPath);
+            preset.ModelPaths[Slot.Eyes] = Config.MakeRelativePath(Config.character.eyesModelPath);
 
             
 
             // Material paths -> relative
-            preset.MaterialPaths[Slot.Body] = Config.MakeRelativePath(Config.bodyMaterialPath);
-            preset.MaterialPaths[Slot.Top] = Config.MakeRelativePath(Config.topMaterialPath);
-            preset.MaterialPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.bottomsMaterialPath);
-            preset.MaterialPaths[Slot.Gloves] = Config.MakeRelativePath(Config.glovesMaterialPath);
-            preset.MaterialPaths[Slot.Socks] = Config.MakeRelativePath(Config.socksMaterialPath);
-            preset.MaterialPaths[Slot.Shoes] = Config.MakeRelativePath(Config.shoesMaterialPath);
-            preset.MaterialPaths[Slot.Bust] = Config.MakeRelativePath(Config.bustMaterialPath);
-            preset.MaterialPaths[Slot.Hat] = Config.MakeRelativePath(Config.hatMaterialPath);
-            preset.MaterialPaths[Slot.Hair] = Config.MakeRelativePath(Config.hairMaterialPath);
-            preset.MaterialPaths[Slot.Eyes] = Config.MakeRelativePath(Config.eyesMaterialPath);
+            preset.MaterialPaths[Slot.Body] = Config.MakeRelativePath(Config.character.bodyMaterialPath);
+            preset.MaterialPaths[Slot.Top] = Config.MakeRelativePath(Config.character.topMaterialPath);
+            preset.MaterialPaths[Slot.Bottoms] = Config.MakeRelativePath(Config.character.bottomsMaterialPath);
+            preset.MaterialPaths[Slot.Gloves] = Config.MakeRelativePath(Config.character.glovesMaterialPath);
+            preset.MaterialPaths[Slot.Socks] = Config.MakeRelativePath(Config.character.socksMaterialPath);
+            preset.MaterialPaths[Slot.Shoes] = Config.MakeRelativePath(Config.character.shoesMaterialPath);
+            preset.MaterialPaths[Slot.Bust] = Config.MakeRelativePath(Config.character.bustMaterialPath);
+            preset.MaterialPaths[Slot.Hat] = Config.MakeRelativePath(Config.character.hatMaterialPath);
+            preset.MaterialPaths[Slot.Hair] = Config.MakeRelativePath(Config.character.hairMaterialPath);
+            preset.MaterialPaths[Slot.Eyes] = Config.MakeRelativePath(Config.character.eyesMaterialPath);
             
-            ClothingPreset.SavePreset(preset);
+            ClothingPreset.Save(preset);
         }
 
         public static void LoadPreset(string presetName)
         {
-            ClothingPreset preset = ClothingPreset.LoadPreset(presetName);
+            ClothingPreset preset = ClothingPreset.Load(presetName);
             if (preset == null) return;
 
             foreach (var kvp in preset.ModelPaths)
@@ -576,9 +579,14 @@ namespace rowemod.Mods
                     ReplaceMaterial(kvp.Key, Config.MakeAbsolutePath(kvp.Value));
                 }
             }
-
+            // Apply visibility
+            foreach (var kvp in preset.SlotVisibility)
+            {
+                _slotVisibility[kvp.Key] = kvp.Value;
+                ToggleSlotVisibility(kvp.Key, kvp.Value);
+            }
             Log.Msg($"Preset '{presetName}' loaded.");
-            Config.lastLoadedPresetCharacter = presetName;
+            Config.character.lastLoadedPresetCharacter = presetName;
             Config.Save();
         }
         public static void UpdateAllPresets()
@@ -588,7 +596,7 @@ namespace rowemod.Mods
             {
                 if (presetName == "DefaultPreset") continue;
 
-                ClothingPreset preset = ClothingPreset.LoadPreset(presetName);
+                ClothingPreset preset = ClothingPreset.Load(presetName);
                 if (preset == null) continue;
 
                 bool updated = false;
@@ -632,10 +640,40 @@ namespace rowemod.Mods
 
                 if (updated)
                 {
-                    ClothingPreset.SavePreset(preset);
+                    ClothingPreset.Save(preset);
                     Log.Error($"Preset '{preset.Name}' updated with missing slots.");
                 }
             }
+        }
+        public static GameObject GetSlotObject(Slot slot)
+        {
+            if (_slotObjects.TryGetValue(slot, out GameObject go) && go != null)
+                return go;
+
+            if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
+                return null;
+
+            string fullPath = SlotParentPath + equipSlotName;
+            if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
+                fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
+
+            Transform charRoot = physicsDrivenCharacter.transform;
+            Transform slotTransform = charRoot.Find(fullPath);
+
+            if (slotTransform == null)
+            {
+                // Try Skeleton fallback
+                fullPath = fullPath.Replace("Physics Skeleton", "Skeleton");
+                slotTransform = charRoot.Find(fullPath);
+            }
+
+            if (slotTransform == null)
+                return null;
+
+            GameObject slotObject = slotTransform.gameObject;
+            _slotObjects[slot] = slotObject;
+
+            return slotObject;
         }
 
         

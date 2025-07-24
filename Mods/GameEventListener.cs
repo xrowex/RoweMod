@@ -182,29 +182,28 @@ namespace rowemod.Mods
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Main.playableSceneLoaded = true;
-                Custom.UpdateAllPresets();
+                //Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
                 MotorVehicleUtils.FindMxVehicleSettings();
-                ToggleEmoteInput();
 
                 // Load a saved session marker if it exists
-                if (!string.IsNullOrEmpty(Config.customSessionMarker))
+                if (!string.IsNullOrEmpty(Config.misc.customSessionMarker))
                 {
                     if (Memory.sessionMarkers != null)
                     {
                         GameObject savedMarker = Memory.sessionMarkers
-                            .FirstOrDefault(marker => marker != null && marker.name == Config.customSessionMarker);
+                            .FirstOrDefault(marker => marker != null && marker.name == Config.misc.customSessionMarker);
 
                         if (savedMarker != null)
                         {
                             Memory.ReplaceSessionMarkerWithPrefab(savedMarker);
-                            Log.Msg($"Loaded saved session marker: {Config.customSessionMarker}");
+                            Log.Msg($"Loaded saved session marker: {Config.misc.customSessionMarker}");
                         }
                         else
                         {
                             Log.Warning(
-                                $"Saved session marker '{Config.customSessionMarker}' not found in loaded assets.");
+                                $"Saved session marker '{Config.misc.customSessionMarker}' not found in loaded assets.");
                         }
                     }
                     else

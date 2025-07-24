@@ -67,7 +67,6 @@ namespace rowemod.Utils
 
         // Character Settings
         public static CharacterData roweCharacterData;
-        public static CharacterDataDictionary roweCharacterDataDictionary;
         public static CharacterManager roweCharacterManager;
         public static VehicleController vehicleController;
         public static MotorVehicleSettings[] vehicleSettingsInstances;
@@ -177,9 +176,9 @@ namespace rowemod.Utils
                     vehicleController = rMbCharacter.GetComponentInChildren<VehicleController>();
                     if (vehicleController != null)
                     {
-                        vehicleController._airSpinAssist = bSpinAssist;
-                        vehicleController._mannyAngle = manualAngle;
-                        vehicleController._noseyAngle = noseManualAngle;
+                        vehicleController._airSpinAssist = Config.physics.spinAssist;;
+                        vehicleController._mannyAngle = Config.physics.manualAngle;
+                        vehicleController._noseyAngle = Config.physics.noseManualAngle;
                         Log.Msg("VehicleController component found.");
                     }
                     else
@@ -363,7 +362,7 @@ namespace rowemod.Utils
                     if (freeCamCollider != null)
                     {
                         Log.Msg($"FreeCam child SphereCollider found on: {freeCamCollider.gameObject.name}");
-                        freeCamCollider.enabled = !bDisableFreeCamCollider;
+                        freeCamCollider.enabled = !Config.misc.disableFreeCamCollider;
                     }
                     else
                     {
@@ -387,7 +386,7 @@ namespace rowemod.Utils
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
 
             //BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
-            Custom.LoadPreset(lastLoadedPresetCharacter);
+            Custom.LoadPreset(Config.character.lastLoadedPresetCharacter);
 
             Mods.Physics.Update();
             
@@ -475,7 +474,7 @@ namespace rowemod.Utils
                                 if (collider != null)
                                 {
                                     Log.Msg($"  - Collider on: {collider.gameObject.name} (Type: {collider.GetType().Name}, Enabled: {collider.enabled})");
-                                    collider.enabled = bDisableDroneCollider;
+                                    collider.enabled = Config.misc.disableDroneCollider;
                                     droneColliders.Add(collider);
                                 }
                             }
@@ -599,7 +598,7 @@ namespace rowemod.Utils
                                 Log.Msg($"Added Marker prefab: {asset.name}");
 
                                 // Check if this is the last saved marker
-                                if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
+                                if (!string.IsNullOrEmpty(Config.misc.customSessionMarker) && asset.name == Config.misc.customSessionMarker)
                                 {
                                     newSessionMarker = asset;
                                     Log.Msg($"Loaded custom session marker from config: {newSessionMarker.name}");
@@ -692,7 +691,7 @@ namespace rowemod.Utils
                                 Log.Msg($"Added Marker prefab from cache: {asset.name}");
 
                                 // Check if this is the last saved marker
-                                if (!string.IsNullOrEmpty(Config.customSessionMarker) && asset.name == Config.customSessionMarker)
+                                if (!string.IsNullOrEmpty(Config.misc.customSessionMarker) && asset.name == Config.misc.customSessionMarker)
                                 {
                                     newSessionMarker = asset;
                                     Log.Msg($"Loaded custom session marker from cache: {newSessionMarker.name}");
@@ -727,19 +726,19 @@ namespace rowemod.Utils
             }
 
             // Reapply session marker if needed
-            if (!string.IsNullOrEmpty(Config.customSessionMarker))
+            if (!string.IsNullOrEmpty(Config.misc.customSessionMarker))
             {
                 GameObject savedMarker = sessionMarkers
-                    .FirstOrDefault(marker => marker != null && marker.name == Config.customSessionMarker);
+                    .FirstOrDefault(marker => marker != null && marker.name == Config.misc.customSessionMarker);
 
                 if (savedMarker != null)
                 {
                     ReplaceSessionMarkerWithPrefab(savedMarker);
-                    Log.Msg($"Reapplied saved session marker: {Config.customSessionMarker}");
+                    Log.Msg($"Reapplied saved session marker: {Config.misc.customSessionMarker}");
                 }
                 else
                 {
-                    Log.Warning($"Saved session marker '{Config.customSessionMarker}' not found in cached assets.");
+                    Log.Warning($"Saved session marker '{Config.misc.customSessionMarker}' not found in cached assets.");
                 }
             }
         }
@@ -782,7 +781,7 @@ namespace rowemod.Utils
                         Log.Msg($"Replaced SessionMarker with prefab: {selectedMarker.name}");
 
                         // Save the selected marker name to config and persist it
-                        Config.customSessionMarker = selectedMarker.name;
+                        Config.misc.customSessionMarker = selectedMarker.name;
                         Config.Save();
                     }
                     else
@@ -887,7 +886,7 @@ namespace rowemod.Utils
                 lastEquippedBars = newBarsPrefab;
 
                 Log.Msg($"[Bars] Successfully switched bars to: {newBarsPrefab.name}");
-                Config.bikeMaterials.Remove("Bars");
+                Config.bike.bikeMaterials.Remove("Bars");
             }
             catch (System.Exception ex)
             {
@@ -978,7 +977,7 @@ namespace rowemod.Utils
                 lastEquippedFrame = newFramePrefab;
                 
                 Log.Msg($"[Frames] Successfully replaced frame with: {newFramePrefab.name}");
-                Config.bikeMaterials.Remove("Frame");
+                Config.bike.bikeMaterials.Remove("Frame");
             }
             catch (System.Exception ex)
             {

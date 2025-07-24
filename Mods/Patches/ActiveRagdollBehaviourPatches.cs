@@ -12,7 +12,7 @@ namespace rowemod.Mods.Patches
             public static bool Prefix(ActiveRagdollBehaviour __instance)
             {
                 if (Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current.enabled) return true;
-                return !Config.bNeverBail;
+                return !Config.misc.neverBail;
             }
         }
 
@@ -22,7 +22,7 @@ namespace rowemod.Mods.Patches
             public static bool Prefix(ActiveRagdollBehaviour __instance)
             {
                 if (Gamepad.current.buttonWest.wasPressedThisFrame && Gamepad.current.enabled) return true;
-                return !Config.bNeverBail;
+                return !Config.misc.neverBail;
             }
         }
 

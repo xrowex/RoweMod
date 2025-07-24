@@ -1,182 +1,186 @@
-﻿using rowemod.Utils;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using rowemod.Mods;
-using UnityEngine;
-using System;
-using System.IO;
+using rowemod.Utils;
 
 namespace rowemod
 {
+    public struct Physics
+    {
+        public bool disableLevelInAir;
+        public bool manualMovement;
+        public bool spinAssist;
+        public bool spinFlipFix;
+        public bool driftAbility;
+        public int lastVehicle;
+        public float gravity;
+        public float smallHopForce;
+        public float pumpForce;
+        public float steerDamp;
+        public float manualAngle;
+        public float noseManualAngle;
+        public float spinMultiplier;
+        public float sideHopPower;
+        public float vertAssistCorrectionStrength;
+        public float tireFrictionThreshold;
+    }
+
+    // Struct for character model and material paths
+    public struct CustomCharacter
+    {
+        public string lastLoadedPresetCharacter;
+        public string bodyModelPath;
+        public string bodyMaterialPath;
+        public string topModelPath;
+        public string topMaterialPath;
+        public string glovesModelPath;
+        public string glovesMaterialPath;
+        public string bottomsModelPath;
+        public string bottomsMaterialPath;
+        public string socksModelPath;
+        public string socksMaterialPath;
+        public string shoesModelPath;
+        public string shoesMaterialPath;
+        public string bustModelPath;
+        public string bustMaterialPath;
+        public string hatModelPath;
+        public string hatMaterialPath;
+        public string hairModelPath;
+        public string hairMaterialPath;
+        public string eyesModelPath;
+        public string eyesMaterialPath;
+    }
+
+    // Struct for bike customization variables
+    public struct CustomBike
+    {
+        public float barPitch;
+        public float barScale;
+        public float seatHeight;
+        public float seatPitch;
+        public float frontWheelRadius;
+        public float frontWheelWidth;
+        public float rearWheelRadius;
+        public float rearWheelWidth;
+        public float pegLength;
+        public Dictionary<string, string> bikeMaterials;
+        public string lastLoadedPresetBike;
+        public string lastLoadedFrame;
+        public string lastLoadedBars;
+        public string lastLoadedWheels;
+        public string lastLoadedStem;
+        public string lastLoadedFork;
+    }
+
+    // Struct for miscellaneous variables
+    public struct Misc
+    {
+        public bool neverBail;
+        public float droneMass;
+        public bool droneBodyToggle;
+        public bool droneEmitterToggle;
+        public float menuAccentR;
+        public float menuAccentG;
+        public float menuAccentB;
+        public bool disableEmoteOnBike;
+        public bool disableFreeCamCollider;
+        public bool disableDroneCollider;
+        public string customSessionMarker;
+    }
+
     public static class Config
     {
-        // Default values for resetting
-        private static readonly bool DefaultBBreakBike = false;
-        private static readonly bool DefaultBDisableLevelInAir = false;
-        private static readonly bool DefaultBManualMovement = false;
-        private static readonly bool DefaultAllowTrickLanders = false;
-        private static readonly bool DefaultAlwaysAllowFireTricks = false;
-        private static readonly bool DefaultSpinAssist = true;
-        private static readonly bool DefaultSpinFlipFix = false;
-        private static readonly bool DefaultDriftAbilityEnabled = true;
-        private static readonly int DefaultLastVehicle = 0;
-        private static readonly float DefaultGravity = 12.5f;
-        private static readonly float DefaultSmallHopForce = 4.2f;
-        //private static readonly float DefaultHopForce = 5.5f;
-        private static readonly float DefaultPumpForce = 1.5f;
-        private static readonly float DefaultSpinTorque = 1f;
-        private static readonly float DefaultPedalForce = 5f;
-        private static readonly float DefaultMaxSpeed = 9f;
-        private static readonly float DefaultSteerDamp = 5f;
-        private static readonly float DefaultBreakForce = 100_000f;
-        private static readonly float DefaultManualAngle = 30f;
-        private static readonly float DefaultNoseManualAngle = 30f;
-        private static readonly float DefaultQuickSpinMultiplier = 1.0f;
-        private static readonly float DefaultSideHopPower = 1.0f;
-        private static readonly float DefaultBarRotationAngle = 0f;
-        private static readonly float DefaultSeatHeight = 0.15f;
-        private static readonly float DefaultSeatRotationX = 330f;
-        private static readonly float DefaultPegLength = 1f; 
+        // Static instances of structs
+        public static Physics physics = new Physics
+        {
+            disableLevelInAir = false,
+            manualMovement = false,
+            spinAssist = true,
+            spinFlipFix = false,
+            driftAbility = true,
+            lastVehicle = 0,
+            gravity = 12.5f,
+            smallHopForce = 4.2f,
+            pumpForce = 1.5f,
+            steerDamp = 5.0f,
+            manualAngle = 30f,
+            noseManualAngle = 30f,
+            spinMultiplier = 1f,
+            sideHopPower = 1f,
+            vertAssistCorrectionStrength = 30f,
+            tireFrictionThreshold = 2f
+        };
 
-        private static readonly string DefaultBodyModelPath = null;
-        private static readonly string DefaultBodyMaterialPath = null;
-        private static readonly string DefaultTopModelPath = null;
-        private static readonly string DefaultTopMaterialPath = null;
-        private static readonly string DefaultGlovesModelPath = null;
-        private static readonly string DefaultGlovesMaterialPath = null;
-        private static readonly string DefaultBottomsModelPath = null;
-        private static readonly string DefaultBottomsMaterialPath = null;
-        private static readonly string DefaultSocksModelPath = null;
-        private static readonly string DefaultSocksMaterialPath = null;
-        private static readonly string DefaultShoesModelPath = null;
-        private static readonly string DefaultShoesMaterialPath = null;
-        private static readonly string DefaultBustModelPath = null;
-        private static readonly string DefaultBustMaterialPath = null;
-        private static readonly string DefaultHatModelPath = null;
-        private static readonly string DefaultHatMaterialPath = null;
-        private static readonly string DefaultHairModelPath = null;
-        private static readonly string DefaultHairMaterialPath = null;
-        private static readonly string DefaultEyesModelPath = null;
-        private static readonly string DefaultEyesMaterialPath = null;
+        public static CustomCharacter character = new CustomCharacter
+        {
+            lastLoadedPresetCharacter = "None",
+            bodyModelPath = null,
+            bodyMaterialPath = null,
+            topModelPath = null,
+            topMaterialPath = null,
+            glovesModelPath = null,
+            glovesMaterialPath = null,
+            bottomsModelPath = null,
+            bottomsMaterialPath = null,
+            socksModelPath = null,
+            socksMaterialPath = null,
+            shoesModelPath = null,
+            shoesMaterialPath = null,
+            bustModelPath = null,
+            bustMaterialPath = null,
+            hatModelPath = null,
+            hatMaterialPath = null,
+            hairModelPath = null,
+            hairMaterialPath = null,
+            eyesModelPath = null,
+            eyesMaterialPath = null
+        };
 
-        private static readonly float DefaultCamLerp = 6f;
-        private static readonly float DefaultFovValue = 60f;
-        private static readonly Vector3 DefaultCamOffset = new Vector3(-0.35f, 0.65f, -2.92f);
-        private static readonly bool DefaultFpvCamera = false;
+        public static CustomBike bike = new CustomBike
+        {
+            barPitch = 0f,
+            barScale = 1f,
+            seatHeight = 0.15f,
+            seatPitch = 330f,
+            frontWheelRadius = 1f,
+            frontWheelWidth = 1f,
+            rearWheelRadius = 1f,
+            rearWheelWidth = 1f,
+            pegLength = 0.5f,
+            bikeMaterials = new Dictionary<string, string>(),
+            lastLoadedPresetBike = "None",
+            lastLoadedBars = "None",
+            lastLoadedFrame = "None",
+            lastLoadedWheels = "None",
+            lastLoadedStem = "None",
+            lastLoadedFork = "None"
+        };
         
-        private static readonly float DefaultTpRecenterSpeed = 90f;
-        private static readonly Vector3 DefaultTpCameraOffset = new Vector3(0f, -0.1f, -3f);
-        private static readonly float DefaultTpCameraPitch = 15f;
-        private static readonly float DefaultTpFovValue = 60f;
 
-        private static readonly bool DefaultBNeverBail = false;
-        private static readonly bool DefaultBShowHUD = true;
-        private static readonly bool DefaultBDiscoMode = false;
-        private static readonly bool DefaultBVibration = true;
-        private static readonly float DefaultDroneMass = 10f;
-        private static readonly bool DefaultDroneBodyToggle = true;
-        private static readonly bool DefaultDroneEmitterToggle = true;
-        private static readonly float DefaultMenuAccentR = 0.2f;
-        private static readonly float DefaultMenuAccentG = 0.6f;
-        private static readonly float DefaultMenuAccentB = 1.0f;
-        private static readonly float DefaultSloMoTimer = 1.0f;
+        public static Misc misc = new Misc
+        {
+            neverBail = false,
+            droneMass = 10f,
+            droneBodyToggle = true,
+            droneEmitterToggle = true,
+            menuAccentR = 0.3f,
+            menuAccentG = 0.3f,
+            menuAccentB = 0.3f,
+            disableEmoteOnBike = false,
+            disableFreeCamCollider = false,
+            disableDroneCollider = false,
+            customSessionMarker = "None"
+        };
 
-        // Added for FreeCam collider toggle feature
-        private static readonly bool DefaultBDisableFreeCamCollider = false;
+        // Helper class for JSON deserialization
+        private class ConfigData
+        {
+            public Physics physicsData { get; set; }
+            public CustomCharacter customCharacterData { get; set; }
+            public CustomBike customBikeData { get; set; }
+            public Misc miscData { get; set; }
+        }
 
-        // Added for Drone collider toggle feature
-        private static readonly bool DefaultBDisableDroneCollider = false;
-
-        // Physics variables
-        public static bool bBreakBike = DefaultBBreakBike;
-        public static bool bDisableLevelInAir = DefaultBDisableLevelInAir;
-        public static bool bManualMovement = DefaultBManualMovement;
-        public static bool allowTrickLanders = DefaultAllowTrickLanders;
-        public static bool alwaysAllowFireTricks = DefaultAlwaysAllowFireTricks;
-        public static bool bSpinAssist = DefaultSpinAssist;
-        public static bool bSpinFlipFix = DefaultSpinFlipFix;
-        public static bool bDriftAbility = DefaultDriftAbilityEnabled;
-        public static int lastVehicle = DefaultLastVehicle;
-        public static float gravity = DefaultGravity;
-        public static float smallHopForce = DefaultSmallHopForce;
-        //public static float hopForce = DefaultHopForce;
-        public static float pumpForce = DefaultPumpForce;
-        public static float spinTorque = DefaultSpinTorque;
-        public static float pedalForce = DefaultPedalForce;
-        public static float maxSpeed = DefaultMaxSpeed;
-        public static float steerDamp = DefaultSteerDamp;
-        public static float breakForce = DefaultBreakForce;
-        public static float manualAngle = DefaultManualAngle;
-        public static float noseManualAngle = DefaultNoseManualAngle;
-        public static float quickSpinMultiplier = DefaultQuickSpinMultiplier;
-        public static float sideHopPower = DefaultSideHopPower;
-        public static float vertAssistCorrectionStrength = 30f; 
-
-        // Custom model and material paths
-        public static string bodyModelPath = DefaultBodyModelPath;
-        public static string bodyMaterialPath = DefaultBodyMaterialPath;
-        public static string topModelPath = DefaultTopModelPath;
-        public static string topMaterialPath = DefaultTopMaterialPath;
-        public static string glovesModelPath = DefaultGlovesModelPath;
-        public static string glovesMaterialPath = DefaultGlovesMaterialPath;
-        public static string bottomsModelPath = DefaultBottomsModelPath;
-        public static string bottomsMaterialPath = DefaultBottomsMaterialPath;
-        public static string socksModelPath = DefaultSocksModelPath;
-        public static string socksMaterialPath = DefaultSocksMaterialPath;
-        public static string shoesModelPath = DefaultShoesModelPath;
-        public static string shoesMaterialPath = DefaultShoesMaterialPath;
-        public static string bustModelPath = DefaultBustModelPath;
-        public static string bustMaterialPath = DefaultBustMaterialPath;
-        public static string hatModelPath = DefaultHatModelPath;
-        public static string hatMaterialPath = DefaultHatMaterialPath;
-        public static string hairModelPath = DefaultHairModelPath;
-        public static string hairMaterialPath = DefaultHairMaterialPath;
-        public static string eyesModelPath = DefaultEyesModelPath;
-        public static string eyesMaterialPath = DefaultEyesMaterialPath;
-
-        public static string customSessionMarker = "None";
-        public static float barRotationAngle = DefaultBarRotationAngle;
-        public static float seatHeight = DefaultSeatHeight;
-        public static float seatRotationX = DefaultSeatRotationX; 
-        public static float pegLength = DefaultPegLength; 
-        public static Dictionary<string, string> bikeMaterials = new Dictionary<string, string>();
-        public static string lastLoadedPresetCharacter = "None"; // Default to None
-        public static string lastLoadedPresetBike = "None"; // Default to None
-
-        // Camera variables
-        public static float camLerp = DefaultCamLerp;
-        public static float fovValue = DefaultFovValue;
-        public static Vector3 camOffset = DefaultCamOffset;
-        public static bool bFpvCamera = DefaultFpvCamera;
-        public static bool bUseOldCam = false;
-        
-        // Third-person camera
-        public static float tpRecenterSpeed = DefaultTpRecenterSpeed;
-        public static Vector3 tpCameraOffset = DefaultTpCameraOffset;
-        public static float tpCameraPitch = DefaultTpCameraPitch;
-        public static float tpFovValue = DefaultTpFovValue;
-
-        // Misc variables
-        public static bool bNeverBail = DefaultBNeverBail;
-        public static bool bShowHUD = DefaultBShowHUD;
-        public static bool bDiscoMode = DefaultBDiscoMode;
-        public static bool bVibration = DefaultBVibration;
-        public static float droneMass = DefaultDroneMass;
-        public static bool droneBodyToggle = DefaultDroneBodyToggle;
-        public static bool droneEmitterToggle = DefaultDroneEmitterToggle;
-        public static float menuAccentR = DefaultMenuAccentR;
-        public static float menuAccentG = DefaultMenuAccentG;
-        public static float menuAccentB = DefaultMenuAccentB;
-        public static float sloMoTimer = DefaultSloMoTimer;
-
-        public static bool disableEmoteOnBike = false;
-
-        // Added for FreeCam collider toggle feature
-        public static bool bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
-
-        // Added for Drone collider toggle feature
-        public static bool bDisableDroneCollider = DefaultBDisableDroneCollider;
-
-        public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "rowemod");
+        public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "RoweMod");
         public static string cfgFile { get; } = Path.Combine(modFolder, "cfg.json");
 
         // Save configuration to JSON file
@@ -184,82 +188,38 @@ namespace rowemod
         {
             try
             {
-                // Logging save operation
                 Log.Msg($"Saving config to {cfgFile}");
 
                 string contents = JsonConvert.SerializeObject(new
                 {
-                    bBreakBike,
-                    bDisableLevelInAir,
-                    bManualMovement,
-                    allowTrickLanders,
-                    alwaysAllowFireTricks,
-                    bSpinAssist,
-                    bSpinFlipFix,
-                    bDriftAbility,
-                    lastVehicle,
-                    gravity,
-                    smallHopForce,
-                    sideHopPower,
-                    pumpForce,
-                    spinTorque,
-                    pedalForce,
-                    maxSpeed,
-                    steerDamp,
-                    breakForce,
-                    manualAngle,
-                    noseManualAngle,
-                    bodyModelPath = SafeMakeRelativePath(bodyModelPath),
-                    bodyMaterialPath = SafeMakeRelativePath(bodyMaterialPath),
-                    topModelPath = SafeMakeRelativePath(topModelPath),
-                    topMaterialPath = SafeMakeRelativePath(topMaterialPath),
-                    glovesModelPath = SafeMakeRelativePath(glovesModelPath),
-                    glovesMaterialPath = SafeMakeRelativePath(glovesMaterialPath),
-                    bottomsModelPath = SafeMakeRelativePath(bottomsModelPath),
-                    bottomsMaterialPath = SafeMakeRelativePath(bottomsMaterialPath),
-                    socksModelPath = SafeMakeRelativePath(socksModelPath),
-                    socksMaterialPath = SafeMakeRelativePath(socksMaterialPath),
-                    shoesModelPath = SafeMakeRelativePath(shoesModelPath),
-                    shoesMaterialPath = SafeMakeRelativePath(shoesMaterialPath),
-                    bustModelPath = SafeMakeRelativePath(bustModelPath),
-                    bustMaterialPath = SafeMakeRelativePath(bustMaterialPath),
-                    hatModelPath = SafeMakeRelativePath(hatModelPath),
-                    hatMaterialPath = SafeMakeRelativePath(hatMaterialPath),
-                    hairModelPath = SafeMakeRelativePath(hairModelPath),
-                    hairMaterialPath = SafeMakeRelativePath(hairMaterialPath),
-                    eyesModelPath = SafeMakeRelativePath(eyesModelPath),
-                    eyesMaterialPath = SafeMakeRelativePath(eyesMaterialPath),
-                    lastLoadedPresetCharacter,
-                    lastLoadedPresetBike,
-                    camLerp,
-                    fovValue,
-                    camOffset = new { camOffset.x, camOffset.y, camOffset.z },
-                    bNeverBail,
-                    bShowHUD,
-                    bDiscoMode,
-                    bVibration,
-                    droneMass,
-                    droneBodyToggle,
-                    menuAccentR,
-                    menuAccentG,
-                    menuAccentB,
-                    sloMoTimer,
-                    bikeMaterials,
-                    quickSpinMultiplier,
-                    bFpvCamera,
-                    bUseOldCam,
-                    tpRecenterSpeed,
-                    tpCameraOffset = new { tpCameraOffset.x, tpCameraOffset.y, tpCameraOffset.z },
-                    tpCameraPitch,
-                    tpFovValue,
-                    customSessionMarker,
-                    droneEmitterToggle,
-                    barRotationAngle,
-                    seatHeight,
-                    seatRotationX,
-                    pegLength,
-                    bDisableFreeCamCollider,
-                    bDisableDroneCollider
+                    physicsData = physics,
+                    customCharacterData = new
+                    {
+                        character.lastLoadedPresetCharacter,
+                        bodyModelPath = SafeMakeRelativePath(character.bodyModelPath),
+                        bodyMaterialPath = SafeMakeRelativePath(character.bodyMaterialPath),
+                        topModelPath = SafeMakeRelativePath(character.topModelPath),
+                        topMaterialPath = SafeMakeRelativePath(character.topMaterialPath),
+                        glovesModelPath = SafeMakeRelativePath(character.glovesModelPath),
+                        glovesMaterialPath = SafeMakeRelativePath(character.glovesMaterialPath),
+                        bottomsModelPath = SafeMakeRelativePath(character.bottomsModelPath),
+                        bottomsMaterialPath = SafeMakeRelativePath(character.bottomsMaterialPath),
+                        socksModelPath = SafeMakeRelativePath(character.socksModelPath),
+                        socksMaterialPath = SafeMakeRelativePath(character.socksMaterialPath),
+                        shoesModelPath = SafeMakeRelativePath(character.shoesModelPath),
+                        shoesMaterialPath = SafeMakeRelativePath(character.shoesMaterialPath),
+                        bustModelPath = SafeMakeRelativePath(character.bustModelPath),
+                        bustMaterialPath = SafeMakeRelativePath(character.bustMaterialPath),
+                        hatModelPath = SafeMakeRelativePath(character.hatModelPath),
+                        hatMaterialPath = SafeMakeRelativePath(character.hatMaterialPath),
+                        hairModelPath = SafeMakeRelativePath(character.hairModelPath),
+                        hairMaterialPath = SafeMakeRelativePath(character.hairMaterialPath),
+                        eyesModelPath = SafeMakeRelativePath(character.eyesModelPath),
+                        eyesMaterialPath = SafeMakeRelativePath(character.eyesMaterialPath)
+                    },
+                    customBikeData = bike,
+                    miscData = misc
+
                 }, Formatting.Indented);
 
                 File.WriteAllText(cfgFile, contents);
@@ -274,175 +234,180 @@ namespace rowemod
         // Load configuration from JSON file
         public static void Load()
         {
-            // Check if config file exists
             if (!File.Exists(cfgFile))
             {
-                Log.Msg($"Config file not found at {cfgFile}. Using default values (menu accent: R={menuAccentR}, G={menuAccentG}, B={menuAccentB}).");
+                Log.Msg($"Config file not found at {cfgFile}. Creating one with default values...");
                 Save(); // Create new config with defaults
                 return;
             }
 
-            try
-            {
-                Log.Msg($"Loading config from {cfgFile}");
-                string jsonContent = File.ReadAllText(cfgFile);
-                JsonData jsonData = JsonConvert.DeserializeObject<JsonData>(jsonContent);
+            Log.Msg($"Loading config from {cfgFile}");
+            string jsonContent = File.ReadAllText(cfgFile);
+            ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
 
-                // Assign values from JSON, preserving defaults if fields are missing
-                bBreakBike = jsonData.bBreakBike;
-                bDisableLevelInAir = jsonData.bDisableLevelInAir;
-                bManualMovement = jsonData.bManualMovement;
-                allowTrickLanders = jsonData.allowTrickLanders;
-                alwaysAllowFireTricks = jsonData.alwaysAllowFireTricks;
-                bSpinAssist = jsonData.bSpinAssist;
-                bSpinFlipFix = jsonData.bSpinFlipFix;
-                bDriftAbility = jsonData.bDriftAbility;
-                lastVehicle = jsonData.lastVehicle;
-                gravity = jsonData.gravity;
-                smallHopForce = jsonData.smallHopForce;
-                sideHopPower = jsonData.sideHopPower;
-                pumpForce = jsonData.pumpForce;
-                spinTorque = jsonData.spinTorque;
-                pedalForce = jsonData.pedalForce;
-                maxSpeed = jsonData.maxSpeed;
-                steerDamp = jsonData.steerDamp;
-                breakForce = jsonData.breakForce;
-                manualAngle = jsonData.manualAngle;
-                noseManualAngle = jsonData.noseManualAngle;
-                bodyModelPath = MakeAbsolutePath(jsonData.bodyModelPath);
-                bodyMaterialPath = MakeAbsolutePath(jsonData.bodyMaterialPath);
-                topModelPath = MakeAbsolutePath(jsonData.topModelPath);
-                topMaterialPath = MakeAbsolutePath(jsonData.topMaterialPath);
-                glovesModelPath = MakeAbsolutePath(jsonData.glovesModelPath);
-                glovesMaterialPath = MakeAbsolutePath(jsonData.glovesMaterialPath);
-                bottomsModelPath = MakeAbsolutePath(jsonData.bottomsModelPath);
-                bottomsMaterialPath = MakeAbsolutePath(jsonData.bottomsMaterialPath);
-                socksModelPath = MakeAbsolutePath(jsonData.socksModelPath);
-                socksMaterialPath = MakeAbsolutePath(jsonData.socksMaterialPath);
-                shoesModelPath = MakeAbsolutePath(jsonData.shoesModelPath);
-                shoesMaterialPath = MakeAbsolutePath(jsonData.shoesMaterialPath);
-                bustModelPath = MakeAbsolutePath(jsonData.bustModelPath);
-                bustMaterialPath = MakeAbsolutePath(jsonData.bustMaterialPath);
-                hatModelPath = MakeAbsolutePath(jsonData.hatModelPath);
-                hatMaterialPath = MakeAbsolutePath(jsonData.hatMaterialPath);
-                hairModelPath = MakeAbsolutePath(jsonData.hairModelPath);
-                hairMaterialPath = MakeAbsolutePath(jsonData.hairMaterialPath);
-                eyesModelPath = MakeAbsolutePath(jsonData.eyesModelPath);
-                eyesMaterialPath = MakeAbsolutePath(jsonData.eyesMaterialPath);
-                lastLoadedPresetCharacter = jsonData.lastLoadedPresetCharacter;
-                lastLoadedPresetBike = jsonData.lastLoadedPresetBike;
-                camLerp = jsonData.camLerp;
-                fovValue = jsonData.fovValue;
-                camOffset = new Vector3(jsonData.camOffset.x, jsonData.camOffset.y, jsonData.camOffset.z);
-                bNeverBail = jsonData.bNeverBail;
-                bShowHUD = jsonData.bShowHUD;
-                bDiscoMode = jsonData.bDiscoMode;
-                bVibration = jsonData.bVibration;
-                droneMass = jsonData.droneMass;
-                droneBodyToggle = jsonData.droneBodyToggle;
-                menuAccentR = jsonData.menuAccentR;
-                menuAccentG = jsonData.menuAccentG;
-                menuAccentB = jsonData.menuAccentB;
-                sloMoTimer = jsonData.sloMoTimer;
-                bikeMaterials = jsonData.bikeMaterials ?? new Dictionary<string, string>();
-                quickSpinMultiplier = jsonData.quickSpinMultiplier;
-                bFpvCamera = jsonData.bFpvCamera;
-                bUseOldCam = jsonData.bUseOldCam;
-                tpRecenterSpeed = jsonData.tpRecenterSpeed;
-                tpCameraOffset = new Vector3(jsonData.tpCameraOffset.x, jsonData.tpCameraOffset.y, jsonData.tpCameraOffset.z);
-                tpCameraPitch = jsonData.tpCameraPitch;
-                tpFovValue = jsonData.tpFovValue;
-                customSessionMarker = jsonData.customSessionMarker;
-                droneEmitterToggle = jsonData.droneEmitterToggle;
-                barRotationAngle = jsonData.barRotationAngle;
-                seatHeight = jsonData.seatHeight;
-                seatRotationX = jsonData.seatRotationX;
-                pegLength = jsonData.pegLength;
-                bDisableFreeCamCollider = jsonData.bDisableFreeCamCollider;
-                bDisableDroneCollider = jsonData.bDisableDroneCollider;
-
-                Log.Msg($"Config loaded successfully. Menu accent: R={menuAccentR}, G={menuAccentG}, B={menuAccentB}");
-            }
-            catch (Exception ex)
+            // Assign values from JSON, preserving defaults if fields are missing
+            physics = jsonData.physicsData;
+            character = new CustomCharacter
             {
-                Log.Error($"Failed to load config: {ex.Message}. Using default values (menu accent: R={menuAccentR}, G={menuAccentG}, B={menuAccentB}).");
-                Save(); // Create new config with defaults
+                lastLoadedPresetCharacter = jsonData.customCharacterData.lastLoadedPresetCharacter,
+                bodyModelPath = MakeAbsolutePath(jsonData.customCharacterData.bodyModelPath),
+                bodyMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.bodyMaterialPath),
+                topModelPath = MakeAbsolutePath(jsonData.customCharacterData.topModelPath),
+                topMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.topMaterialPath),
+                glovesModelPath = MakeAbsolutePath(jsonData.customCharacterData.glovesModelPath),
+                glovesMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.glovesMaterialPath),
+                bottomsModelPath = MakeAbsolutePath(jsonData.customCharacterData.bottomsModelPath),
+                bottomsMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.bottomsMaterialPath),
+                socksModelPath = MakeAbsolutePath(jsonData.customCharacterData.socksModelPath),
+                socksMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.socksMaterialPath),
+                shoesModelPath = MakeAbsolutePath(jsonData.customCharacterData.shoesModelPath),
+                shoesMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.shoesMaterialPath),
+                bustModelPath = MakeAbsolutePath(jsonData.customCharacterData.bustModelPath),
+                bustMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.bustMaterialPath),
+                hatModelPath = MakeAbsolutePath(jsonData.customCharacterData.hatModelPath),
+                hatMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.hatMaterialPath),
+                hairModelPath = MakeAbsolutePath(jsonData.customCharacterData.hairModelPath),
+                hairMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.hairMaterialPath),
+                eyesModelPath = MakeAbsolutePath(jsonData.customCharacterData.eyesModelPath),
+                eyesMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.eyesMaterialPath)
+            };
+            bike = jsonData.customBikeData;
+            misc = jsonData.miscData;
+
+            Log.Msg($"Config loaded successfully.");
+        }
+        
+        public static void SetCharacterModelPath(Custom.Slot slot, string path)
+        {
+            switch (slot)
+            {
+                case Custom.Slot.Body: character.bodyModelPath = path; break;
+                case Custom.Slot.Top: character.topModelPath = path; break;
+                case Custom.Slot.Gloves: character.glovesModelPath = path; break;
+                case Custom.Slot.Bottoms: character.bottomsModelPath = path; break;
+                case Custom.Slot.Socks: character.socksModelPath = path; break;
+                case Custom.Slot.Shoes: character.shoesModelPath = path; break;
+                case Custom.Slot.Bust: character.bustModelPath = path; break;
+                case Custom.Slot.Hat: character.hatModelPath = path; break;
+                case Custom.Slot.Hair: character.hairModelPath = path; break;
+                case Custom.Slot.Eyes: character.eyesModelPath = path; break;
             }
         }
 
-        // Reset physics tab settings to defaults
+        public static void SetCharacterMaterialPath(Custom.Slot slot, string path)
+        {
+            switch (slot)
+            {
+                case Custom.Slot.Body: character.bodyMaterialPath = path; break;
+                case Custom.Slot.Top: character.topMaterialPath = path; break;
+                case Custom.Slot.Gloves: character.glovesMaterialPath = path; break;
+                case Custom.Slot.Bottoms: character.bottomsMaterialPath = path; break;
+                case Custom.Slot.Socks: character.socksMaterialPath = path; break;
+                case Custom.Slot.Shoes: character.shoesMaterialPath = path; break;
+                case Custom.Slot.Bust: character.bustMaterialPath = path; break;
+                case Custom.Slot.Hat: character.hatMaterialPath = path; break;
+                case Custom.Slot.Hair: character.hairMaterialPath = path; break;
+                case Custom.Slot.Eyes: character.eyesMaterialPath = path; break;
+            }
+        }
+// Reset physics tab settings to defaults
         public static void ResetPhysicsTab()
         {
-            bBreakBike = DefaultBBreakBike;
-            bDisableLevelInAir = DefaultBDisableLevelInAir;
-            bManualMovement = DefaultBManualMovement;
-            allowTrickLanders = DefaultAllowTrickLanders;
-            alwaysAllowFireTricks = DefaultAlwaysAllowFireTricks;
-            bSpinAssist = DefaultSpinAssist;
-            gravity = DefaultGravity;
-            smallHopForce = DefaultSmallHopForce;
-            //hopForce = DefaultHopForce;
-            pumpForce = DefaultPumpForce;
-            spinTorque = DefaultSpinTorque;
-            steerDamp = DefaultSteerDamp;
-            breakForce = DefaultBreakForce;
-            manualAngle = DefaultManualAngle;
-            noseManualAngle = DefaultNoseManualAngle;
-            quickSpinMultiplier = DefaultQuickSpinMultiplier;
+            physics = new Physics
+            {
+                disableLevelInAir = false,
+                manualMovement = false,
+                spinAssist = true,
+                spinFlipFix = false,
+                driftAbility = true,
+                lastVehicle = 0,
+                gravity = 12.5f,
+                smallHopForce = 4.2f,
+                pumpForce = 1.5f,
+                steerDamp = 5.0f,
+                manualAngle = 30f,
+                noseManualAngle = 30f,
+                spinMultiplier = 1f,
+                sideHopPower = 1f,
+                vertAssistCorrectionStrength = 30f,
+                tireFrictionThreshold = 2f
+            };
         }
 
         // Reset character tab settings to defaults
+        // Reset character tab settings to defaults
         public static void ResetCharacterTab()
         {
-            bodyModelPath = DefaultBodyModelPath;
-            bodyMaterialPath = DefaultBodyMaterialPath;
-            topModelPath = DefaultTopModelPath;
-            topMaterialPath = DefaultTopMaterialPath;
-            glovesModelPath = DefaultGlovesModelPath;
-            glovesMaterialPath = DefaultGlovesMaterialPath;
-            bottomsModelPath = DefaultBottomsModelPath;
-            bottomsMaterialPath = DefaultBottomsMaterialPath;
-            socksModelPath = DefaultSocksModelPath;
-            socksMaterialPath = DefaultSocksMaterialPath;
-            shoesModelPath = DefaultShoesModelPath;
-            shoesMaterialPath = DefaultShoesMaterialPath;
-            bustModelPath = DefaultBustModelPath;
-            bustMaterialPath = DefaultBustMaterialPath;
-            hatModelPath = DefaultHatModelPath;
-            hatMaterialPath = DefaultHatMaterialPath;
-            hairModelPath = DefaultHairModelPath;
-            hairMaterialPath = DefaultHairMaterialPath;
-            eyesModelPath = DefaultEyesModelPath;
-            eyesMaterialPath = DefaultEyesMaterialPath;
-            RoweCustomCharacter.rCharacterManager.ChangeData(RoweCustomCharacter.defaultCharacterData);
+            character = new CustomCharacter
+            {
+                lastLoadedPresetCharacter = "None",
+                bodyModelPath = null,
+                bodyMaterialPath = null,
+                topModelPath = null,
+                topMaterialPath = null,
+                glovesModelPath = null,
+                glovesMaterialPath = null,
+                bottomsModelPath = null,
+                bottomsMaterialPath = null,
+                socksModelPath = null,
+                socksMaterialPath = null,
+                shoesModelPath = null,
+                shoesMaterialPath = null,
+                bustModelPath = null,
+                bustMaterialPath = null,
+                hatModelPath = null,
+                hatMaterialPath = null,
+                hairModelPath = null,
+                hairMaterialPath = null,
+                eyesModelPath = null,
+                eyesMaterialPath = null
+            };
         }
 
         // Reset bike tab settings to defaults
         public static void ResetBikeTab()
         {
-            // No settings to reset currently
+            bike.barPitch = 0f;
+            bike.barScale = 1f;
+            bike.seatHeight = 0.15f;
+            bike.seatPitch = 330f;
+            bike.frontWheelRadius = 1f;
+            bike.frontWheelWidth = 1f;
+            bike.rearWheelRadius = 1f;
+            bike.rearWheelWidth = 1f;
+            bike.pegLength = 0.5f;
+            bike.lastLoadedPresetBike = "None";
+            bike.lastLoadedFrame = "None";
+            bike.lastLoadedBars = "None";
+            bike.lastLoadedWheels = "None";
+            bike.lastLoadedStem = "None";
+            bike.lastLoadedFork = "None";
+            bike.bikeMaterials = new Dictionary<string, string>();
         }
 
         // Reset bike materials tab settings to defaults
         public static void ResetBikeMaterialsTab()
         {
-            bikeMaterials.Clear();
+            bike.bikeMaterials.Clear();
         }
 
         // Reset misc tab settings to defaults
         public static void ResetMiscTab()
         {
-            bNeverBail = DefaultBNeverBail;
-            bShowHUD = DefaultBShowHUD;
-            bDiscoMode = DefaultBDiscoMode;
-            bVibration = DefaultBVibration;
-            droneMass = DefaultDroneMass;
-            sloMoTimer = DefaultSloMoTimer;
-            menuAccentR = DefaultMenuAccentR;
-            menuAccentG = DefaultMenuAccentG;
-            menuAccentB = DefaultMenuAccentB;
-            bDisableFreeCamCollider = DefaultBDisableFreeCamCollider;
-            bDisableDroneCollider = DefaultBDisableDroneCollider;
+            misc = new Misc
+            {
+                neverBail = false,
+                droneMass = 10f,
+                droneBodyToggle = true,
+                droneEmitterToggle = true,
+                menuAccentR = 0.3f,
+                menuAccentG = 0.3f,
+                menuAccentB = 0.3f,
+                disableEmoteOnBike = false,
+                disableFreeCamCollider = false,
+                disableDroneCollider = false,
+                customSessionMarker = "None"
+            };
         }
 
         // Convert absolute path to relative path for storage
@@ -486,7 +451,6 @@ namespace rowemod
             {
                 return path;
             }
-
             return MakeRelativePath(path);
         }
     }

@@ -384,7 +384,7 @@ namespace rowemod.Mods
         public static void ApplySavedMaterialsOnSceneLoad()
         {
 
-            foreach (var category in Config.bikeMaterials)
+            foreach (var category in Config.bike.bikeMaterials)
             {
                 if (!categories.ContainsKey(category.Key))
                 {
@@ -497,14 +497,14 @@ namespace rowemod.Mods
             }
 
             scrollOffset = 0;
-            Config.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
+            Config.bike.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
             Config.Save();
         }
         public static void SaveBikeMaterialPreset(string presetName)
         {
             BikeMaterialPreset preset = new BikeMaterialPreset { name = presetName };
 
-            foreach (var material in Config.bikeMaterials)
+            foreach (var material in Config.bike.bikeMaterials)
             {
                 preset.Materials[material.Key] = material.Value;
             }

@@ -11,14 +11,14 @@ using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "1.9.8", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.0.2", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "1.9.8";
+        public const string ModVersion = "2.0.2";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
@@ -145,11 +145,11 @@ namespace rowemod
         {
             yield return new WaitForSeconds(3f); // Give it time to fully load scene stuff
 
-            if (!string.IsNullOrEmpty(lastLoadedPresetCharacter) && Memory.rMbCharacter != null)
+            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) && Memory.rMbCharacter != null)
             {
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");
                 Memory.FindObjects(Memory.rMbCharacter); // Refresh all references
-                Custom.LoadPreset(lastLoadedPresetCharacter); // Now it should work
+                Custom.LoadPreset(Config.character.lastLoadedPresetCharacter); // Now it should work
             }
             else
             {

@@ -1,5 +1,6 @@
 ﻿using Il2CppMashBox.Core.Runtime.Input;
 using MelonLoader;
+using MelonLoader;
 using rowemod.Utils;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -10,7 +11,7 @@ namespace rowemod.Mods
 {
     public static class Misc
     {
-        private static bool lastDisableDroneCollider = bDisableDroneCollider;
+        private static bool lastDisableDroneCollider = Config.misc.disableDroneCollider;
 
         public static void ToggleEmoteInput()
         {
@@ -29,18 +30,18 @@ namespace rowemod.Mods
         public static void Update()
         {
             // Detect change in bDisableDroneCollider
-            if (lastDisableDroneCollider != bDisableDroneCollider)
+            if (lastDisableDroneCollider != misc.disableDroneCollider)
             {
                 Log.Msg(
-                    $"Detected bDisableDroneCollider change from {lastDisableDroneCollider} to {bDisableDroneCollider}. Refreshing drone components.");
+                    $"Detected bDisableDroneCollider change from {lastDisableDroneCollider} to {misc.disableDroneCollider}. Refreshing drone components.");
                 Memory.RefreshDroneComponents();
-                lastDisableDroneCollider = bDisableDroneCollider;
+                lastDisableDroneCollider = misc.disableDroneCollider;
             }
 
             // Update Drone Rigidbody Mass
             if (droneRb != null)
             {
-                droneRb.mass = droneMass;
+                droneRb.mass = misc.droneMass;
             }
 
             // Update Drone Mesh Renderers (Hide Body)
@@ -50,7 +51,7 @@ namespace rowemod.Mods
                 {
                     if (renderer != null)
                     {
-                        renderer.enabled = droneBodyToggle;
+                        renderer.enabled = misc.droneBodyToggle;
                     }
                 }
             }
@@ -62,7 +63,7 @@ namespace rowemod.Mods
                 {
                     if (emitter != null)
                     {
-                        emitter.enabled = droneEmitterToggle;
+                        emitter.enabled = misc.droneEmitterToggle;
                     }
                 }
             }
@@ -74,7 +75,7 @@ namespace rowemod.Mods
                 {
                     if (collider != null)
                     {
-                        collider.enabled = bDisableDroneCollider;
+                        collider.enabled = misc.disableDroneCollider;
                     }
                 }
             }
@@ -82,7 +83,7 @@ namespace rowemod.Mods
             // Update FreeCam Collider
             if (freeCamCollider != null)
             {
-                freeCamCollider.enabled = !bDisableFreeCamCollider;
+                freeCamCollider.enabled = !misc.disableFreeCamCollider;
             }
 
         }
