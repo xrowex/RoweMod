@@ -2,6 +2,7 @@ using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using rowemod.Utils;
 using UnityEngine;
 using System.Linq;
+using Il2CppMashBox.Addons.ContentManagment;
 using Il2CppMashBox.BMX_Physics_Development;
 
 namespace rowemod.Mods
@@ -12,7 +13,26 @@ namespace rowemod.Mods
         public static Transform seatAnchor;
         public static Transform barsAnchor;
         public static Transform[] pegsAnchor; // Fix: Correctly declare pegsAnchor as an array of Transform  
+        private static float lastBarPitch, lastBarScale, lastSeatHeight, lastSeatPitch, lastPegLength;
+        public enum PartTypeTab
+        {
+            Bars,
+            Frame
+        }
 
+        private static PartTypeTab currentPartTab = PartTypeTab.Bars;
+
+        private static int selectedBarIndex = 0;
+        public static bool barListInitialized = false;
+        private static string[] barNames;
+        private static List<GameObject> barPrefabs = new();
+        private static Vector2 barScrollPos = Vector2.zero;
+
+        private static int selectedFrameIndex = 0;
+        public static bool frameListInitialized = false;
+        private static string[] frameNames;
+        private static List<GameObject> framePrefabs = new();
+        private static Vector2 frameScrollPos = Vector2.zero;
         public static void FindParts()
         {
             Log.Msg("FindParts called.");
@@ -81,8 +101,8 @@ namespace rowemod.Mods
         }
 
         private static float barRotationAngle = 0f;
-        private static float seatHeight = 0.15f;      // Y position  
-        private static float seatRotationX = 330f;
+        private static float seatHeight = 0.1f;      // Y position  
+        private static float seatRotationX = 350f;
         private static float pegLength = 1.0f;
         public static void DrawPartTweaker()
         {
@@ -138,7 +158,7 @@ namespace rowemod.Mods
             {
                 GUILayout.Space(10);
                 GUILayout.Label("Peg Length", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Length", ref pegLength, 1f, 3f);
+                Menu.ModernSlider("Length", ref pegLength, 0f, 3f);
                 foreach(var peg in pegsAnchor)
                 {
                     peg.localScale = new Vector3(pegLength, peg.localScale.y, peg.localScale.z);
@@ -146,5 +166,240 @@ namespace rowemod.Mods
                 Config.bike.pegLength = pegLength;
             }
         }
+        
+        public static void UpdatePartTransforms()
+        {
+            Log.Msg("Updating part transforms...");
+            if (Memory.customizableEntity == null) return;
+
+            if (barsAnchor != null)
+            {
+                barsAnchor.localRotation = Quaternion.Euler(Config.bike.barPitch, 0f, 0f);
+                if (Config.bike.barScale <= 0)
+                    barsAnchor.localScale = Vector3.one;
+                else
+                    barsAnchor.localScale = Vector3.one * Config.bike.barScale;
+            }
+            else
+            {
+                Log.Error("Skipping Bars_Anchor updates: barsAnchor is null.");
+            }
+
+            if (seatPostAnchor != null)
+            {
+                // Move the seat post up/down  
+                seatPostAnchor.localPosition = new Vector3(
+                    seatPostAnchor.localPosition.x,
+                    Config.bike.seatHeight,
+                    seatPostAnchor.localPosition.z
+                );
+
+                if (seatAnchor != null)
+                {
+                    // Update seat tilt  
+                    Quaternion newRotation = Quaternion.Euler(Config.bike.seatPitch % 360f, 0f, 0f);
+                    seatAnchor.localRotation = newRotation;
+                }
+                else
+                {
+                    Log.Error("Skipping Seat_Anchor updates: seatAnchor is null.");
+                }
+            }
+            
+
+            if (pegsAnchor != null)
+            {
+                foreach (var peg in pegsAnchor)
+                {
+                    peg.localScale = new Vector3(Config.bike.pegLength, peg.localScale.y, peg.localScale.z);
+                }
+            }
+            
+            // Update cached values
+            lastBarPitch = Config.bike.barPitch;
+            lastBarScale = Config.bike.barScale;
+            lastSeatHeight = Config.bike.seatHeight;
+            lastSeatPitch = Config.bike.seatPitch;
+            lastPegLength = Config.bike.pegLength;
+
+            Memory.customizableEntity.RelaySnap();
+        }
+        public static System.Collections.IEnumerator DelayedUpdatePartTransforms()
+        {
+            yield return new WaitForSeconds(4f);
+            FindParts();
+            UpdatePartTransforms();
+        }
+        
+        ///CUSTOM PART LOADING AND LAYOUT
+        private static void DrawPartTab(string label, List<GameObject> prefabs, string[] names, ref int selectedIndex, ref Vector2 scrollPos, Action<GameObject> onSelect)
+        {
+            GUILayout.Label(label, Menu.labelStyle);
+    
+            if (names == null || names.Length == 0)
+            {
+                GUILayout.Label("No prefabs found.", Menu.labelStyle);
+                return;
+            }
+
+            scrollPos = GUILayout.BeginScrollView(scrollPos, GUILayout.Height(200));
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (GUILayout.Button($"<b>{names[i]}</b>", Menu.highQualityButtonStyle))
+                {
+                    selectedIndex = i;
+                    GameObject selected = prefabs[i];
+                    onSelect?.Invoke(selected);
+                }
+            }
+            GUILayout.EndScrollView();
+        }
+        public static void DrawPartSelectorUI()
+        {
+            DrawPartTypeTabs();
+
+            switch (currentPartTab)
+            {
+                case PartTypeTab.Bars:
+                    EnsureBarsLoaded();
+                    DrawPartTab("Select Bars:", barPrefabs, barNames, ref selectedBarIndex, ref barScrollPos, TryReplaceBars);
+                    break;
+
+                case PartTypeTab.Frame:
+                    EnsureFramesLoaded();
+                    DrawPartTab("Select Frame:", framePrefabs, frameNames, ref selectedFrameIndex, ref frameScrollPos, TryReplaceFrame);
+                    break;
+
+            }
+        }
+        private static void EnsureBarsLoaded()
+        {
+            if (barListInitialized && barPrefabs.Count > 0)
+                return;
+
+            barPrefabs = Memory.prefabList
+                .Where(p => p != null && p.name.ToLower().StartsWith("bars"))
+                .ToList();
+
+            barNames = barPrefabs.Select(p =>
+            {
+                string bundleName = Memory.prefabToBundleMap.TryGetValue(p, out var bundle) ? bundle : "UnknownBundle";
+                return $"{p.name} ({bundleName})";
+            }).ToArray();
+
+            barListInitialized = true;
+            Log.Msg($"[Bars] Loaded {barPrefabs.Count} bar prefabs.");
+        }
+
+        public static void TryReplaceBars(GameObject prefab)
+        {
+            var slot = Memory.rMbCharacter.transform.FindDeepChild("Bars")?.GetComponent<EquipSlotVehicle>();
+            if (slot == null)
+            {
+                Log.Warning("[Bars] Could not find Bars EquipSlot.");
+                return;
+            }
+
+            Log.Msg($"[Bars] Instantiating: {prefab.name}");
+            slot.Equip(prefab);
+
+            Memory.lastEquippedBars = prefab;
+            Config.bike.lastLoadedBars = prefab.name;
+            Config.bike.bikeMaterials.Remove("Bars");
+            Config.Save();
+
+            FindParts();
+            UpdatePartTransforms();
+        }
+        private static void EnsureFramesLoaded()
+        {
+            if (frameListInitialized && framePrefabs.Count > 0)
+                return;
+
+            framePrefabs = Memory.prefabList
+                .Where(p => p != null && p.name.ToLower().StartsWith("frame"))
+                .ToList();
+
+            frameNames = framePrefabs.Select(p => p.name).ToArray();
+            frameListInitialized = true;
+            Log.Msg($"[Frame] Loaded {framePrefabs.Count} frame prefabs.");
+        }
+
+        public static void TryReplaceFrame(GameObject prefab)
+        {
+            var slot = Memory.rMbCharacter.transform
+                .GetComponentsInChildren<Transform>(true)
+                .FirstOrDefault(t => t.name.ToLower() == "frame" && t.GetComponent<EquipSlotVehicle>() != null)?
+                .GetComponent<EquipSlotVehicle>();
+
+            if (slot == null)
+            {
+                Log.Warning("[Frame] Could not find Frame EquipSlot.");
+                return;
+            }
+
+            Log.Msg($"[Frame] Instantiating: {prefab.name}");
+            slot.Equip(prefab);
+
+            Memory.lastEquippedFrame = prefab;
+            Config.bike.lastLoadedFrame = prefab.name;
+            Config.bike.bikeMaterials.Remove("Frame");
+            Config.Save();
+
+            FindParts();
+            UpdatePartTransforms();
+        }
+        public static void LoadSavedBars()
+        {
+            if (!string.IsNullOrEmpty(Config.bike.lastLoadedBars))
+            {
+                var savedBar = Memory.prefabList.FirstOrDefault(p => p != null && p.name == Config.bike.lastLoadedBars);
+                if (savedBar != null)
+                {
+                    TryReplaceBars(savedBar);
+                    Memory.lastEquippedBars = savedBar;
+                    Log.Msg($"[Bars] Loaded saved bar: {savedBar.name}");
+                }
+                else
+                {
+                    Log.Warning($"[Bars] Could not find saved bar: {Config.bike.lastLoadedBars}");
+                }
+            }
+        }
+
+        public static void LoadSavedFrame()
+        {
+            if (!string.IsNullOrEmpty(Config.bike.lastLoadedFrame))
+            {
+                var savedFrame = Memory.prefabList.FirstOrDefault(p => p != null && p.name == Config.bike.lastLoadedFrame);
+                if (savedFrame != null)
+                {
+                    TryReplaceFrame(savedFrame);
+                    Memory.lastEquippedFrame = savedFrame;
+                    Log.Msg($"[Frames] Loaded saved frame: {savedFrame.name}");
+                }
+                else
+                {
+                    Log.Warning($"[Frames] Could not find saved frame: {Config.bike.lastLoadedFrame}");
+                }
+            }
+        }
+        private static void DrawPartTypeTabs()
+        {
+            GUILayout.BeginHorizontal();
+
+            foreach (PartTypeTab tab in Enum.GetValues(typeof(PartTypeTab)))
+            {
+                GUIStyle style = currentPartTab == tab ? Menu.activeTabButtonStyle : Menu.highQualityButtonStyle;
+                if (GUILayout.Button($"<b>{tab}</b>", style, GUILayout.Height(30), GUILayout.Width(100)))
+                {
+                    currentPartTab = tab;
+                }
+            }
+
+            GUILayout.EndHorizontal();
+        }
+        
+        
     }
 }

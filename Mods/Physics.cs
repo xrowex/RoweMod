@@ -62,6 +62,8 @@ namespace rowemod.Mods
                 {
                     vehicleInstance.JumpSettings.JumpVelocity[0] = physics.smallHopForce;
                     vehicleInstance.JumpSettings.JumpVelocity[1] = physics.smallHopForce;
+                    vehicleInstance.EngineSettings._forceFactor = physics.bmxForceFactor;
+                    vehicleInstance.EngineSettings._maxSpeed = physics.bmxMaxSpeed;
                     //vehicleInstance.JumpSettings.JumpVelocity[2] = hopForce;
                 }
                 catch (Exception ex)

@@ -10,7 +10,7 @@ namespace rowemod.Mods
         public string name;
         public Dictionary<string, string> Materials = new Dictionary<string, string>();
 
-        public static string presetDirectory => Path.Combine(MelonEnvironment.ModsDirectory, "rowemod", "BikePresets");
+        public static string presetDirectory => Path.Combine(MelonEnvironment.ModsDirectory, "RoweMod", "BikePresets");
 
         public static void SavePreset(BikeMaterialPreset preset)
         {

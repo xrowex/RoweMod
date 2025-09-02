@@ -11,14 +11,14 @@ using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.0.2", "rowe & nolew & holo", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.0.3", "rowe & nolew & holo", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "2.0.2";
+        public const string ModVersion = "2.0.3";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
@@ -28,7 +28,6 @@ namespace rowemod
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
-           
         }
 
         public override void OnLateInitializeMelon()
@@ -136,7 +135,10 @@ namespace rowemod
 
             // Reload assets from cached bundles
             Memory.ReloadAssetsFromCachedBundles();
-
+            
+            //Initialize bike materials
+            BikeMaterialsLoader.Initialize();
+            
             // Re-initialize ObjectDropper on scene load
             ObjectDropper.Initialize();
         }

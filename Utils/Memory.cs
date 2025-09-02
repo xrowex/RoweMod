@@ -6,6 +6,7 @@ using Il2CppMashBox.Addons.ReplaySystem;
 using Il2CppMashBox.Addons.SlowMotionSystem;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
+using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System;
 using Il2CppMashBox.Character;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Audio;
@@ -535,13 +536,14 @@ namespace rowemod.Utils
         public static List<AssetBundle> loadedBundles = new List<AssetBundle>();
         public static GameObject roweSpokes, roweBars;
         public static GameObject newSessionMarker;
-        private static Dictionary<GameObject, string> prefabToBundleMap = new();
+        public static Dictionary<GameObject, string> prefabToBundleMap = new();
 
         public static void LoadAllAssetBundles()
         {
             Log.Msg($"Looking for AssetBundles in: {bundlesFolderPath}");
 
-            string[] bundleFiles = Directory.GetFiles(bundlesFolderPath);
+            string[] bundleFiles = Directory.GetFiles(bundlesFolderPath, "*", SearchOption.AllDirectories);
+
             if (bundleFiles.Length == 0)
             {
                 Log.Msg("No files found in the mods folder.");
@@ -592,7 +594,7 @@ namespace rowemod.Utils
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
 
                             // Handle session markers
-                            if (asset.name.IndexOf("marker", StringComparison.OrdinalIgnoreCase) >= 0 && !fileName.StartsWith("bars"))
+                            if (asset.name.ToLower().StartsWith("marker"))
                             {
                                 sessionMarkers.Add(asset);
                                 Log.Msg($"Added Marker prefab: {asset.name}");
@@ -606,7 +608,7 @@ namespace rowemod.Utils
                             }
 
                             // Handle dropper prefabs
-                            if (fileName.StartsWith("dropper_"))
+                            if (fileName.ToLower().StartsWith("dropper_"))
                             {
                                 string displayName = fileName.Substring("dropper_".Length);
                                 if (!string.IsNullOrEmpty(displayName))
@@ -649,8 +651,8 @@ namespace rowemod.Utils
             prefabList.Clear();
             sessionMarkers.Clear();
             dropperPrefabs.Clear();
-            barListInitialized = false;
-            frameListInitialized = false;
+            PartTweaker.barListInitialized = false;
+            PartTweaker.frameListInitialized = false;
             prefabNames.Clear();
             dropperPrefabNames.Clear();
 
@@ -685,7 +687,7 @@ namespace rowemod.Utils
                             }
 
                             // Handle session markers
-                            if (asset.name.StartsWith("Marker"))
+                            if (asset.name.ToLower().StartsWith("marker"))
                             {
                                 sessionMarkers.Add(asset);
                                 Log.Msg($"Added Marker prefab from cache: {asset.name}");
@@ -796,195 +798,6 @@ namespace rowemod.Utils
             }
         }
 
-        private static int selectedBarIndex = 0;
-        private static bool barListInitialized = false;
-        private static string[] barNames;
-        private static List<GameObject> barPrefabs = new();
-        private static Vector2 barScrollPos = Vector2.zero;
-
-        public static void DrawBmxBarsSelector()
-        {
-            // Initialize bar prefab list if not already done or if empty
-            if (!barListInitialized || barPrefabs.Count == 0)
-            {
-                Log.Msg("[Bars] (Re)building bar prefab list...");
-                barPrefabs = prefabList
-                    .Where(p => p != null && p.name.ToLower().StartsWith("bars"))
-                    .ToList();
-
-                barNames = barPrefabs.Select(p =>
-                {
-                    string bundleName = prefabToBundleMap.TryGetValue(p, out var bundle) ? bundle : "UnknownBundle";
-                    return $"{p.name} ({bundleName})";
-                }).ToArray();
-                barListInitialized = true;
-
-                Log.Msg($"[Bars] Found {barPrefabs.Count} bar prefabs.");
-            }
-
-            // Draw header label
-            GUILayout.Label("Select BMX Bars:", Menu.labelStyle);
-
-            // Draw buttons for each bar prefab using Menu.highQualityButtonStyle
-            if (barNames == null || barNames.Length == 0)
-            {
-                GUILayout.Label("No bar prefabs found.", Menu.labelStyle);
-                Log.Warning("[Bars] barNames array is empty.");
-                return;
-            }
-
-            // Create a vertical list of buttons
-            foreach (var barName in barNames)
-            {
-                if (GUILayout.Button($"<b>{barName}</b>", Menu.highQualityButtonStyle))
-                {
-                    // Find the index of the selected bar
-                    selectedBarIndex = Array.IndexOf(barNames, barName);
-                    if (selectedBarIndex >= 0 && selectedBarIndex < barPrefabs.Count)
-                    {
-                        // Replace bars and update parts
-                        TryReplaceBars(barPrefabs[selectedBarIndex]);
-                        PartTweaker.FindParts();
-                        Log.Msg($"[Bars] Selected bar index: {selectedBarIndex}, name: {barName}");
-                    }
-                    else
-                    {
-                        Log.Error($"[Bars] Invalid selectedBarIndex: {selectedBarIndex} for bar: {barName}");
-                    }
-                }
-            }
-
-            GUILayout.Space(10); // Add spacing after buttons for consistency
-        }
-
-        public static void TryReplaceBars(GameObject newBarsPrefab)
-        {
-            try
-            {
-                if (Memory.rMbCharacter == null)
-                {
-                    Log.Error("[Bars] rMbCharacter is null.");
-                    return;
-                }
-
-                Log.Msg("[Bars] Searching for Bars EquipSlot...");
-
-                var frontBars = rMbCharacter.transform
-                    .FindDeepChild("Bars")
-                    ?.gameObject.GetComponent<EquipSlotVehicle>();
-
-                if (frontBars == null)
-                {
-                    Log.Warning("[Bars] Couldn't find current Bars EquipSlot.");
-                    return;
-                }
-
-                Log.Msg($"[Bars] Found Bars EquipSlot, instantiating: {newBarsPrefab.name}");
-
-                frontBars.InstantiateItem(newBarsPrefab);
-                frontBars.GetComponent<Anchor>()?.SnapToAnchor();
-                lastEquippedBars = newBarsPrefab;
-
-                Log.Msg($"[Bars] Successfully switched bars to: {newBarsPrefab.name}");
-                Config.bike.bikeMaterials.Remove("Bars");
-            }
-            catch (System.Exception ex)
-            {
-                Log.Error($"[Bars] Error swapping bars: {ex.Message}");
-            }
-        }
-
-        private static int selectedFrameIndex = 0;
-        private static bool frameListInitialized = false;
-        private static string[] frameNames;
-        private static List<GameObject> framePrefabs = new();
-        private static Vector2 frameScrollPos = Vector2.zero;
-
-        public static void DrawBmxFramesSelector()
-        {
-            if (!frameListInitialized || framePrefabs.Count == 0)
-            {
-                Log.Msg("[Frames] (Re)building frame prefab list...");
-
-                framePrefabs = Memory.prefabList
-                    .Where(p => p != null && p.name.ToLower().StartsWith("frame"))
-                    .ToList();
-
-                frameNames = framePrefabs.Select(p => p.name).ToArray();
-                frameListInitialized = true;
-
-                Log.Msg($"[Frames] Found {framePrefabs.Count} frame prefabs.");
-            }
-
-            GUILayout.Space(15);
-            GUILayout.Label("Select BMX Frame:");
-
-            if (frameNames == null || frameNames.Length == 0)
-            {
-                GUILayout.Label("No frame prefabs found.");
-                Log.Warning("[Frames] frameNames array is empty.");
-                return;
-            }
-
-            frameScrollPos = GUILayout.BeginScrollView(frameScrollPos, GUILayout.Height(150));
-            for (int i = 0; i < frameNames.Length; i++)
-            {
-                if (Menu.ModernButton(frameNames[i], 150f))
-                {
-                    selectedFrameIndex = i;
-                    Log.Msg($"[Frames] Selected frame index: {selectedFrameIndex}, name: {frameNames[i]}");
-
-                    // Apply frame immediately on selection
-                    TryReplaceFrame(framePrefabs[selectedFrameIndex]);
-                    PartTweaker.FindParts();
-                }
-            }
-            GUILayout.EndScrollView();
-        }
-
-        public static void TryReplaceFrame(GameObject newFramePrefab)
-        {
-            try
-            {
-                if (Memory.rMbCharacter == null)
-                {
-                    Log.Error("[Frames] rMbCharacter is null.");
-                    return;
-                }
-
-                Log.Msg("[Frames] Searching for Frame GameObject with EquipSlotVehicle...");
-
-                var frameObj = rMbCharacter.transform
-                    .GetComponentsInChildren<Transform>(true)
-                    .FirstOrDefault(t => t.name.ToLower() == "frame" && t.GetComponent<EquipSlotVehicle>() != null);
-
-                if (frameObj == null)
-                {
-                    Log.Warning("[Frames] Could not find a 'Frame' GameObject with EquipSlotVehicle.");
-                    return;
-                }
-
-                var frameSlot = frameObj.GetComponent<EquipSlotVehicle>();
-                if (frameSlot == null)
-                {
-                    Log.Warning("[Frames] 'Frame' exists, but EquipSlotVehicle is missing.");
-                    return;
-                }
-
-                Log.Msg($"[Frames] Found Frame EquipSlot. Replacing with: {newFramePrefab.name}");
-                frameSlot.InstantiateItem(newFramePrefab);
-                frameSlot.GetComponent<Anchor>()?.SnapToAnchor();
-                lastEquippedFrame = newFramePrefab;
-                
-                Log.Msg($"[Frames] Successfully replaced frame with: {newFramePrefab.name}");
-                Config.bike.bikeMaterials.Remove("Frame");
-            }
-            catch (System.Exception ex)
-            {
-                Log.Error($"[Frames] Exception while replacing frame: {ex.Message}");
-            }
-        }
-
         public static bool GetGameObject(string name, ref GameObject obj, bool bSometimesNull = false)
         {
             obj = GameObject.Find(name);
@@ -997,43 +810,6 @@ namespace rowemod.Utils
             return true;
         }
 
-        public static bool GetComponent<T>(ref GameObject obj, ref T component)
-        {
-            if (obj != null)
-            {
-                component = obj.GetComponent<T>();
-                if (component == null)
-                {
-                    Log.Error($"Failed to find component of type {typeof(T).Name} on GameObject: {obj.name}");
-                    return false;
-                }
-            }
-            else
-            {
-                Log.Error("Provided GameObject is null, cannot retrieve component.");
-                return false;
-            }
-            return true;
-        }
-
-        public static bool GetComponents<T>(ref GameObject obj, ref T[] components)
-        {
-            if (obj != null)
-            {
-                components = obj.GetComponents<T>();
-                if (components == null || components.Length == 0)
-                {
-                    Log.Error($"Failed to find any components of type {typeof(T).Name} on GameObject: {obj.name}");
-                    return false;
-                }
-            }
-            else
-            {
-                Log.Error("Provided GameObject is null, cannot retrieve components.");
-                return false;
-            }
-            return true;
-        }
 
         public static bool GetComponentsInChildren<T>(ref GameObject obj, ref T[] components, bool includeInactive = false)
         {
@@ -1052,6 +828,17 @@ namespace rowemod.Utils
                 return false;
             }
             return true;
+        }
+        public static System.Collections.IEnumerator DelayedLoadEquippedParts()
+        {
+            yield return new WaitForSeconds(2f); // Wait for bundles to finish loading
+
+            Log.Msg("Attempting to load saved custom parts...");
+            PartTweaker.LoadSavedBars();
+            yield return new WaitForSeconds(0.25f);
+            PartTweaker.LoadSavedFrame();
+                
+            yield return null;
         }
     }
 }

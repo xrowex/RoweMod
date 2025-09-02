@@ -53,6 +53,11 @@ namespace rowemod
         public static float scrollOffset = 0f;
         public static float scrollViewHeight = 10000f;
         public static float viewHeight = 0f;
+        
+        private static bool isResizing = false;
+        private static Vector2 resizeStartMouse;
+        private static Vector2 resizeStartSize;
+        private static readonly float resizeHandleSize = 20f;
 
         // Style variables
         public static GUIStyle windowStyle;
@@ -78,8 +83,6 @@ namespace rowemod
         public static bool stylesInitialized = false;
 
         // Dictionaries and caches
-        private static readonly Dictionary<string, string> sliderTextValues = new Dictionary<string, string>();
-        private static readonly Dictionary<string, bool> sliderFieldJustFocused = new Dictionary<string, bool>();
         public static Dictionary<Slot, GameObject> slotGameObjects = new Dictionary<Slot, GameObject>();
         public static List<UnityEngine.Camera> cachedCameras = new List<UnityEngine.Camera>();
         public static List<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData> cachedHDRCameras = new List<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>();
@@ -121,6 +124,32 @@ namespace rowemod
                 GUILayout.Space(5);
                 DrawScrollableContent();
                 GUILayout.EndVertical();
+                
+                // Resize handle area (bottom-right corner)
+                Rect resizeRect = new Rect(windowRect.width - resizeHandleSize, windowRect.height - resizeHandleSize, resizeHandleSize, resizeHandleSize);
+                GUI.DrawTexture(resizeRect, MakeTex(1, 1, new Color(1f, 1f, 1f, 0.2f))); // Optional: visible handle
+
+
+                Event e = Event.current;
+                if (e.type == EventType.MouseDown && resizeRect.Contains(e.mousePosition))
+                {
+                    isResizing = true;
+                    resizeStartMouse = e.mousePosition;
+                    resizeStartSize = new Vector2(windowRect.width, windowRect.height);
+                    e.Use();
+                }
+                else if (e.type == EventType.MouseUp && isResizing)
+                {
+                    isResizing = false;
+                    e.Use();
+                }
+                else if (e.type == EventType.MouseDrag && isResizing)
+                {
+                    Vector2 delta = e.mousePosition - resizeStartMouse;
+                    windowRect.width = Mathf.Max(600f, resizeStartSize.x + delta.x); // Clamp min size
+                    windowRect.height = Mathf.Max(400f, resizeStartSize.y + delta.y);
+                    e.Use();
+                }
             }
             catch (Exception ex)
             {
@@ -139,15 +168,18 @@ namespace rowemod
                         GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernToggle("Spin Assist", ref physics.spinAssist);
                         ModernToggle("Drifting", ref physics.driftAbility);
-                        ModernSlider("Gravity", ref physics.gravity, 0f, 30f);
-                        ModernSlider("Small Hop Force", ref physics.smallHopForce, 0f, 25f);
+                        Slider("Gravity", ref physics.gravity,12.5f, 0f, 30f);
+                        Slider("Small Hop Force", ref physics.smallHopForce,4.2f, 0f, 25f);
+                        GUILayout.Box("Speed", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        Slider("Push Force", ref physics.bmxForceFactor,0.07f, 0.05f, 2f);
+                        Slider("Max Speed",ref physics.bmxMaxSpeed,7f, 2f, 15f);
                         GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernSlider("Pump Force", ref physics.pumpForce, 0f, 30f);
-                        ModernSlider("Spin Speed Multiplier", ref physics.spinMultiplier, 0f, 10f);
-                        ModernSlider("Steer Damping", ref physics.steerDamp, 1f, 5f);
+                        Slider("Pump Force", ref physics.pumpForce,1.0f, 0f, 30f);
+                        Slider("Spin Speed Multiplier", ref physics.spinMultiplier,1.0f, 0f, 10f);
+                        Slider("Steer Damping", ref physics.steerDamp,1f, 1f, 5f);
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        ModernSlider("Max Nose Manual Angle", ref physics.noseManualAngle, 10f, 50f);
-                        ModernSlider("Max Manual Angle", ref physics.manualAngle, 10f, 50f);
+                        Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
+                        Slider("Max Manual Angle", ref physics.manualAngle,30f, 10f, 50f);
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
@@ -156,8 +188,7 @@ namespace rowemod
                         GUILayout.Box("Bike Parts", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         GUILayout.EndHorizontal();
 
-                        Memory.DrawBmxBarsSelector();
-                        Memory.DrawBmxFramesSelector();
+                        PartTweaker.DrawPartSelectorUI();
                         break;
                     case Tab.Tricks:
                         TrickMods.DrawTrickMenu();
@@ -222,7 +253,7 @@ namespace rowemod
                         ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
                         ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
                         ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
-                        ModernSlider("Drone Mass", ref misc.droneMass, 2f, 1000f);
+                        Slider("Drone Mass", ref misc.droneMass, 5f, 2f, 1000f);
                         GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         ModernToggle("No Bail", ref misc.neverBail);
                         ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
@@ -321,15 +352,17 @@ namespace rowemod
             // Begin a group to position all tabs precisely, increased height to prevent clipping
             GUI.BeginGroup(new Rect(0, 0, windowRect.width, 60f));
 
-            float tabHeight = 30f; // Matches rounded button height
-            float tabWidth = 80f; // Width for each tab button
+            float tabHeight = 30f;
             float yPosition = 30f;
+
+            
+
 
             // Define tab labels and corresponding enum values
             (string label, Tab tab)[] tabs = new[]
             {
                 ("Physics", Tab.Physics),
-                //("Tricks", Tab.Tricks),
+                ("Tricks", Tab.Tricks),
                 ("Bike", Tab.Bike),
                 ("Materials", Tab.BikeMaterials),
                 ("MX", Tab.MX),
@@ -339,27 +372,36 @@ namespace rowemod
                 ("Marker", Tab.Marker),
                 ("Dropper", Tab.Dropper),
             };
-
+            
+            float totalPadding = 10f * (tabs.Length + 1); // 10px padding between buttons and edges
+            float dynamicTabWidth = (windowRect.width - totalPadding - 90f); // leave room for reset button
+            dynamicTabWidth = dynamicTabWidth / tabs.Length;
+            
+            
             // Draw tab buttons with precise Rect positioning
             for (int i = 0; i < tabs.Length; i++)
             {
                 var (label, tab) = tabs[i];
                 GUIStyle buttonStyle = currentTab == tab ? activeTabButtonStyle : highQualityButtonStyle;
-                Rect tabRect = new Rect(10f + i * (tabWidth + 5f), yPosition, tabWidth, tabHeight);
+
+                float xPos = 10f + i * (dynamicTabWidth + 10f);
+                Rect tabRect = new Rect(xPos, yPosition, dynamicTabWidth, tabHeight);
+
                 if (GUI.Button(tabRect, $"<b>{label}</b>", buttonStyle))
                 {
                     SetCurrentTab(tab);
                 }
             }
 
+
             // Draw "Reset Tab" button in top-right corner
             float resetButtonWidth = 80f;
             float resetButtonHeight = 30f;
             Rect resetButtonRect = new Rect(
-                windowRect.width - resetButtonWidth - 10f,
+                windowRect.width - 80f - 10f, // 80f width, 10px margin
                 yPosition,
-                resetButtonWidth,
-                resetButtonHeight
+                80f,
+                tabHeight
             );
             if (GUI.Button(resetButtonRect, "<b>RESET\nTAB</b>", highQualityButtonStyle))
             {
@@ -371,8 +413,11 @@ namespace rowemod
 
                     case Tab.Bike:
                         //LoadAllAssetBundles();
+                        Config.ResetBikeTab();
                         PartTweaker.FindParts();
-                        //ReloadAssetsFromCachedBundles();
+                        ReloadAssetsFromCachedBundles();
+                        customizableEntity.EquipItems();
+                        customizableEntity.EquipItems();
                         Log.Msg("Bike Tab reset!");
                         break;
 
@@ -392,7 +437,7 @@ namespace rowemod
                         break;
 
                     case Tab.Marker:
-                        Memory.ReloadAssetsFromCachedBundles();
+                        ReloadAssetsFromCachedBundles();
                         break;
 
                     case Tab.Dropper:
@@ -401,7 +446,7 @@ namespace rowemod
                         break;
                 }
 
-                ResetSliderTextValues();
+                ResetSliderUI();
             }
 
             GUI.EndGroup();
@@ -421,32 +466,6 @@ namespace rowemod
             }
         }
 
-        //-------------------------------------------------------------------
-        // RESET SLIDER TEXT VALUES
-        //-------------------------------------------------------------------
-
-        public static void ResetSliderTextValues()
-        {
-
-            sliderTextValues.Clear();
-            sliderFieldJustFocused.Clear();
-
-            // Physics Tab Sliders
-            sliderTextValues["Gravity"] = physics.gravity.ToString("F2");
-            sliderTextValues["Small Hop Force"] = physics.smallHopForce.ToString("F2");
-            sliderTextValues["Pump Force"] = physics.pumpForce.ToString("F2");
-            sliderTextValues["Spin Speed Multiplier"] = physics.spinMultiplier.ToString("F2");
-            sliderTextValues["Steer Damping"] = physics.steerDamp.ToString("F2");
-            sliderTextValues["Max Nose Manual Angle"] = physics.noseManualAngle.ToString("F2");
-            sliderTextValues["Max Manual Angle"] = physics.manualAngle.ToString("F2");
-
-            // Misc Tab Sliders
-            sliderTextValues["Drone Mass"] = misc.droneMass.ToString("F2");
-            sliderTextValues["Menu Color R"] = misc.menuAccentR.ToString("F2");
-            sliderTextValues["Menu Color G"] = misc.menuAccentG.ToString("F2");
-            sliderTextValues["Menu Color B"] = misc.menuAccentB.ToString("F2");
-
-        }
 
         //-------------------------------------------------------------------
         // STYLES
@@ -1168,6 +1187,13 @@ namespace rowemod
             {
                 www.Dispose();
             }
+        }
+        private static void ResetSliderUI()
+        {
+            _activeSliderLabel = null;
+            _sliderTextInputs.Clear();         // clear all slider text caches
+            toggleAnimationState.Clear();      // optional: reset toggle animation positions
+            GUI.FocusControl(null);            // drop focus so text fields refresh
         }
     }
 }

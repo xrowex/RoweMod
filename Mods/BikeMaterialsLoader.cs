@@ -10,7 +10,7 @@ namespace rowemod.Mods
     public static class BikeMaterialsLoader
     {
         public static readonly string BikeRootPath =
-            Path.Combine(MelonEnvironment.ModsDirectory, @"rowemod\Bike");
+            Path.Combine(MelonEnvironment.ModsDirectory, @"RoweMod\Bike");
 
         private static List<string> _bikeFolders = new List<string>();
         private static string _selectedFolder = string.Empty;
@@ -21,6 +21,7 @@ namespace rowemod.Mods
 
         private static Dictionary<string, Dictionary<string, Texture2D>> _categoryPreviews = new Dictionary<string, Dictionary<string, Texture2D>>();
         private static Dictionary<string, Texture2D> _materialPreviews = new Dictionary<string, Texture2D>();
+        private static Dictionary<string, bool> _categoryVisibility = new Dictionary<string, bool>();
 
         public static Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)> categories =
     new Dictionary<string, (string displayName, List<EquipSlotVehicle> slots)>
@@ -79,17 +80,42 @@ namespace rowemod.Mods
             try
             {
                 GUILayout.BeginHorizontal();
-
+                
                 GUILayout.BeginVertical(GUILayout.Width(200));
                 GUILayout.Label("Categories:", Menu.labelStyle);
 
                 foreach (var category in categories)
                 {
-                    if (GUILayout.Button(category.Value.displayName, Menu.highQualityButtonStyle))
+                    GUILayout.BeginHorizontal();
+
+                    // Toggle
+                    if (_categoryVisibility == null)
+                    {
+                        _categoryVisibility = new Dictionary<string, bool>(); // fail-safe init
+                    }
+
+                    bool currentVisible = true;
+                    if (_categoryVisibility.ContainsKey(category.Key))
+                        currentVisible = _categoryVisibility[category.Key];
+                    else
+                        _categoryVisibility[category.Key] = true; // fallback default
+
+
+                    bool newVisible = GUILayout.Toggle(currentVisible, "", GUILayout.Width(20));
+                    if (newVisible != currentVisible)
+                    {
+                        _categoryVisibility[category.Key] = newVisible;
+                        SetRenderersActive(category.Key, newVisible);
+                    }
+
+                    // Button
+                    if (GUILayout.Button(category.Value.displayName, highQualityButtonStyle))
                     {
                         _selectedCategory = category.Key;
                         _selectedFolder = Path.Combine(BikeRootPath, category.Value.displayName);
                     }
+
+                    GUILayout.EndHorizontal();
                 }
                 GUILayout.EndVertical();
 
@@ -116,14 +142,15 @@ namespace rowemod.Mods
                                 Log.Msg("Decals disabled on material " + loadedMaterial.name);
                             }
 
-                            if (loadedMaterial != null && _selectedCategory != null)
+                            if (loadedMaterial != null && _selectedCategory != null && categories.ContainsKey(_selectedCategory))
                             {
                                 ApplyMaterialToCategory(_selectedCategory, loadedMaterial, materialFile);
                             }
                             else
                             {
-                                Log.Error($"Failed to load material: {materialName}");
+                                Log.Error($"[rowemod] Failed to apply material. Invalid category: {_selectedCategory}");
                             }
+
                         }
 
                         GUILayout.EndHorizontal();
@@ -147,11 +174,13 @@ namespace rowemod.Mods
                 {
                     if (!string.IsNullOrWhiteSpace(_newPresetName))
                     {
+                        if (Config.bike.bikeMaterials == null)
+                            Config.bike.bikeMaterials = new Dictionary<string, string>();
+
                         SaveBikeMaterialPreset(_newPresetName);
                         _newPresetName = ""; // Clear input field after saving
                         GUI.FocusControl(null); // Reset focus to the GUI window
                     }
-                    
                 }
 
                 List<string> availableBikePresets = BikeMaterialPreset.GetAvailablePresets();
@@ -189,7 +218,14 @@ namespace rowemod.Mods
             _selectedCategory = null;
 
             LoadBikeFolders();
-
+            
+            // ✅ Always initialize visibility map — not just if character exists
+            foreach (var category in categories.Keys)
+            {
+                if (!_categoryVisibility.ContainsKey(category))
+                    _categoryVisibility[category] = true; // default to visible
+            }
+            
             Log.Msg($"rMBCharacter value: {(rMbCharacter != null ? rMbCharacter.name : "NULL")}");
 
             if (rMbCharacter != null)
@@ -368,7 +404,24 @@ namespace rowemod.Mods
             return "Unknown";
         }
 
+        private static void SetRenderersActive(string categoryKey, bool isVisible)
+        {
+            if (!categories.ContainsKey(categoryKey)) return;
 
+            foreach (var slot in categories[categoryKey].slots)
+            {
+                if (slot?._itemSlot == null || !slot._itemSlot.HasItemEquip) continue;
+
+                GameObject equippedObject = slot._itemSlot.EquippedItem;
+                if (equippedObject == null) continue;
+
+                Renderer[] renderers = equippedObject.GetComponentsInChildren<Renderer>(true);
+                foreach (var r in renderers)
+                {
+                    r.enabled = isVisible;
+                }
+            }
+        }
 
 
 
@@ -383,7 +436,10 @@ namespace rowemod.Mods
         }
         public static void ApplySavedMaterialsOnSceneLoad()
         {
-
+            if (Config.bike.bikeMaterials == null)
+            {
+                Config.bike.bikeMaterials = new Dictionary<string, string>();
+            }
             foreach (var category in Config.bike.bikeMaterials)
             {
                 if (!categories.ContainsKey(category.Key))
@@ -451,9 +507,14 @@ namespace rowemod.Mods
             }
 
             Log.Msg($"Applying material '{material.name}' to category '{category}'");
-
+            
             foreach (var slot in categories[category].slots)
             {
+                if (slot == null)
+                {
+                    Log.Warning($"Null slot found in category '{category}'. Skipping.");
+                    continue;
+                }
                 if (slot?._itemSlot == null || !slot._itemSlot.HasItemEquip)
                 {
                     Log.Warning($"Slot '{slot?.name}' has no equipped item yet.");
@@ -497,11 +558,32 @@ namespace rowemod.Mods
             }
 
             scrollOffset = 0;
+            if (Config.bike.bikeMaterials == null)
+            {
+                Config.bike.bikeMaterials = new Dictionary<string, string>();
+            }
             Config.bike.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
             Config.Save();
         }
+        /*public static void SaveBikeMaterialPreset(string presetName)
+        {
+            BikeMaterialPreset preset = new BikeMaterialPreset { name = presetName };
+
+            foreach (var material in Config.bike.bikeMaterials)
+            {
+                preset.Materials[material.Key] = material.Value;
+            }
+
+            BikeMaterialPreset.SavePreset(preset);
+        }*/
         public static void SaveBikeMaterialPreset(string presetName)
         {
+            if (Config.bike.bikeMaterials == null)
+            {
+                Log.Warning("bikeMaterials was null. Initializing an empty dictionary before saving preset.");
+                Config.bike.bikeMaterials = new Dictionary<string, string>();
+            }
+
             BikeMaterialPreset preset = new BikeMaterialPreset { name = presetName };
 
             foreach (var material in Config.bike.bikeMaterials)

@@ -4,6 +4,7 @@ using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ReplaySystem;
 using rowemod;
+using UnityEngine.Animations;
 using Object = UnityEngine.Object;
 
 namespace rowemod.Mods
@@ -124,7 +125,7 @@ namespace rowemod.Mods
                 Log.Msg("Initialized toggle styles and textures.");
             }
         }
-
+        
         // Update method to handle object spawning and menu toggle deselection
         public static void Update()
         {
@@ -214,6 +215,68 @@ namespace rowemod.Mods
                     position.y += bottomOffset;
 
                     GameObject spawned = Object.Instantiate(prefabToSpawn, position, rotation);
+
+                    if (spawned != null && spawned.GetComponent<Rigidbody>() != null)
+                    {
+                        spawned.AddComponent<RecordableBody>();
+                        Log.Msg($"Added RecordableBody to {spawned.name} as it has a Rigidbody component");
+                    }
+
+                    /*
+                    if (spawned.GetComponentInChildren<AimConstraint>() != null)
+                    {
+                        Log.Msg("Object has an AimConstraint component");
+
+                        var aimConstraint = spawned.GetComponentInChildren<AimConstraint>();
+
+
+                        // Create and assign new source
+                        ConstraintSource source = new ConstraintSource
+                        {
+                            sourceTransform = Memory.vehicleBalance.transform,
+                            weight = 1.0f
+                        };
+                        aimConstraint.AddSource(source);
+                        Log.Msg("Set AimConstraint sourceTransform to " + Memory.vehicleBalance.transform.name);
+
+                        // Activate constraint
+                        aimConstraint.constraintActive = true;
+                        aimConstraint.locked = true;
+
+                        // Optional: Force refresh
+                        aimConstraint.enabled = false;
+                        aimConstraint.enabled = true;
+                    }
+                    */
+                    if (spawned.GetComponentInChildren<AimConstraint>() != null)
+                    {
+                        Log.Msg("Object has an AimConstraint component");
+
+                        var aimConstraints = spawned.GetComponentsInChildren<AimConstraint>();
+
+                        // Clear existing sources just in case
+                        foreach (var aimConstraint in aimConstraints)
+                        {
+                            aimConstraint.SetSources(new Il2CppSystem.Collections.Generic.List<ConstraintSource>());
+                            
+                            ConstraintSource source = new ConstraintSource
+                            {
+                                sourceTransform = Memory.chassisRb.transform,
+                                weight = 1.0f
+                            };
+
+                            Log.Msg("AimConstraint sourceTransform set to " + Memory.chassisRb.transform.name);
+
+                            aimConstraint.AddSource(source);
+
+                            aimConstraint.constraintActive = true;
+                            aimConstraint.locked = true;
+                            
+                            // Optional: Force update (may help in some cases)
+                            aimConstraint.enabled = false;
+                            aimConstraint.enabled = true;
+                        }
+                    }
                     spawnedObjects.Add(spawned);
                     Log.Msg($"Spawned object under mouse at {position}, rotation: {rotation.eulerAngles}");
                 }

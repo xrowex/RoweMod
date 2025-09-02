@@ -22,6 +22,8 @@ namespace rowemod
         public float sideHopPower;
         public float vertAssistCorrectionStrength;
         public float tireFrictionThreshold;
+        public float bmxForceFactor;
+        public float bmxMaxSpeed;
     }
 
     // Struct for character model and material paths
@@ -107,7 +109,9 @@ namespace rowemod
             spinMultiplier = 1f,
             sideHopPower = 1f,
             vertAssistCorrectionStrength = 30f,
-            tireFrictionThreshold = 2f
+            tireFrictionThreshold = 2f,
+            bmxForceFactor = 0.07f,
+            bmxMaxSpeed = 7.5f
         };
 
         public static CustomCharacter character = new CustomCharacter
@@ -273,7 +277,11 @@ namespace rowemod
             };
             bike = jsonData.customBikeData;
             misc = jsonData.miscData;
-
+            
+            //set new config variables to defaults if 0
+            if (physics.bmxForceFactor <= 0f) physics.bmxForceFactor = 0.07f;
+            if (physics.bmxMaxSpeed <= 0f) physics.bmxMaxSpeed = 7.5f;
+            
             Log.Msg($"Config loaded successfully.");
         }
         
@@ -330,7 +338,9 @@ namespace rowemod
                 spinMultiplier = 1f,
                 sideHopPower = 1f,
                 vertAssistCorrectionStrength = 30f,
-                tireFrictionThreshold = 2f
+                tireFrictionThreshold = 2f,
+                bmxForceFactor = 0.07f,
+                bmxMaxSpeed = 7.5f
             };
         }
 
@@ -383,6 +393,8 @@ namespace rowemod
             bike.lastLoadedStem = "None";
             bike.lastLoadedFork = "None";
             bike.bikeMaterials = new Dictionary<string, string>();
+            Memory.lastEquippedBars = null;
+            Memory.lastEquippedFrame = null;
         }
 
         // Reset bike materials tab settings to defaults

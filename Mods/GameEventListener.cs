@@ -1,4 +1,5 @@
-﻿using Il2CppMashBox.Core.Runtime.Events;
+﻿using System.Collections;
+using Il2CppMashBox.Core.Runtime.Events;
 using MelonLoader;
 using rowemod.Utils;
 using UnityEngine;
@@ -26,7 +27,6 @@ namespace rowemod.Mods
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
-
                 UnityAction genericListener =
                     Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(() => OnAnyGameEvent(ev.name));
                 ev.OnRaise.AddListener(genericListener);
@@ -157,7 +157,7 @@ namespace rowemod.Mods
         {
 
         }
-
+        
         private void OnPlayerSpawned()
         {
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
@@ -186,7 +186,10 @@ namespace rowemod.Mods
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
                 MotorVehicleUtils.FindMxVehicleSettings();
-
+                MelonCoroutines.Start(DelayedLoadPreset());
+                MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
+                MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+                BikeMaterialsLoader.Initialize();
                 // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.misc.customSessionMarker))
                 {
@@ -232,11 +235,15 @@ namespace rowemod.Mods
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Memory.FindObjects(go);
-                PartTweaker.FindParts();
-                MotorVehicleUtils.FindMxVehicleSettings();
+                MelonCoroutines.Start(DelayedLoadPreset());
+                MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
+                MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+                BikeMaterialsLoader.Initialize();
+                MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());//added
             }
         }
 
+        /*
         private void OnTitleLoopGameplayEnter()
         {
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
@@ -245,17 +252,45 @@ namespace rowemod.Mods
 
             MelonCoroutines.Start(DelayedPartReload());
             //Memory.FindObjects(Memory.physicsDrivenCharacter);
+        }*/
+        private void OnTitleLoopGameplayEnter()
+        {
+            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
+            // Delayed bike materials load to bypass shop load
+            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+            PartTweaker.barListInitialized = false;
+            PartTweaker.frameListInitialized = false;
+            
+            
+            MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
+            MelonCoroutines.Start(DelayedPartReload());
+            MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+            //Memory.FindObjects(Memory.physicsDrivenCharacter);
         }
+        public IEnumerator DelayedLoadPreset()
+        {
+            yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
 
+            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) && Memory.rMbCharacter != null)
+            {
+                Log.Msg("Manually invoking LoadPreset on TheShop scene...");
+                Memory.FindObjects(Memory.rMbCharacter); // Refresh all references
+                Custom.LoadPreset(Config.character.lastLoadedPresetCharacter); // Now it should work
+            }
+            else
+            {
+                Log.Warning("Cannot load preset - missing reference or preset name.");
+            }
+        }
         private System.Collections.IEnumerator DelayedPartReload()
         {
-            yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(3f);
             
             if (Memory.lastEquippedBars != null)
-                Memory.TryReplaceBars(Memory.lastEquippedBars);
+                PartTweaker.TryReplaceBars(Memory.lastEquippedBars);
 
             if (Memory.lastEquippedFrame != null)
-                Memory.TryReplaceFrame(Memory.lastEquippedFrame);
+                PartTweaker.TryReplaceFrame(Memory.lastEquippedFrame);
 
             PartTweaker.FindParts();
             yield return null;
