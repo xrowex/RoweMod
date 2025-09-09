@@ -5,6 +5,7 @@ using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.ReplaySystem;
 using Il2CppMashBox.Addons.SlowMotionSystem;
 using Il2CppMashBox.BMX_Physics_Development;
+using Il2CppMashBox.BMX_Physics_Development.ActivityTracking;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System;
 using Il2CppMashBox.Character;
@@ -68,7 +69,7 @@ namespace rowemod.Utils
 
         // Character Settings
         public static CharacterData roweCharacterData;
-        public static CharacterManager roweCharacterManager;
+        public static CustomCharacterManager roweCharacterManager;
         public static VehicleController vehicleController;
         public static MotorVehicleSettings[] vehicleSettingsInstances;
         public static VehicleBalancePID vehicleBalance;
@@ -101,7 +102,12 @@ namespace rowemod.Utils
         public static FreeCam freeCam;
         public static SphereCollider freeCamCollider;
         // Drone Colliders
+
         public static List<Collider> droneColliders = new List<Collider>();
+
+        //8bitt challenge
+        public static ActivityTracker eightbittActivityTracker;
+        public static PlayerTrickGameplay playerTrickGameplay;
 
         public static void FindObjects(GameObject player)
         {
@@ -161,7 +167,17 @@ namespace rowemod.Utils
                         Log.Msg($"Found character component: {theCharacter.name}");
                     else
                         Log.Error("Character component not found under rMBCharacter.");
-
+                    
+                    roweCharacterManager = rMbCharacter.GetComponentInChildren<CustomCharacterManager>();
+                    if (roweCharacterManager != null)
+                    {
+                        Log.Msg("CharacterManager component found under rMBCharacter.");
+                    }
+                    else
+                    {
+                        Log.Error("CharacterManager component not found under rMBCharacter.");
+                    }
+                    
                     customizableEntity = rMbCharacter.GetComponentInChildren<CustomizableEntity>();
                     if (customizableEntity != null)
                         Log.Msg($"Found customizable entity: {customizableEntity.name}");
@@ -350,6 +366,28 @@ namespace rowemod.Utils
             {
                 Log.Error($"Exception while finding Haptic Feedback Manager: {ex.Message}");
             }
+
+            try
+            {
+                Log.Msg("Starting to find eightbittActivityTracker...");
+                eightbittActivityTracker = rMbCharacter.GetComponentInChildren<ActivityTracker>(true);
+            }
+            catch (System.Exception ex)
+            {
+                Log.Error($"Exception while finding eightbittActivityTracker: {ex.Message}");
+            }
+
+            try
+            {
+                Log.Msg("Starting to find PlayerTrickGameplay...");
+                playerTrickGameplay = rMbCharacter.GetComponentInChildren<PlayerTrickGameplay>(true);
+            }
+            catch (System.Exception ex)
+            {
+                Log.Error($"Exception while finding PlayerTrickGameplay: {ex.Message}");
+            }
+
+
 
             // FreeCam collider toggle
             try
@@ -561,7 +599,7 @@ namespace rowemod.Utils
             foreach (string bundlePath in bundleFiles)
             {
                 string fileName = Path.GetFileNameWithoutExtension(bundlePath).ToLower();
-                Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
+                //Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
 
                 AssetBundle bundle = AssetBundle.LoadFromFile(bundlePath);
                 if (bundle == null)
@@ -571,12 +609,12 @@ namespace rowemod.Utils
                 }
 
                 loadedBundles.Add(bundle);
-                Log.Msg($"Successfully loaded AssetBundle from: {bundlePath}");
+                //Log.Msg($"Successfully loaded AssetBundle from: {bundlePath}");
 
                 string[] assetNames = bundle.GetAllAssetNames();
                 foreach (var assetName in assetNames)
                 {
-                    Log.Msg($"Found asset in bundle: {assetName}");
+                    //Log.Msg($"Found asset in bundle: {assetName}");
 
                     // Handle marker prefabs
                     if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
@@ -591,7 +629,7 @@ namespace rowemod.Utils
                                 prefabToBundleMap[asset] = Path.GetFileName(bundlePath);
                             }
                             prefabList.Add(asset);
-                            Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
+                            //Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
 
                             // Handle session markers
                             if (asset.name.ToLower().StartsWith("marker"))
@@ -615,7 +653,7 @@ namespace rowemod.Utils
                                 {
                                     dropperPrefabs.Add(asset);
                                     dropperPrefabNames.Add(displayName);
-                                    Log.Msg($"[Dropper] Loaded dropper prefab: {asset.name} (display name: {displayName})");
+                                    //Log.Msg($"[Dropper] Loaded dropper prefab: {asset.name} (display name: {displayName})");
                                 }
                                 else
                                 {

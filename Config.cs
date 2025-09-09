@@ -143,7 +143,7 @@ namespace rowemod
         {
             barPitch = 0f,
             barScale = 1f,
-            seatHeight = 0.15f,
+            seatHeight = 0.05f,
             seatPitch = 330f,
             frontWheelRadius = 1f,
             frontWheelWidth = 1f,
@@ -372,6 +372,7 @@ namespace rowemod
                 eyesModelPath = null,
                 eyesMaterialPath = null
             };
+            Memory.roweCharacterManager.InitCharacterData();
         }
 
         // Reset bike tab settings to defaults
@@ -379,7 +380,7 @@ namespace rowemod
         {
             bike.barPitch = 0f;
             bike.barScale = 1f;
-            bike.seatHeight = 0.15f;
+            bike.seatHeight = 0.05f;
             bike.seatPitch = 330f;
             bike.frontWheelRadius = 1f;
             bike.frontWheelWidth = 1f;
@@ -395,6 +396,8 @@ namespace rowemod
             bike.bikeMaterials = new Dictionary<string, string>();
             Memory.lastEquippedBars = null;
             Memory.lastEquippedFrame = null;
+            Memory.customizableEntity.EquipItems();
+            Memory.customizableEntity.EquipItems();
         }
 
         // Reset bike materials tab settings to defaults

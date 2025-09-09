@@ -101,7 +101,7 @@ namespace rowemod.Mods
         }
 
         private static float barRotationAngle = 0f;
-        private static float seatHeight = 0.1f;      // Y position  
+        private static float seatHeight = 0.05f;      // Y position  
         private static float seatRotationX = 350f;
         private static float pegLength = 1.0f;
         public static void DrawPartTweaker()
@@ -114,7 +114,7 @@ namespace rowemod.Mods
             if (seatPostAnchor != null)
             {
                 GUILayout.Label("Seat Height", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Height", ref seatHeight, 0.0f, 0.3f);
+                Menu.ModernSlider("Height", ref seatHeight, 0.0f, 0.15f);
 
                 // Move the seat post up/down  
                 seatPostAnchor.localPosition = new Vector3(
@@ -254,8 +254,43 @@ namespace rowemod.Mods
             }
             GUILayout.EndScrollView();
         }
+        public static void ResetAllCustomParts()
+        {
+            Log.Msg("Resetting all custom parts to default...");
+            if (Memory.rMbCharacter == null)
+            {
+                Log.Error("ResetAllCustomParts(): rMbCharacter is null. Cannot reset parts.");
+                return;
+            }
+            // Clear saved config entries
+            Config.bike.lastLoadedBars = string.Empty;
+            Config.bike.lastLoadedFrame = string.Empty;
+            Config.Save();
+            Memory.lastEquippedBars = null;
+            Memory.lastEquippedFrame = null;
+
+
+            Memory.customizableEntity.EquipItems();
+            Memory.customizableEntity.EquipItems();
+
+            FindParts();
+            UpdatePartTransforms();
+        }
         public static void DrawPartSelectorUI()
         {
+            // nice bordered container for the whole part selector (the red box in your screenshot)
+            GUILayout.BeginVertical(GUI.skin.box); // Or use Menu.cardOuterStyle if you have it
+
+            // Header row + RESET PARTS button (right aligned)
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Bike Parts", Menu.coloredBoxStyle, GUILayout.Height(26));
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("<b>RESET PARTS</b>", Menu.redButtonStyle, GUILayout.Height(26), GUILayout.Width(140)))
+            {
+                ResetAllCustomParts();
+            }
+            GUILayout.EndHorizontal();
+            
             DrawPartTypeTabs();
 
             switch (currentPartTab)

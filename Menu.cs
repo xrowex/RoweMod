@@ -39,6 +39,7 @@ namespace rowemod
             Graphics,
             Marker,
             Dropper,
+            Challenge // Added Challenge tab for future use
         }
 
         // Menu Variables
@@ -67,6 +68,7 @@ namespace rowemod
         public static GUIStyle horizontalSliderThumbStyle;
         public static GUIStyle coloredBoxStyle;
         public static GUIStyle highQualityButtonStyle;
+        public static GUIStyle redButtonStyle;
         public static GUIStyle activeTabButtonStyle;
         // Texture caches for styles
         private static Texture2D backgroundTexture;
@@ -174,9 +176,9 @@ namespace rowemod
                         Slider("Push Force", ref physics.bmxForceFactor,0.07f, 0.05f, 2f);
                         Slider("Max Speed",ref physics.bmxMaxSpeed,7f, 2f, 15f);
                         GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        Slider("Pump Force", ref physics.pumpForce,1.0f, 0f, 30f);
+                        Slider("Pump Force", ref physics.pumpForce,1.0f, 1f, 5f);
                         Slider("Spin Speed Multiplier", ref physics.spinMultiplier,1.0f, 0f, 10f);
-                        Slider("Steer Damping", ref physics.steerDamp,1f, 1f, 5f);
+                        Slider("Steer Damping", ref physics.steerDamp,5f, 1f, 5f);
                         GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
                         Slider("Max Manual Angle", ref physics.manualAngle,30f, 10f, 50f);
@@ -184,9 +186,6 @@ namespace rowemod
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
 
-                        GUILayout.BeginHorizontal();
-                        GUILayout.Box("Bike Parts", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        GUILayout.EndHorizontal();
 
                         PartTweaker.DrawPartSelectorUI();
                         break;
@@ -201,6 +200,7 @@ namespace rowemod
                     case Tab.BikeMaterials:
                         BikeMaterialsLoader.DrawBikeMaterialsTabUI();
                         break;
+                    /*
                     case Tab.MX:
                         if (!hasInitializedMxSettings)
                         {
@@ -246,6 +246,7 @@ namespace rowemod
                             Log.Error("No MX Vehicle available to display settings.");
                         }
                         break;
+                        */
 
                     
                     case Tab.Misc:
@@ -286,6 +287,12 @@ namespace rowemod
                     case Tab.Dropper:
                         ObjectDropper.DrawDropperTab();
                         break;
+                    
+                    /*case Tab.Challenge:
+                        GUILayout.Box("8Bitt Challenge", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        GUILayout.Label("This tab is reserved for future challenges.", labelStyle);
+                        // Placeholder for future challenge content
+                        break;*/
                 }
             }
             catch (Exception ex)
@@ -365,12 +372,13 @@ namespace rowemod
                 ("Tricks", Tab.Tricks),
                 ("Bike", Tab.Bike),
                 ("Materials", Tab.BikeMaterials),
-                ("MX", Tab.MX),
+                //("MX", Tab.MX),
                 ("Character", Tab.Character),
                 ("Misc", Tab.Misc),
                 ("Graphics", Tab.Graphics),
                 ("Marker", Tab.Marker),
                 ("Dropper", Tab.Dropper),
+                //("Challenge", Tab.Challenge) // Added Challenge tab
             };
             
             float totalPadding = 10f * (tabs.Length + 1); // 10px padding between buttons and edges
@@ -403,7 +411,7 @@ namespace rowemod
                 80f,
                 tabHeight
             );
-            if (GUI.Button(resetButtonRect, "<b>RESET\nTAB</b>", highQualityButtonStyle))
+            if (GUI.Button(resetButtonRect, "<b>RESET\nTAB</b>", redButtonStyle))
             {
                 switch (currentTab)
                 {
@@ -555,6 +563,10 @@ namespace rowemod
                 highQualityButtonStyle.fontStyle = FontStyle.Bold;
                 highQualityButtonStyle.alignment = TextAnchor.MiddleCenter;
                 highQualityButtonStyle.border = new RectOffset(10, 10, 10, 10);
+                
+                
+                
+                
 
                 // Active Tab Button Style
                 activeTabButtonStyle = new GUIStyle(highQualityButtonStyle);
@@ -564,6 +576,15 @@ namespace rowemod
                 activeTabButtonStyle.normal.textColor = Color.white;
                 activeTabButtonStyle.hover.textColor = Color.yellow;
                 activeTabButtonStyle.active.textColor = Color.green;
+                
+                // Red Button Style
+                redButtonStyle = new GUIStyle(highQualityButtonStyle);
+                redButtonStyle.normal.background = MakeRoundedTex(20, 40, new Color(0.8f, 0.2f, 0.2f), 10, 1, Color.black);
+                redButtonStyle.hover.background = MakeRoundedTex(20, 40, new Color(1f, 0.3f, 0.3f), 10, 1, Color.black);
+                redButtonStyle.active.background = MakeRoundedTex(20, 40, new Color(0.6f, 0.1f, 0.1f), 10, 1, Color.black);
+                redButtonStyle.normal.textColor = Color.white;
+                redButtonStyle.hover.textColor = Color.yellow;
+                redButtonStyle.active.textColor = Color.green;
                 
                 textFieldStyle = new GUIStyle(GUI.skin.textField)
                 {
