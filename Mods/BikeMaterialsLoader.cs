@@ -72,6 +72,44 @@ namespace rowemod.Mods
         { "BMX_Tire", ("Tires", new List<EquipSlotVehicle>()) },
     };
 
+        // Helpers
+        private static string Norm(string s) =>
+            new string((s ?? string.Empty).ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+        private sealed class CategoryRule
+        {
+            public string SubType;             // required slot._subType match (normalized)
+            public string[] Includes = Array.Empty<string>(); // tokens allowed in renderer path
+            public string[] Excludes = Array.Empty<string>(); // tokens that must NOT appear
+        }
+
+        // Map UI categories to expected slot._subType and renderer-name tokens
+        private static readonly Dictionary<string, CategoryRule> _categoryRules =
+            new Dictionary<string, CategoryRule>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Seat"] = new CategoryRule {
+                    SubType  = "seat",
+                    Includes = new[] { "seat" },                   // accept "seat" anywhere in path
+                    Excludes = new[] { "clamp", "post", "bolt" }   // avoid neighbors
+                },
+                ["SeatClamp"] = new CategoryRule {
+                    SubType  = "seatclamp",                        // covers "seat_clamp" as well (see Norm)
+                    Includes = new[] { "clamp" },
+                    Excludes = new[] { "post", "bolt" }
+                },
+                ["Seat Post"] = new CategoryRule {
+                    SubType  = "seatpost",                         // covers "seat_post"
+                    Includes = new[] { "post" },
+                    Excludes = new[] { "clamp", "bolt" }
+                },
+
+                // add more categories as you like, e.g.
+                // ["Bars"] = new CategoryRule { SubType = "bars", Includes = new[] {"bar"}, Excludes = Array.Empty<string>() }
+            };
+
+        
+        
+        
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
 
@@ -467,6 +505,7 @@ namespace rowemod.Mods
         }
 
 
+        #region Helper Methods
         private static Material LoadMaterialFromFile(string materialPath)
         {
             try
@@ -476,7 +515,7 @@ namespace rowemod.Mods
                 {
                     return null;
                 }
-
+        
                 string[] assetNames = assetBundle.GetAllAssetNames();
                 Material material = assetNames.Length > 0 ? assetBundle.LoadAsset<Material>(assetNames[0]) : null;
                 assetBundle.Unload(false);
@@ -487,8 +526,8 @@ namespace rowemod.Mods
                 return null;
             }
         }
-
-
+        
+        
         private static void LoadBikeFolders()
         {
             foreach (var category in categories.Values)
@@ -496,8 +535,8 @@ namespace rowemod.Mods
                 string categoryFolder = Path.Combine(BikeRootPath, category.displayName);
             }
         }
-
-
+        
+        
         private static void ApplyMaterialToCategory(string category, Material material, string materialPath)
         {
             if (!categories.ContainsKey(category))
@@ -507,73 +546,55 @@ namespace rowemod.Mods
             }
 
             Log.Msg($"Applying material '{material.name}' to category '{category}'");
-            
+
             foreach (var slot in categories[category].slots)
             {
-                if (slot == null)
+                if (slot == null || slot._itemSlot == null || !slot._itemSlot.HasItemEquip) continue;
+
+                // ✅ Only act on slots whose _subType matches the category's expected subtype
+                if (!SlotMatchesCategory(slot, category))
                 {
-                    Log.Warning($"Null slot found in category '{category}'. Skipping.");
-                    continue;
-                }
-                if (slot?._itemSlot == null || !slot._itemSlot.HasItemEquip)
-                {
-                    Log.Warning($"Slot '{slot?.name}' has no equipped item yet.");
+                    // Uncomment for debugging:
+                    // Log.Msg($"Skip slot '{slot.name}' for '{category}' due to _subType='{slot?._subType}'");
                     continue;
                 }
 
-                GameObject equippedObject = slot._itemSlot.EquippedItem;
-                if (equippedObject == null)
-                {
-                    Log.Warning($"Equipped object is null for slot '{slot.name}'.");
-                    continue;
-                }
-                
-                Renderer[] renderers = equippedObject.GetComponentsInChildren<MeshRenderer>(true);
-                if (renderers.Length == 0)
-                {
-                    renderers = equippedObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-                    if (renderers.Length == 0)
-                    {
-                        Log.Warning($"No renderers (Mesh or Skinned) found under equipped object for slot '{slot.name}'.");
-                        continue;
-                    }
-                    else
-                    {
-                        Log.Msg($"Fallback to SkinnedMeshRenderer successful for slot '{slot.name}'.");
-                    }
-                }
+                var equippedObject = slot._itemSlot.EquippedItem;
+                if (equippedObject == null) continue;
 
-                foreach (var renderer in renderers)
+                var renderers = equippedObject.GetComponentsInChildren<Renderer>(true);
+                foreach (var r in renderers)
                 {
-                    Log.Msg($"Applying material '{material.name}' to renderer '{renderer.name}'.");
+                    // ✅ Only paint renderers whose path matches subtype tokens, excluding neighbors
+                    if (!ShouldAffectRenderer(category, r, equippedObject)) continue;
 
-                    Material[] mats = renderer.materials;
+                    Log.Msg($"Applying material '{material.name}' to renderer '{r.name}'.");
+
+                    var mats = r.materials;
                     for (int i = 0; i < mats.Length; i++)
-                    {
                         mats[i] = new Material(material);
-                    }
-                    renderer.materials = mats;
-                    renderer.material = material;
+
+                    r.materials = mats;
                 }
             }
 
+            // persist
             scrollOffset = 0;
-            if (Config.bike.bikeMaterials == null)
-            {
-                Config.bike.bikeMaterials = new Dictionary<string, string>();
-            }
+            Config.bike.bikeMaterials ??= new Dictionary<string, string>();
             Config.bike.bikeMaterials[category] = Path.GetFileNameWithoutExtension(materialPath);
             Config.Save();
         }
+
+        
         /*public static void SaveBikeMaterialPreset(string presetName)
         {
             BikeMaterialPreset preset = new BikeMaterialPreset { name = presetName };
-
+        
             foreach (var material in Config.bike.bikeMaterials)
             {
                 preset.Materials[material.Key] = material.Value;
             }
-
+        
             BikeMaterialPreset.SavePreset(preset);
         }*/
         public static void SaveBikeMaterialPreset(string presetName)
@@ -583,26 +604,26 @@ namespace rowemod.Mods
                 Log.Warning("bikeMaterials was null. Initializing an empty dictionary before saving preset.");
                 Config.bike.bikeMaterials = new Dictionary<string, string>();
             }
-
+        
             BikeMaterialPreset preset = new BikeMaterialPreset { name = presetName };
-
+        
             foreach (var material in Config.bike.bikeMaterials)
             {
                 preset.Materials[material.Key] = material.Value;
             }
-
+        
             BikeMaterialPreset.SavePreset(preset);
         }
-
+        
         public static void LoadBikeMaterialPreset(string presetName)
         {
             BikeMaterialPreset? preset = BikeMaterialPreset.LoadPreset(presetName);
             if (preset == null) return;
-
+        
             foreach (var kvp in preset.Materials)
             {
                 string categoryKey = kvp.Key;
-
+        
                 // 🔄 Convert old "Back" keys to "Rear" keys for compatibility
                 if (categoryKey.Contains("Back") && !BikeMaterialsLoader.categories.ContainsKey(categoryKey))
                 {
@@ -613,20 +634,20 @@ namespace rowemod.Mods
                         categoryKey = convertedKey;
                     }
                 }
-
+        
                 if (!BikeMaterialsLoader.categories.ContainsKey(categoryKey))
                 {
                     Log.Error($"[rowemod] Skipping unknown category '{categoryKey}' in preset.");
                     continue;
                 }
-
+        
                 string materialPath = Path.Combine(BikeRootPath, BikeMaterialsLoader.categories[categoryKey].displayName, $"{kvp.Value}.material");
                 if (!File.Exists(materialPath))
                 {
                     Log.Error($"[rowemod] Material file '{materialPath}' not found for category '{categoryKey}'.");
                     continue;
                 }
-
+        
                 Material loadedMaterial = LoadMaterialFromFile(materialPath);
                 if (loadedMaterial != null)
                 {
@@ -634,9 +655,49 @@ namespace rowemod.Mods
                 }
             }
         }
+        
+        private static bool SlotMatchesCategory(EquipSlotVehicle slot, string category)
+        {
+            if (!_categoryRules.TryGetValue(category, out var rule)) return true; // if no rule, allow
+            var slotSub = Norm(slot?._subType?.ToString() ?? "");
+            return slotSub == Norm(rule.SubType);
+        }
+
+        private static IEnumerable<string> PathTokens(Transform t, GameObject stopAtInclusive)
+        {
+            var cur = t;
+            while (cur != null)
+            {
+                yield return Norm(cur.name);
+                if (cur == stopAtInclusive.transform) break;
+                cur = cur.parent;
+            }
+        }
+
+        private static bool ShouldAffectRenderer(string category, Renderer r, GameObject equippedRoot)
+        {
+            if (!_categoryRules.TryGetValue(category, out var rule))
+            {
+                // Fallback: legacy behavior (name contains category)
+                return Norm(r.name).Contains(Norm(category));
+            }
+
+            var tokens = PathTokens(r.transform, equippedRoot).ToArray();
+
+            // must NOT contain excluded tokens anywhere in the path
+            if (rule.Excludes.Any(x => tokens.Any(t => t.Contains(Norm(x))))) return false;
+
+            // must contain at least one include token somewhere in the path
+            if (rule.Includes.Length > 0 && !rule.Includes.Any(x => tokens.Any(t => t.Contains(Norm(x))))) return false;
+
+            return true;
+        }
+
+        
+        #endregion
 
 
-
+        
 
     }
 }

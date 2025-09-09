@@ -51,9 +51,13 @@ namespace rowemod.Mods
         private static int _pickerSlot = -1;
         private static Vector2 _pickerScroll;
         private static string _pickerSearch = "";
-
+        private static bool _pickerOnlyThisSet = true;
+        
         // Optional: a little style cache
         private static GUIStyle _pickerBox, _pickerRow, _pickerSearchStyle;
+        
+
+
         
         #endregion
 
@@ -314,6 +318,7 @@ namespace rowemod.Mods
             }
 
             BuildTrickMenuDisplay(); // optional (kept if you still want the prebuilt view elsewhere)
+            BuildGlobalCatalog();
         }
 
 
@@ -381,7 +386,16 @@ namespace rowemod.Mods
 
                     GUILayout.BeginHorizontal();
                     bool newFlag = GUILayout.Toggle(flagsRef[i], GUIContent.none, GUILayout.Width(20));
-                    GUILayout.Label($"{direction} ⇒ {trickName}");
+                    GUILayout.Label($"{direction} ⇒ {trickName}", GUILayout.ExpandWidth(true));
+
+// NEW: open picker for this slot
+                    if (GUILayout.Button("Replace", GUILayout.Width(80)))
+                    {
+                        _pickerOpen   = true;
+                        _pickerSet    = set;
+                        _pickerSlot   = i;
+                        _pickerSearch = "";
+                    }
                     GUILayout.EndHorizontal();
 
                     if (newFlag != flagsRef[i])
@@ -391,6 +405,15 @@ namespace rowemod.Mods
                     }
                 }
             }
+
+            if (_pickerOpen)
+            {
+                // Temporarily end any GUILayout scopes if you're inside one (optional / if needed)
+                // Then draw in a fullscreen group so we're not clipped
+                GUI.BeginGroup(new Rect(0, 0, Screen.width, Screen.height));
+                DrawTrickPickerOverlay();
+                GUI.EndGroup();
+            }
         }
 
 
@@ -398,7 +421,173 @@ namespace rowemod.Mods
         #endregion
 
         #region Private Helpers
-        
+        // Filter helper
+        private static bool IsMatch(string text, string needle)
+        {
+            if (string.IsNullOrEmpty(needle)) return true;
+            return text?.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+// Enumerate candidates for the picker (either the current set or the global catalog)
+        private static IEnumerable<(string name, UnityEngine.Object obj)> EnumeratePickerCandidates()
+        {
+            if (_pickerSet == null) yield break;
+
+            if (_pickerOnlyThisSet)
+            {
+                var list = _pickerSet._dataList;
+                if (list != null)
+                {
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        var obj = list[(Index)i] as UnityEngine.Object;
+                        if (obj == null) continue;
+                        var nm = CleanTrickName(obj);
+                        if (IsMatch(nm, _pickerSearch))
+                            yield return (nm, obj);
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < _catalog.Count; i++)
+                {
+                    var obj = _catalog[i];
+                    var nm = _catalogNames[i];
+                    if (IsMatch(nm, _pickerSearch))
+                        yield return (nm, obj);
+                }
+            }
+        }
+
+// Actually perform the replacement + bookkeeping + refresh
+        private static void ReplaceTrick(TrickSetData set, int slot, UnityEngine.Object newObj)
+        {
+            if (set == null || set._dataList == null) return;
+            if (slot < 0 || slot >= set._dataList.Count) return;
+
+            var key = set.name;
+
+            // Ensure flags exist (defensive)
+            if (!_trickEnabled.TryGetValue(key, out var flags))
+            {
+                flags = new bool[set._dataList.Count];
+                _trickEnabled[key] = flags;
+            }
+
+            set._dataList[(Index)slot] = newObj; // <-- write the new trick reference
+            flags[slot] = newObj != null;
+
+            // Update cached UI names
+            if (trickDictionary.TryGetValue(key, out var names) && slot < names.Count)
+                names[slot] = CleanTrickName(newObj);
+
+            // If you want this replacement to become the new "Enable All" baseline, uncomment:
+            // if (_originalRefs.TryGetValue(key, out var originals) && slot < originals.Length)
+            //     originals[slot] = newObj;
+
+            ForceRefreshTrickRuntime();
+            Log.Msg($"Replaced {CleanSetName(key)}[{slot}] with {CleanTrickName(newObj)}");
+        }
+
+// Modal overlay wrapper
+        // Modal overlay wrapper
+        // Draw as a plain overlay area to avoid WindowFunction/IntPtr issues in IL2CPP
+        private static void DrawTrickPickerOverlay()
+        {
+            if (_pickerSet == null || _pickerSlot < 0)
+            {
+                Log.Msg($"Picker closed: set={_pickerSet}, slot={_pickerSlot}");
+                _pickerOpen = false;
+                return;
+            }
+
+            var r = new Rect(Screen.width / 2f - 260f, Screen.height / 2f - 180f, 520f, 360f);
+
+            // Window-styled area (title drawn by us)
+            GUILayout.BeginArea(r, GUI.skin.window);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Select Replacement Trick", GUI.skin.label);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("✕", GUILayout.Width(24))) { _pickerOpen = false; GUILayout.EndHorizontal(); GUILayout.EndArea(); return; }
+            GUILayout.EndHorizontal();
+
+            DrawTrickPickerWindowContents();   // <— see below
+            GUILayout.EndArea();
+        }
+
+
+// Same content as before, just no 'id' arg and no ModalWindow/DragWindow
+        private static void DrawTrickPickerWindowContents()
+        {
+            GUILayout.Space(4);
+            GUILayout.Label($"Set: {CleanSetName(_pickerSet.name)} | Slot: {_pickerSlot}");
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search:", GUILayout.Width(60));
+            _pickerSearch = GUILayout.TextField(_pickerSearch);
+            GUILayout.EndHorizontal();
+
+            _pickerOnlyThisSet = GUILayout.Toggle(_pickerOnlyThisSet, "Only show tricks from this set");
+
+            GUILayout.Space(6);
+            _pickerScroll = GUILayout.BeginScrollView(_pickerScroll, GUILayout.Height(240));
+
+            foreach (var (name, obj) in EnumeratePickerCandidates())
+            {
+                GUILayout.BeginHorizontal(GUI.skin.box);
+                GUILayout.Label(name, GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("Use", GUILayout.Width(60)))
+                {
+                    ReplaceTrick(_pickerSet, _pickerSlot, obj);
+                    _pickerOpen = false;
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndScrollView();
+
+            GUILayout.Space(6);
+            if (GUILayout.Button("Cancel")) _pickerOpen = false;
+
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
+            {
+                _pickerOpen = false;
+                GUI.FocusControl(null);
+            }
+        }
+
+
+        private static void BuildGlobalCatalog()
+        {
+            _catalog.Clear();
+            _catalogIndexByName.Clear();
+
+            // Walk every set and collect non-null entries
+            if (rTrickSetData == null) return;
+
+            foreach (var set in rTrickSetData)
+            {
+                if (set?._dataList == null) continue;
+
+                for (int i = 0; i < set._dataList.Count; i++)
+                {
+                    var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                    if (obj == null) continue;
+
+                    var clean = CleanTrickName(obj);
+                    if (_catalogIndexByName.ContainsKey(clean)) continue;
+
+                    _catalogIndexByName[clean] = _catalog.Count;
+                    _catalog.Add(obj);
+                }
+            }
+
+            // Frozen lookup array for fast Popup rendering
+            _catalogNames = new string[_catalog.Count];
+            for (int i = 0; i < _catalog.Count; i++)
+                _catalogNames[i] = CleanTrickName(_catalog[i]);
+        }
         private static void BuildTrickMenuDisplay()
         {
             trickMenuDisplayItems.Clear();

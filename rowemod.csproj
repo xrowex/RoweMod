@@ -447,6 +447,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Compile Include="Challenges\ChallengeArea.cs" />
+		<Compile Include="Challenges\ChallengeAreaManager.cs" />
 		<Compile Include="Config.cs" />
 		<Compile Include="JsonData.cs" />
 		<Compile Include="Menu.cs" />
