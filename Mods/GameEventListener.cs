@@ -186,10 +186,11 @@ namespace rowemod.Mods
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
                 MotorVehicleUtils.FindMxVehicleSettings();
-                MelonCoroutines.Start(DelayedLoadPreset());
+                MelonCoroutines.Start(DelayedLoadPreset(go));
                 MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                 MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
                 BikeMaterialsLoader.Initialize();
+                TrickMods.LoadTricksFromConfig();
                 // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.misc.customSessionMarker))
                 {
@@ -234,12 +235,14 @@ namespace rowemod.Mods
                 Log.Msg($"Menu Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
+                Memory.menuPlayer = Memory.rMbCharacter;
                 Memory.FindObjects(go);
-                MelonCoroutines.Start(DelayedLoadPreset());
+                MelonCoroutines.Start(DelayedLoadPreset(go));
                 MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                 MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
                 BikeMaterialsLoader.Initialize();
                 MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());//added
+                TrickMods.LoadTricksFromConfig();
             }
         }
 
@@ -260,22 +263,32 @@ namespace rowemod.Mods
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             PartTweaker.barListInitialized = false;
             PartTweaker.frameListInitialized = false;
-            
-            
+
+            MelonCoroutines.Start(DelayedLoadPreset(Memory.menuPlayer));
             MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
             MelonCoroutines.Start(DelayedPartReload());
             MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+            TrickMods.LoadTricksFromConfig();
             //Memory.FindObjects(Memory.physicsDrivenCharacter);
         }
-        public IEnumerator DelayedLoadPreset()
+        private void OnTitleLoopGameplayOnExit()
+        {
+
+        }
+        public IEnumerator DelayedLoadPreset(GameObject player)
         {
             yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
 
-            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) && Memory.rMbCharacter != null)
+            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) &&    player != null)
             {
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");
-                Memory.FindObjects(Memory.rMbCharacter); // Refresh all references
                 Custom.LoadPreset(Config.character.lastLoadedPresetCharacter); // Now it should work
+
+                // NEW: Re-apply visibility after model/material replacement
+                foreach (var kvp in Custom._slotVisibility)
+                {
+                    Custom.ToggleSlotVisibility(kvp.Key, kvp.Value);
+                }
             }
             else
             {

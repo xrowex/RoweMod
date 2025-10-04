@@ -55,6 +55,28 @@ namespace rowemod.Mods
             return presets;
         }
 
+        public static bool Delete(string presetName)
+        {
+            string filePath = Path.Combine(presetDirectory, $"{presetName}.json");
+            if (!File.Exists(filePath))
+            {
+                Log.Msg($"Cannot delete preset '{presetName}' - file not found.");
+                return false;
+            }
+
+            try
+            {
+                File.Delete(filePath);
+                Log.Msg($"Preset '{presetName}' deleted successfully.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to delete preset '{presetName}': {ex.Message}");
+                return false;
+            }
+        }
+
         /// <summary>
         /// Fills SlotVisibility based on current in-game equipped objects.
         /// </summary>

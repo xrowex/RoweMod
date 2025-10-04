@@ -462,6 +462,7 @@
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\MotorVehicleUtils.cs" />
+		<Compile Include="Mods\Multiplayer.cs" />
 		<Compile Include="Mods\ObjectDropper.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\Patches\ActiveRagdollBehaviourPatches.cs" />

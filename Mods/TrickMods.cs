@@ -8,9 +8,11 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Il2CppSystem;
 using AppDomain = System.AppDomain; // for Il2CppSystem.Type
+using Array = System.Array;
 using ManagedType = System.Type;
 using Il2CppTypeRef = Il2CppSystem.Type;
 using Math = System.Math;
+using StringComparison = System.StringComparison;
 
 namespace rowemod.Mods
 {
@@ -51,14 +53,27 @@ namespace rowemod.Mods
         private static int _pickerSlot = -1;
         private static Vector2 _pickerScroll;
         private static string _pickerSearch = "";
-        private static bool _pickerOnlyThisSet = true;
-        
+
         // Optional: a little style cache
         private static GUIStyle _pickerBox, _pickerRow, _pickerSearchStyle;
         
+        // Replace your DirectionGlyphMap with this:
+        private static readonly Dictionary<string, string> DirectionGlyphMap = new()
+        {
+            { "Up",    "xbox_dpad_up"    },
+            { "Right", "xbox_dpad_right" },
+            { "Down",  "xbox_dpad_down"  },
+            { "Left",  "xbox_dpad_left"  },
+            // NOTE: No diagonals here on purpose.
+        };
+        private static readonly Dictionary<string, Texture2D> GlyphCache = new();
 
 
-        
+        // Popup window placement
+        private static Rect _pickerRect = new Rect(0, 0, 360, 340);
+        private const int PickerWindowId = 0x315C0DE; // any unique int
+
+
         #endregion
 
         #region Helper Class for GUI
@@ -243,12 +258,115 @@ namespace rowemod.Mods
             return null;
         }
 
+        public static void DrawTrickPickerPopup()
+        {
+            if (!_pickerOpen || _pickerSet == null || _pickerSlot < 0) return;
+
+            // Close if clicked outside the popup
+            if (Event.current.type == EventType.MouseDown && !_pickerRect.Contains(Event.current.mousePosition))
+            {
+                _pickerOpen = false;
+            }
+
+            // Clamp so it doesn’t run off-screen
+            _pickerRect = ClampToScreen(_pickerRect, 10f);
+
+            // Draw the floating popup window
+            _pickerRect = GUI.Window(PickerWindowId, _pickerRect, (GUI.WindowFunction)PickerWindow, "Trick Picker");
+        }
+
+        private static void PickerWindow(int id)
+        {
+            // Dark background like your main cards
+            GUILayout.BeginVertical(_card);   // instead of "box"
+
+            GUILayout.Label($"Replace Trick in {_pickerSet.name} [Slot {_pickerSlot}]", _cardHeader);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search:", GUILayout.Width(60));
+            _pickerSearch = GUILayout.TextField(_pickerSearch ?? "", _searchField, GUILayout.Width(200));
+            if (GUILayout.Button("×", _miniBtn, GUILayout.Width(24)))
+                _pickerOpen = false;
+            GUILayout.EndHorizontal();
+
+            _pickerScroll = GUILayout.BeginScrollView(_pickerScroll, GUILayout.Height(200));
+
+            foreach (var trickName in _catalogNames)
+            {
+                if (!string.IsNullOrEmpty(_pickerSearch) &&
+                    trickName.IndexOf(_pickerSearch, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                if (GUILayout.Button(trickName, _rowLabelRight))
+                {
+                    ReplaceTrick(_pickerSet, _pickerSlot, trickName);
+                    _pickerOpen = false;
+                }
+            }
+
+            GUILayout.EndScrollView();
+
+            if (GUILayout.Button("Cancel", _miniBtn)) _pickerOpen = false;
+
+            GUILayout.EndVertical();
+
+            GUI.DragWindow(new Rect(0, 0, 10000, 24));
+        }
+
+
 
         public static void GrabTrickData()
         {
             Log.Msg("GrabTrickData() called...");
 
-            rTrickSetData = Resources.FindObjectsOfTypeAll<TrickSetData>();
+            // Prefer the container asset "BMX_TrickDataSets"
+            TrickSetData[] bmxSetsFromAsset = null;
+            var allSetsAssets = Resources.FindObjectsOfTypeAll<TrickDataSets>();
+            if (allSetsAssets != null && allSetsAssets.Length > 0)
+            {
+                for (int i = 0; i < allSetsAssets.Length; i++)
+                {
+                    var ds = allSetsAssets[i];
+                    if (ds == null) continue;
+
+                    if ((ds.name ?? "").IndexOf("BMX", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        var arr = ds.TrickSets; // Il2CppReferenceArray<TrickSetData>
+                        if (arr != null && arr.Length > 0)
+                        {
+                            var tmp = new List<TrickSetData>(arr.Length);
+                            for (int k = 0; k < arr.Length; k++)
+                            {
+                                var ts = arr[k];
+                                if (ts != null) tmp.Add(ts);
+                            }
+
+                            bmxSetsFromAsset = tmp.ToArray();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (bmxSetsFromAsset != null && bmxSetsFromAsset.Length > 0)
+            {
+                rTrickSetData = bmxSetsFromAsset;
+                Log.Msg($"Using Scooter_TrickDataSets asset: {rTrickSetData.Length} sets.");
+            }
+            else
+            {
+                // Fallback: keep only sets whose names indicate Scooter
+                var all = Resources.FindObjectsOfTypeAll<TrickSetData>();
+                rTrickSetData = (all == null || all.Length == 0)
+                    ? Array.Empty<TrickSetData>()
+                    : FilterScooterSets(all);
+
+                Log.Msg($"Using name filter fallback: {rTrickSetData.Length} scooter sets.");
+            }
+
+            // DO NOT overwrite rTrickSetData again here.
+            // rTrickSetData = Resources.FindObjectsOfTypeAll<TrickSetData>();  <-- remove this line
+
             rTrickSystemBrain = GameObject.FindObjectOfType<TrickSystemBrain>();
 
             trickDictionary.Clear();
@@ -256,7 +374,7 @@ namespace rowemod.Mods
 
             if (rTrickSetData != null && rTrickSetData.Length > 0)
             {
-                Log.Msg($"TrickSetData Found: {rTrickSetData.Length}");
+                Log.Msg($"TrickSetData (Scooter only) Found: {rTrickSetData.Length}");
 
                 for (int t = 0; t < rTrickSetData.Length; t++)
                 {
@@ -275,7 +393,6 @@ namespace rowemod.Mods
                     {
                         int count = trickSetData._dataList.Count;
 
-                        // Cache originals for this set (so we can null/restore later)
                         var originals = new UnityEngine.Object?[count];
                         var enabled = new bool[count];
 
@@ -284,9 +401,8 @@ namespace rowemod.Mods
                             var item = trickSetData._dataList[(Index)i];
                             var obj = item as UnityEngine.Object;
                             originals[i] = obj;
-                            enabled[i] = obj != null; // default: enabled if it exists
+                            enabled[i] = obj != null;
 
-                            // Display name fallback
                             trickNames.Add(CleanTrickName(obj));
                         }
 
@@ -303,7 +419,7 @@ namespace rowemod.Mods
             }
             else
             {
-                Log.Msg("No TrickSetData objects found!");
+                Log.Msg("No Scooter TrickSetData objects found!");
             }
 
             if (rTrickSystemBrain != null)
@@ -317,18 +433,52 @@ namespace rowemod.Mods
                 trickSet6InputAction = rTrickSystemBrain._trickSet6InputAction;
             }
 
-            BuildTrickMenuDisplay(); // optional (kept if you still want the prebuilt view elsewhere)
-            BuildGlobalCatalog();
+            BuildTrickMenuDisplay(); // operates on Scooter-only rTrickSetData
+            BuildCatalog();
         }
 
 
-        public static void DrawTrickMenu()
+        // Add these fields to TrickMods
+        private static Vector2 _uiScroll;
+        private static string _uiSearch = "";
+        private static readonly Dictionary<string, bool> _foldouts = new();
+        private static bool _stylesInited;
+        private static GUIStyle _card, _cardHeader, _pill, _pillOn, _rowLabelLeft, _rowLabelRight, _miniBtn, _badge, _searchField;
+
+        // tiny “dirty” flag so we only rebuild runtime when something changed
+        private static bool _pendingRefresh;
+
+        public static void DrawTrickMenuPro()
         {
-            GUILayout.Label("=== Trick Menu ===");
+            InitStylesIfNeeded();
+
+            GUILayout.Space(6);
+            GUILayout.Label("Tricks", _cardHeader);
+
+            // top toolbar
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search:", GUILayout.Width(60));
+            GUI.SetNextControlName("trickSearch");
+            var newSearch = GUILayout.TextField(_uiSearch, _searchField, GUILayout.Width(220));
+            if (newSearch != _uiSearch) _uiSearch = newSearch;
+
+            GUILayout.FlexibleSpace();
+
+            // global actions
+            if (GUILayout.Button("Expand All", _miniBtn)) SetAllFoldouts(true);
+            if (GUILayout.Button("Collapse All", _miniBtn)) SetAllFoldouts(false);
+            GUI.backgroundColor = Color.red;
+            if (GUILayout.Button("Reset Tricks", _miniBtn)) ResetCustomTricks();
+            GUI.backgroundColor = Color.white;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+            _uiScroll = GUILayout.BeginScrollView(_uiScroll);
 
             if (rTrickSetData == null || rTrickSetData.Length == 0)
             {
-                GUILayout.Label("No Trick Sets found...");
+                GUILayout.Label("No Trick Sets found…");
+                GUILayout.EndScrollView();
                 return;
             }
 
@@ -336,84 +486,299 @@ namespace rowemod.Mods
             {
                 if (set == null) continue;
 
-                string setKey = set.name;
-                // UPDATED: clean the set display name
-                string displaySetName = CleanSetName(setKey);
+                var setKey = set.name;
+                var setDisplay = CleanSetName(setKey);
 
-                if (!_trickEnabled.ContainsKey(setKey) || !_originalRefs.ContainsKey(setKey))
-                {
-                    if (set._dataList != null)
-                    {
-                        int count = set._dataList.Count;
-                        var originals = new UnityEngine.Object?[count];
-                        var flags = new bool[count];
-                        for (int i = 0; i < count; i++)
-                        {
-                            var objInit = set._dataList[(Index)i] as UnityEngine.Object;
-                            originals[i] = objInit;
-                            flags[i] = objInit != null;
-                        }
+                // lazy init storage for this set
+                EnsureBackingArrays(set);
 
-                        _originalRefs[setKey] = originals;
-                        _trickEnabled[setKey] = flags;
-                    }
-                }
+                // filter: if search text is present and none of this set’s tricks match, skip
+                if (!SetMatchesSearch(setKey, set)) continue;
+
+                // card
+                GUILayout.BeginVertical(_card);
+
+                // header row
+                GUILayout.BeginHorizontal();
+                bool currentFold = _foldouts.TryGetValue(setKey, out var f) ? f : true;
+                bool newFold = FoldoutButton(currentFold, "", _cardHeader); // show caret only
+                DrawSetHeaderGlyphs(setDisplay);                            // LB + RT icons
+                _foldouts[setKey] = newFold;
+
+                GUILayout.FlexibleSpace();
+
+                // tiny status pill: enabled count / total
+                GetEnabledCount(setKey, set, out int enabledCount, out int totalCount);
+                GUILayout.Label($"{enabledCount}/{totalCount}", _badge);
 
                 GUILayout.Space(6);
-                GUILayout.Label($"Trick Set: {displaySetName}");
 
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Enable All", GUILayout.Width(110))) ApplyAll(set, true);
-                if (GUILayout.Button("Disable All", GUILayout.Width(110))) ApplyAll(set, false);
+                if (GUILayout.Button("Enable All", _pillOn, GUILayout.Height(22)))
+                {
+                    ApplyAll(set, true);
+                    _pendingRefresh = true;
+                }
+
+                if (GUILayout.Button("Disable All", _pill, GUILayout.Height(22)))
+                {
+                    ApplyAll(set, false);
+                    _pendingRefresh = true;
+                }
+
                 GUILayout.EndHorizontal();
 
-                if (set._dataList == null)
+                if (newFold)
                 {
-                    GUILayout.Label("  (No data list)");
-                    continue;
-                }
+                    GUILayout.Space(6);
 
-                var flagsRef = _trickEnabled[setKey];
-                int itemCount = Mathf.Min(set._dataList.Count, flagsRef.Length);
-
-                for (int i = 0; i < itemCount; i++)
-                {
-                    string direction = (i < DefaultDirectionLabels.Length) ? DefaultDirectionLabels[i] : $"Index {i}";
-
-                    // UPDATED: clean trick name
-                    var obj = set._dataList[(Index)i] as UnityEngine.Object;
-                    string trickName = CleanTrickName(obj);
-
+                    // header for columns
                     GUILayout.BeginHorizontal();
-                    bool newFlag = GUILayout.Toggle(flagsRef[i], GUIContent.none, GUILayout.Width(20));
-                    GUILayout.Label($"{direction} ⇒ {trickName}", GUILayout.ExpandWidth(true));
-
-// NEW: open picker for this slot
-                    if (GUILayout.Button("Replace", GUILayout.Width(80)))
-                    {
-                        _pickerOpen   = true;
-                        _pickerSet    = set;
-                        _pickerSlot   = i;
-                        _pickerSearch = "";
-                    }
+                    GUILayout.Label("<b>Direction</b>", _rowLabelLeft);
+                    GUILayout.Label("<b>Trick</b>", _rowLabelRight);
                     GUILayout.EndHorizontal();
 
-                    if (newFlag != flagsRef[i])
+                    // rows
+                    var flags = _trickEnabled[setKey];
+                    int itemCount = Mathf.Min(set._dataList.Count, flags.Length);
+
+                    for (int i = 0; i < itemCount; i++)
                     {
-                        flagsRef[i] = newFlag;
-                        ApplyToggle(set, i, newFlag);
+                        var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                        string dir = (i < DefaultDirectionLabels.Length) ? DefaultDirectionLabels[i] : $"Index {i}";
+                        string trickName = CleanTrickName(obj);
+
+                        // row background zebra
+                        DrawRowBackground(i);
+
+                        GUILayout.BeginHorizontal();
+
+                        // left side: toggle + direction
+                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(20));
+                        //GUILayout.Label(dir, _rowLabelLeft);
+                        DrawDirectionCell(dir);
+
+                        // right side: trick label (grays out when disabled)
+                        using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
+                        {
+                            GUILayout.Label(trickName, _rowLabelRight);
+                        }
+                        // right side: trick label (grays out when disabled)
+                        using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
+                        {
+                            GUILayout.Label(trickName, _rowLabelRight);
+                        }
+
+                        // NEW: Replace button
+                        if (GUILayout.Button("Replace", _miniBtn, GUILayout.Width(70)))
+                        {
+                            // Get button rect (local to layout group)
+                            var btnRect = GUILayoutUtility.GetLastRect();
+
+                            // Convert to *screen space*
+                            Vector2 screenPos = GUIUtility.GUIToScreenPoint(
+                                new Vector2(btnRect.x, btnRect.y + btnRect.height)
+                            );
+
+                            // Place popup to the RIGHT of your menu panel
+                            float popupX = Menu.previousWindowPosition.x + Menu.windowRect.width + 280f + 20f; // 20px padding
+                            float popupY = screenPos.y;
+
+                            _pickerRect = new Rect(popupX, popupY, 280f, 320f);
+
+                            _pickerOpen = true;
+                            _pickerSet = set;
+                            _pickerSlot = i;
+                            _pickerScroll = Vector2.zero;
+                            _pickerSearch = "";
+
+                            if (_catalogNames == null || _catalogNames.Length == 0)
+                                BuildCatalog();
+                        }
+
+
+
+
+                        GUILayout.EndHorizontal();
+
+                        if (newFlag != flags[i])
+                        {
+                            flags[i] = newFlag;
+                            ApplyToggle(set, i, newFlag);
+                            _pendingRefresh = true;
+                            SaveTricksToConfig();
+                        }
+
+                        // search quick-skip: if searching and neither dir nor trick text matches, hide quickly
+                        if (!RowMatchesSearch(dir, trickName)) continue;
+                    }
+                }
+
+                GUILayout.EndVertical(); // card
+                GUILayout.Space(8);
+            }
+
+            GUILayout.EndScrollView();
+
+            // final refresh once if anything changed this frame
+            if (_pendingRefresh)
+            {
+                _pendingRefresh = false;
+                ForceRefreshTrickRuntime();
+            }
+
+            // keyboard shortcuts (A/D in the current hovered card)
+            HandleKeyboardShortcuts();
+
+        }
+
+        public static void ReplaceTrick(TrickSetData set, int index, string trickName)
+        {
+            if (set == null || set._dataList == null) return;
+            if (index < 0 || index >= set._dataList.Count) return;
+
+            if (!_catalogIndexByName.TryGetValue(trickName, out int newIndex))
+            {
+                Log.Error($"ReplaceTrick: Trick '{trickName}' not found in catalog.");
+                return;
+            }
+
+            var newTrick = _catalog[newIndex];
+            set._dataList[(Index)index] = newTrick;
+
+            if (trickDictionary.TryGetValue(set.name, out var names) && index < names.Count)
+                names[index] = CleanTrickName(newTrick);
+
+            if (_trickEnabled.TryGetValue(set.name, out var flags) && index < flags.Length)
+                flags[index] = newTrick != null;
+
+            ForceRefreshTrickRuntime();
+            SaveTricksToConfig();
+            Log.Msg($"Replaced {set.name}[{index}] with {trickName}");
+        }
+        private static void BuildCatalog()
+        {
+            _catalog.Clear();
+            _catalogIndexByName.Clear();
+
+            var names = new List<string>();
+
+            if (rTrickSetData != null)
+            {
+                foreach (var set in rTrickSetData)
+                {
+                    if (set == null || set._dataList == null) continue;
+
+                    for (int i = 0; i < set._dataList.Count; i++)
+                    {
+                        var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                        if (obj == null) continue;
+
+                        string cleanName = CleanTrickName(obj);
+
+
+                        // skip dupes
+                        if (_catalogIndexByName.ContainsKey(cleanName))
+                            continue;
+
+                        _catalogIndexByName[cleanName] = _catalog.Count;
+                        _catalog.Add(obj);
+                        names.Add(cleanName);
                     }
                 }
             }
 
-            if (_pickerOpen)
+            _catalogNames = names.ToArray();
+            Log.Msg($"BMX catalog built: {_catalogNames.Length} tricks available.");
+        }
+        public static void ResetCustomTricks()
+        {
+            if (rTrickSetData == null) return;
+
+            foreach (var set in rTrickSetData)
             {
-                // Temporarily end any GUILayout scopes if you're inside one (optional / if needed)
-                // Then draw in a fullscreen group so we're not clipped
-                GUI.BeginGroup(new Rect(0, 0, Screen.width, Screen.height));
-                DrawTrickPickerOverlay();
-                GUI.EndGroup();
+                if (set == null) continue;
+
+                // Reset the underlying data
+                set.InitializeOrResizeTrickData();
+
+                // Reset toggle flags to true
+                var setKey = set.name;
+                if (_trickEnabled.TryGetValue(setKey, out var flags))
+                {
+                    for (int i = 0; i < flags.Length; i++)
+                        flags[i] = true;
+                }
+
+                // Restore original references into the data list
+                if (_originalRefs.TryGetValue(setKey, out var originals))
+                {
+                    for (int i = 0; i < set._dataList.Count && i < originals.Length; i++)
+                        set._dataList[(Index)i] = originals[i];
+                }
             }
+
+            Config.tricks.trickSets.Clear();
+            SaveTricksToConfig();
+
+            // Refresh runtime systems
+            ForceRefreshTrickRuntime();
+
+            Log.Msg("All trick sets reset: all toggles enabled and TrickData re-initialized.");
+        }
+
+        public static void SaveTricksToConfig()
+        {
+            if (rTrickSetData == null) return;
+
+            var dict = new Dictionary<string, List<TrickEntry>>();
+            foreach (var set in rTrickSetData)
+            {
+                if (set == null || set._dataList == null) continue;
+
+                var entries = new List<TrickEntry>();
+                for (int i = 0; i < set._dataList.Count; i++)
+                {
+                    var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                    string name = CleanTrickName(obj);
+
+                    // TODO: Replace with your real enable/disable logic
+                    bool enabled = obj != null;
+
+                    entries.Add(new TrickEntry { Name = name, Enabled = enabled });
+                }
+
+                dict[set.name] = entries;
+            }
+
+            Config.tricks.trickSets = dict;
+            Config.Save();
+            Log.Msg("Custom tricks (with enabled state) saved to config.");
+        }
+
+        public static void LoadTricksFromConfig()
+        {
+            if (rTrickSetData == null || Config.tricks.trickSets == null) return;
+
+            foreach (var set in rTrickSetData)
+            {
+                if (set == null || set._dataList == null) continue;
+
+                if (!Config.tricks.trickSets.TryGetValue(set.name, out var savedTricks)) continue;
+
+                for (int i = 0; i < set._dataList.Count && i < savedTricks.Count; i++)
+                {
+                    var entry = savedTricks[i];
+                    if (_catalogIndexByName.TryGetValue(entry.Name, out int newIndex))
+                    {
+                        set._dataList[(Index)i] = entry.Enabled
+                            ? _catalog[newIndex]
+                            : null; // disabled → empty slot
+                    }
+                }
+            }
+
+            ForceRefreshTrickRuntime();
+            Log.Msg("Custom tricks (with enabled state) restored from config.");
         }
 
 
@@ -421,173 +786,421 @@ namespace rowemod.Mods
         #endregion
 
         #region Private Helpers
-        // Filter helper
-        private static bool IsMatch(string text, string needle)
+        private static string NormalizeTitle(string title)
         {
-            if (string.IsNullOrEmpty(needle)) return true;
-            return text?.IndexOf(needle, System.StringComparison.OrdinalIgnoreCase) >= 0;
+            string s = title.Trim().ToLowerInvariant();
+            s = s.Replace("/", " / ")
+                .Replace("\\", " / ")
+                .Replace("&", " and ")
+                .Replace("+", " and ")
+                .Replace(",", " ");
+            while (s.Contains("  ")) s = s.Replace("  ", " ");
+
+            // Expand combined patterns into explicit pairs *per noun*
+            s = ExpandLeftRightCombos(s, "shoulder"); // e.g. "left/right shoulder" -> "left shoulder right shoulder"
+            s = ExpandLeftRightCombos(s, "trigger");  // e.g. "left and right trigger" -> "left trigger right trigger"
+            return s;
         }
 
-// Enumerate candidates for the picker (either the current set or the global catalog)
-        private static IEnumerable<(string name, UnityEngine.Object obj)> EnumeratePickerCandidates()
+        private static string ExpandLeftRightCombos(string s, string noun)
         {
-            if (_pickerSet == null) yield break;
+            // patterns where noun comes after "left/right"
+            string[] pats1 = {
+                $"left and right {noun}", $"left right {noun}",
+                $"left / right {noun}",   $"left & right {noun}",
+                $"left + right {noun}",   $"left, right {noun}"
+            };
+            foreach (var p in pats1)
+                if (s.Contains(p)) s = s.Replace(p, $"left {noun} right {noun}");
 
-            if (_pickerOnlyThisSet)
+            // patterns where noun comes first
+            string[] pats2 = {
+                $"{noun} left and right", $"{noun} left right",
+                $"{noun} left / right",   $"{noun} left & right",
+                $"{noun} left + right",   $"{noun} left, right"
+            };
+            foreach (var p in pats2)
+                if (s.Contains(p)) s = s.Replace(p, $"{noun} left {noun} right");
+
+            // clean up extra spaces
+            while (s.Contains("  ")) s = s.Replace("  ", " ");
+            return s;
+        }
+
+        // Parse a cleaned set title like "Left Shoulder Right Trigger" into glyph IDs
+        private static readonly (string key, string glyph)[] _titleTokens =
+        {
+            ("left shoulder",  "xbox_lb"),
+            ("right shoulder", "xbox_rb"),
+            ("left trigger",   "xbox_lt"),
+            ("right trigger",  "xbox_rt"),
+            // add more if your titles include face buttons, e.g. ("button a","xbox_button_a")
+        };
+        
+
+        // Draw the glyph sequence; fallback to the text title if nothing matched
+        // Parse a cleaned set title (e.g., "Left Shoulder Right Trigger") into glyph IDs (LB, RB, etc.)
+        private static List<string> TitleToGlyphs(string title)
+        {
+            if (string.IsNullOrEmpty(title)) return null;
+
+            // normalize & expand "left/right shoulder" style phrases to explicit pairs
+            string s = NormalizeTitle(title);
+
+            var hits = new List<(int idx, string id)>();
+
+            // helper: add all occurrences of a PHRASE (keeps true order)
+            void AddPhrase(string phrase, string id)
             {
-                var list = _pickerSet._dataList;
-                if (list != null)
+                int start = 0;
+                while (true)
                 {
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        var obj = list[(Index)i] as UnityEngine.Object;
-                        if (obj == null) continue;
-                        var nm = CleanTrickName(obj);
-                        if (IsMatch(nm, _pickerSearch))
-                            yield return (nm, obj);
-                    }
+                    int i = s.IndexOf(phrase, start, StringComparison.Ordinal);
+                    if (i < 0) break;
+                    hits.Add((i, id));
+                    start = i + phrase.Length;
                 }
             }
-            else
+
+            // helper: add occurrences of a WORD (bounded by spaces)
+            void AddWord(string word, string id)
             {
-                for (int i = 0; i < _catalog.Count; i++)
+                string padded = " " + s + " ";
+                string needle = " " + word + " ";
+                int start = 0;
+                while (true)
                 {
-                    var obj = _catalog[i];
-                    var nm = _catalogNames[i];
-                    if (IsMatch(nm, _pickerSearch))
-                        yield return (nm, obj);
+                    int i = padded.IndexOf(needle, start, StringComparison.Ordinal);
+                    if (i < 0) break;
+                    // subtract the padding so ordering is roughly original
+                    hits.Add((Mathf.Max(0, i - 1), id));
+                    start = i + needle.Length;
                 }
             }
+
+            // explicit phrases
+            AddPhrase("left shoulder", "xbox_lb");
+            AddPhrase("right shoulder", "xbox_rb");
+            AddPhrase("left trigger", "xbox_lt");
+            AddPhrase("right trigger", "xbox_rt");
+
+            // shorthand / alt labels
+            AddWord("lb", "xbox_lb");
+            AddWord("rb", "xbox_rb");
+            AddWord("lt", "xbox_lt");
+            AddWord("rt", "xbox_rt");
+
+            // PlayStation style (map to Xbox-equivalent glyphs you've got loaded)
+            AddWord("l1", "xbox_lb");
+            AddWord("r1", "xbox_rb");
+            AddWord("l2", "xbox_lt");
+            AddWord("r2", "xbox_rt");
+
+            if (hits.Count == 0) return null;
+
+            hits.Sort((a, b) => a.idx.CompareTo(b.idx));
+
+            // de-dupe but preserve visual order
+            var outIds = new List<string>(hits.Count);
+            foreach (var h in hits)
+                if (!outIds.Contains(h.id))
+                    outIds.Add(h.id);
+
+            return outIds.Count > 0 ? outIds : null;
         }
 
-// Actually perform the replacement + bookkeeping + refresh
-        private static void ReplaceTrick(TrickSetData set, int slot, UnityEngine.Object newObj)
+
+// Draw the glyph sequence; fallback to the text title if nothing matched
+        private static void DrawSetHeaderGlyphs(string setTitle)
         {
-            if (set == null || set._dataList == null) return;
-            if (slot < 0 || slot >= set._dataList.Count) return;
+            const float baseSize = 24f;
+            float size = baseSize * UIScale;
 
-            var key = set.name;
-
-            // Ensure flags exist (defensive)
-            if (!_trickEnabled.TryGetValue(key, out var flags))
+            var ids = TitleToGlyphs(setTitle);
+            if (ids == null)
             {
-                flags = new bool[set._dataList.Count];
-                _trickEnabled[key] = flags;
-            }
-
-            set._dataList[(Index)slot] = newObj; // <-- write the new trick reference
-            flags[slot] = newObj != null;
-
-            // Update cached UI names
-            if (trickDictionary.TryGetValue(key, out var names) && slot < names.Count)
-                names[slot] = CleanTrickName(newObj);
-
-            // If you want this replacement to become the new "Enable All" baseline, uncomment:
-            // if (_originalRefs.TryGetValue(key, out var originals) && slot < originals.Length)
-            //     originals[slot] = newObj;
-
-            ForceRefreshTrickRuntime();
-            Log.Msg($"Replaced {CleanSetName(key)}[{slot}] with {CleanTrickName(newObj)}");
-        }
-
-// Modal overlay wrapper
-        // Modal overlay wrapper
-        // Draw as a plain overlay area to avoid WindowFunction/IntPtr issues in IL2CPP
-        private static void DrawTrickPickerOverlay()
-        {
-            if (_pickerSet == null || _pickerSlot < 0)
-            {
-                Log.Msg($"Picker closed: set={_pickerSet}, slot={_pickerSlot}");
-                _pickerOpen = false;
+                GUILayout.Label($"<b>{setTitle}</b>", _cardHeader);
                 return;
             }
 
-            var r = new Rect(Screen.width / 2f - 260f, Screen.height / 2f - 180f, 520f, 360f);
-
-            // Window-styled area (title drawn by us)
-            GUILayout.BeginArea(r, GUI.skin.window);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Select Replacement Trick", GUI.skin.label);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("✕", GUILayout.Width(24))) { _pickerOpen = false; GUILayout.EndHorizontal(); GUILayout.EndArea(); return; }
-            GUILayout.EndHorizontal();
-
-            DrawTrickPickerWindowContents();   // <— see below
-            GUILayout.EndArea();
-        }
-
-
-// Same content as before, just no 'id' arg and no ModalWindow/DragWindow
-        private static void DrawTrickPickerWindowContents()
-        {
-            GUILayout.Space(4);
-            GUILayout.Label($"Set: {CleanSetName(_pickerSet.name)} | Slot: {_pickerSlot}");
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Search:", GUILayout.Width(60));
-            _pickerSearch = GUILayout.TextField(_pickerSearch);
-            GUILayout.EndHorizontal();
-
-            _pickerOnlyThisSet = GUILayout.Toggle(_pickerOnlyThisSet, "Only show tricks from this set");
-
-            GUILayout.Space(6);
-            _pickerScroll = GUILayout.BeginScrollView(_pickerScroll, GUILayout.Height(240));
-
-            foreach (var (name, obj) in EnumeratePickerCandidates())
+            GUILayout.BeginHorizontal(GUILayout.Height(size));
+            for (int k = 0; k < ids.Count; k++)
             {
-                GUILayout.BeginHorizontal(GUI.skin.box);
-                GUILayout.Label(name, GUILayout.ExpandWidth(true));
-                if (GUILayout.Button("Use", GUILayout.Width(60)))
+                var tex = GetGlyph(ids[k]);
+                if (tex != null)
+                    GUILayout.Box(tex, GUILayout.Width(size), GUILayout.Height(size));
+                else
                 {
-                    ReplaceTrick(_pickerSet, _pickerSlot, obj);
-                    _pickerOpen = false;
+                    // If any glyph missing, fall back gracefully
+                    GUILayout.Label($"<b>{setTitle}</b>", _cardHeader);
+                    break;
                 }
-                GUILayout.EndHorizontal();
+
+                if (k < ids.Count - 1) GUILayout.Space(4f * UIScale);
             }
 
-            GUILayout.EndScrollView();
-
-            GUILayout.Space(6);
-            if (GUILayout.Button("Cancel")) _pickerOpen = false;
-
-            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
-            {
-                _pickerOpen = false;
-                GUI.FocusControl(null);
-            }
+            GUILayout.EndHorizontal();
         }
 
 
-        private static void BuildGlobalCatalog()
+        // --- DPI helper (add once, near your fields) ---
+        private static float UIScale => Mathf.Clamp(Screen.height / 1080f, 0.85f, 1.6f);
+
+        // --- Robust loader: Texture2D OR Sprite; Resources OR already-loaded assets ---
+        private static Texture2D GetGlyph(string resourceName)
         {
-            _catalog.Clear();
-            _catalogIndexByName.Clear();
+            if (GlyphCache.TryGetValue(resourceName, out var tex) && tex) return tex;
 
-            // Walk every set and collect non-null entries
-            if (rTrickSetData == null) return;
+            // 1) Try Resources as Texture2D
+            tex = Resources.Load<Texture2D>(resourceName);
+            if (tex) return GlyphCache[resourceName] = tex;
 
-            foreach (var set in rTrickSetData)
+            // 2) Try Resources as Sprite (use underlying texture)
+            var spr = Resources.Load<Sprite>(resourceName);
+            if (spr && spr.texture) return GlyphCache[resourceName] = spr.texture;
+
+            // 3) Search already loaded assets by name (works in IL2CPP builds)
+            var allTex = Resources.FindObjectsOfTypeAll<Texture2D>();
+            for (int i = 0; i < allTex.Length; i++)
+                if (string.Equals(allTex[i].name, resourceName, StringComparison.OrdinalIgnoreCase))
+                    return GlyphCache[resourceName] = allTex[i];
+
+            var allSpr = Resources.FindObjectsOfTypeAll<Sprite>();
+            for (int i = 0; i < allSpr.Length; i++)
+                if (string.Equals(allSpr[i].name, resourceName, StringComparison.OrdinalIgnoreCase) &&
+                    allSpr[i].texture)
+                    return GlyphCache[resourceName] = allSpr[i].texture;
+
+            return null; // fallback will draw text
+        }
+
+        private static void DrawDirectionCell(string dir)
+    {
+        const float baseSize = 22f;
+        float size = baseSize * UIScale;
+
+        // 1) Cardials: draw direct glyphs.
+        if (DirectionGlyphMap.TryGetValue(dir, out var glyphName))
+        {
+            var tex = GetGlyph(glyphName);
+            if (tex != null)
             {
-                if (set?._dataList == null) continue;
+                GUILayout.Box(tex, GUILayout.Width(size), GUILayout.Height(size));
+                return;
+            }
+        }
 
-                for (int i = 0; i < set._dataList.Count; i++)
+        // 2) Diagonals (or missing cardinals): rotate the Up icon to the needed angle.
+        var baseTex = GetGlyph("xbox_dpad_up");
+        if (baseTex != null)
+        {
+            float angle =
+                dir == "Up" ? 0f :
+                dir == "UpRight" ? 45f :
+                dir == "Right" ? 90f :
+                dir == "DownRight" ? 135f :
+                dir == "Down" ? 180f :
+                dir == "DownLeft" ? 225f :
+                dir == "Left" ? 270f :
+                dir == "UpLeft" ? 315f : 0f;
+
+            Rect r = GUILayoutUtility.GetRect(size, size, GUILayout.Width(size), GUILayout.Height(size));
+            Vector2 pivot = new Vector2(r.x + r.width * 0.5f, r.y + r.height * 0.5f);
+
+            GUIUtility.RotateAroundPivot(angle, pivot);
+            GUI.DrawTexture(r, baseTex, ScaleMode.ScaleToFit, true);
+            GUIUtility.RotateAroundPivot(-angle, pivot);
+            return;
+        }
+
+        // 3) Fallback: text
+        GUILayout.Label(dir);
+    }
+
+
+
+        private static void InitStylesIfNeeded()
+        {
+            if (_stylesInited) return;
+            _stylesInited = true;
+
+            _card = new GUIStyle("box")
+            {
+                padding = new RectOffset(10,10,8,10),
+                margin  = new RectOffset(0,0,4,0)
+            };
+
+            _cardHeader = new GUIStyle(GUI.skin.label)
+            {
+                richText = true,
+                fontStyle = FontStyle.Bold,
+                fontSize = 14
+            };
+
+            _pill = new GUIStyle(GUI.skin.button)
+            {
+                padding = new RectOffset(10,10,2,2),
+                margin  = new RectOffset(4,0,0,0)
+            };
+            _pillOn = new GUIStyle(_pill);
+
+            _rowLabelLeft  = new GUIStyle(GUI.skin.label){ richText=true, alignment = TextAnchor.MiddleLeft,  padding = new RectOffset(0,6,2,2) };
+            _rowLabelRight = new GUIStyle(GUI.skin.label){ richText=true, alignment = TextAnchor.MiddleLeft,  padding = new RectOffset(6,0,2,2) };
+
+            _miniBtn = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 11,
+                padding = new RectOffset(6,6,2,2),
+                margin  = new RectOffset(2,2,0,0)
+            };
+
+            _badge = new GUIStyle(GUI.skin.box)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 11,
+                fixedHeight = 20,
+                padding = new RectOffset(6,6,2,2)
+            };
+
+            _searchField = new GUIStyle(GUI.skin.textField){ fontSize = 12 };
+        }
+
+        private static void EnsureBackingArrays(TrickSetData set)
+        {
+            if (set == null || set._dataList == null) return;
+            var setKey = set.name;
+
+            if (!_originalRefs.ContainsKey(setKey))
+            {
+                int count = set._dataList.Count;
+                var originals = new UnityEngine.Object?[count];
+                var flags     = new bool[count];
+                for (int i = 0; i < count; i++)
                 {
                     var obj = set._dataList[(Index)i] as UnityEngine.Object;
-                    if (obj == null) continue;
+                    originals[i] = obj;
+                    flags[i] = obj != null;
+                }
+                _originalRefs[setKey] = originals;
+                _trickEnabled[setKey] = flags;
+                if (!_foldouts.ContainsKey(setKey)) _foldouts[setKey] = true;
+            }
+        }
 
-                    var clean = CleanTrickName(obj);
-                    if (_catalogIndexByName.ContainsKey(clean)) continue;
+        private static bool FoldoutButton(bool open, string title, GUIStyle style)
+        {
+            string caret = open ? "▼" : "▶";
+            return GUILayout.Toggle(open, $"{caret}  <b>{title}</b>", style);
+        }
 
-                    _catalogIndexByName[clean] = _catalog.Count;
-                    _catalog.Add(obj);
+        private static void DrawRowBackground(int index)
+        {
+            var r = GUILayoutUtility.GetRect(1, 22, GUILayout.ExpandWidth(true));
+            Color bg = (index % 2 == 0) ? new Color(1,1,1,0.06f) : new Color(1,1,1,0.03f);
+            EditorishFill(r, bg);
+            GUI.skin.label.CalcHeight(GUIContent.none, r.width); // keep layout happy
+            GUI.BeginGroup(r);
+            GUI.EndGroup();
+            GUILayout.Space(-22); // pull back; we’ll draw actual contents next
+        }
+
+        // tiny immediate-mode rect fill without UnityEditor
+        private static Texture2D _fillTex;
+        private static void EditorishFill(Rect r, Color c)
+        {
+            if (_fillTex == null) { _fillTex = new Texture2D(1,1); _fillTex.SetPixel(0,0,Color.white); _fillTex.Apply(); }
+            var prev = GUI.color; GUI.color = c;
+            GUI.DrawTexture(r, _fillTex);
+            GUI.color = prev;
+        }
+
+        private static bool RowMatchesSearch(string dir, string trick)
+        {
+            if (string.IsNullOrWhiteSpace(_uiSearch)) return true;
+            var s = _uiSearch.Trim();
+            return dir.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0
+                || trick.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool SetMatchesSearch(string setKey, TrickSetData set)
+        {
+            if (string.IsNullOrWhiteSpace(_uiSearch)) return true;
+            // quick accept if set name matches
+            if (CleanSetName(setKey).IndexOf(_uiSearch, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+
+            // else scan rows until we find one that matches
+            if (set?._dataList == null) return false;
+            int n = set._dataList.Count;
+            for (int i = 0; i < n; i++)
+            {
+                var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                if (RowMatchesSearch(i < DefaultDirectionLabels.Length ? DefaultDirectionLabels[i] : $"Index {i}",
+                                     CleanTrickName(obj)))
+                    return true;
+            }
+            return false;
+        }
+
+        private static void GetEnabledCount(string setKey, TrickSetData set, out int enabled, out int total)
+        {
+            enabled = 0; total = 0;
+            if (set?._dataList == null) return;
+            var flags = _trickEnabled[setKey];
+            total = Mathf.Min(set._dataList.Count, flags.Length);
+            for (int i = 0; i < total; i++) if (flags[i]) enabled++;
+        }
+
+        private static void SetAllFoldouts(bool open)
+        {
+            if (rTrickSetData == null) return;
+            foreach (var s in rTrickSetData)
+                if (s != null) _foldouts[s.name] = open;
+        }
+
+        private struct GUIContentColor : System.IDisposable
+        {
+            private readonly Color _prev;
+            public GUIContentColor(Color c){ _prev = GUI.color; GUI.color = c; }
+            public void Dispose(){ GUI.color = _prev; }
+        }
+
+        private static void HandleKeyboardShortcuts()
+        {
+            var e = Event.current;
+            if (e.type != EventType.KeyDown) return;
+
+            // A = enable all, D = disable all, when mouse is over a card
+            if (e.keyCode != KeyCode.A && e.keyCode != KeyCode.D) return;
+
+            // naive hit test: find last card under mouse
+            if (rTrickSetData == null) return;
+            foreach (var set in rTrickSetData)
+            {
+                if (set == null) continue;
+                // if card is open and mouse is inside current layout rect, trigger (kept simple)
+                // (IMGUI doesn't give us an easy per-card rect without extra bookkeeping, so skip for brevity)
+            }
+        }
+
+        private static TrickSetData[] FilterScooterSets(TrickSetData[] all)
+        {
+            var list = new List<TrickSetData>(all.Length);
+            for (int i = 0; i < all.Length; i++)
+            {
+                var s = all[i];
+                if (s == null) continue;
+                var n = s.name ?? "";
+                // accept anything clearly scooter-specific
+                if (n.IndexOf("Scooter", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    n.IndexOf("_TrickSetData_Scooter", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    list.Add(s);
                 }
             }
-
-            // Frozen lookup array for fast Popup rendering
-            _catalogNames = new string[_catalog.Count];
-            for (int i = 0; i < _catalog.Count; i++)
-                _catalogNames[i] = CleanTrickName(_catalog[i]);
+            return list.ToArray();
         }
+
+        
         private static void BuildTrickMenuDisplay()
         {
             trickMenuDisplayItems.Clear();
@@ -665,9 +1278,16 @@ namespace rowemod.Mods
             return raw;
         }
 
+        private static Rect ClampToScreen(Rect r, float padding)
+        {
+            float x = Mathf.Clamp(r.x, padding, Screen.width - r.width - padding);
+            float y = Mathf.Clamp(r.y, padding, Screen.height - r.height - padding);
+            r.x = x; r.y = y;
+            return r;
+        }
 
         #endregion
-        
+
 
     }
 }

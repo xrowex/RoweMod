@@ -1,4 +1,6 @@
-﻿using Il2CppMashBox.Character.Scripts;
+﻿using System.Collections;
+using Il2CppMashBox.Character.Scripts;
+using MelonLoader;
 using rowemod;
 using rowemod.Mods;
 using rowemod.Utils;
@@ -61,8 +63,9 @@ namespace rowemod.Mods
 
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
-
-
+        
+        
+        
         public static void DrawCharacterTab()
         {
             // --- TOP BAR ------------------------------------------------------------
@@ -163,11 +166,20 @@ namespace rowemod.Mods
                     GUILayout.BeginVertical();
                     for (int i = 0; i < availablePresets.Count; i++)
                     {
+                        GUILayout.BeginHorizontal();
                         if (GUILayout.Button(availablePresets[i], Menu.highQualityButtonStyle))
                         {
                             _selectedPresetIndex = i;
                             LoadPreset(availablePresets[_selectedPresetIndex]);
                         }
+                        if (availablePresets[i] != "DefaultPreset" && GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30)))
+                        {
+                            ClothingPreset.Delete(availablePresets[i]);
+                            if (i == _selectedPresetIndex) _selectedPresetIndex = 0;
+                            break;
+                        }
+                        GUILayout.EndHorizontal();
+                        
                     }
 
                     GUILayout.EndVertical();
@@ -182,54 +194,52 @@ namespace rowemod.Mods
 
         public static void ToggleSlotVisibility(Slot slot, bool isVisible)
         {
-            // Ensure the slot exists in the dictionary
             if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
             {
                 Debug.LogError($"ToggleSlotVisibility: No mapped name found for slot '{slot}'.");
                 return;
             }
 
-            // Construct the correct full path
+            // Start with Physics Skeleton path
             string fullPath = SlotParentPath + equipSlotName;
             if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
-            {
                 fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
-            }
 
-            // Check if we already stored this GameObject
-            if (!_slotObjects.TryGetValue(slot, out GameObject slotObject) || slotObject == null)
+            
+
+            // Try Physics Skeleton first
+            GameObject slotObject = GameObject.Find(fullPath);
+
+            // Fallback to Skeleton path if not found
+            if (slotObject == null)
             {
-                // Find and store the GameObject only once
-                slotObject = GameObject.Find(fullPath);
+                string fallbackPath = fullPath.Replace("Physics Skeleton", "Skeleton");
+                slotObject = GameObject.Find(fallbackPath);
                 if (slotObject != null)
                 {
-                    _slotObjects[slot] = slotObject;
-                }
-                else
-                {
-                    Debug.LogWarning($"[rowemod] Slot GameObject not found: {fullPath}");
-                    return;
+                    Log.Msg($"[rowemod] Fallback path used: {fallbackPath}");
                 }
             }
 
-            // Enable or disable the object
+            if (slotObject == null)
+            {
+                Debug.LogWarning($"[rowemod] Slot GameObject not found: {fullPath}");
+                return;
+            }
+
+            _slotObjects[slot] = slotObject;
             slotObject.SetActive(isVisible);
-            Debug.Log($"[rowemod] Slot GameObject '{fullPath}' set to {isVisible}.");
+            Debug.Log($"[rowemod] Slot GameObject '{slotObject.name}' set to {isVisible}.");
         }
-        
-        
-        
-        
+
+
+
+
+
         public static void ListCharacterBundles(Slot slot)
         {
-            if (_lastSelectedSlot != slot)
-            {
-                inModelsTab = true;
-                _lastSelectedSlot = slot;
-            }
-            
-            string slotPath = Path.Combine(characterRootPath, slot.ToString());
-            
+            EnsureSlotModels(slot);
+
             GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Models", highQualityButtonStyle)) inModelsTab = true;
@@ -238,47 +248,75 @@ namespace rowemod.Mods
 
             if (inModelsTab)
             {
-                // List all *.model files in this slot’s folder
-                foreach (string file in Directory.GetFiles(slotPath, "*.model", SearchOption.AllDirectories))
+                foreach (var entry in _slotModels[slot])
                 {
-                    string buttonText = Path.GetFileNameWithoutExtension(file);
-                    if (GUILayout.Button(buttonText, highQualityButtonStyle))
+                    GUILayout.BeginHorizontal();
+
+                    if (entry.materialPaths.Length == 0)
                     {
-                        ReplaceModel(slot, file);
-                    }
-                }
-            }
-            else
-            {
-                // If we have a selected model directory, show any *.material files in it
-                if (_selectedModelDirectories.TryGetValue(slot, out string modelDirectory)
-                    && Directory.Exists(modelDirectory))
-                {
-                    string[] materialFiles = Directory.GetFiles(modelDirectory, "*.material", SearchOption.AllDirectories);
-                    if (materialFiles.Length == 0)
-                    {
-                        GUILayout.Label("No materials found in this model's directory.", labelStyle);
+                        // request default model icon
+                        Texture2D tex = RequestOrLoadIcon(LoadPrefab(entry.modelPath), entry.modelPath);
+                        if (GUILayout.Button(tex, GUILayout.Width(128), GUILayout.Height(128)))
+                            ReplaceModel(slot, entry.modelPath);
                     }
                     else
                     {
-                        foreach (string file in materialFiles)
+                        foreach (var matFile in entry.materialPaths)
                         {
-                            string buttonText = Path.GetFileNameWithoutExtension(file);
-                            if (GUILayout.Button(buttonText, highQualityButtonStyle))
+                            Material mat = LoadMaterial(matFile);
+                            Texture2D tex = RequestOrLoadIcon(LoadPrefab(entry.modelPath), entry.modelPath, matFile, mat);
+
+                            if (GUILayout.Button(tex, GUILayout.Width(128), GUILayout.Height(128)))
                             {
-                                ReplaceMaterial(slot, file);
+                                ReplaceModel(slot, entry.modelPath);
+                                ReplaceMaterial(slot, matFile);
                             }
                         }
                     }
-                }
-                else
-                {
-                    GUILayout.Label("No model selected. Select a model first.", labelStyle);
+
+                    GUILayout.EndHorizontal();
                 }
             }
 
             GUILayout.EndVertical();
         }
+        // Loads a prefab from a .model bundle temporarily
+        private static GameObject LoadPrefab(string modelPath)
+        {
+            if (string.IsNullOrEmpty(modelPath) || !File.Exists(modelPath))
+                return null;
+
+            GameObject prefab = null;
+            var bundle = AssetBundle.LoadFromFile(modelPath);
+            if (bundle != null)
+            {
+                string[] assetNames = bundle.GetAllAssetNames();
+                if (assetNames.Length > 0)
+                    prefab = bundle.LoadAsset<GameObject>(assetNames[0]);
+                bundle.Unload(false); // release bundle but keep asset alive
+            }
+            return prefab;
+        }
+        
+        // Loads a Material from a .material bundle temporarily
+        private static Material LoadMaterial(string matPath)
+        {
+            if (string.IsNullOrEmpty(matPath) || !File.Exists(matPath))
+                return null;
+
+            Material mat = null;
+            var bundle = AssetBundle.LoadFromFile(matPath);
+            if (bundle != null)
+            {
+                mat = bundle.LoadAllAssets<Material>().FirstOrDefault();
+                bundle.Unload(false);
+            }
+            return mat;
+        }
+
+
+
+
 
         public static void ReplaceModel(Slot slot, string newBundlePath)
         {
@@ -332,7 +370,7 @@ namespace rowemod.Mods
                 return;
             }
 
-            Log.Msg($"ReplaceModel: Successfully loaded prefab {assetNames[0]} for slot '{slot}'.");
+            //Log.Msg($"ReplaceModel: Successfully loaded prefab {assetNames[0]} for slot '{slot}'.");
 
             // Grab the "Physics Driven Character" as your root
             Transform charRoot = physicsDrivenCharacter.transform;
@@ -341,6 +379,7 @@ namespace rowemod.Mods
                 Log.Error("ReplaceModel: charRoot (physicsDrivenCharacter) is null.");
                 newBundle.Unload(false);
                 return;
+                
             }
 
             // Update our config path for the chosen slot (so you can persist it):
@@ -369,22 +408,22 @@ namespace rowemod.Mods
 
             // Find the actual slot transform. Notice the full path includes "Physics Skeleton/Character_Reference/"
             string fullPath = SlotParentPath + equipSlotName;
-            if (equipSlotName == "Hat_EquipSlot"  || equipSlotName == "Hair_EquipSlot" || equipSlotName == "Eyes_EquipSlot")
+            if (equipSlotName == "Hat_EquipSlot" || equipSlotName == "Hair_EquipSlot" || equipSlotName == "Eyes_EquipSlot")
             {
                 fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
             }
             Transform slotTransform = charRoot.Find(fullPath);
-            
+
             //change the slot transform name to see if it works in TheShop
             if (slotTransform == null)
             {
                 Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
-                Log.Error($"ReplaceModel: Trying to find '{fullPath.Replace("Physics Skeleton","Skeleton")}' instead.");
-                fullPath = fullPath.Replace("Physics Skeleton","Skeleton");
+                Log.Error($"ReplaceModel: Trying to find '{fullPath.Replace("Physics Skeleton", "Skeleton")}' instead.");
+                fullPath = fullPath.Replace("Physics Skeleton", "Skeleton");
                 slotTransform = charRoot.Find(fullPath);
             }
-                
-            
+
+
             if (slotTransform == null)
             {
                 Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
@@ -428,16 +467,16 @@ namespace rowemod.Mods
             if (equipSlot != null)
             {
                 equipSlot.Equip(_customObject);
-                Log.Msg($"ReplaceModel: Successfully equipped {slot} model.");
+                //Log.Msg($"ReplaceModel: Successfully equipped {slot} model.");
             }
             else
             {
                 Log.Error($"ReplaceModel: No EquipSlot component found on {slotTransform.name}.");
             }
-            
+
             // Unload the bundle
             newBundle.Unload(false);
-            
+
             // --- NEW: switch to Materials tab and auto-apply the first available material ---
             // (Also ensure the UI is looking at the active slot)
             Menu.currentSlot = slot;
@@ -721,37 +760,292 @@ namespace rowemod.Mods
 
             return slotObject;
         }
-        // Add near other fields (already present): 
-// static Dictionary<Slot, string> _selectedModelDirectories = new Dictionary<Slot, string>();
+        
 
-// --- NEW: helper ---
+        // --- NEW: helper ---
         private static void OpenMaterialsTabAndAutoSelectFirst(Slot slot)
         {
             // Open the Materials tab in UI
             inModelsTab = false;
 
-            // Find the first .material inside the selected model's directory
-            if (_selectedModelDirectories.TryGetValue(slot, out string modelDir) && Directory.Exists(modelDir))
+            if (slot != Slot.Body)
             {
-                string[] materialFiles = Directory.GetFiles(modelDir, "*.material", SearchOption.AllDirectories);
-                if (materialFiles != null && materialFiles.Length > 0)
+                // Find the first .material inside the selected model's directory
+                if (_selectedModelDirectories.TryGetValue(slot, out string modelDir) && Directory.Exists(modelDir))
                 {
-                    string firstMat = materialFiles[0];
-                    Log.Msg($"Auto-selecting first material for {slot}: {Path.GetFileName(firstMat)}");
-                    ReplaceMaterial(slot, firstMat);
-                    return;
+                    string[] materialFiles = Directory.GetFiles(modelDir, "*.material", SearchOption.AllDirectories);
+                    if (materialFiles != null && materialFiles.Length > 0)
+                    {
+                        string firstMat = materialFiles[0];
+                        Log.Msg($"Auto-selecting first material for {slot}: {Path.GetFileName(firstMat)}");
+                        ReplaceMaterial(slot, firstMat);
+                        return;
+                    }
+                    else
+                    {
+                        Log.Msg($"No *.material files found for {slot} in '{modelDir}'.");
+                    }
                 }
                 else
                 {
-                    Log.Msg($"No *.material files found for {slot} in '{modelDir}'.");
+                    Log.Msg($"No model directory stored for {slot}; cannot auto-select material.");
                 }
-            }
-            else
-            {
-                Log.Msg($"No model directory stored for {slot}; cannot auto-select material.");
             }
         }
 
+        private static IEnumerator EnableClothNextFrame(Transform charRoot, GameObject equippedRoot)
+        {
+            // Wait one frame so parenting/binding finishes inside Equip()
+            yield return null;
+
+            if (equippedRoot == null) yield break;
+
+            // (Optional) gather colliders from the character if your Cloth needs them
+            var capsules = charRoot.GetComponentsInChildren<CapsuleCollider>(true);
+
+            foreach (var cloth in equippedRoot.GetComponentsInChildren<Cloth>(true))
+            {
+                // If your game expects colliders, wire them here (optional):
+                // cloth.capsuleColliders = capsules;
+
+                // Safety: enable at the end
+                cloth.enabled = true;
+            }
+        }
+        // --- Add fields in Custom.cs ---
+        private static Dictionary<string, Texture2D> _modelPreviews = new Dictionary<string, Texture2D>();
+        private static Dictionary<string, Texture2D> _materialPreviews = new Dictionary<string, Texture2D>();
+        private static UnityEngine.Camera _previewCamera;
+        private static GameObject _previewRoot;
+
+        // --- Utility: ensure hidden preview scene exists ---
+        private static void EnsurePreviewCamera()
+        {
+            if (_previewCamera != null) return;
+
+            _previewRoot = new GameObject("RoweMod_PreviewRoot");
+            _previewRoot.hideFlags = HideFlags.HideAndDontSave;
+
+            var camGO = new GameObject("RoweMod_PreviewCam");
+            camGO.transform.SetParent(_previewRoot.transform);
+            _previewCamera = camGO.AddComponent<UnityEngine.Camera>();
+            _previewCamera.backgroundColor = Color.clear;
+            _previewCamera.clearFlags = CameraClearFlags.Color;
+            _previewCamera.orthographic = false;
+            _previewCamera.enabled = false; // manual rendering only
+
+        }
+
+        // --- Cache + queue ---
+        private static Dictionary<string, Texture2D> _previewCache = new Dictionary<string, Texture2D>();
+        private static Queue<PreviewJob> _previewQueue = new Queue<PreviewJob>();
+        private static bool _isGenerating = false;
+
+        private class PreviewJob
+        {
+            public GameObject prefab;
+            public string key;
+            public Material material;
+            public string SavePath;
+        }
+
+        private static readonly string IconCachePath = Path.Combine(
+            Path.GetDirectoryName(typeof(Custom).Assembly.Location),
+            "rowemod", "BundleIcons"
+        );
         
+        private static Texture2D RequestOrLoadIcon(GameObject prefab, string bundlePath, string matPath = null, Material mat = null)
+        {
+            Directory.CreateDirectory(IconCachePath);
+
+            // key for caching in memory
+            string key = bundlePath + "::" + (matPath ?? "default");
+
+            // 1. Already in memory?
+            if (_previewCache.TryGetValue(key, out var tex) && tex != null && tex != Texture2D.grayTexture)
+                return tex;
+
+            // 2. Check disk
+            string safeName = Path.GetFileNameWithoutExtension(bundlePath);
+            if (!string.IsNullOrEmpty(matPath))
+                safeName += "_" + Path.GetFileNameWithoutExtension(matPath);
+
+            string iconFile = Path.Combine(IconCachePath, safeName + ".png");
+
+            if (File.Exists(iconFile))
+            {
+                byte[] bytes = File.ReadAllBytes(iconFile);
+                Texture2D diskTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                diskTex.LoadImage(bytes);
+                _previewCache[key] = diskTex;
+                return diskTex;
+            }
+
+            // 3. Not found → enqueue for generation
+            _previewCache[key] = Texture2D.grayTexture;
+            _previewQueue.Enqueue(new PreviewJob { prefab = prefab, key = key, material = mat, SavePath = iconFile });
+
+            if (!_isGenerating)
+                MelonCoroutines.Start(ProcessPreviewQueue());
+
+            return Texture2D.grayTexture;
+        }
+
+        // --- Request a preview (lazy load) ---
+        private static void RequestPreview(GameObject prefab, string key, Material mat = null)
+        {
+            if (_previewCache.ContainsKey(key)) return; // already cached
+
+            // placeholder until real render is done
+            _previewCache[key] = Texture2D.grayTexture;
+
+            _previewQueue.Enqueue(new PreviewJob { prefab = prefab, key = key, material = mat });
+
+            if (!_isGenerating)
+                MelonCoroutines.Start(ProcessPreviewQueue());
+        }
+
+        // --- Coroutine processes queue gradually ---
+        private static IEnumerator ProcessPreviewQueue()
+        {
+            _isGenerating = true;
+
+            while (_previewQueue.Count > 0)
+            {
+                int jobsThisFrame = Mathf.Min(2, _previewQueue.Count); // limit work per frame
+                for (int i = 0; i < jobsThisFrame; i++)
+                {
+                    var job = _previewQueue.Dequeue();
+                    Texture2D tex = GeneratePreview(job.prefab, job.key, job.material);
+
+                    if (!string.IsNullOrEmpty(job.SavePath))
+                        File.WriteAllBytes(job.SavePath, tex.EncodeToPNG());
+
+                    _previewCache[job.key] = tex;
+                }
+                yield return null; // give frame back to game
+            }
+
+            _isGenerating = false;
+        }
+
+        private static void EnsureSlotModels(Slot slot)
+        {
+            if (_slotModels.ContainsKey(slot)) return;
+
+            string slotPath = Path.Combine(characterRootPath, slot.ToString());
+            var entries = new List<ModelEntry>();
+
+            foreach (string modelFile in Directory.GetFiles(slotPath, "*.model", SearchOption.AllDirectories))
+            {
+                string modelDir = Path.GetDirectoryName(modelFile);
+                string[] mats = Directory.GetFiles(modelDir, "*.material", SearchOption.AllDirectories);
+                entries.Add(new ModelEntry { modelPath = modelFile, materialPaths = mats });
+            }
+
+            _slotModels[slot] = entries;
+        }
+
+
+        // --- Heavy render (actual capture once) ---
+        private static Texture2D GeneratePreview(GameObject prefab, string key, Material mat = null)
+        {
+            EnsurePreviewCamera();
+
+            GameObject inst = GameObject.Instantiate(prefab, _previewRoot.transform);
+            inst.transform.position = Vector3.zero;
+
+            foreach (Transform t in inst.GetComponentsInChildren<Transform>(true))
+                t.gameObject.layer = 31;
+
+            if (mat != null)
+            {
+                var rend = inst.GetComponentInChildren<Renderer>();
+                if (rend != null)
+                    rend.sharedMaterial = mat;
+            }
+
+            // Handle SkinnedMeshRenderers (bake them for preview)
+            foreach (var smr in inst.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                if (smr.sharedMesh != null)
+                {
+                    var baked = new Mesh();
+                    smr.BakeMesh(baked);
+
+                    var tempGO = new GameObject("BakedMeshPreview");
+                    tempGO.layer = 31;
+                    tempGO.transform.SetParent(smr.transform, false);
+
+                    var mf = tempGO.AddComponent<MeshFilter>();
+                    mf.sharedMesh = baked;
+
+                    var mr = tempGO.AddComponent<MeshRenderer>();
+                    mr.sharedMaterial = smr.sharedMaterial;
+                }
+            }
+
+            // temporary light
+            var lightGO = new GameObject("PreviewLight_Temp");
+            lightGO.transform.SetParent(_previewRoot.transform);
+            var light = lightGO.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.2f;
+            light.transform.rotation = Quaternion.Euler(30, 30, 0);
+
+            // calculate bounds
+            Bounds b = new Bounds(inst.transform.position, Vector3.zero);
+            foreach (var r in inst.GetComponentsInChildren<Renderer>())
+                if (r != null) b.Encapsulate(r.bounds);
+
+            float radius = b.extents.magnitude;
+            float distance = Mathf.Max(0.1f, radius * 2.5f);
+
+            _previewCamera.transform.position = b.center + new Vector3(0, 0, -distance);
+            _previewCamera.transform.LookAt(b.center);
+            _previewCamera.fieldOfView = 30f;
+            _previewCamera.nearClipPlane = 0.01f;
+            _previewCamera.farClipPlane = distance * 4f;
+
+            _previewCamera.cullingMask = 1 << 31;
+            _previewCamera.clearFlags = CameraClearFlags.SolidColor;
+            _previewCamera.backgroundColor = Color.clear;
+
+            // render
+            RenderTexture rt = new RenderTexture(256, 256, 16);
+            _previewCamera.targetTexture = rt;
+            _previewCamera.Render();
+
+            Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+            RenderTexture.active = rt;
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            tex.Apply();
+
+            RenderTexture.active = null;
+            _previewCamera.targetTexture = null;
+
+            // cleanup
+            GameObject.DestroyImmediate(inst);
+            GameObject.DestroyImmediate(lightGO);
+            rt.Release();
+
+            return tex;
+        }
+        private class ModelEntry
+        {
+            public string modelPath;
+            public string[] materialPaths;
+        }
+        private static Dictionary<Slot, List<ModelEntry>> _slotModels = new();
+
+
+
+
+
+
+
+
+
+
     }
 }

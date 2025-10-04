@@ -39,6 +39,7 @@ namespace rowemod
             Graphics,
             Marker,
             Dropper,
+            Multiplayer,
             Challenge // Added Challenge tab for future use
         }
 
@@ -127,6 +128,8 @@ namespace rowemod
                 DrawScrollableContent();
                 GUILayout.EndVertical();
                 
+
+
                 // Resize handle area (bottom-right corner)
                 Rect resizeRect = new Rect(windowRect.width - resizeHandleSize, windowRect.height - resizeHandleSize, resizeHandleSize, resizeHandleSize);
                 GUI.DrawTexture(resizeRect, MakeTex(1, 1, new Color(1f, 1f, 1f, 0.2f))); // Optional: visible handle
@@ -190,7 +193,7 @@ namespace rowemod
                         PartTweaker.DrawPartSelectorUI();
                         break;
                     case Tab.Tricks:
-                        TrickMods.DrawTrickMenu();
+                        TrickMods.DrawTrickMenuPro();
                         break;
 
                     case Tab.Character:
@@ -287,7 +290,9 @@ namespace rowemod
                     case Tab.Dropper:
                         ObjectDropper.DrawDropperTab();
                         break;
-                    
+                    case Tab.Multiplayer:
+                        Multiplayer.DrawMultiplayerTab();
+                        break;
                     /*case Tab.Challenge:
                         GUILayout.Box("8Bitt Challenge", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         GUILayout.Label("This tab is reserved for future challenges.", labelStyle);
@@ -378,6 +383,7 @@ namespace rowemod
                 ("Graphics", Tab.Graphics),
                 ("Marker", Tab.Marker),
                 ("Dropper", Tab.Dropper),
+                ("MP", Tab.Multiplayer), // Added Multiplayer tab
                 //("Challenge", Tab.Challenge) // Added Challenge tab
             };
             
@@ -418,7 +424,9 @@ namespace rowemod
                     case Tab.Physics:
                         ResetPhysicsTab();
                         break;
-
+                    case Tab.Tricks:
+                        TrickMods.ResetCustomTricks();
+                        break;
                     case Tab.Bike:
                         //LoadAllAssetBundles();
                         Config.ResetBikeTab();
@@ -426,6 +434,7 @@ namespace rowemod
                         ReloadAssetsFromCachedBundles();
                         customizableEntity.EquipItems();
                         customizableEntity.EquipItems();
+                        Memory.FindObjects(Memory.rMbCharacter); // Refresh all references
                         Log.Msg("Bike Tab reset!");
                         break;
 

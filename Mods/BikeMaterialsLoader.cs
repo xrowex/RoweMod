@@ -76,36 +76,7 @@ namespace rowemod.Mods
         private static string Norm(string s) =>
             new string((s ?? string.Empty).ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
-        private sealed class CategoryRule
-        {
-            public string SubType;             // required slot._subType match (normalized)
-            public string[] Includes = Array.Empty<string>(); // tokens allowed in renderer path
-            public string[] Excludes = Array.Empty<string>(); // tokens that must NOT appear
-        }
-
-        // Map UI categories to expected slot._subType and renderer-name tokens
-        private static readonly Dictionary<string, CategoryRule> _categoryRules =
-            new Dictionary<string, CategoryRule>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Seat"] = new CategoryRule {
-                    SubType  = "seat",
-                    Includes = new[] { "seat" },                   // accept "seat" anywhere in path
-                    Excludes = new[] { "clamp", "post", "bolt" }   // avoid neighbors
-                },
-                ["SeatClamp"] = new CategoryRule {
-                    SubType  = "seatclamp",                        // covers "seat_clamp" as well (see Norm)
-                    Includes = new[] { "clamp" },
-                    Excludes = new[] { "post", "bolt" }
-                },
-                ["Seat Post"] = new CategoryRule {
-                    SubType  = "seatpost",                         // covers "seat_post"
-                    Includes = new[] { "post" },
-                    Excludes = new[] { "clamp", "bolt" }
-                },
-
-                // add more categories as you like, e.g.
-                // ["Bars"] = new CategoryRule { SubType = "bars", Includes = new[] {"bar"}, Excludes = Array.Empty<string>() }
-            };
+     
 
         
         
@@ -282,6 +253,132 @@ namespace rowemod.Mods
 
         public static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
         {
+            if (equipSlotVehicles == null || equipSlotVehicles.Length == 0) return;
+
+            int slotsCategorized = 0;
+
+            // Order keys by normalized length so specific names (e.g., "SeatClamp") beat "Seat"
+            var orderedKeys = categories.Keys
+                .OrderByDescending(k => Norm(k).Length)
+                .ToList();
+
+            foreach (var slot in equipSlotVehicles)
+            {
+                
+                string slotName = slot.gameObject.name;
+                Log.Msg($"Checking slot: {slotName}");
+
+                bool isPeg = slotName.Contains("Peg", StringComparison.OrdinalIgnoreCase);
+                string wheelType = GetWheelType(slot.gameObject);
+                bool isFront = wheelType == "Front Wheel";
+                bool isBack = wheelType == "Back Wheel";
+
+                // --- BMX_* branch ---
+                if (slotName.StartsWith("BMX_", StringComparison.OrdinalIgnoreCase))
+                {
+                    string baseName = slotName
+                        .Replace("_Front_EquipSlot", "")
+                        .Replace("_Rear_EquipSlot", "")
+                        .Replace("_Back_EquipSlot", "")
+                        .Replace("_EquipSlot", "");
+
+                    // strip "BMX_" -> e.g. "BMX_Hub" => "Hub", "BMX_Tire" => "Tire"
+                    string simplified = baseName.StartsWith("BMX_", StringComparison.OrdinalIgnoreCase)
+                        ? baseName.Substring(4)
+                        : baseName;
+
+                    if (isFront)
+                    {
+                        // Try BOTH forms so Hubs map to Hub_Front and Tires to BMX_Tire_Front
+                        string[] frontKeys = { $"{simplified}_Front", $"{baseName}_Front" };
+                        foreach (var k in frontKeys)
+                            if (categories.ContainsKey(k))
+                            {
+                                categories[k].slots.Add(slot);
+                                Log.Msg($"Assigned '{slotName}' to '{k}'.");
+                            }
+
+                        string[] genKeys = { simplified, baseName };
+                        foreach (var k in genKeys)
+                            if (categories.ContainsKey(k))
+                            {
+                                categories[k].slots.Add(slot);
+                                Log.Msg($"Also assigned '{slotName}' to general '{k}' category.");
+                            }
+                    }
+                    else if (isBack)
+                    {
+                        string[] rearKeys = { $"{simplified}_Rear", $"{baseName}_Rear" };
+                        foreach (var k in rearKeys)
+                            if (categories.ContainsKey(k))
+                            {
+                                categories[k].slots.Add(slot);
+                                Log.Msg($"Assigned '{slotName}' to '{k}'.");
+                            }
+
+                        string[] genKeys = { simplified, baseName };
+                        foreach (var k in genKeys)
+                            if (categories.ContainsKey(k))
+                            {
+                                categories[k].slots.Add(slot);
+                                Log.Msg($"Also assigned '{slotName}' to general '{k}' category.");
+                            }
+                    }
+                    else
+                    {
+                        if (categories.ContainsKey(simplified))
+                        {
+                            categories[simplified].slots.Add(slot);
+                            Log.Msg($"Assigned '{slotName}' to generic '{simplified}' category.");
+                        }
+                        else if (categories.ContainsKey(baseName))
+                        {
+                            categories[baseName].slots.Add(slot);
+                            Log.Msg($"Assigned '{slotName}' to generic '{baseName}' category.");
+                        }
+                    }
+
+                    if (isPeg && categories.ContainsKey("BMX_Peg"))
+                    {
+                        categories["BMX_Peg"].slots.Add(slot);
+                        Log.Msg($"Assigned '{slotName}' to 'BMX_Peg'.");
+                    }
+
+                    slotsCategorized++;
+                    continue;
+                }
+
+                // --- Non-BMX names ("Seat Clamp", "Seat Post", "StemBolt", etc.) ---
+                bool matched = false;
+                string normSlot = Norm(slotName);
+
+                foreach (var key in orderedKeys)
+                {
+                    string normKey = Norm(key);
+                    if (normSlot.Contains(normKey))
+                    {
+                        categories[key].slots.Add(slot);
+                        Log.Msg($"Categorized slot '{slotName}' under '{categories[key].displayName}'.");
+                        slotsCategorized++;
+                        matched = true;
+                        break;
+                    }
+                }
+
+                if (!matched && isPeg && categories.ContainsKey("BMX_Peg"))
+                {
+                    categories["BMX_Peg"].slots.Add(slot);
+                    Log.Msg($"Assigned '{slotName}' to 'BMX_Peg'.");
+                    slotsCategorized++;
+                }
+            }
+            
+            Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
+        }
+
+
+        /*public static void CategorizeEquipSlots(EquipSlotVehicle[] equipSlotVehicles)
+        {
             //Log.Msg("Listing all EquipSlotVehicle names:");
             foreach (var slot in equipSlotVehicles)
             {
@@ -299,7 +396,7 @@ namespace rowemod.Mods
             foreach (var slot in equipSlotVehicles)
             {
                 string slotName = slot.gameObject.name;
-                //Log.Msg($"Checking slot: {slotName}");
+                Log.Msg($"Checking slot: {slotName}");
 
                 bool isPeg = slotName.Contains("Peg", StringComparison.OrdinalIgnoreCase);
                 string wheelType = GetWheelType(slot.gameObject);
@@ -313,55 +410,39 @@ namespace rowemod.Mods
                         .Replace("_Front_EquipSlot", "")
                         .Replace("_Rear_EquipSlot", "")
                         .Replace("_Back_EquipSlot", "")
-                        .Replace("_EquipSlot", ""); // fallback cleanup
+                        .Replace("_EquipSlot", "");
+
+                    // NEW: strip "BMX_" so we can match your category keys ("Hub_Front", "Hub_Rear", "Hub")
+                    string simplified = baseName.StartsWith("BMX_", StringComparison.OrdinalIgnoreCase)
+                        ? baseName.Substring(4) // e.g., "BMX_Hub" -> "Hub"
+                        : baseName;
 
                     if (isFront)
                     {
-                        string frontKey = $"{baseName}_Front";
-                        if (categories.ContainsKey(frontKey))
-                        {
-                            categories[frontKey].slots.Add(slot);
-                            //Log.Msg($"Assigned '{slotName}' to '{frontKey}'.");
-                        }
-
-                        if (categories.ContainsKey(baseName))
-                        {
-                            categories[baseName].slots.Add(slot);
-                            //Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
-                        }
+                        string frontKey = $"{simplified}_Front";  // "Hub_Front"
+                        if (categories.ContainsKey(frontKey)) categories[frontKey].slots.Add(slot);
+                        if (categories.ContainsKey(simplified))  categories[simplified].slots.Add(slot); // "Hub"
                     }
                     else if (isBack)
                     {
-                        string rearKey = $"{baseName}_Rear";
-                        if (categories.ContainsKey(rearKey))
-                        {
-                            categories[rearKey].slots.Add(slot);
-                            //Log.Msg($"Assigned '{slotName}' to '{rearKey}'.");
-                        }
-
-                        if (categories.ContainsKey(baseName))
-                        {
-                            categories[baseName].slots.Add(slot);
-                            //Log.Msg($"Also assigned '{slotName}' to general '{baseName}' category.");
-                        }
+                        string rearKey = $"{simplified}_Rear";    // "Hub_Rear"
+                        if (categories.ContainsKey(rearKey)) categories[rearKey].slots.Add(slot);
+                        if (categories.ContainsKey(simplified)) categories[simplified].slots.Add(slot);  // "Hub"
                     }
-
-                    else if (categories.ContainsKey(baseName))
+                    else
                     {
-                        categories[baseName].slots.Add(slot);
-                        //Log.Msg($"Assigned '{slotName}' to generic '{baseName}' category.");
+                        if (categories.ContainsKey(simplified)) categories[simplified].slots.Add(slot);
+                        else if (categories.ContainsKey(baseName)) categories[baseName].slots.Add(slot);
                     }
 
-                    // Add to 'Pegs' if applicable
+                    // Peg handling unchanged...
                     if (isPeg && categories.ContainsKey("BMX_Peg"))
-                    {
                         categories["BMX_Peg"].slots.Add(slot);
-                        //Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
-                    }
 
                     slotsCategorized++;
                     continue;
                 }
+
 
                 // Pegs with specific naming
                 if (isPeg)
@@ -375,13 +456,13 @@ namespace rowemod.Mods
                     if (!string.IsNullOrEmpty(specificPegCategory))
                     {
                         categories[specificPegCategory].slots.Add(slot);
-                        //Log.Msg($"Assigned '{slotName}' to '{categories[specificPegCategory].displayName}'.");
+                        Log.Msg($"Assigned '{slotName}' to '{categories[specificPegCategory].displayName}'.");
                     }
 
                     if (categories.ContainsKey("BMX_Peg"))
                     {
                         categories["BMX_Peg"].slots.Add(slot);
-                        //Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
+                        Log.Msg($"Assigned '{slotName}' to 'Pegs'.");
                     }
 
                     slotsCategorized++;
@@ -394,15 +475,15 @@ namespace rowemod.Mods
                     if (slotName.Contains(category, StringComparison.OrdinalIgnoreCase))
                     {
                         categories[category].slots.Add(slot);
-                        //Log.Msg($"Categorized slot '{slotName}' under '{categories[category].displayName}'.");
+                        Log.Msg($"Categorized slot '{slotName}' under '{categories[category].displayName}'.");
                         slotsCategorized++;
                         break;
                     }
                 }
             }
 
-            //Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
-        }
+            Log.Msg($"Finished categorizing. {slotsCategorized} slots assigned.");
+        }*/
 
 
 
@@ -551,13 +632,6 @@ namespace rowemod.Mods
             {
                 if (slot == null || slot._itemSlot == null || !slot._itemSlot.HasItemEquip) continue;
 
-                // ✅ Only act on slots whose _subType matches the category's expected subtype
-                if (!SlotMatchesCategory(slot, category))
-                {
-                    // Uncomment for debugging:
-                    // Log.Msg($"Skip slot '{slot.name}' for '{category}' due to _subType='{slot?._subType}'");
-                    continue;
-                }
 
                 var equippedObject = slot._itemSlot.EquippedItem;
                 if (equippedObject == null) continue;
@@ -565,9 +639,6 @@ namespace rowemod.Mods
                 var renderers = equippedObject.GetComponentsInChildren<Renderer>(true);
                 foreach (var r in renderers)
                 {
-                    // ✅ Only paint renderers whose path matches subtype tokens, excluding neighbors
-                    if (!ShouldAffectRenderer(category, r, equippedObject)) continue;
-
                     Log.Msg($"Applying material '{material.name}' to renderer '{r.name}'.");
 
                     var mats = r.materials;
@@ -656,42 +727,7 @@ namespace rowemod.Mods
             }
         }
         
-        private static bool SlotMatchesCategory(EquipSlotVehicle slot, string category)
-        {
-            if (!_categoryRules.TryGetValue(category, out var rule)) return true; // if no rule, allow
-            var slotSub = Norm(slot?._subType?.ToString() ?? "");
-            return slotSub == Norm(rule.SubType);
-        }
-
-        private static IEnumerable<string> PathTokens(Transform t, GameObject stopAtInclusive)
-        {
-            var cur = t;
-            while (cur != null)
-            {
-                yield return Norm(cur.name);
-                if (cur == stopAtInclusive.transform) break;
-                cur = cur.parent;
-            }
-        }
-
-        private static bool ShouldAffectRenderer(string category, Renderer r, GameObject equippedRoot)
-        {
-            if (!_categoryRules.TryGetValue(category, out var rule))
-            {
-                // Fallback: legacy behavior (name contains category)
-                return Norm(r.name).Contains(Norm(category));
-            }
-
-            var tokens = PathTokens(r.transform, equippedRoot).ToArray();
-
-            // must NOT contain excluded tokens anywhere in the path
-            if (rule.Excludes.Any(x => tokens.Any(t => t.Contains(Norm(x))))) return false;
-
-            // must contain at least one include token somewhere in the path
-            if (rule.Includes.Length > 0 && !rule.Includes.Any(x => tokens.Any(t => t.Contains(Norm(x))))) return false;
-
-            return true;
-        }
+       
 
         
         #endregion

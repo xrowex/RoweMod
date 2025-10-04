@@ -1,6 +1,8 @@
 ﻿using Il2CppCinemachine;
+using Il2CppFusion;
 using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ContentManagment;
+using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.ReplaySystem;
 using Il2CppMashBox.Addons.SlowMotionSystem;
@@ -26,6 +28,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using static rowemod.Config;
 using Camera = UnityEngine.Camera;
+using EquipSlot = Il2CppMashBox.Addons.ContentManagment.EquipSlot;
 using Object = UnityEngine.Object;
 using PlayerInputBehaviour = Il2CppMashBox.BMX_Physics_Development.NewShit.PlayerInputBehaviour;
 
@@ -44,6 +47,7 @@ namespace rowemod.Utils
         public static GameObject sportsVehicleCamera;
         public static GameObject physicsDrivenCharacter;
         public static GameObject rPhysicsSkeleton;
+        public static GameObject menuPlayer;
 
         // HUD
         public static Test mashBucksHUD;
@@ -108,6 +112,17 @@ namespace rowemod.Utils
         //8bitt challenge
         public static ActivityTracker eightbittActivityTracker;
         public static PlayerTrickGameplay playerTrickGameplay;
+        
+        //mulltiplayer shit
+        public static NetworkHuman localNetworkHuman;
+        public static NetworkHuman[] networkHumans;
+        public static NetworkPlayer localNetworkPlayer;
+        public static NetworkPlayer[] networkPlayers;
+        public static NetworkObject networkObject;
+        private static Il2CppSystem.Collections.Generic.List<GameObject> localVisuals;
+        public static Dictionary<NetworkString<_32>, NetworkPlayer> playerNameDictionary = new Dictionary<NetworkString<_32>, NetworkPlayer>();
+        public static Dictionary<NetworkString<_32>, EquipSlot> playerSlotsDictionary = new Dictionary<NetworkString<_32>, EquipSlot>();
+        public static object LocalCustomCharacterData { get; set; }
 
         public static void FindObjects(GameObject player)
         {
@@ -417,6 +432,26 @@ namespace rowemod.Utils
             {
                 Log.Error($"Exception while finding FreeCam or child SphereCollider: {ex.Message}");
             }
+            
+            
+            
+            networkPlayers = GameObject.FindObjectsOfType<NetworkPlayer>(true);
+            networkHumans = GameObject.FindObjectsOfType<NetworkHuman>(true);
+            playerNameDictionary.Clear();
+            if (networkPlayers != null && networkPlayers.Length > 0)
+                foreach (NetworkPlayer eachplayer in networkPlayers)
+                {
+                    if (eachplayer.IsLocalPlayer)
+                    {
+                        localNetworkPlayer = eachplayer;
+                        networkObject = eachplayer._networkObject;
+                        localNetworkHuman = eachplayer.gameObject.GetComponentInParent<NetworkHuman>();
+                        localVisuals = localNetworkHuman._visuals;
+                    }
+                    
+                    NetworkString<_32> playerName = eachplayer._UserName;
+                    playerNameDictionary[playerName] = eachplayer;
+                }
 
             Log.Msg("Running GrabTrickData()");
             TrickMods.GrabTrickData();

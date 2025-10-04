@@ -88,6 +88,15 @@ namespace rowemod
         public bool disableDroneCollider;
         public string customSessionMarker;
     }
+    public class TrickEntry
+    {
+        public string Name { get; set; }
+        public bool Enabled { get; set; }
+    }
+    public struct CustomTricks
+    {
+        public Dictionary<string, List<TrickEntry>> trickSets;
+    }
 
     public static class Config
     {
@@ -174,6 +183,12 @@ namespace rowemod
             disableDroneCollider = false,
             customSessionMarker = "None"
         };
+        public static CustomTricks tricks = new CustomTricks
+        {
+            trickSets = new Dictionary<string, List<TrickEntry>>()
+        };
+
+
 
         // Helper class for JSON deserialization
         private class ConfigData
@@ -182,6 +197,7 @@ namespace rowemod
             public CustomCharacter customCharacterData { get; set; }
             public CustomBike customBikeData { get; set; }
             public Misc miscData { get; set; }
+            public CustomTricks customTricksData { get; set; }
         }
 
         public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "RoweMod");
@@ -222,8 +238,8 @@ namespace rowemod
                         eyesMaterialPath = SafeMakeRelativePath(character.eyesMaterialPath)
                     },
                     customBikeData = bike,
-                    miscData = misc
-
+                    miscData = misc,
+                    customTricksData = tricks
                 }, Formatting.Indented);
 
                 File.WriteAllText(cfgFile, contents);
@@ -277,7 +293,8 @@ namespace rowemod
             };
             bike = jsonData.customBikeData;
             misc = jsonData.miscData;
-            
+            tricks = jsonData.customTricksData;
+
             //set new config variables to defaults if 0
             if (physics.bmxForceFactor <= 0f) physics.bmxForceFactor = 0.07f;
             if (physics.bmxMaxSpeed <= 0f) physics.bmxMaxSpeed = 7.5f;
@@ -348,6 +365,23 @@ namespace rowemod
         // Reset character tab settings to defaults
         public static void ResetCharacterTab()
         {
+            // Load the preset by name
+            var preset = ClothingPreset.Load(Config.character.lastLoadedPresetCharacter);
+            if (preset != null && preset.SlotVisibility != null)
+            {
+                foreach (var slot in preset.SlotVisibility.Keys.ToList())
+                {
+                    Custom.ToggleSlotVisibility(slot, true);
+                }
+
+                Log.Msg($"All SlotVisibility set to true for preset '{preset.Name}'.");
+            }
+            else
+            {
+                Log.Warning("Could not load preset or SlotVisibility dictionary was null.");
+            }
+
+            
             character = new CustomCharacter
             {
                 lastLoadedPresetCharacter = "None",
@@ -372,6 +406,7 @@ namespace rowemod
                 eyesModelPath = null,
                 eyesMaterialPath = null
             };
+            
             Memory.roweCharacterManager.InitCharacterData();
         }
 
