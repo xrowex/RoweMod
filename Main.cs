@@ -107,33 +107,7 @@ namespace rowemod
             
             //load rowe logo
             MelonCoroutines.Start(LoadRoweLogo());
-
             
-            //disable test mod in game
-            /*foreach (var obj in GameObject.FindObjectsOfType<GameObject>())
-            {
-                if (obj.name == "TestRoweMod" || obj.name == "TestRoweMod(Clone)")
-                {
-                    obj.SetActive(false);
-                    Log.Msg($"Disabled: {obj.name}");
-                }
-            }*/
-            
-            /*if (sceneName.Contains("TheShop"))
-            {
-                RoweCustomCharacter.GetDefaultCharacter();
-
-                Memory.rMbCharacter = GameObject.Find("Custom Character");
-                Memory.physicsDrivenCharacter = Memory.rMbCharacter.GetComponentsInChildren<CustomCharacterManager>().FirstOrDefault()?.gameObject;
-                if (Memory.physicsDrivenCharacter == null)
-                    return;
-                
-                Custom.UpdateAllPresets();
-                
-                MelonCoroutines.Start(DelayedLoadPreset());
-                MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-            }*/
-
             // Reload assets from cached bundles
             Memory.ReloadAssetsFromCachedBundles();
             

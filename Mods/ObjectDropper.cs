@@ -1,3 +1,4 @@
+using Il2CppFusion;
 using UnityEngine;
 using rowemod.Utils;
 using Il2CppMashBox.Addons.ProtoDrone;
@@ -5,7 +6,9 @@ using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ReplaySystem;
 using rowemod;
 using UnityEngine.Animations;
+using Log = rowemod.Utils.Log;
 using Object = UnityEngine.Object;
+
 
 namespace rowemod.Mods
 {
@@ -213,8 +216,22 @@ namespace rowemod.Mods
                     }
                     Object.Destroy(temp);
                     position.y += bottomOffset;
+                    
+                    
+                    GameObject spawned = null;
+                    
+                    // Local fallback (single-player or offline)
+                    GameObject local = Object.Instantiate(prefabToSpawn, position, rotation);
+                    spawned = local;
+                    spawnedObjects.Add(local);
+                    Log.Warning($"[LocalOnly] Spawned {local.name} (no active NetworkRunner)");
 
-                    GameObject spawned = Object.Instantiate(prefabToSpawn, position, rotation);
+                    if (local != null && local.GetComponent<Rigidbody>() != null)
+                    {
+                        local.AddComponent<RecordableBody>();
+                        Log.Msg($"Added RecordableBody to {local.name} as it has a Rigidbody component");
+                    }
+                    
 
                     if (spawned != null && spawned.GetComponent<Rigidbody>() != null)
                     {
@@ -222,32 +239,6 @@ namespace rowemod.Mods
                         Log.Msg($"Added RecordableBody to {spawned.name} as it has a Rigidbody component");
                     }
 
-                    /*
-                    if (spawned.GetComponentInChildren<AimConstraint>() != null)
-                    {
-                        Log.Msg("Object has an AimConstraint component");
-
-                        var aimConstraint = spawned.GetComponentInChildren<AimConstraint>();
-
-
-                        // Create and assign new source
-                        ConstraintSource source = new ConstraintSource
-                        {
-                            sourceTransform = Memory.vehicleBalance.transform,
-                            weight = 1.0f
-                        };
-                        aimConstraint.AddSource(source);
-                        Log.Msg("Set AimConstraint sourceTransform to " + Memory.vehicleBalance.transform.name);
-
-                        // Activate constraint
-                        aimConstraint.constraintActive = true;
-                        aimConstraint.locked = true;
-
-                        // Optional: Force refresh
-                        aimConstraint.enabled = false;
-                        aimConstraint.enabled = true;
-                    }
-                    */
                     if (spawned.GetComponentInChildren<AimConstraint>() != null)
                     {
                         Log.Msg("Object has an AimConstraint component");
@@ -535,143 +526,6 @@ namespace rowemod.Mods
             rotationOffset = Vector3.zero;
         }
 
-        // Spawn an object at the appropriate position with raycast to ground
-        private static void SpawnObject(GameObject prefab)
-        {
-            if (prefab == null)
-            {
-                Log.Error("Cannot spawn null prefab.");
-                return;
-            }
-
-            // Checking if spawned objects exceed the limit
-            if (spawnedObjects.Count >= MaxSpawnedObjects)
-            {
-                // Removing the oldest object (first in the list)
-                GameObject oldestObject = spawnedObjects[0];
-                if (oldestObject != null)
-                {
-                    UnityEngine.Object.Destroy(oldestObject);
-                    Log.Msg($"Destroyed oldest spawned object: {oldestObject.name} to stay within {MaxSpawnedObjects} limit.");
-                }
-                spawnedObjects.RemoveAt(0);
-            }
-
-            // Determining raycast origin and rotation
-            Vector3 raycastOrigin;
-            float sourceYRotation;
-            bool isDrone = false;
-
-            if (droneTransform != null && droneTransform.gameObject.activeInHierarchy)
-            {
-                // Raycast starts 0.3 meter(s) below the drone
-                raycastOrigin = droneTransform.position - Vector3.up * 0.3f;
-                sourceYRotation = droneTransform.eulerAngles.y;
-                isDrone = true;
-                Log.Msg($"Raycast starting 0.3m below drone at: {raycastOrigin}");
-            }
-            else if (characterTransform != null)
-            {
-                // Raycast starts 1 meter(s) in front of character
-                raycastOrigin = characterTransform.position + characterTransform.forward * 1f;
-                sourceYRotation = characterTransform.eulerAngles.y;
-                Log.Msg($"Raycast starting 1m in front of character at: {raycastOrigin}");
-            }
-            else
-            {
-                Log.Error("No valid raycast origin (both drone and character unavailable).");
-                return;
-            }
-
-            // Performing initial raycast to find ground and rotation
-            float raycastDistance = 1000f; // Distance to cover drone/character altitude
-            Quaternion spawnRotation = Quaternion.Euler(0f, sourceYRotation, 0f); // Default upright rotation
-            Vector3 spawnPosition;
-            Vector3 groundNormal = Vector3.up;
-
-            if (UnityEngine.Physics.Raycast(raycastOrigin, Vector3.down, out RaycastHit hit, raycastDistance, groundLayerMask))
-            {
-                spawnPosition = hit.point;
-
-                // Validate normal and align rotation
-                groundNormal = hit.normal.normalized;
-                if (groundNormal.y > 0.0872f) // Allow slopes up to ~85 degrees (cos(85°))
-                {
-                    // Align object up direction with surface normal, forward with source Y-rotation
-                    Vector3 forward = Quaternion.Euler(0f, sourceYRotation, 0f) * Vector3.forward;
-                    // Project forward onto plane perpendicular to normal to avoid twisting
-                    forward = Vector3.ProjectOnPlane(forward, groundNormal).normalized;
-                    spawnRotation = Quaternion.LookRotation(forward, groundNormal);
-                    Log.Msg($"Initial raycast hit ground at: {hit.point}, collider: {hit.collider.gameObject.name}, layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}, distance: {hit.distance}, normal: {groundNormal}, rotation: {spawnRotation.eulerAngles}");
-                }
-                else
-                {
-                    Log.Warning($"Initial raycast normal too steep: {groundNormal} (y={groundNormal.y}). Using default rotation.");
-                }
-            }
-            else
-            {
-                // Fallback to Y=0 at raycast origin's X/Z position
-                spawnPosition = new Vector3(raycastOrigin.x, 0f, raycastOrigin.z);
-                Log.Warning($"Initial raycast did not hit ground from {raycastOrigin} within {raycastDistance} units. Using fallback position: {spawnPosition}");
-            }
-
-            // Calculate bottom offset at safe position
-            float bottomOffset = 0f;
-            GameObject tempObject = UnityEngine.Object.Instantiate(prefab, Vector3.zero, spawnRotation);
-            Renderer[] renderers = tempObject.GetComponentsInChildren<Renderer>();
-            Collider[] colliders = tempObject.GetComponentsInChildren<Collider>();
-            if (renderers.Length > 0 || colliders.Length > 0)
-            {
-                Bounds combinedBounds = new Bounds(Vector3.zero, Vector3.zero);
-                if (renderers.Length > 0)
-                {
-                    foreach (Renderer renderer in renderers)
-                    {
-                        combinedBounds.Encapsulate(renderer.bounds);
-                    }
-                }
-                else
-                {
-                    foreach (Collider collider in colliders)
-                    {
-                        combinedBounds.Encapsulate(collider.bounds);
-                    }
-                }
-
-                // Calculate offset from origin to bottom in world space
-                bottomOffset = -combinedBounds.min.y; // Distance from origin to bottom
-                Log.Msg($"Bottom offset (origin to bottom): {bottomOffset}");
-            }
-            else
-            {
-                Log.Warning($"Prefab {prefab.name} has no renderers or colliders, using unadjusted spawn position.");
-            }
-            UnityEngine.Object.Destroy(tempObject);
-
-            // Adjust spawn position to align bottom with ground
-            spawnPosition.y += bottomOffset;
-            Log.Msg($"Adjusted spawn position by bottom offset: {bottomOffset}, new position: {spawnPosition}");
-
-            // Instantiating the object
-            GameObject spawnedObject = UnityEngine.Object.Instantiate(prefab, spawnPosition, spawnRotation);
-            
-            if (spawnedObject != null && spawnedObject.GetComponent<Rigidbody>() != null)
-            {
-                spawnedObject.AddComponent<RecordableBody>();
-                Log.Msg($"Added RecordableBody to {spawnedObject.name} as it has a Rigidbody component");
-            }
-            
-            if (spawnedObject != null)
-            {
-                spawnedObjects.Add(spawnedObject);
-                Log.Msg($"Spawned object: {spawnedObject.name} at {spawnPosition}");
-            }
-            else
-            {
-                Log.Error("Failed to instantiate prefab.");
-            }
-        }
 
         // Draw the UI for the Dropper tab
         public static void DrawDropperTab()

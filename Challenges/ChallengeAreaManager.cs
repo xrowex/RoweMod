@@ -67,6 +67,7 @@ namespace rowemod.Challenges
         {
             // Example: mark “in zone” so your points watcher knows attempts count
             InZone = true;
+            
         }
 
         public static void NotifyAreaExit(ChallengeArea area, Collider who)
