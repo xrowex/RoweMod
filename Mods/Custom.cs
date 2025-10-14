@@ -23,31 +23,33 @@ namespace rowemod.Mods
             Shoes,
             Bust
         }
+
         // Map your enum to the ACTUAL child names that appear in the screenshot:
         // "HeadGear", "EquipSlot_Body", "EquipSlot_Shirt", "EquipSlot_Pants", etc.
         public static readonly Dictionary<Slot, string> SlotNameMap = new Dictionary<Slot, string>()
         {
-            { Slot.Hat,      "Hat_EquipSlot"    },
-            { Slot.Hair,     "Hair_EquipSlot"   },
-            { Slot.Eyes,     "Eyes_EquipSlot"   },
-            { Slot.Body,     "EquipSlot_Body"   },
-            { Slot.Top,      "EquipSlot_Shirt"  },
-            { Slot.Gloves,   "EquipSlot_Gloves" },
-            { Slot.Bottoms,  "EquipSlot_Pants"  },
-            { Slot.Socks,    "EquipSlot_Socks"  },
-            { Slot.Shoes,    "EquipSlot_Shoes"  },
-            { Slot.Bust,     "EquipSlot_Bust"   },
+            { Slot.Hat, "Hat_EquipSlot" },
+            { Slot.Hair, "Hair_EquipSlot" },
+            { Slot.Eyes, "Eyes_EquipSlot" },
+            { Slot.Body, "EquipSlot_Body" },
+            { Slot.Top, "EquipSlot_Shirt" },
+            { Slot.Gloves, "EquipSlot_Gloves" },
+            { Slot.Bottoms, "EquipSlot_Pants" },
+            { Slot.Socks, "EquipSlot_Socks" },
+            { Slot.Shoes, "EquipSlot_Shoes" },
+            { Slot.Bust, "EquipSlot_Bust" },
         };
 
         // Because your actual slot GameObjects live deeper in the hierarchy,
         // we can define that path here. (Adjust if yours is slightly different.)
         private const string SlotParentPath = "Physics Skeleton/";
-        
+
         //Change to just skeleton to try to work with new main menu? jk fuck that
         //private const string SLOT_PARENT_PATH = "Skeleton/";
 
         static Transform _prefab;
         static GameObject _customObject;
+
         public static string characterRootPath = Path.Combine(
             Path.GetDirectoryName(typeof(Custom).Assembly.Location),
             @"rowemod\Character"
@@ -74,6 +76,7 @@ namespace rowemod.Mods
                 Config.ResetCharacterTab();
                 GUI.FocusControl(null);
             }
+
             GUILayout.EndHorizontal();
             // -----------------------------------------------------------------------
 
@@ -169,14 +172,17 @@ namespace rowemod.Mods
                             _selectedPresetIndex = i;
                             LoadPreset(availablePresets[_selectedPresetIndex]);
                         }
-                        if (availablePresets[i] != "DefaultPreset" && GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30)))
+
+                        if (availablePresets[i] != "DefaultPreset" &&
+                            GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30)))
                         {
                             ClothingPreset.Delete(availablePresets[i]);
                             if (i == _selectedPresetIndex) _selectedPresetIndex = 0;
                             break;
                         }
+
                         GUILayout.EndHorizontal();
-                        
+
                     }
 
                     GUILayout.EndVertical();
@@ -184,51 +190,74 @@ namespace rowemod.Mods
             }
 
             GUILayout.EndHorizontal();
-        
-    }
+
+        }
 
         private static Dictionary<Slot, GameObject> _slotObjects = new Dictionary<Slot, GameObject>();
 
         public static void ToggleSlotVisibility(Slot slot, bool isVisible)
         {
-            // Ensure the slot exists in the dictionary
             if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
             {
-                Debug.LogError($"ToggleSlotVisibility: No mapped name found for slot '{slot}'.");
+                Log.Error($"[ToggleSlotVisibility] No mapped name found for slot '{slot}'.");
                 return;
             }
 
-            // Construct the correct full path
-            string fullPath = SlotParentPath + equipSlotName;
+            string basePath = SlotParentPath + equipSlotName;
             if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
-            {
-                fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
-            }
+                basePath = SlotParentPath + "HeadGear/" + equipSlotName;
 
-            // Check if we already stored this GameObject
-            if (!_slotObjects.TryGetValue(slot, out GameObject slotObject) || slotObject == null)
+            // Helper function to toggle visibility on a specific character
+            void ApplyToCharacter(GameObject character, string label)
             {
-                // Find and store the GameObject only once
-                slotObject = GameObject.Find(fullPath);
-                if (slotObject != null)
+                if (character == null)
                 {
-                    _slotObjects[slot] = slotObject;
-                }
-                else
-                {
-                    Debug.LogWarning($"[rowemod] Slot GameObject not found: {fullPath}");
+                    Log.Warning($"[ToggleSlotVisibility] {label} character is null — skipping.");
                     return;
                 }
+
+                string fullPath = basePath;
+                GameObject slotObject = null;
+
+                // Try Physics Skeleton path
+                slotObject = character.transform.Find(fullPath)?.gameObject;
+
+                // Fallback to Skeleton
+                if (slotObject == null)
+                {
+                    string fallbackPath = fullPath.Replace("Physics Skeleton", "Skeleton");
+                    slotObject = character.transform.Find(fallbackPath)?.gameObject;
+
+                    if (slotObject != null)
+                    {
+                        fullPath = fallbackPath;
+                        Log.Msg($"[ToggleSlotVisibility] {label}: Fallback succeeded — found '{fallbackPath}'.");
+                    }
+                }
+
+                if (slotObject == null)
+                {
+                    Log.Warning($"[ToggleSlotVisibility] {label}: Could not find '{basePath}' or fallback path.");
+                    return;
+                }
+
+                // Cache slot per-character separately if desired
+                _slotObjects[slot] = slotObject;
+
+                slotObject.SetActive(isVisible);
+                Log.Msg($"[ToggleSlotVisibility] {label}: '{fullPath}' set to {isVisible}");
             }
 
-            // Enable or disable the object
-            slotObject.SetActive(isVisible);
-            Debug.Log($"[rowemod] Slot GameObject '{fullPath}' set to {isVisible}.");
+            // Apply to both characters if they exist
+            ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
+            ApplyToCharacter(Memory.gamePlayer, "GamePlayer");
         }
-        
-        
-        
-        
+
+
+
+
+
+
         public static void ListCharacterBundles(Slot slot)
         {
             if (_lastSelectedSlot != slot)
@@ -236,9 +265,9 @@ namespace rowemod.Mods
                 inModelsTab = true;
                 _lastSelectedSlot = slot;
             }
-            
+
             string slotPath = Path.Combine(characterRootPath, slot.ToString());
-            
+
             GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("Models", highQualityButtonStyle)) inModelsTab = true;
@@ -263,7 +292,8 @@ namespace rowemod.Mods
                 if (_selectedModelDirectories.TryGetValue(slot, out string modelDirectory)
                     && Directory.Exists(modelDirectory))
                 {
-                    string[] materialFiles = Directory.GetFiles(modelDirectory, "*.material", SearchOption.AllDirectories);
+                    string[] materialFiles =
+                        Directory.GetFiles(modelDirectory, "*.material", SearchOption.AllDirectories);
                     if (materialFiles.Length == 0)
                     {
                         GUILayout.Label("No materials found in this model's directory.", labelStyle);
@@ -297,14 +327,10 @@ namespace rowemod.Mods
                 return;
             }
 
-            // Store the directory where the *.model was found (so we can look for materials next).
             string directory = Path.GetDirectoryName(newBundlePath);
             if (!string.IsNullOrEmpty(directory))
-            {
                 _selectedModelDirectories[slot] = directory;
-            }
 
-            // Load the new asset bundle
             var newBundle = AssetBundle.LoadFromFile(newBundlePath);
             if (newBundle == null)
             {
@@ -312,19 +338,6 @@ namespace rowemod.Mods
                 return;
             }
 
-            // Clean up old references
-            if (_customObject != null)
-            {
-                GameObject.Destroy(_customObject);
-                _customObject = null;
-            }
-            if (_prefab != null)
-            {
-                GameObject.Destroy(_prefab.gameObject);
-                _prefab = null;
-            }
-
-            // Load the prefab (assuming the first asset is the prefab you want)
             string[] assetNames = newBundle.GetAllAssetNames();
             if (assetNames.Length == 0)
             {
@@ -333,26 +346,15 @@ namespace rowemod.Mods
                 return;
             }
 
-            _prefab = newBundle.LoadAsset<GameObject>(assetNames[0])?.transform;
-            if (_prefab == null)
+            Transform prefab = newBundle.LoadAsset<GameObject>(assetNames[0])?.transform;
+            if (prefab == null)
             {
                 Log.Error("ReplaceModel: Failed to load prefab from asset bundle.");
                 newBundle.Unload(false);
                 return;
             }
 
-            Log.Msg($"ReplaceModel: Successfully loaded prefab {assetNames[0]} for slot '{slot}'.");
-
-            // Grab the "Physics Driven Character" as your root
-            Transform charRoot = physicsDrivenCharacter.transform;
-            if (charRoot == null)
-            {
-                Log.Error("ReplaceModel: charRoot (physicsDrivenCharacter) is null.");
-                newBundle.Unload(false);
-                return;
-            }
-
-            // Update our config path for the chosen slot (so you can persist it):
+            // Store config path
             string relPath = Config.MakeRelativePath(newBundlePath);
             switch (slot)
             {
@@ -368,173 +370,18 @@ namespace rowemod.Mods
                 case Slot.Eyes: Config.character.eyesModelPath = relPath; break;
             }
 
-            // **Use the dictionary** to find which child name we should look for.
-            if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
+            // Reusable function to apply model to a specific character
+            void ApplyToCharacter(GameObject character, string label)
             {
-                Log.Error($"ReplaceModel: No known mapping for slot '{slot}'.");
-                newBundle.Unload(false);
-                return;
-            }
-
-            // Find the actual slot transform. Notice the full path includes "Physics Skeleton/Character_Reference/"
-            string fullPath = SlotParentPath + equipSlotName;
-            if (equipSlotName == "Hat_EquipSlot"  || equipSlotName == "Hair_EquipSlot" || equipSlotName == "Eyes_EquipSlot")
-            {
-                fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
-            }
-            Transform slotTransform = charRoot.Find(fullPath);
-            
-            //change the slot transform name to see if it works in TheShop
-            if (slotTransform == null)
-            {
-                Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
-                Log.Error($"ReplaceModel: Trying to find '{fullPath.Replace("Physics Skeleton","Skeleton")}' instead.");
-                fullPath = fullPath.Replace("Physics Skeleton","Skeleton");
-                slotTransform = charRoot.Find(fullPath);
-            }
-                
-            
-            if (slotTransform == null)
-            {
-                Log.Error($"ReplaceModel: Could not find transform '{fullPath}' under {charRoot.name}.");
-                newBundle.Unload(false);
-                return;
-            }
-
-            // In your bundle’s prefab, also look for the child named the same as the slot, if needed
-            // (If your prefab root actually *is* the model, you might not need this step.)
-            var prefabSlotChild = _prefab.Find(equipSlotName);
-            if (prefabSlotChild == null)
-            {
-                // If your model is just the prefab itself, use prefab.gameObject
-                _customObject = _prefab.gameObject;
-                /*if (slot == Slot.Hair)
+                if (character == null)
                 {
-                    customObject.AddComponent<ComplexCharacterPartBehaviour>();
-                }*/
-            }
-            else
-            {
-                _customObject = prefabSlotChild.gameObject;
-            }
-            if (_customObject == null)
-            {
-                Log.Error($"ReplaceModel: Could not find child '{equipSlotName}' in the loaded prefab.");
-                newBundle.Unload(false);
-                return;
-            }
-
-            // If it has Cloth, enable cloth
-            if (_customObject.GetComponent<Cloth>() != null)
-            {
-                Log.Msg("customObject has a Cloth Component! Enabling!");
-                Cloth clothComp = slotTransform.GetComponent<Cloth>();
-                if (clothComp != null) clothComp.enabled = true;
-            }
-
-            // Finally, equip
-            var equipSlot = slotTransform.GetComponent<EquipSlot>();
-            if (equipSlot != null)
-            {
-                equipSlot.Equip(_customObject);
-                Log.Msg($"ReplaceModel: Successfully equipped {slot} model.");
-            }
-            else
-            {
-                Log.Error($"ReplaceModel: No EquipSlot component found on {slotTransform.name}.");
-            }
-            
-            // Unload the bundle
-            newBundle.Unload(false);
-            
-            // --- NEW: switch to Materials tab and auto-apply the first available material ---
-            // (Also ensure the UI is looking at the active slot)
-            Menu.currentSlot = slot;
-            OpenMaterialsTabAndAutoSelectFirst(slot);
-        }
-
-        public static void ReplaceMaterial(Slot slot, string selectedPath)
-        {
-            // ---------- 0) Validate ----------
-            if (string.IsNullOrEmpty(selectedPath))
-            {
-                Log.Error("ReplaceMaterial: selectedPath is null/empty.");
-                return;
-            }
-
-            // ---------- 1) Persist relative path (for config), but DO NOT round-trip for loading ----------
-            string relativeForConfig = Config.MakeRelativePath(selectedPath);
-            switch (slot)
-            {
-                case Slot.Body: Config.character.bodyMaterialPath = relativeForConfig; break;
-                case Slot.Top: Config.character.topMaterialPath = relativeForConfig; break;
-                case Slot.Gloves: Config.character.glovesMaterialPath = relativeForConfig; break;
-                case Slot.Bottoms: Config.character.bottomsMaterialPath = relativeForConfig; break;
-                case Slot.Socks: Config.character.socksMaterialPath = relativeForConfig; break;
-                case Slot.Shoes: Config.character.shoesMaterialPath = relativeForConfig; break;
-                case Slot.Bust: Config.character.bustMaterialPath = relativeForConfig; break;
-                case Slot.Hat: Config.character.hatMaterialPath = relativeForConfig; break;
-                case Slot.Hair: Config.character.hairMaterialPath = relativeForConfig; break;
-                case Slot.Eyes: Config.character.eyesMaterialPath = relativeForConfig; break;
-            }
-
-            // ---------- 2) Resolve an absolute path for loading (no re-encode/decode loop) ----------
-            string loadPath = selectedPath;
-            if (!Path.IsPathRooted(loadPath))
-                loadPath = Config.MakeAbsolutePath(loadPath);
-
-            if (!File.Exists(loadPath))
-            {
-                Log.Error($"ReplaceMaterial: File does not exist: {loadPath}");
-                return;
-            }
-
-            Log.Msg($"ReplaceMaterial: Loading material bundle from: {loadPath}");
-
-            // ---------- 3) Load the bundle & pull a Material ----------
-            var bundle = AssetBundle.LoadFromFile(loadPath);
-            if (bundle == null)
-            {
-                Log.Error($"ReplaceMaterial: AssetBundle.LoadFromFile returned null for: {loadPath}");
-                return;
-            }
-
-            try
-            {
-                Material newMat = null;
-
-                // Prefer typed load (safer than first asset name)
-                var mats = bundle.LoadAllAssets<Material>();
-                if (mats != null && mats.Length > 0)
-                {
-                    newMat = mats[0];
-                }
-                else
-                {
-                    // Extra diagnostics if bundle has no Materials
-                    var names = bundle.GetAllAssetNames();
-                    Log.Error("ReplaceMaterial: No Material assets found in bundle. Assets present: " +
-                              (names == null ? "(none)" : string.Join(", ", names)));
+                    Log.Warning($"[ReplaceModel] {label} character is null — skipping.");
                     return;
                 }
 
-                if (newMat == null)
-                {
-                    Log.Error("ReplaceMaterial: Loaded material is null.");
-                    return;
-                }
-
-                // ---------- 4) Find the correct slot transform ----------
                 if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
                 {
-                    Log.Error($"ReplaceMaterial: No mapping for slot '{slot}'.");
-                    return;
-                }
-
-                Transform charRoot = physicsDrivenCharacter?.transform;
-                if (charRoot == null)
-                {
-                    Log.Error("ReplaceMaterial: physicsDrivenCharacter is null.");
+                    Log.Error($"[ReplaceModel] {label}: No known mapping for slot '{slot}'.");
                     return;
                 }
 
@@ -542,42 +389,151 @@ namespace rowemod.Mods
                 if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
                     fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
 
-                Transform slotTransform = charRoot.Find(fullPath);
+                Transform slotTransform = character.transform.Find(fullPath);
                 if (slotTransform == null)
                 {
-                    // Proper immediate fallback + retry
                     string fallbackPath = fullPath.Replace("Physics Skeleton", "Skeleton");
-                    slotTransform = charRoot.Find(fallbackPath);
+                    slotTransform = character.transform.Find(fallbackPath);
+
+                    if (slotTransform != null)
+                    {
+                        fullPath = fallbackPath;
+                        Log.Msg($"[ReplaceModel] {label}: Fallback succeeded — found '{fallbackPath}'.");
+                    }
                 }
 
                 if (slotTransform == null)
                 {
-                    Log.Error($"ReplaceMaterial: Could not find slot at '{fullPath}' (and Skeleton fallback).");
+                    Log.Warning($"[ReplaceModel] {label}: Could not find transform '{fullPath}'.");
                     return;
                 }
 
-                // Assign to renderer
-                Renderer renderer = slotTransform.GetComponentInChildren<SkinnedMeshRenderer>();
-                if (renderer == null)
-                    renderer = slotTransform.GetComponentInChildren<MeshRenderer>();
-
-                if (renderer != null && newMat != null)
+                // Find prefab’s slot child
+                GameObject modelObject = prefab.Find(equipSlotName)?.gameObject ?? prefab.gameObject;
+                if (modelObject == null)
                 {
-                    renderer.sharedMaterial = newMat;
-                    //Log.Msg($"ReplaceMaterial: Material replaced for slot {slot} (decals disabled).");
-                }
-                else
-                {
-                    Log.Error($"ReplaceMaterial: Could not apply new material on slot {slot}.");
+                    Log.Error($"[ReplaceModel] {label}: No valid prefab object for slot {slot}.");
+                    return;
                 }
 
+                var equipSlot = slotTransform.GetComponent<EquipSlot>();
+                if (equipSlot == null)
+                {
+                    Log.Error($"[ReplaceModel] {label}: No EquipSlot component found on {slotTransform.name}.");
+                    return;
+                }
+
+                equipSlot.Equip(modelObject);
+                Log.Msg($"[ReplaceModel] {label}: Successfully equipped {slot} model.");
+            }
+
+            // Apply to both characters
+            ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
+            ApplyToCharacter(Memory.gamePlayer, "GamePlayer");
+
+            newBundle.Unload(false);
+
+            Menu.currentSlot = slot;
+            OpenMaterialsTabAndAutoSelectFirst(slot);
+        }
+
+
+        public static void ReplaceMaterial(Slot slot, string selectedPath)
+        {
+            if (string.IsNullOrEmpty(selectedPath))
+            {
+                Log.Error("ReplaceMaterial: selectedPath is null/empty.");
+                return;
+            }
+
+            string relPath = Config.MakeRelativePath(selectedPath);
+            string absPath = Path.IsPathRooted(selectedPath) ? selectedPath : Config.MakeAbsolutePath(selectedPath);
+
+            if (!File.Exists(absPath))
+            {
+                Log.Error($"ReplaceMaterial: File does not exist: {absPath}");
+                return;
+            }
+
+            var bundle = AssetBundle.LoadFromFile(absPath);
+            if (bundle == null)
+            {
+                Log.Error($"ReplaceMaterial: Failed to load bundle {absPath}");
+                return;
+            }
+
+            try
+            {
+                Material mat = bundle.LoadAllAssets<Material>().FirstOrDefault();
+                if (mat == null)
+                {
+                    Log.Error($"ReplaceMaterial: No Material found in {absPath}");
+                    return;
+                }
+
+                void ApplyToCharacter(GameObject character, string label)
+                {
+                    if (character == null)
+                    {
+                        Log.Warning($"[ReplaceMaterial] {label} character is null — skipping.");
+                        return;
+                    }
+
+                    if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
+                    {
+                        Log.Error($"[ReplaceMaterial] {label}: No known mapping for slot '{slot}'.");
+                        return;
+                    }
+
+                    string fullPath = SlotParentPath + equipSlotName;
+                    if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
+                        fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
+
+                    Transform slotTransform = character.transform.Find(fullPath);
+                    if (slotTransform == null)
+                    {
+                        string fallbackPath = fullPath.Replace("Physics Skeleton", "Skeleton");
+                        slotTransform = character.transform.Find(fallbackPath);
+
+                        if (slotTransform != null)
+                        {
+                            fullPath = fallbackPath;
+                            Log.Msg($"[ReplaceMaterial] {label}: Fallback succeeded — found '{fallbackPath}'.");
+                        }
+                    }
+
+                    if (slotTransform == null)
+                    {
+                        Log.Warning($"[ReplaceMaterial] {label}: Could not find transform '{fullPath}'.");
+                        return;
+                    }
+
+                    Renderer renderer =
+                        (Renderer)slotTransform.GetComponentInChildren<SkinnedMeshRenderer>() ??
+                        (Renderer)slotTransform.GetComponentInChildren<MeshRenderer>();
+
+
+                    if (renderer != null)
+                    {
+                        renderer.sharedMaterial = mat;
+                        Log.Msg($"[ReplaceMaterial] {label}: Applied material to {slot}.");
+                    }
+                    else
+                    {
+                        Log.Warning($"[ReplaceMaterial] {label}: No renderer found for {slot}.");
+                    }
+                }
+
+                // Apply to both
+                ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
+                ApplyToCharacter(Memory.gamePlayer, "GamePlayer");
             }
             finally
             {
-                // Keep loaded assets alive; just release the file handle
                 bundle.Unload(false);
             }
         }
+
 
 
 
@@ -597,7 +553,7 @@ namespace rowemod.Mods
             preset.ModelPaths[Slot.Hair] = Config.MakeRelativePath(Config.character.hairModelPath);
             preset.ModelPaths[Slot.Eyes] = Config.MakeRelativePath(Config.character.eyesModelPath);
 
-            
+
 
             // Material paths -> relative
             preset.MaterialPaths[Slot.Body] = Config.MakeRelativePath(Config.character.bodyMaterialPath);
@@ -610,7 +566,7 @@ namespace rowemod.Mods
             preset.MaterialPaths[Slot.Hat] = Config.MakeRelativePath(Config.character.hatMaterialPath);
             preset.MaterialPaths[Slot.Hair] = Config.MakeRelativePath(Config.character.hairMaterialPath);
             preset.MaterialPaths[Slot.Eyes] = Config.MakeRelativePath(Config.character.eyesMaterialPath);
-            
+
             ClothingPreset.Save(preset);
         }
 
@@ -634,16 +590,19 @@ namespace rowemod.Mods
                     ReplaceMaterial(kvp.Key, Config.MakeAbsolutePath(kvp.Value));
                 }
             }
+
             // Apply visibility
             foreach (var kvp in preset.SlotVisibility)
             {
                 _slotVisibility[kvp.Key] = kvp.Value;
                 ToggleSlotVisibility(kvp.Key, kvp.Value);
             }
+
             Log.Msg($"Preset '{presetName}' loaded.");
             Config.character.lastLoadedPresetCharacter = presetName;
             Config.Save();
         }
+
         public static void UpdateAllPresets()
         {
             List<string> presetNames = ClothingPreset.GetAvailablePresets();
@@ -700,6 +659,7 @@ namespace rowemod.Mods
                 }
             }
         }
+
         public static GameObject GetSlotObject(Slot slot)
         {
             if (_slotObjects.TryGetValue(slot, out GameObject go) && go != null)
@@ -730,37 +690,39 @@ namespace rowemod.Mods
 
             return slotObject;
         }
-        // Add near other fields (already present): 
-// static Dictionary<Slot, string> _selectedModelDirectories = new Dictionary<Slot, string>();
+
 
 // --- NEW: helper ---
         private static void OpenMaterialsTabAndAutoSelectFirst(Slot slot)
         {
             // Open the Materials tab in UI
             inModelsTab = false;
-
-            // Find the first .material inside the selected model's directory
-            if (_selectedModelDirectories.TryGetValue(slot, out string modelDir) && Directory.Exists(modelDir))
+            if (slot != Slot.Body)
             {
-                string[] materialFiles = Directory.GetFiles(modelDir, "*.material", SearchOption.AllDirectories);
-                if (materialFiles != null && materialFiles.Length > 0)
+                // Find the first .material inside the selected model's directory
+                if (_selectedModelDirectories.TryGetValue(slot, out string modelDir) && Directory.Exists(modelDir))
                 {
-                    string firstMat = materialFiles[0];
-                    Log.Msg($"Auto-selecting first material for {slot}: {Path.GetFileName(firstMat)}");
-                    ReplaceMaterial(slot, firstMat);
-                    return;
+                    string[] materialFiles = Directory.GetFiles(modelDir, "*.material", SearchOption.AllDirectories);
+                    if (materialFiles != null && materialFiles.Length > 0)
+                    {
+                        string firstMat = materialFiles[0];
+                        Log.Msg($"Auto-selecting first material for {slot}: {Path.GetFileName(firstMat)}");
+                        ReplaceMaterial(slot, firstMat);
+                        return;
+                    }
+                    else
+                    {
+                        Log.Msg($"No *.material files found for {slot} in '{modelDir}'.");
+                    }
                 }
                 else
                 {
-                    Log.Msg($"No *.material files found for {slot} in '{modelDir}'.");
+                    Log.Msg($"No model directory stored for {slot}; cannot auto-select material.");
                 }
             }
-            else
-            {
-                Log.Msg($"No model directory stored for {slot}; cannot auto-select material.");
-            }
-        }
 
-        
+
+
+        }
     }
 }

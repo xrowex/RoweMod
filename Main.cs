@@ -11,7 +11,7 @@ using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.0.8", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.0.9", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
@@ -81,11 +81,6 @@ namespace rowemod
             Log.Msg("Starting Bundle loading...");
             Memory.LoadAllAssetBundles();
             
-            
-            
-            
-            
-            
         }
         
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -101,21 +96,24 @@ namespace rowemod
             
             //We set styles to false to reload each time scene is initialized
             stylesInitialized = false;
+
+
+
+            if (sceneName != "MashBox_Main" || sceneName != "TitleScreen")
+            {
+                //load rowe logo
+                MelonCoroutines.Start(LoadRoweLogo());
             
+                // Reload assets from cached bundles
+                Memory.ReloadAssetsFromCachedBundles();
             
+                //Initialize bike materials
+                BikeMaterialsLoader.Initialize();
             
+                // Re-initialize ObjectDropper on scene load
+                ObjectDropper.Initialize();
+            }
             
-            //load rowe logo
-            MelonCoroutines.Start(LoadRoweLogo());
-            
-            // Reload assets from cached bundles
-            Memory.ReloadAssetsFromCachedBundles();
-            
-            //Initialize bike materials
-            BikeMaterialsLoader.Initialize();
-            
-            // Re-initialize ObjectDropper on scene load
-            ObjectDropper.Initialize();
         }
         
         

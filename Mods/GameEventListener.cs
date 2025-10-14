@@ -181,6 +181,7 @@ namespace rowemod.Mods
                 Log.Msg($"Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
+                Memory.gamePlayer = go;
                 Main.playableSceneLoaded = true;
                 //Custom.UpdateAllPresets();
                 Memory.FindObjects(go);
@@ -235,7 +236,7 @@ namespace rowemod.Mods
                 Log.Msg($"Menu Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
-                Memory.menuPlayer = Memory.rMbCharacter;
+                Memory.menuPlayer = go;
                 Memory.FindObjects(go);
                 MelonCoroutines.Start(DelayedLoadPreset(go));
                 MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
@@ -246,16 +247,6 @@ namespace rowemod.Mods
             }
         }
 
-        /*
-        private void OnTitleLoopGameplayEnter()
-        {
-            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
-            // Delayed bike materials load to bypass shop load
-            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-
-            MelonCoroutines.Start(DelayedPartReload());
-            //Memory.FindObjects(Memory.physicsDrivenCharacter);
-        }*/
         private void OnTitleLoopGameplayEnter()
         {
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
@@ -279,7 +270,7 @@ namespace rowemod.Mods
         {
             yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
 
-            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) &&    player != null)
+            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) && player != null)
             {
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");
                 Custom.LoadPreset(Config.character.lastLoadedPresetCharacter); // Now it should work

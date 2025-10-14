@@ -48,6 +48,7 @@ namespace rowemod.Utils
         public static GameObject physicsDrivenCharacter;
         public static GameObject rPhysicsSkeleton;
         public static GameObject menuPlayer;
+        public static GameObject gamePlayer;
 
         // HUD
         public static Test mashBucksHUD;
