@@ -12,12 +12,15 @@ namespace rowemod.Mods
         public static Transform seatPostAnchor;
         public static Transform seatAnchor;
         public static Transform barsAnchor;
-        public static Transform[] pegsAnchor; // Fix: Correctly declare pegsAnchor as an array of Transform  
+        public static Transform sprocketAnchor;
+        public static Transform[] pegsAnchor; // Fix: Correctly declare pegsAnchor as an array of Transform 
+        public static Transform[] pegsEnabledTransform;
         private static float lastBarPitch, lastBarScale, lastSeatHeight, lastSeatPitch, lastPegLength;
         public enum PartTypeTab
         {
             Bars,
-            Frame
+            Frame,
+            Stem
         }
 
         private static PartTypeTab currentPartTab = PartTypeTab.Bars;
@@ -33,6 +36,18 @@ namespace rowemod.Mods
         private static string[] frameNames;
         private static List<GameObject> framePrefabs = new();
         private static Vector2 frameScrollPos = Vector2.zero;
+        
+        private static int selectedSprocketIndex = 0;
+        public static bool sprocketListInitialized = false;
+        private static string[] sprocketNames;
+        private static List<GameObject> sprocketPrefabs = new();
+        private static Vector2 sprocketScrollPos = Vector2.zero;
+        
+        private static int selectedStemIndex = 0;
+        public static bool stemListInitialized = false;
+        private static string[] stemNames;
+        private static List<GameObject> stemPrefabs = new();
+        private static Vector2 stemScrollPos = Vector2.zero;
         public static void FindParts()
         {
             Log.Msg("FindParts called.");
@@ -42,7 +57,7 @@ namespace rowemod.Mods
                 Log.Error("rMbCharacter is null. Cannot search for anchors.");
                 return;
             }
-
+            
             // Try finding the SeatPost_Anchor (any active one)  
             Log.Msg("Searching for SeatPost_Anchor transforms...");
             var allSeatPosts = UnityEngine.Object.FindObjectsOfType<Transform>()
@@ -60,7 +75,7 @@ namespace rowemod.Mods
                 Log.Error("No active SeatPost_Anchor found.");
             }
 
-            // Find Seat_Anchor deeply under rMbCharacter  
+            // Find Seat_Anchor deeply under rMbCharacter
             Log.Msg("Searching for Seat_Anchor using FindDeepChild...");
             seatAnchor = Memory.rMbCharacter.transform.FindDeepChild("Seat_Anchor");
             if (seatAnchor != null)
@@ -71,7 +86,20 @@ namespace rowemod.Mods
             {
                 Log.Error("Seat_Anchor not found under rMbCharacter.");
             }
-
+            
+            /*
+            // Find Seat_Anchor deeply under rMbCharacter  
+            Log.Msg("Searching for Sprocket_Anchor using FindDeepChild...");
+            sprocketAnchor = Memory.rMbCharacter.transform.FindDeepChild("Sprocket_Anchor");
+            if (sprocketAnchor != null)
+            {
+                Log.Msg("Sprocket_Anchor found using FindDeepChild.");
+            }
+            else
+            {
+                Log.Error("Seat_Anchor not found under rMbCharacter.");
+            }*/
+            
             // Find Bars_Anchor the same way  
             Log.Msg("Searching for Bars_Anchor using FindDeepChild...");
             barsAnchor = Memory.rMbCharacter.transform.FindDeepChild("Bars_Anchor");
@@ -98,6 +126,19 @@ namespace rowemod.Mods
             {
                 Log.Error("Pegs not found.");
             }
+            
+            pegsEnabledTransform = Memory.rMbCharacter.transform.GetComponentsInChildren<Transform>()
+                .Where(t => t.name == "Pegs")
+                .ToArray();
+            if (pegsEnabledTransform != null && pegsEnabledTransform.Length > 0)
+            {
+                Log.Msg($"Pegs Enabled found: {pegsEnabledTransform.Length} peg(s).");
+            }
+            else
+            {
+                Log.Error("Pegs Enabled not found.");
+            }
+                
         }
 
         private static float barRotationAngle = 0f;
@@ -164,6 +205,18 @@ namespace rowemod.Mods
                     peg.localScale = new Vector3(pegLength, peg.localScale.y, peg.localScale.z);
                 }
                 Config.bike.pegLength = pegLength;
+            }
+
+            if (pegsEnabledTransform != null)
+            {
+                GUILayout.Space(10);
+                GUILayout.Label("Pegs Enabled", Menu.coloredBoxStyle);
+                foreach (var peg in pegsEnabledTransform)
+                {
+                    bool enabled = GUILayout.Toggle(peg.gameObject.activeSelf, peg.name);
+                    peg.gameObject.SetActive(enabled);
+                    Config.bike.pegsEnabled = enabled;
+                }
             }
         }
         
@@ -265,9 +318,11 @@ namespace rowemod.Mods
             // Clear saved config entries
             Config.bike.lastLoadedBars = string.Empty;
             Config.bike.lastLoadedFrame = string.Empty;
+            Config.bike.lastLoadedStem  = string.Empty;
             Config.Save();
             Memory.lastEquippedBars = null;
             Memory.lastEquippedFrame = null;
+            Memory.lastEquippedStem = null;
 
 
             Memory.customizableEntity.EquipItems();
@@ -299,13 +354,55 @@ namespace rowemod.Mods
                     EnsureBarsLoaded();
                     DrawPartTab("Select Bars:", barPrefabs, barNames, ref selectedBarIndex, ref barScrollPos, TryReplaceBars);
                     break;
-
                 case PartTypeTab.Frame:
                     EnsureFramesLoaded();
                     DrawPartTab("Select Frame:", framePrefabs, frameNames, ref selectedFrameIndex, ref frameScrollPos, TryReplaceFrame);
                     break;
-
+                case PartTypeTab.Stem:
+                    EnsureStemLoaded();
+                    DrawPartTab("Select Stem:", stemPrefabs, stemNames, ref selectedStemIndex, ref stemScrollPos, TryReplaceStem);
+                    break;
             }
+        }
+        
+        
+        //added custom stem loading and replacing methods
+        private static void EnsureStemLoaded()
+        {
+            if (stemListInitialized && stemPrefabs.Count > 0)
+                return;
+        
+            stemPrefabs = Memory.prefabList
+                .Where(p => p != null && p.name.ToLower().StartsWith("stem"))
+                .ToList();
+        
+            stemNames = stemPrefabs.Select(p =>
+            {
+                string bundleName = Memory.prefabToBundleMap.TryGetValue(p, out var bundle) ? bundle : "UnknownBundle";
+                return $"{p.name} ({bundleName})";
+            }).ToArray();
+        
+            stemListInitialized = true;
+            Log.Msg($"[Stem] Loaded {stemPrefabs.Count} stem prefabs.");
+        }
+        
+        public static void TryReplaceStem(GameObject prefab)
+        {
+            var slot = Memory.rMbCharacter.transform.FindDeepChild("Stem")?.GetComponent<EquipSlotVehicle>();
+            if (slot == null)
+            {
+                Log.Warning("[Stem] Could not find Stem EquipSlot.");
+                return;
+            }
+        
+            Log.Msg($"[Stem] Instantiating: {prefab.name}");
+            slot.Equip(prefab);
+        
+            Config.bike.bikeMaterials.Remove("Stem");
+            Config.Save();
+        
+            FindParts();
+            UpdatePartTransforms();
         }
         private static void EnsureBarsLoaded()
         {
@@ -419,6 +516,7 @@ namespace rowemod.Mods
                 }
             }
         }
+        
         private static void DrawPartTypeTabs()
         {
             GUILayout.BeginHorizontal();
@@ -435,6 +533,21 @@ namespace rowemod.Mods
             GUILayout.EndHorizontal();
         }
         
-        
+        public static void LoadSavedStem()
+        {
+            if (!string.IsNullOrEmpty(Config.bike.lastLoadedStem))
+            {
+                var savedStem = Memory.prefabList.FirstOrDefault(p => p != null && p.name == Config.bike.lastLoadedStem);
+                if (savedStem != null)
+                {
+                    TryReplaceStem(savedStem);
+                    Log.Msg($"[Stem] Loaded saved stem: {savedStem.name}");
+                }
+                else
+                {
+                    Log.Warning($"[Stem] Could not find saved stem: {Config.bike.lastLoadedStem}");
+                }
+            }
+        }
     }
 }

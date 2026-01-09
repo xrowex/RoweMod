@@ -12,21 +12,7 @@ namespace rowemod.Mods
     public static class Misc
     {
         private static bool lastDisableDroneCollider = Config.misc.disableDroneCollider;
-
-        public static void ToggleEmoteInput()
-        {
-            InputActionAsset[] ias = Resources.FindObjectsOfTypeAll<InputActionAsset>();
-            foreach(InputActionAsset ia in ias)
-            {
-                if(ia.name == "MashBox_Freerun_InputActions")
-                {
-                    ia.actionMaps[0].m_Actions[5] = null;
-                    break;
-                }
-            }
-        }
-
-
+        
         public static void Update()
         {
             // Detect change in bDisableDroneCollider
@@ -37,13 +23,18 @@ namespace rowemod.Mods
                 Memory.RefreshDroneComponents();
                 lastDisableDroneCollider = misc.disableDroneCollider;
             }
-
+            
+            
+            // Update Ragdoll Behaviour
+            if(activeRagdollBehaviour !=null)
+                activeRagdollBehaviour._invinsible = misc.neverBail;
+            
             // Update Drone Rigidbody Mass
             if (droneRb != null)
             {
                 droneRb.mass = misc.droneMass;
             }
-
+            
             // Update Drone Mesh Renderers (Hide Body)
             if (allDroneMeshRenderers != null && allDroneMeshRenderers.Count > 0)
             {

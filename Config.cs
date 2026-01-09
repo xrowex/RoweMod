@@ -64,6 +64,7 @@ namespace rowemod
         public float rearWheelRadius;
         public float rearWheelWidth;
         public float pegLength;
+        public bool pegsEnabled;
         public Dictionary<string, string> bikeMaterials;
         public string lastLoadedPresetBike;
         public string lastLoadedFrame;
@@ -159,6 +160,7 @@ namespace rowemod
             rearWheelRadius = 1f,
             rearWheelWidth = 1f,
             pegLength = 0.5f,
+            pegsEnabled = true,
             bikeMaterials = new Dictionary<string, string>(),
             lastLoadedPresetBike = "None",
             lastLoadedBars = "None",
@@ -422,6 +424,7 @@ namespace rowemod
             bike.rearWheelRadius = 1f;
             bike.rearWheelWidth = 1f;
             bike.pegLength = 0.5f;
+            bike.pegsEnabled = true;
             bike.lastLoadedPresetBike = "None";
             bike.lastLoadedFrame = "None";
             bike.lastLoadedBars = "None";

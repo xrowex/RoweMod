@@ -104,7 +104,7 @@ namespace rowemod
         private static string fovInput = "60";
         private static float fovInputValue = 60f;
 
-
+        public static bool isLogoLoaded = false;
         //-------------------------------------------------------------------
         // MENU & TAB LOGIC
         //-------------------------------------------------------------------
@@ -290,14 +290,19 @@ namespace rowemod
                     case Tab.Dropper:
                         ObjectDropper.DrawDropperTab();
                         break;
+                    /*
                     case Tab.Multiplayer:
                         Multiplayer.DrawMultiplayerTab();
                         break;
-                    /*case Tab.Challenge:
+                    */
+                    
+                    /*
+                     case Tab.Challenge:
                         GUILayout.Box("8Bitt Challenge", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
                         GUILayout.Label("This tab is reserved for future challenges.", labelStyle);
                         // Placeholder for future challenge content
-                        break;*/
+                        break;
+                    */
                 }
             }
             catch (Exception ex)
@@ -383,7 +388,7 @@ namespace rowemod
                 ("Graphics", Tab.Graphics),
                 ("Marker", Tab.Marker),
                 ("Dropper", Tab.Dropper),
-                ("MP", Tab.Multiplayer), // Added Multiplayer tab
+                //("MP", Tab.Multiplayer), // Added Multiplayer tab
                 //("Challenge", Tab.Challenge) // Added Challenge tab
             };
             
@@ -432,6 +437,7 @@ namespace rowemod
                         Config.ResetBikeTab();
                         PartTweaker.FindParts();
                         ReloadAssetsFromCachedBundles();
+                        //Memory.LoadAllAssetBundles();
                         customizableEntity.EquipItems();
                         customizableEntity.EquipItems();
                         Memory.FindObjects(Memory.rMbCharacter); // Refresh all references
@@ -455,6 +461,7 @@ namespace rowemod
 
                     case Tab.Marker:
                         ReloadAssetsFromCachedBundles();
+                        //Memory.LoadAllAssetBundles();
                         break;
 
                     case Tab.Dropper:
@@ -1193,6 +1200,7 @@ namespace rowemod
 
         public static IEnumerator LoadRoweLogo()
         {
+            isLogoLoaded = true;
             string url = "https://github.com/xrowex/RoweModsLogo/raw/main/rowemods.png";
             UnityWebRequest www = UnityWebRequestTexture.GetTexture(url);
             yield return www.SendWebRequest();

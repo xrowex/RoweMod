@@ -1,13 +1,11 @@
-﻿using System.Collections;
+﻿using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
 using MelonLoader;
 using rowemod.Utils;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
-using Physics = UnityEngine.Physics;
-using static rowemod.Mods.Misc;
-
 namespace rowemod.Mods
 {
     public class GameEventListener : MelonMod
@@ -17,6 +15,7 @@ namespace rowemod.Mods
         private GameEvent _playerResetAtMarker;
         private GameEvent _playerCloseReplay;
         private GameEvent _titleLoopGameplayEnter;
+        private GameEvent _mainMenuOpen;
 
         public void Initialize()
         {
@@ -56,6 +55,10 @@ namespace rowemod.Mods
                 {
                     _titleLoopGameplayEnter = ev;
                 }
+                if (ev.name.Contains("GameEvent_UI_OnMenuOpen"))
+                {
+                    _mainMenuOpen = ev;
+                }
 
             }
 
@@ -82,8 +85,6 @@ namespace rowemod.Mods
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnMenuPlayerSpawned);
             _localMenuHumanSpawnEvent.OnRaise.AddListener(menuAction);
 
-
-
             //RESET AT MARKER
             if (_playerResetAtMarker == null)
             {
@@ -95,8 +96,6 @@ namespace rowemod.Mods
             UnityAction resetAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
             _playerResetAtMarker.OnRaise.AddListener(resetAction);
-
-
 
             //PLAYER CLOSES replay
             if (_playerCloseReplay == null)
@@ -122,6 +121,17 @@ namespace rowemod.Mods
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnTitleLoopGameplayEnter);
             _titleLoopGameplayEnter.OnRaise.AddListener(gameplayEnterAction);
 
+            //main menu open
+            if (_mainMenuOpen == null)
+            {
+                Log.Error("mainMenuOpen is null!");
+                return;
+            }
+
+            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter found! Subscribing to event...");
+            UnityAction mainMenuOpen =
+                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnMainMenuOpen);
+            _mainMenuOpen.OnRaise.AddListener(mainMenuOpen);
 
 
         }
@@ -130,11 +140,16 @@ namespace rowemod.Mods
         {
             Log.Msg($"[GameEventListener] Event raised: {eventName}");
         }
-
+        private void OnMainMenuOpen()
+        {
+            Log.Msg("GameEvent_UI_OnMenuOpen triggered!");
+            MelonCoroutines.Start(DelayedLoadPreset());
+        }
         private void OnPlayerCloseReplay()
         {
-            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
             /*
+            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
+
             Memory.FindObjects(Memory.physicsDrivenCharacter);
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             */
@@ -148,6 +163,7 @@ namespace rowemod.Mods
         }
 
 
+        /*
         private void OnTitleLoopOnExitMainMenu()
         {
 
@@ -157,6 +173,13 @@ namespace rowemod.Mods
         {
 
         }
+        
+        
+        private void OnTitleLoopGameplayOnExit()
+        {
+
+        }
+        */
         
         private void OnPlayerSpawned()
         {
@@ -178,27 +201,43 @@ namespace rowemod.Mods
             var go = unityObj.TryCast<GameObject>();
             if (go != null)
             {
+                if (!RemoteKillSwitch.isModEnabled) return;
                 Log.Msg($"Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Memory.gamePlayer = go;
+
+                if (Memory.gamePlayer)
+                {
+                    Log.Msg($"gamePlayer set to : {Memory.gamePlayer.name}");
+                }
+                else
+                {
+                    Log.Error("gamePlayer is null!");
+                }
                 Main.playableSceneLoaded = true;
-                //Custom.UpdateAllPresets();
+
+                Main.DisableMeshCombiners();
+                
+                
                 Memory.FindObjects(go);
                 PartTweaker.FindParts();
                 MotorVehicleUtils.FindMxVehicleSettings();
-                MelonCoroutines.Start(DelayedLoadPreset(go));
+                MelonCoroutines.Start(DelayedLoadPreset());
                 MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                 MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
                 BikeMaterialsLoader.Initialize();
                 TrickMods.LoadTricksFromConfig();
+                //Memory.UpdateCharacters();
+
                 // Load a saved session marker if it exists
                 if (!string.IsNullOrEmpty(Config.misc.customSessionMarker))
                 {
                     if (Memory.sessionMarkers != null)
                     {
                         GameObject savedMarker = Memory.sessionMarkers
-                            .FirstOrDefault(marker => marker != null && marker.name == Config.misc.customSessionMarker);
+                            .FirstOrDefault(marker =>
+                                marker != null && marker.name == Config.misc.customSessionMarker);
 
                         if (savedMarker != null)
                         {
@@ -233,71 +272,71 @@ namespace rowemod.Mods
             var go = unityObj.TryCast<GameObject>();
             if (go != null)
             {
-                Log.Msg($"Menu Player Spawned: {go.name}");
-                Memory.physicsDrivenCharacter = go;
-                Memory.rMbCharacter = go.transform.parent?.gameObject;
-                Memory.menuPlayer = go;
-                Memory.FindObjects(go);
-                MelonCoroutines.Start(DelayedLoadPreset(go));
-                MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
-                MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
-                BikeMaterialsLoader.Initialize();
-                MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());//added
-                TrickMods.LoadTricksFromConfig();
+                if (RemoteKillSwitch.isModEnabled)
+                {
+                    Log.Msg($"Menu Player Spawned: {go.name}");
+                    Memory.physicsDrivenCharacter = go;
+                    Memory.rMbCharacter = go.transform.parent?.gameObject;
+                    Memory.menuPlayer = go;
+                    if(Memory.menuPlayer)
+                        Log.Msg($"menuPlayer set to : {Memory.menuPlayer.name}");
+                    else
+                    {
+                        Log.Error("menuPlayer is null!");
+                    }
+                    Main.DisableMeshCombiners();
+                    
+                    
+                    Memory.FindObjects(go);
+                    MelonCoroutines.Start(DelayedLoadPreset());
+                    MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
+                    MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+                    MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+                    BikeMaterialsLoader.Initialize();
+                    //Memory.UpdateCharacters();
+                }
+            }
+            else
+            {
+                Log.Error("Menu player object is null!");
             }
         }
 
         private void OnTitleLoopGameplayEnter()
         {
-            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
-            // Delayed bike materials load to bypass shop load
-            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-            PartTweaker.barListInitialized = false;
-            PartTweaker.frameListInitialized = false;
-
-            MelonCoroutines.Start(DelayedLoadPreset(Memory.menuPlayer));
-            MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
-            MelonCoroutines.Start(DelayedPartReload());
-            MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
-            TrickMods.LoadTricksFromConfig();
-            //Memory.FindObjects(Memory.physicsDrivenCharacter);
+            if (RemoteKillSwitch.isModEnabled)
+            {
+                Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
+                // Delayed bike materials load to bypass shop load
+               
+                PartTweaker.barListInitialized = false;
+                PartTweaker.frameListInitialized = false;
+                
+                //These might not be needed each gameplay enter 
+                MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+                //MelonCoroutines.Start(DelayedLoadPreset());
+                //MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
+                //MelonCoroutines.Start(DelayedPartReload());
+                //MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+                
+                //TrickMods.LoadTricksFromConfig();
+            }
+            
         }
-        private void OnTitleLoopGameplayOnExit()
-        {
-
-        }
-        public IEnumerator DelayedLoadPreset(GameObject player)
+        
+        public IEnumerator DelayedLoadPreset()
         {
             yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
 
-            if (!string.IsNullOrEmpty(Config.character.lastLoadedPresetCharacter) && player != null)
+            if (Config.character.lastLoadedPresetCharacter!=null)
             {
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");
-                Custom.LoadPreset(Config.character.lastLoadedPresetCharacter); // Now it should work
-
-                // NEW: Re-apply visibility after model/material replacement
-                foreach (var kvp in Custom._slotVisibility)
-                {
-                    Custom.ToggleSlotVisibility(kvp.Key, kvp.Value);
-                }
+                MelonCoroutines.Start(Custom.LoadPreset(Config.character.lastLoadedPresetCharacter)); // Now it should work
             }
             else
             {
                 Log.Warning("Cannot load preset - missing reference or preset name.");
             }
-        }
-        private System.Collections.IEnumerator DelayedPartReload()
-        {
-            yield return new WaitForSeconds(3f);
-            
-            if (Memory.lastEquippedBars != null)
-                PartTweaker.TryReplaceBars(Memory.lastEquippedBars);
-
-            if (Memory.lastEquippedFrame != null)
-                PartTweaker.TryReplaceFrame(Memory.lastEquippedFrame);
-
-            PartTweaker.FindParts();
-            yield return null;
         }
     }
 

@@ -16,9 +16,11 @@ using Il2CppMashBox.Core.Runtime.Audio;
 using Il2CppMashBox.Core.Runtime.Camera;
 using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using Il2CppMashBox.Core.Runtime.Events;
+using Il2CppMashBox.Core.Runtime.Gameplay.ActivityTracking;
 using Il2CppMashBox.Core.Runtime.Physics;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 using Il2CppMashBox.Core.Runtime.Spawning;
+using Il2CppMashBox.Development.Anim_Follow.Physics_Driven_Animation;
 using Il2CppMashBox.Development.RandD.IAP;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
 using Il2CppMashBox.Development.RandD.Vehicle_Force_Pull;
@@ -26,7 +28,9 @@ using MelonLoader;
 using rowemod.Mods;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using static rowemod.Config;
+using ActiveRagdollBehaviour = Il2CppMashBox.Addons.PhysicsDrivenAnimation.ActiveRagdollBehaviour;
 using Camera = UnityEngine.Camera;
 using EquipSlot = Il2CppMashBox.Addons.ContentManagment.EquipSlot;
 using Object = UnityEngine.Object;
@@ -56,6 +60,7 @@ namespace rowemod.Utils
         //Custom models
         public static GameObject lastEquippedBars;
         public static GameObject lastEquippedFrame;
+        public static GameObject lastEquippedStem;
         
         // Camera
         public static Camera roweCam;
@@ -98,6 +103,7 @@ namespace rowemod.Utils
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
         public static PlayerInputBehaviour playerInputBehaviour;
         public static MGCharacterController mgCharacterController;
+        public static ActiveRagdollBehaviour activeRagdollBehaviour;
 
         // Game Events
         public static GameEvent playerSpawned;
@@ -146,6 +152,17 @@ namespace rowemod.Utils
                     physicsDrivenCharacter = player;
                 }
             }
+            
+            //Active Ragdoll
+            if(physicsDrivenCharacter!=null)
+            {
+                activeRagdollBehaviour = physicsDrivenCharacter.GetComponent<ActiveRagdollBehaviour>();
+                if(activeRagdollBehaviour != null)
+                    Log.Msg("ActiveRagdollBehaviour component found.");
+                else
+                    Log.Error("ActiveRagdollBehaviour component not found on physicsDrivenCharacter.");
+            }
+            
             gameplayCameraBrain = GameObject.FindObjectsOfType<CinemachineBrain>()
                 .FirstOrDefault(brain => brain != null && brain.gameObject.name.Contains("Gameplay Camera"));
 
@@ -386,7 +403,7 @@ namespace rowemod.Utils
             try
             {
                 Log.Msg("Starting to find eightbittActivityTracker...");
-                eightbittActivityTracker = rMbCharacter.GetComponentInChildren<ActivityTracker>(true);
+                //eightbittActivityTracker = rMbCharacter.GetComponentInChildren<ActivityTracker>(true);
             }
             catch (System.Exception ex)
             {
@@ -436,6 +453,7 @@ namespace rowemod.Utils
             
             
             
+            /*
             networkPlayers = GameObject.FindObjectsOfType<NetworkPlayer>(true);
             networkHumans = GameObject.FindObjectsOfType<NetworkHuman>(true);
             playerNameDictionary.Clear();
@@ -452,16 +470,16 @@ namespace rowemod.Utils
                     
                     NetworkString<_32> playerName = eachplayer._UserName;
                     playerNameDictionary[playerName] = eachplayer;
-                }
+                }*/
 
             Log.Msg("Running GrabTrickData()");
             TrickMods.GrabTrickData();
 
             // Delayed bike materials load to bypass shop load
-            MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
+            //MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
 
             //BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
-            Custom.LoadPreset(Config.character.lastLoadedPresetCharacter);
+            //Custom.LoadPreset(Config.character.lastLoadedPresetCharacter);
 
             Mods.Physics.Update();
             
@@ -727,6 +745,7 @@ namespace rowemod.Utils
             dropperPrefabs.Clear();
             PartTweaker.barListInitialized = false;
             PartTweaker.frameListInitialized = false;
+            PartTweaker.stemListInitialized = false;
             prefabNames.Clear();
             dropperPrefabNames.Clear();
 
@@ -754,11 +773,6 @@ namespace rowemod.Utils
                             prefabList.Add(asset);
                             Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
 
-                            // Updated to check for "bars" prefix instead of "bar" substring
-                            if (asset.name.ToLower().StartsWith("bars"))
-                            {
-                                prefabToBundleMap[asset] = Path.GetFileName(bundlePath);
-                            }
 
                             // Handle session markers
                             if (asset.name.ToLower().StartsWith("marker"))
@@ -909,10 +923,51 @@ namespace rowemod.Utils
 
             Log.Msg("Attempting to load saved custom parts...");
             PartTweaker.LoadSavedBars();
-            yield return new WaitForSeconds(0.25f);
+            yield return new WaitForSeconds(0.5f);
             PartTweaker.LoadSavedFrame();
+            yield return new WaitForSeconds(0.5f);
+            PartTweaker.LoadSavedStem();
+            
+            
                 
             yield return null;
+        }
+
+        public static void UpdateCharacters()
+        {
+            menuPlayer = FindObjectWithComponentInScene<CustomCharacterManager>("MainMenu");
+            
+            if (menuPlayer == null)
+                Log.Error("MainMenu character not found!");
+            
+            gamePlayer = Object.FindObjectOfType<CustomCharacterManager>().gameObject;
+            
+            if(gamePlayer == null)
+                Log.Error("GamePlayer character not found!");
+        }
+        public static GameObject FindObjectWithComponentInScene<T>(string sceneName) where T : Component
+        {
+            Scene scene = SceneManager.GetSceneByName(sceneName);
+
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                Debug.LogError($"[SceneSearch] Scene '{sceneName}' is not loaded or invalid.");
+                return null;
+            }
+
+            GameObject[] roots = scene.GetRootGameObjects();
+
+            foreach (GameObject root in roots)
+            {
+                // true = include inactive
+                T comp = root.GetComponentInChildren<T>(true);
+                if (comp != null)
+                {
+                    return comp.gameObject.transform.parent.gameObject;   // <- GameObject that holds the component
+                }
+            }
+
+            return null;
         }
     }
 }

@@ -9,16 +9,17 @@ using Log = rowemod.Utils.Log;
 using System.Collections;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
+using Il2CppMashBox.Development.RandD.PlayFabTesting;
 using Il2CppSteamworks;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.0.9", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.1.6", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "2.0.8";
+        public const string ModVersion = "2.1.6";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
@@ -28,6 +29,7 @@ namespace rowemod
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
+            
         }
 
         public override void OnLateInitializeMelon()
@@ -83,8 +85,26 @@ namespace rowemod
             
         }
         
+        public static void DisableMeshCombiners()
+        {
+            var smCombiner = UnityEngine.Object.FindObjectsOfType<SkinnedMeshCombiner>();
+            var CEHuman = UnityEngine.Object.FindObjectsOfType<CustomizableEntityHuman>();
+            if(smCombiner!=null)
+                foreach (var smc in smCombiner)
+                    smc.enabled = false;
+            if(CEHuman!=null)
+                foreach(var ceh in CEHuman)
+                    ceh.enabled = false;
+            
+            var combinedMesh = GameObject.Find("CombinedMesh");
+
+            if(combinedMesh!=null)
+                combinedMesh.SetActive(false);
+        }
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
+            RemoteKillSwitch.CheckStatus();
+            DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
 
             cachedHDRCameras = UnityEngine.Camera.allCameras
@@ -101,17 +121,18 @@ namespace rowemod
 
             if (sceneName != "MashBox_Main" || sceneName != "TitleScreen")
             {
-                //load rowe logo
-                MelonCoroutines.Start(LoadRoweLogo());
+                //load rowe logo if not loaded
+                if(!isLogoLoaded)
+                    MelonCoroutines.Start(LoadRoweLogo());
             
                 // Reload assets from cached bundles
                 Memory.ReloadAssetsFromCachedBundles();
             
                 //Initialize bike materials
-                BikeMaterialsLoader.Initialize();
+                //BikeMaterialsLoader.Initialize();
             
                 // Re-initialize ObjectDropper on scene load
-                ObjectDropper.Initialize();
+                //ObjectDropper.Initialize();
             }
             
         }
@@ -133,7 +154,6 @@ namespace rowemod
                 }
             }
         } 
-        
         public override void OnGUI()
         {
             if (!stylesInitialized)
@@ -144,9 +164,15 @@ namespace rowemod
                 
             if (isOpen)
             {
-                Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
-                TrickMods.DrawTrickPickerPopup();
-
+                if (RemoteKillSwitch.isModEnabled)
+                {
+                    Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
+                    TrickMods.DrawTrickPickerPopup();
+                }
+                else
+                {
+                    Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)RemoteKillSwitch.DrawDisabledWindow, $"RoweMod v. {ModVersion}", Menu.windowStyle);
+                }
             }
         }
         

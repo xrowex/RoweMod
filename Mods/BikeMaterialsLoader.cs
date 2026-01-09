@@ -228,7 +228,7 @@ namespace rowemod.Mods
 
             LoadBikeFolders();
             
-            // ✅ Always initialize visibility map — not just if character exists
+            //  Always initialize visibility map — not just if character exists
             foreach (var category in categories.Keys)
             {
                 if (!_categoryVisibility.ContainsKey(category))
@@ -522,7 +522,7 @@ namespace rowemod.Mods
             //Log.Warning($"⚠ '{obj.name}' does NOT belong to a known wheel type! No valid parent found.");
             return "Unknown";
         }
-
+        
         private static void SetRenderersActive(string categoryKey, bool isVisible)
         {
             if (!categories.ContainsKey(categoryKey)) return;

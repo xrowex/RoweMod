@@ -218,19 +218,8 @@ namespace rowemod.Mods
                     position.y += bottomOffset;
                     
                     
-                    GameObject spawned = null;
                     
-                    // Local fallback (single-player or offline)
-                    GameObject local = Object.Instantiate(prefabToSpawn, position, rotation);
-                    spawned = local;
-                    spawnedObjects.Add(local);
-                    Log.Warning($"[LocalOnly] Spawned {local.name} (no active NetworkRunner)");
-
-                    if (local != null && local.GetComponent<Rigidbody>() != null)
-                    {
-                        local.AddComponent<RecordableBody>();
-                        Log.Msg($"Added RecordableBody to {local.name} as it has a Rigidbody component");
-                    }
+                    GameObject spawned = Object.Instantiate(prefabToSpawn, position, rotation);
                     
 
                     if (spawned != null && spawned.GetComponent<Rigidbody>() != null)
@@ -574,18 +563,36 @@ namespace rowemod.Mods
             }
             else
             {
+                // Clean up any nulls in both lists just in case
+                spawnedObjects.RemoveAll(o => o == null);
+                selectedObjects.RemoveAll(o => o == null);
+
                 for (int i = 0; i < spawnedObjects.Count; i++)
                 {
                     GameObject obj = spawnedObjects[i];
-                    // Use the prefab display name from Memory.dropperPrefabNames based on the prefab's name
-                    string displayName = Memory.dropperPrefabNames.FirstOrDefault(name => obj != null && obj.name.Contains(name)) ?? obj?.name ?? "(Destroyed)";
-                    string label = obj != null ? $"Object {i + 1}: {displayName}" : $"Object {i + 1}: (Destroyed)";
                     if (obj == null) continue;
 
-                    bool isSelected = selectedObjects.Contains(obj);
-                    GUIStyle toggleStyle = isSelected ? toggleOnStyle : toggleOffStyle;
+                    string displayName = "(Unknown)";
 
-                    if (GUILayout.Button(label, toggleStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
+                    if (Memory.dropperPrefabNames != null)
+                    {
+                        displayName = Memory.dropperPrefabNames
+                            .FirstOrDefault(name => obj.name.Contains(name));
+                    }
+
+                    if (string.IsNullOrEmpty(displayName))
+                        displayName = obj.name;
+
+                    string label = $"Object {i + 1}: {displayName}";
+
+                    bool isSelected = selectedObjects.Contains(obj);
+
+                    // Fallback if styles haven't been built for some reason
+                    GUIStyle toggleStyle =
+                        (isSelected ? toggleOnStyle : toggleOffStyle) ?? Menu.highQualityButtonStyle;
+
+                    if (GUILayout.Button(label, toggleStyle,
+                            GUILayout.Width(500f), GUILayout.Height(20f)))
                     {
                         ToggleObjectSelection(obj);
                     }

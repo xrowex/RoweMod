@@ -465,9 +465,8 @@
 		<Compile Include="Mods\Multiplayer.cs" />
 		<Compile Include="Mods\ObjectDropper.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
-		<Compile Include="Mods\Patches\ActiveRagdollBehaviourPatches.cs" />
-		<Compile Include="Mods\Patches\TestDeathPatches.cs" />
 		<Compile Include="Mods\Physics.cs" />
+		<Compile Include="Mods\RemoteKillSwitch.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
 		<Compile Include="Mods\TrickMods.cs" />
@@ -481,6 +480,7 @@
 
 	<ItemGroup>
 	  <Folder Include="DLL\" />
+	  <Folder Include="Mods\Patches\" />
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
