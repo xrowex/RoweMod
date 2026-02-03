@@ -3,9 +3,14 @@ using Il2CppMashBox.Core.Runtime.Events;
 using MelonLoader;
 using rowemod.Utils;
 using System.Collections;
+using Il2CppFusion;
+using Il2CppMashBox.Addons.NetworkingFusion;
+using Il2CppMashBox.Character;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using Log = rowemod.Utils.Log;
+
 namespace rowemod.Mods
 {
     public class GameEventListener : MelonMod
@@ -191,14 +196,25 @@ namespace rowemod.Mods
                 Log.Error("Player object is null in event data!");
                 return;
             }
-
+            
             // Log the type to see what IL2CPP actually thinks it is.
             Log.Msg($"_extraEventDataUnityObject Type: {unityObj.GetType().FullName}");
+            
+            GameObject go;
+            
+            var allNetworkPlayers = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>();
+            var localPlayer = allNetworkPlayers.FirstOrDefault(player => player._isLocal);
+            if (localPlayer != null)
+            {
+                Log.Msg($"Found local network player: {localPlayer.gameObject.name}");
+                go = localPlayer.gameObject.GetComponentInChildren<LocalHumanPlayerSpawnEvent>().gameObject;
+            }
+            else
+            {
+                // If you have TryCast in your environment:
+                go = unityObj.TryCast<GameObject>();
+            }
 
-
-
-            // If you have TryCast in your environment:
-            var go = unityObj.TryCast<GameObject>();
             if (go != null)
             {
                 if (!RemoteKillSwitch.isModEnabled) return;
@@ -206,6 +222,8 @@ namespace rowemod.Mods
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Memory.gamePlayer = go;
+            
+                
 
                 if (Memory.gamePlayer)
                 {

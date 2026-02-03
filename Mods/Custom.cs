@@ -8,6 +8,7 @@ using UnityEngine;
 using static rowemod.Utils.Memory;
 using static rowemod.Menu;
 using MelonLoader;
+using Il2CppMagicaCloth2;
 
 namespace rowemod.Mods
 {
@@ -24,7 +25,8 @@ namespace rowemod.Mods
             Bottoms,
             Socks,
             Shoes,
-            Bust
+            Bust,
+            Eyewear
         }
 
         // Map your enum to the ACTUAL child names that appear in the screenshot:
@@ -41,6 +43,7 @@ namespace rowemod.Mods
             { Slot.Socks, "EquipSlot_Socks" },
             { Slot.Shoes, "EquipSlot_Shoes" },
             { Slot.Bust, "EquipSlot_Bust" },
+            { Slot.Eyewear, "Eyewear_EquipSlot" }
         };
 
         // Because your actual slot GameObjects live deeper in the hierarchy,
@@ -207,7 +210,7 @@ namespace rowemod.Mods
             }
 
             string basePath = SlotParentPath + equipSlotName;
-            if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
+            if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes || slot == Slot.Eyewear)
                 basePath = SlotParentPath + "HeadGear/" + equipSlotName;
 
             // Helper function to toggle visibility on a specific character
@@ -371,6 +374,8 @@ namespace rowemod.Mods
                 case Slot.Hat: Config.character.hatModelPath = relPath; break;
                 case Slot.Hair: Config.character.hairModelPath = relPath; break;
                 case Slot.Eyes: Config.character.eyesModelPath = relPath; break;
+                case Slot.Eyewear: Config.character.eyewearModelPath = relPath; break;
+                
             }
 
             // Reusable function to apply model to a specific character
@@ -422,12 +427,24 @@ namespace rowemod.Mods
                 // Disable SM_Body GameObjects
                 foreach (Transform child in modelObject.GetComponentsInChildren<Transform>(true))
                 {
-                    if (child.name.Contains("SM_Body"))
+                    if (child.name.Contains("SM_Body")) 
                     {
                         Log.Msg("Removing erroneous skinned mesh renderer : " + child.name);
                         UnityEngine.Object.Destroy(child.gameObject);
-
                     }
+                    if (child.name.Contains("SM_Bust")) 
+                    {
+                        Log.Msg("Removing erroneous skinned mesh renderer : " + child.name);
+                        UnityEngine.Object.Destroy(child.gameObject);
+                    }
+                }
+                
+                // Check for MagicaCloth component
+                var magicaCloth = modelObject.GetComponent<MagicaCloth>();
+                if (magicaCloth != null)
+                {
+                    Log.Msg("Found MagicaCloth component, running BuildAndRun");
+                    magicaCloth.BuildAndRun();
                 }
                 
                 var equipSlot = slotTransform.GetComponent<EquipSlot>();
@@ -436,7 +453,9 @@ namespace rowemod.Mods
                     Log.Error($"[ReplaceModel] {label}: No EquipSlot component found on {slotTransform.name}.");
                     return;
                 }
-
+                
+                
+                    
                 equipSlot.Equip(modelObject);
                 Log.Msg($"[ReplaceModel] {label}: Successfully equipped {slot} model.");
                 

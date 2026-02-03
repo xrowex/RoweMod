@@ -11,15 +11,17 @@ using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
 using Il2CppSteamworks;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.1.6", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.3.0", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "2.1.6";
+        public const string ModVersion = "2.3.0";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
@@ -31,7 +33,8 @@ namespace rowemod
             CreateModDirectories();
             
         }
-
+        
+        
         public override void OnLateInitializeMelon()
         {
             if (!SteamAPI.IsSteamRunning())
@@ -88,13 +91,9 @@ namespace rowemod
         public static void DisableMeshCombiners()
         {
             var smCombiner = UnityEngine.Object.FindObjectsOfType<SkinnedMeshCombiner>();
-            var CEHuman = UnityEngine.Object.FindObjectsOfType<CustomizableEntityHuman>();
             if(smCombiner!=null)
                 foreach (var smc in smCombiner)
                     smc.enabled = false;
-            if(CEHuman!=null)
-                foreach(var ceh in CEHuman)
-                    ceh.enabled = false;
             
             var combinedMesh = GameObject.Find("CombinedMesh");
 
@@ -176,11 +175,25 @@ namespace rowemod
             }
         }
         
+        // 1-second cooldown shared across all instances (prevents double-toggle issues)
+        private static float _nextToggleTime = 0f;
+
         private void HandleMenuToggle()
         {
-            if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.N))
+            var kb = Keyboard.current;
+            if (kb == null) return;
+
+            // Cooldown guard (use unscaled time so pause/timeScale doesn't affect it)
+            if (Time.unscaledTime < _nextToggleTime)
+                return;
+
+            if ((kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed) &&
+                kb.nKey.wasPressedThisFrame)
             {
+                _nextToggleTime = Time.unscaledTime + 1f; // 1 second cooldown
+
                 isOpen = !isOpen;
+
                 try
                 {
                     if (isOpen)

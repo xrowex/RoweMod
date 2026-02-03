@@ -170,21 +170,28 @@ namespace rowemod
                 {
                     case Tab.Physics:
                         Mods.Physics.Update();
-                        GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("Physics", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight),
+                            GUILayout.ExpandWidth(true));
                         ModernToggle("Spin Assist", ref physics.spinAssist);
+                        ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
+                        if(physics.grindAlignAssist)
+                            Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 5f, 0f, 10f);
                         ModernToggle("Drifting", ref physics.driftAbility);
-                        Slider("Gravity", ref physics.gravity,12.5f, 0f, 30f);
-                        Slider("Small Hop Force", ref physics.smallHopForce,4.2f, 0f, 25f);
-                        GUILayout.Box("Speed", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        Slider("Push Force", ref physics.bmxForceFactor,0.07f, 0.05f, 2f);
-                        Slider("Max Speed",ref physics.bmxMaxSpeed,7f, 2f, 15f);
-                        GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
-                        Slider("Pump Force", ref physics.pumpForce,1.0f, 1f, 5f);
-                        Slider("Spin Speed Multiplier", ref physics.spinMultiplier,1.0f, 0f, 10f);
-                        Slider("Steer Damping", ref physics.steerDamp,5f, 1f, 5f);
-                        GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
+                        Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
+                        GUILayout.Box("Speed", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight),
+                            GUILayout.ExpandWidth(true));
+                        Slider("Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
+                        Slider("Max Speed", ref physics.bmxMaxSpeed, 7f, 2f, 15f);
+                        GUILayout.Box("Pump/Spin", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight),
+                            GUILayout.ExpandWidth(true));
+                        Slider("Pump Force", ref physics.pumpForce, 1.0f, 1f, 5f);
+                        Slider("Spin Speed Multiplier", ref physics.spinMultiplier, 1.0f, 0f, 10f);
+                        Slider("Steer Damping", ref physics.steerDamp, 5f, 1f, 5f);
+                        GUILayout.Box("Manuals", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight),
+                            GUILayout.ExpandWidth(true));
                         Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
-                        Slider("Max Manual Angle", ref physics.manualAngle,30f, 10f, 50f);
+                        Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
@@ -251,22 +258,38 @@ namespace rowemod
                         break;
                         */
 
-                    
+
                     case Tab.Misc:
-                        GUILayout.Box("Drone", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("Drone", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight),
+                            GUILayout.ExpandWidth(true));
                         ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
                         ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
                         ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
                         Slider("Drone Mass", ref misc.droneMass, 5f, 2f, 1000f);
-                        GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                        GUILayout.Box("Other", coloredBoxStyle, GUILayout.Height(coloredBoxStyle.fixedHeight),
+                            GUILayout.ExpandWidth(true));
                         ModernToggle("No Bail", ref misc.neverBail);
                         ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
+                        if (GUILayout.Button("<b>REMOVE SKIDMARKS</b>", redButtonStyle))
+                        {
+                            Memory.RemoveSkidmarks();
+                        }
                         ModernSlider("Menu Color R", ref misc.menuAccentR,  0f, 1f);
                         ModernSlider("Menu Color G", ref misc.menuAccentG, 0f, 1f);
                         ModernSlider("Menu Color B", ref misc.menuAccentB, 0f, 1f);
                         if (GUILayout.Button("<b>Set Menu Color</b>", highQualityButtonStyle))
                         {
                             stylesInitialized = false;
+                        }
+                        var bones = beyondMeatSystem.bones;
+                        GUILayout.Label("Break Bones");
+                        foreach (var bone in bones)
+                        {
+                             GUILayout.Label($"Bone Name: {bone.boneTransform.name}");
+                             if (GUILayout.Button("Break Bone", redButtonStyle))
+                             {
+                                 beyondMeatSystem.HandleBoneBreak(bone);
+                             }
                         }
                         break;
 

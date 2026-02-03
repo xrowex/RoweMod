@@ -24,6 +24,8 @@ namespace rowemod
         public float tireFrictionThreshold;
         public float bmxForceFactor;
         public float bmxMaxSpeed;
+        public bool grindAlignAssist;
+        public float grindAssistStrength;
     }
 
     // Struct for character model and material paths
@@ -50,6 +52,8 @@ namespace rowemod
         public string hairMaterialPath;
         public string eyesModelPath;
         public string eyesMaterialPath;
+        public string eyewearModelPath;
+        public string eyewearMaterialPath;
     }
 
     // Struct for bike customization variables
@@ -59,12 +63,16 @@ namespace rowemod
         public float barScale;
         public float seatHeight;
         public float seatPitch;
+        public float forkScale;
         public float frontWheelRadius;
         public float frontWheelWidth;
         public float rearWheelRadius;
         public float rearWheelWidth;
         public float pegLength;
-        public bool pegsEnabled;
+        public bool frontLeftPegsEnabled;
+        public bool frontRightPegsEnabled;
+        public bool rearLeftPegsEnabled;
+        public bool rearRightPegsEnabled;
         public Dictionary<string, string> bikeMaterials;
         public string lastLoadedPresetBike;
         public string lastLoadedFrame;
@@ -146,7 +154,9 @@ namespace rowemod
             hairModelPath = null,
             hairMaterialPath = null,
             eyesModelPath = null,
-            eyesMaterialPath = null
+            eyesMaterialPath = null,
+            eyewearModelPath = null,
+            eyewearMaterialPath = null
         };
 
         public static CustomBike bike = new CustomBike
@@ -155,12 +165,16 @@ namespace rowemod
             barScale = 1f,
             seatHeight = 0.05f,
             seatPitch = 330f,
+            forkScale = 1f,
             frontWheelRadius = 1f,
             frontWheelWidth = 1f,
             rearWheelRadius = 1f,
             rearWheelWidth = 1f,
             pegLength = 0.5f,
-            pegsEnabled = true,
+            frontLeftPegsEnabled = true,
+            frontRightPegsEnabled = true,
+            rearLeftPegsEnabled = true,
+            rearRightPegsEnabled = true,
             bikeMaterials = new Dictionary<string, string>(),
             lastLoadedPresetBike = "None",
             lastLoadedBars = "None",
@@ -237,7 +251,9 @@ namespace rowemod
                         hairModelPath = SafeMakeRelativePath(character.hairModelPath),
                         hairMaterialPath = SafeMakeRelativePath(character.hairMaterialPath),
                         eyesModelPath = SafeMakeRelativePath(character.eyesModelPath),
-                        eyesMaterialPath = SafeMakeRelativePath(character.eyesMaterialPath)
+                        eyesMaterialPath = SafeMakeRelativePath(character.eyesMaterialPath),
+                        eyewearModelPath = SafeMakeRelativePath(character.eyewearModelPath),
+                        eyewearMaterialPath = SafeMakeRelativePath(character.eyewearMaterialPath)
                     },
                     customBikeData = bike,
                     miscData = misc,
@@ -291,7 +307,9 @@ namespace rowemod
                 hairModelPath = MakeAbsolutePath(jsonData.customCharacterData.hairModelPath),
                 hairMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.hairMaterialPath),
                 eyesModelPath = MakeAbsolutePath(jsonData.customCharacterData.eyesModelPath),
-                eyesMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.eyesMaterialPath)
+                eyesMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.eyesMaterialPath),
+                eyewearModelPath = MakeAbsolutePath(jsonData.customCharacterData.eyewearModelPath),
+                eyewearMaterialPath = MakeAbsolutePath(jsonData.customCharacterData.eyewearMaterialPath)
             };
             bike = jsonData.customBikeData;
             misc = jsonData.miscData;
@@ -318,6 +336,7 @@ namespace rowemod
                 case Custom.Slot.Hat: character.hatModelPath = path; break;
                 case Custom.Slot.Hair: character.hairModelPath = path; break;
                 case Custom.Slot.Eyes: character.eyesModelPath = path; break;
+                case Custom.Slot.Eyewear: character.eyewearModelPath = path; break;
             }
         }
 
@@ -335,6 +354,7 @@ namespace rowemod
                 case Custom.Slot.Hat: character.hatMaterialPath = path; break;
                 case Custom.Slot.Hair: character.hairMaterialPath = path; break;
                 case Custom.Slot.Eyes: character.eyesMaterialPath = path; break;
+                case Custom.Slot.Eyewear: character.eyewearMaterialPath = path; break;
             }
         }
 // Reset physics tab settings to defaults
@@ -359,7 +379,9 @@ namespace rowemod
                 vertAssistCorrectionStrength = 30f,
                 tireFrictionThreshold = 2f,
                 bmxForceFactor = 0.07f,
-                bmxMaxSpeed = 7.5f
+                bmxMaxSpeed = 7.5f,
+                grindAlignAssist = false,
+                grindAssistStrength = 0.5f,
             };
         }
 
@@ -406,7 +428,9 @@ namespace rowemod
                 hairModelPath = null,
                 hairMaterialPath = null,
                 eyesModelPath = null,
-                eyesMaterialPath = null
+                eyesMaterialPath = null,
+                eyewearModelPath = null,
+                eyewearMaterialPath = null
             };
             
             Memory.roweCharacterManager.InitCharacterData();
@@ -424,7 +448,10 @@ namespace rowemod
             bike.rearWheelRadius = 1f;
             bike.rearWheelWidth = 1f;
             bike.pegLength = 0.5f;
-            bike.pegsEnabled = true;
+            bike.frontLeftPegsEnabled = true;
+            bike.frontRightPegsEnabled = true;
+            bike.rearLeftPegsEnabled = true;
+            bike.rearRightPegsEnabled = true;
             bike.lastLoadedPresetBike = "None";
             bike.lastLoadedFrame = "None";
             bike.lastLoadedBars = "None";
@@ -434,6 +461,7 @@ namespace rowemod
             bike.bikeMaterials = new Dictionary<string, string>();
             Memory.lastEquippedBars = null;
             Memory.lastEquippedFrame = null;
+            Memory.lastEquippedStem = null;
             Memory.customizableEntity.EquipItems();
             Memory.customizableEntity.EquipItems();
         }

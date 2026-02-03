@@ -53,6 +53,13 @@ namespace rowemod.Mods
                     Log.Warning("PumpSystem component is not initialized.");
                 }
 
+                if (grindMagnetZEM != null)
+                {
+                    grindMagnetZEM._alignAssist = physics.grindAlignAssist;
+                    grindMagnetZEM._forceMult = physics.grindAssistStrength;
+                }
+                    
+
                 
             }
 

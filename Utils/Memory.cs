@@ -3,6 +3,7 @@ using Il2CppFusion;
 using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ContentManagment;
 using Il2CppMashBox.Addons.NetworkingFusion;
+using Il2CppMashBox.Addons.PhysicsDrivenAnimation.BeyondMeat;
 using Il2CppMashBox.Addons.ProtoDrone;
 using Il2CppMashBox.Addons.ReplaySystem;
 using Il2CppMashBox.Addons.SlowMotionSystem;
@@ -18,6 +19,7 @@ using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppMashBox.Core.Runtime.Gameplay.ActivityTracking;
 using Il2CppMashBox.Core.Runtime.Physics;
+using Il2CppMashBox.Core.Runtime.Physics.Skidmarks;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 using Il2CppMashBox.Core.Runtime.Spawning;
 using Il2CppMashBox.Development.Anim_Follow.Physics_Driven_Animation;
@@ -131,6 +133,14 @@ namespace rowemod.Utils
         public static Dictionary<NetworkString<_32>, EquipSlot> playerSlotsDictionary = new Dictionary<NetworkString<_32>, EquipSlot>();
         public static object LocalCustomCharacterData { get; set; }
 
+        //skidmarks
+        public static SkidmarkManager skidmarkManager;
+        
+        //GRIND MAGNET
+        public static GrindMagnetZEM grindMagnetZEM;
+        
+        //bones
+        public static BeyondMeatSystem beyondMeatSystem;
         public static void FindObjects(GameObject player)
         {
             Log.Msg("FindObjects called...");
@@ -178,7 +188,18 @@ namespace rowemod.Utils
                     }
                 }
             }
-
+            skidmarkManager = GameObject.FindObjectOfType<SkidmarkManager>();
+            if (skidmarkManager != null)
+                Log.Msg("SkidmarkManager component found.");
+            else
+                Log.Error("SkidmarkManager component not found.");
+            
+             beyondMeatSystem = GameObject.FindObjectOfType<BeyondMeatSystem>();
+             if(beyondMeatSystem != null)
+                 Log.Msg("BeyondMeatSystem component found.");
+             else
+                 Log.Error("BeyondMeatSystem component not found.");
+            
             // Find specific components inside rMBCharacter instead of using GameObject.Find()
             if (rMbCharacter != null)
             {
@@ -487,6 +508,11 @@ namespace rowemod.Utils
             ObjectDropper.Initialize();
         }
 
+        public static void RemoveSkidmarks()
+        {
+            if(skidmarkManager == null) return;
+            skidmarkManager.Start();
+        }
         // New: Refresh drone components when toggles are used
         public static void RefreshDroneComponents()
         {

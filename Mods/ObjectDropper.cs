@@ -6,6 +6,7 @@ using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ReplaySystem;
 using rowemod;
 using UnityEngine.Animations;
+using UnityEngine.InputSystem;
 using Log = rowemod.Utils.Log;
 using Object = UnityEngine.Object;
 
@@ -132,8 +133,10 @@ namespace rowemod.Mods
         // Update method to handle object spawning and menu toggle deselection
         public static void Update()
         {
+            var mouse = Mouse.current;
+            if (mouse == null) return;
             // Handle object spawning
-            if (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper && Input.GetMouseButtonDown(0))
+            if (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper && mouse.leftButton.wasPressedThisFrame)
             {
                 Config.misc.disableDroneCollider = true;
                 if (IsMouseOverUI()) return;
@@ -180,7 +183,7 @@ namespace rowemod.Mods
                 }
 
                 // Use mouse raycast for placement
-                Ray ray = activeCamera.ScreenPointToRay(Input.mousePosition);
+                Ray ray = activeCamera.ScreenPointToRay(mouse.position.ReadValue());
                 int placementMask = groundLayerMask & ~(1 << 31); // Exclude preview layer
                 if (UnityEngine.Physics.Raycast(ray, out RaycastHit hit, 100f, placementMask))
                 {
@@ -279,12 +282,19 @@ namespace rowemod.Mods
                 }
                 wasMenuOpen = isMenuOpen;
             }
-
+            
             // Scroll to rotate preview
-            float scrollDelta = Input.mouseScrollDelta.y;
+            float scrollDelta = 0f;
+
+            if (Mouse.current != null)
+            {
+                // Normalize OS delta (e.g., 120 on Windows) into “notches” (~1 per step)
+                scrollDelta = Mouse.current.scroll.ReadValue().y / 120f;
+            }
+
             if (scrollDelta != 0f)
             {
-                previewYRotation += scrollDelta * 5f;
+                previewYRotation += scrollDelta * 5f; // same multiplier you had
                 previewYRotation %= 360f;
             }
 
@@ -313,7 +323,7 @@ namespace rowemod.Mods
 
                 if (activeCamera != null && previewObject != null)
                 {
-                    Ray ray = activeCamera.ScreenPointToRay(Input.mousePosition);
+                    Ray ray = activeCamera.ScreenPointToRay(mouse.position.ReadValue());
                     int placementMask = groundLayerMask & ~(1 << 31); // Exclude preview layer
                     if (UnityEngine.Physics.Raycast(ray, out RaycastHit hit, 100f, placementMask))
                     {
@@ -353,10 +363,13 @@ namespace rowemod.Mods
                 Menu.windowRect.width,
                 Menu.windowRect.height
             );
-
+            
+            var mouse = Mouse.current;
+            if (mouse == null) return false;
+            
             // Flip Y since GUI and Screen have different origins
-            float flippedY = Screen.height - Input.mousePosition.y;
-            Vector2 mousePos = new Vector2(Input.mousePosition.x, flippedY);
+            float flippedY = Screen.height - mouse.position.y.ReadValue();
+            Vector2 mousePos = new Vector2(mouse.position.x.ReadValue(), flippedY);
 
             return screenRect.Contains(mousePos);
         }
