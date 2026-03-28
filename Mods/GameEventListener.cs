@@ -28,6 +28,9 @@ namespace rowemod.Mods
             _localGameplayHumanSpawnEvent = null;
             _localMenuHumanSpawnEvent = null;
             _playerResetAtMarker = null;
+            _playerCloseReplay = null;
+            _titleLoopGameplayEnter = null;
+            _mainMenuOpen = null;
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
@@ -51,7 +54,7 @@ namespace rowemod.Mods
                     _localMenuHumanSpawnEvent = ev;
                 }
 
-                if (ev.name.Contains("GameEvent_TitleLoop_TransitionTrigger_OpenReplay"))
+                if (ev.name.Contains("GameEvent_TitleLoop_TransitionTrigger_CloseReplay"))
                 {
                     _playerCloseReplay = ev;
                 }
@@ -109,7 +112,7 @@ namespace rowemod.Mods
                 return;
             }
 
-            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_OpenReplay found! Subscribing to event...");
+            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay found! Subscribing to event...");
             UnityAction closeReplayAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseReplay);
             _playerCloseReplay.OnRaise.AddListener(closeReplayAction);
@@ -122,9 +125,9 @@ namespace rowemod.Mods
             }
 
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter found! Subscribing to event...");
-            UnityAction gameplayEnterAction =
-                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnTitleLoopGameplayEnter);
-            _titleLoopGameplayEnter.OnRaise.AddListener(gameplayEnterAction);
+            UnityAction gameplayOnEnterAction =
+                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnTitleLoopGameplayOnEnter);
+            _titleLoopGameplayEnter.OnRaise.AddListener(gameplayOnEnterAction);
 
             //main menu open
             if (_mainMenuOpen == null)
@@ -133,7 +136,7 @@ namespace rowemod.Mods
                 return;
             }
 
-            Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter found! Subscribing to event...");
+            Log.Msg("GameEvent_UI_OnMenuOpen found! Subscribing to event...");
             UnityAction mainMenuOpen =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnMainMenuOpen);
             _mainMenuOpen.OnRaise.AddListener(mainMenuOpen);
@@ -147,22 +150,31 @@ namespace rowemod.Mods
         }
         private void OnMainMenuOpen()
         {
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
             Log.Msg("GameEvent_UI_OnMenuOpen triggered!");
-            MelonCoroutines.Start(DelayedLoadPreset());
+            //MelonCoroutines.Start(DelayedLoadPreset());
         }
         private void OnPlayerCloseReplay()
         {
-            /*
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
             Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
 
             Memory.FindObjects(Memory.physicsDrivenCharacter);
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-            */
+            MelonCoroutines.Start(DelayedLoadPreset());
         }
 
         private void OnPlayerResetAtMarker()
         {
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
             Misc.Update();
+            Misc.ApplyPlayerUserNameTargetsVisibility(true);
             Physics.Update();
             MotorVehicleUtils.FindMxVehicleSettings();
         }
@@ -188,6 +200,9 @@ namespace rowemod.Mods
         
         private void OnPlayerSpawned()
         {
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
 
             var unityObj = _localGameplayHumanSpawnEvent._extraEventDataUnityObject;
@@ -239,11 +254,14 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                Misc.ApplyPlayerUserNameTargetsVisibility(true);
                 PartTweaker.FindParts();
+                GrindPoseEditor.ApplyConfigToRuntime(true);
                 MotorVehicleUtils.FindMxVehicleSettings();
                 MelonCoroutines.Start(DelayedLoadPreset());
                 MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                 MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+                MelonCoroutines.Start(GrindPoseEditor.DelayedApplyConfigRoutine());
                 BikeMaterialsLoader.Initialize();
                 TrickMods.LoadTricksFromConfig();
                 //Memory.UpdateCharacters();
@@ -278,6 +296,9 @@ namespace rowemod.Mods
 
         private void OnMenuPlayerSpawned()
         {
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
             Log.Msg("GameEvent_LocalMenuHumanSpawned triggered!");
 
             var unityObj = _localMenuHumanSpawnEvent._extraEventDataUnityObject;
@@ -306,6 +327,7 @@ namespace rowemod.Mods
                     
                     
                     Memory.FindObjects(go);
+                    Misc.ApplyPlayerUserNameTargetsVisibility(true);
                     MelonCoroutines.Start(DelayedLoadPreset());
                     MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                     MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
@@ -320,7 +342,7 @@ namespace rowemod.Mods
             }
         }
 
-        private void OnTitleLoopGameplayEnter()
+        private void OnTitleLoopGameplayOnEnter()
         {
             if (RemoteKillSwitch.isModEnabled)
             {
@@ -329,13 +351,11 @@ namespace rowemod.Mods
                
                 PartTweaker.barListInitialized = false;
                 PartTweaker.frameListInitialized = false;
-                
                 //These might not be needed each gameplay enter 
                 MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-                //MelonCoroutines.Start(DelayedLoadPreset());
-                //MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
-                //MelonCoroutines.Start(DelayedPartReload());
-                //MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
+                MelonCoroutines.Start(DelayedLoadPreset());
+                MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
+                MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
                 
                 //TrickMods.LoadTricksFromConfig();
             }
@@ -344,10 +364,12 @@ namespace rowemod.Mods
         
         public IEnumerator DelayedLoadPreset()
         {
-            yield return new WaitForSeconds(2f); // Give it time to fully load scene stuff
+            
+            yield return new WaitForSeconds(4f); // Give it time to fully load scene stuff
 
-            if (Config.character.lastLoadedPresetCharacter!=null)
-            {
+            if (Config.character.lastLoadedPresetCharacter!=null & RemoteKillSwitch.isModEnabled)
+            { 
+                
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");
                 MelonCoroutines.Start(Custom.LoadPreset(Config.character.lastLoadedPresetCharacter)); // Now it should work
             }

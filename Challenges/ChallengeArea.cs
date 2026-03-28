@@ -1,55 +1,91 @@
-﻿using UnityEngine;
+﻿using rowemod.Utils;
+using UnityEngine;
 
 namespace rowemod.Challenges
 {
     public class ChallengeArea : MonoBehaviour
     {
-        public string playerTag = "Player";      // Make this match your game’s player tag (or set at runtime)
+        public string playerTag = "VehicleColliders";      // Make this match your game’s player tag (or set at runtime)
         public bool visible = true;
+        public Color areaColor = new Color(0f, 1f, 0.6f, 0.22f);
 
         private BoxCollider _trigger;
         private MeshRenderer _renderer;
         private Transform _visual;
+        private bool _initialized;
 
-        void Awake()
+        public static ChallengeArea CreateChallengeArea(Vector3 position, Vector3 size, Quaternion rotation, string playerTag = "Player", Color? color = null)
         {
+            var root = new GameObject("ChallengeArea");
+            root.transform.position = position;
+            root.transform.rotation = rotation;
+            root.transform.localScale = size;
+
+            if (root.GetComponent<BoxCollider>() == null)
+                root.AddComponent<BoxCollider>();
+
+            root.GetComponent<BoxCollider>().isTrigger = true;
+            
+            var area = root.AddComponent<ChallengeArea>();
+            area.playerTag = playerTag;
+            if (color.HasValue) area.areaColor = color.Value;
+            area.Init();
+            return area;
+        }
+
+        public void Init()
+        {
+            if (_initialized) return;
+            _initialized = true;
+
             gameObject.layer = LayerMask.NameToLayer("Default");
 
             // Trigger collider (the actual challenge volume)
             _trigger = GetComponent<BoxCollider>();
             _trigger.isTrigger = true;
-
+            _trigger.size = Vector3.one;
+            
             // Build a visible child cube that matches the collider
             var visualGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(visualGo.GetComponent<Collider>()); // we only want the parent collider
+            if (visualGo.GetComponent<Collider>())
+                Destroy(visualGo.GetComponent<Collider>()); 
+            
             visualGo.name = "ChallengeArea_Visual";
             visualGo.transform.SetParent(transform, false);
             visualGo.transform.localPosition = Vector3.zero;
             visualGo.transform.localRotation = Quaternion.identity;
-            visualGo.transform.localScale = Vector3.one; // will be scaled by parent
+            visualGo.transform.localScale = Vector3.one; // matches parent scale
             _visual = visualGo.transform;
-
+            
             _renderer = visualGo.GetComponent<MeshRenderer>();
             _renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _renderer.receiveShadows = false;
             _renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-
+            
             // Transparent material (HDRP-ready; falls back if HDRP/Lit is missing)
-            _renderer.sharedMaterial = BuildTransparentMat(new Color(0f, 1f, 0.6f, 0.22f));
-
+            _renderer.sharedMaterial = BuildTransparentMat(areaColor);
+            
             SetVisible(visible);
         }
 
         public void SetSize(Vector3 size)
         {
-            _trigger.size = size;
-            // Visual is scaled by parent transform; keep local scale = 1 and scale the root instead (recommended)
+            transform.localScale = size;
         }
 
         public void SetVisible(bool v)
         {
             visible = v;
             if (_renderer != null) _renderer.enabled = v;
+        }
+
+        public void SetColor(Color color)
+        {
+            areaColor = color;
+            if (_renderer != null)
+            {
+                _renderer.sharedMaterial = BuildTransparentMat(color);
+            }
         }
 
         // HDRP transparent material helper
@@ -71,18 +107,12 @@ namespace rowemod.Challenges
                 m.EnableKeyword("_BLENDMODE_ALPHA");
                 return m;
             }
-
-            // Fallback: Standard
-            Shader std = Shader.Find("Standard");
-            var stdMat = new Material(std);
-            stdMat.SetColor("_Color", color);
-            stdMat.SetFloat("_Mode", 3f); // Transparent
-            stdMat.EnableKeyword("_ALPHABLEND_ON");
-            stdMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            stdMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            stdMat.SetInt("_ZWrite", 0);
-            stdMat.renderQueue = 3000;
-            return stdMat;
+            else
+            {
+                Log.Error("HDRP shader null!");
+                return null;
+            }
+            
         }
 
         private void OnTriggerEnter(Collider other)

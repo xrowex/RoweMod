@@ -237,9 +237,11 @@ namespace rowemod.Mods
             // Find Bars_Anchor the same way  
             Log.Msg("Searching for Bars_Anchor using FindDeepChild...");
             barsAnchor = Memory.rMbCharacter.transform.FindDeepChild("Bars_Anchor");
+            if (barsAnchor == null) barsAnchor = Memory.rMbCharacter.transform.FindDeepChild("Bars");
+
             if (barsAnchor != null)
             {
-                Log.Msg("Bars_Anchor found.");
+                Log.Msg($"Bars_Anchor found: {barsAnchor.name}");
             }
             else
             {
@@ -261,7 +263,19 @@ namespace rowemod.Mods
                 Log.Error("Pegs not found.");
             }
             
-            forkAnchor = Memory.rMbCharacter.transform.FindDeepChild("Forks");
+            Log.Msg("Searching for Forks...");
+            forkAnchor = Memory.rMbCharacter.transform.FindDeepChild("Forks") 
+                         ?? Memory.rMbCharacter.transform.FindDeepChild("Fork")
+                         ?? Memory.rMbCharacter.transform.FindDeepChild("Fork_Anchor")
+                         ?? Memory.rMbCharacter.transform.FindDeepChild("Forks_Anchor");
+
+            if (forkAnchor == null)
+            {
+                var forkSlot = Memory.rMbCharacter.transform.GetComponentsInChildren<EquipSlotVehicle>(true)
+                    .FirstOrDefault(s => s.name.ToLower().Contains("fork"));
+                if (forkSlot != null) forkAnchor = forkSlot.transform;
+            }
+
             if (forkAnchor == null)
             {
                 Log.Error("Forks not found.");
@@ -300,121 +314,71 @@ namespace rowemod.Mods
         }
 
 
-        private static float barRotationAngle = 0f;
-        private static float seatHeight = 0.05f;      // Y position  
-        private static float seatRotationX = 350f;
-        private static float pegLength = 1.0f;
         public static void DrawPartTweaker()
         {
-            if (seatAnchor == null || seatPostAnchor == null || barsAnchor == null)
-            {
-                FindParts();
-            }
+            bool changed = false;
 
             if (seatPostAnchor != null)
             {
                 GUILayout.Label("Seat Height", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Height", ref seatHeight, 0.0f, 0.15f);
-
-                // Move the seat post up/down  
-                seatPostAnchor.localPosition = new Vector3(
-                    seatPostAnchor.localPosition.x,
-                    seatHeight,
-                    seatPostAnchor.localPosition.z
-                );
-                Config.bike.seatHeight = seatHeight;
+                float oldSeatHeight = Config.bike.seatHeight;
+                Menu.ModernSlider("Height", ref Config.bike.seatHeight, 0.0f, 0.15f);
+                if (oldSeatHeight != Config.bike.seatHeight) changed = true;
 
                 GUILayout.Space(10);
                 GUILayout.Label("Seat Tilt", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Rotation X", ref seatRotationX, 330f, 379f); // 379 wraps around to 19  
-
-                if (seatAnchor != null)
-                {
-                    // Update seat tilt  
-                    Quaternion newRotation = Quaternion.Euler(seatRotationX % 360f, 0f, 0f);
-                    seatAnchor.localRotation = newRotation;
-                    Config.bike.seatPitch = seatRotationX;
-
-                }
-                else
-                {
-                    Log.Error("Skipping Seat_Anchor updates: seatAnchor is null.");
-                }
-
-                Memory.customizableEntity.RelaySnap();
+                float oldSeatPitch = Config.bike.seatPitch;
+                Menu.ModernSlider("Rotation X", ref Config.bike.seatPitch, 330f, 379f);
+                if (oldSeatPitch != Config.bike.seatPitch) changed = true;
             }
 
             if (barsAnchor != null)
             {
                 GUILayout.Space(10);
                 GUILayout.Label("Bars Rotation", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Rotation", ref barRotationAngle, -45f, 45f);
-                barsAnchor.localRotation = Quaternion.Euler(barRotationAngle, 0f, 0f);
-                Config.bike.barPitch = barRotationAngle;
+                float oldBarPitch = Config.bike.barPitch;
+                Menu.ModernSlider("Rotation", ref Config.bike.barPitch, -45f, 45f);
+                if (oldBarPitch != Config.bike.barPitch) changed = true;
                 
-                //Bar Scale
+                float oldBarScale = Config.bike.barScale;
                 Menu.ModernSlider("Scale", ref Config.bike.barScale, 0.1f, 10f);
-                barsAnchor.localScale = Vector3.one * Config.bike.barScale;
-                
-                if (gripsEquipSlots != null)
-                {
-                    foreach (var grip in gripsEquipSlots)
-                    {
-                        grip._anchorTrans.localScale = Vector3.one * Config.bike.barScale;
-                    }
-                }
-                else
-                {
-                    Log.Error("Skipping Grip_Anchors updates: gripsAnchors is null.");
-                }
-
-                if (barEndEquipSlots != null)
-                {
-                    foreach (var barEnd in barEndEquipSlots)
-                    {
-                        barEnd._anchorTrans.localScale = Vector3.one * Config.bike.barScale;
-                    }
-                }
-                else
-                {
-                    Log.Error("Skipping BarEnd_Anchors updates: barEndAnchors is null.");
-                }
-                
-                
-                Memory.customizableEntity.RelaySnap();
+                if (oldBarScale != Config.bike.barScale) changed = true;
             }
 
             if (wheelMeshes != null)
             {
                 GUILayout.Space(10);
                 GUILayout.Label("Wheel Scale", Menu.coloredBoxStyle);
+
+                float oldW = Config.bike.frontWheelWidth;
+                float oldR = Config.bike.frontWheelRadius;
+
                 Menu.ModernSlider("Width", ref Config.bike.frontWheelWidth, 0.5f, 2f);
                 Menu.ModernSlider("Radius", ref Config.bike.frontWheelRadius, 0.5f, 2f);
-                foreach (var wheelMesh in wheelMeshes)
+
+                if (!Mathf.Approximately(oldW, Config.bike.frontWheelWidth) ||
+                    !Mathf.Approximately(oldR, Config.bike.frontWheelRadius))
                 {
-                    wheelMesh.localScale = new Vector3(Config.bike.frontWheelWidth,Config.bike.frontWheelRadius , Config.bike.frontWheelRadius);
-                }
-                foreach (var tire in tireTest)
-                {
-                    tire.UpdateBounds();
+                    changed = true;
                 }
             }
 
-            if (forkAnchor != null)
+            /*if (forkAnchor != null)
             {
                 GUILayout.Space(10);
                 GUILayout.Label("Fork Scale", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Length", ref Config.bike.forkScale,  1f, 3f);
-                forkAnchor.localScale = new Vector3(Config.bike.forkScale, Config.bike.forkScale, Config.bike.forkScale);
-            }
-            if(pegsAnchor != null)
+                float oldForkScale = Config.bike.forkScale;
+                Menu.ModernSlider("Length", ref Config.bike.forkScale, 1f, 3f);
+                if (oldForkScale != Config.bike.forkScale) changed = true;
+            }*/
+
+            if (pegsAnchor != null || pegData.Count > 0)
             {
                 GUILayout.Space(10);
                 GUILayout.Label("Peg Length", Menu.coloredBoxStyle);
-                Menu.ModernSlider("Length", ref pegLength, 0f, 3f);
-                    
-                    
-                Config.bike.pegLength = pegLength;
+                float oldPegLength = Config.bike.pegLength;
+                Menu.ModernSlider("Length", ref Config.bike.pegLength, 0f, 3f);
+                if (oldPegLength != Config.bike.pegLength) changed = true;
             }
 
             if (pegData != null && pegData.Count > 0)
@@ -425,51 +389,28 @@ namespace rowemod.Mods
                 for (int i = 0; i < pegData.Count; i++)
                 {
                     var d = pegData[i];
-
-                    // Label
-                    string label =
-                        d.IsFrontLeft ? "Front Left" :
-                        d.IsFrontRight ? "Front Right" :
-                        d.IsRearLeft ? "Rear Left" :
-                        d.IsRearRight ? "Rear Right" :
-                        d.EquipSlot != null ? d.EquipSlot.name : "Peg";
+                    string label = d.IsFrontLeft ? "Front Left" :
+                                   d.IsFrontRight ? "Front Right" :
+                                   d.IsRearLeft ? "Rear Left" :
+                                   d.IsRearRight ? "Rear Right" :
+                                   d.EquipSlot != null ? d.EquipSlot.name : "Peg";
 
                     bool enabledNow = GUILayout.Toggle(d.IsEnabled, label);
-
                     if (enabledNow != d.IsEnabled)
                     {
-                        // Apply runtime
-                        if (d.Parent != null) d.Parent.SetActive(enabledNow);
-
-                        // Persist
                         SetConfigEnabled(d, enabledNow);
-                        Config.Save();
-
                         d.IsEnabled = enabledNow;
                         pegData[i] = d;
+                        changed = true;
                     }
-
-                    d.scale = Config.bike.pegLength;
-                    d.EquipSlot.transform.localScale = new Vector3(Vector3.one.x, Vector3.one.y, Config.bike.pegLength);
-                    d.Collider.transform.localScale = new Vector3(Vector3.one.x, Vector3.one.y, Config.bike.pegLength * 0.7f);
-                    
-                    // Apply
-                    if (d.Parent != null && d.IsEnabled != enabledNow)
-                        d.Parent.SetActive(enabledNow);
-
-                    d.IsEnabled = enabledNow;
-
-                    // Persist into config (optional)
-                    if (d.IsFrontLeft) Config.bike.frontLeftPegsEnabled = enabledNow;
-                    else if (d.IsFrontRight) Config.bike.frontRightPegsEnabled = enabledNow;
-                    else if (d.IsRearLeft) Config.bike.rearLeftPegsEnabled = enabledNow;
-                    else if (d.IsRearRight) Config.bike.rearRightPegsEnabled = enabledNow;
-
-                    // IMPORTANT: structs are value types → write it back
-                    pegData[i] = d;
                 }
             }
 
+            if (changed)
+            {
+                UpdatePartTransforms();
+                Config.Save();
+            }
         }
         
         public static void UpdatePartTransforms()
@@ -477,51 +418,51 @@ namespace rowemod.Mods
             Log.Msg("Updating part transforms...");
             if (Memory.customizableEntity == null) return;
 
+            // Bars
             if (barsAnchor != null)
             {
+                float bScale = Config.bike.barScale <= 0 ? 1f : Config.bike.barScale;
                 barsAnchor.localRotation = Quaternion.Euler(Config.bike.barPitch, 0f, 0f);
-                
-                if (Config.bike.barScale <= 0)
-                    barsAnchor.localScale = Vector3.one;
-                else
-                {
-                    barsAnchor.localScale = Vector3.one * Config.bike.barScale;
-                }
-                    
-                    
-            }
-            else
-            {
-                Log.Error("Skipping Bars_Anchor updates: barsAnchor is null.");
+                barsAnchor.localScale = Vector3.one * bScale;
             }
 
+            // Grips
             if (gripsEquipSlots != null)
             {
+                float bScale = Config.bike.barScale <= 0 ? 1f : Config.bike.barScale;
                 foreach (var grip in gripsEquipSlots)
                 {
-                    grip._anchorTrans.localScale = Vector3.one * Config.bike.barScale;
+                    if (grip != null && grip._anchorTrans != null)
+                    {
+                        // Compensate if already scaled by parent barsAnchor
+                        if (barsAnchor != null && grip._anchorTrans.IsChildOf(barsAnchor))
+                            grip._anchorTrans.localScale = Vector3.one;
+                        else
+                            grip._anchorTrans.localScale = Vector3.one * bScale;
+                    }
                 }
-            }
-            else
-            {
-                Log.Error("Skipping Grip_Anchors updates: gripsAnchors is null.");
             }
 
+            // Bar Ends
             if (barEndEquipSlots != null)
             {
+                float bScale = Config.bike.barScale <= 0 ? 1f : Config.bike.barScale;
                 foreach (var barEnd in barEndEquipSlots)
                 {
-                    barEnd._anchorTrans.localScale = Vector3.one * Config.bike.barScale;
+                    if (barEnd != null && barEnd._anchorTrans != null)
+                    {
+                        // Compensate if already scaled by parent barsAnchor
+                        if (barsAnchor != null && barEnd._anchorTrans.IsChildOf(barsAnchor))
+                            barEnd._anchorTrans.localScale = Vector3.one;
+                        else
+                            barEnd._anchorTrans.localScale = Vector3.one * bScale;
+                    }
                 }
             }
-            else
-            {
-                Log.Error("Skipping BarEnd_Anchors updates: barEndAnchors is null.");
-            }
-            
+
+            // Seat
             if (seatPostAnchor != null)
             {
-                // Move the seat post up/down  
                 seatPostAnchor.localPosition = new Vector3(
                     seatPostAnchor.localPosition.x,
                     Config.bike.seatHeight,
@@ -530,77 +471,93 @@ namespace rowemod.Mods
 
                 if (seatAnchor != null)
                 {
-                    // Update seat tilt  
-                    Quaternion newRotation = Quaternion.Euler(Config.bike.seatPitch % 360f, 0f, 0f);
-                    seatAnchor.localRotation = newRotation;
-                }
-                else
-                {
-                    Log.Error("Skipping Seat_Anchor updates: seatAnchor is null.");
+                    seatAnchor.localRotation = Quaternion.Euler(Config.bike.seatPitch % 360f, 0f, 0f);
                 }
             }
 
+            // Wheels
+            if (wheelMeshes != null)
+            {
+                Vector3 wheelScale = new Vector3(
+                    Config.bike.frontWheelWidth,
+                    Config.bike.frontWheelRadius,
+                    Config.bike.frontWheelRadius
+                );
+
+                float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
+
+                foreach (var wheelMesh in wheelMeshes)
+                {
+                    if (wheelMesh == null) continue;
+                    
+                    Vector3 actualScale = wheelScale;
+                    wheelMesh.localScale = actualScale;
+                }
+
+                if (tireTest != null)
+                {
+                    foreach (var tire in tireTest)
+                    {
+                        if (tire == null) continue;
+                        
+                        
+                        tire.UpdateBounds();
+                    }
+                }
+            }
+
+            // Forks
+            if (forkAnchor != null)
+            {
+                float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
+                forkAnchor.localScale = Vector3.one * fScale;
+            }
+
+            // Pegs
             if (pegData != null && pegData.Count > 0)
             {
                 for (int i = 0; i < pegData.Count; i++)
                 {
                     var d = pegData[i];
+                    bool enabledNow = GetConfigEnabled(d);
+                    
+                    d.scale = Config.bike.pegLength;
+                    Vector3 pegScale = new Vector3(1f, 1f, Config.bike.pegLength);
 
-                    // Label
-                    string label =
-                        d.IsFrontLeft ? "Front Left" :
-                        d.IsFrontRight ? "Front Right" :
-                        d.IsRearLeft ? "Rear Left" :
-                        d.IsRearRight ? "Rear Right" :
-                        d.EquipSlot != null ? d.EquipSlot.name : "Peg";
+                    float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
 
-                    bool enabledNow = GUILayout.Toggle(d.IsEnabled, label);
-
-                    if (enabledNow != d.IsEnabled)
+                    if (d.EquipSlot != null)
                     {
-                        // Apply runtime
-                        if (d.Parent != null) d.Parent.SetActive(enabledNow);
-
-                        // Persist
-                        SetConfigEnabled(d, enabledNow);
-                        Config.Save();
-
-                        d.IsEnabled = enabledNow;
-                        pegData[i] = d;
+                        Vector3 actualPegScale = pegScale;
+                        if (forkAnchor != null && d.EquipSlot.transform.IsChildOf(forkAnchor))
+                        {
+                            actualPegScale.x /= fScale;
+                            actualPegScale.y /= fScale;
+                            actualPegScale.z /= fScale;
+                        }
+                        d.EquipSlot.transform.localScale = actualPegScale;
+                    }
+                    
+                    if (d.Collider != null)
+                    {
+                        Vector3 colliderScale = new Vector3(1f, 1f, Config.bike.pegLength * 0.7f);
+                        if (forkAnchor != null && d.Collider.transform.IsChildOf(forkAnchor))
+                        {
+                            colliderScale.x /= fScale;
+                            colliderScale.y /= fScale;
+                            colliderScale.z /= fScale;
+                        }
+                        d.Collider.transform.localScale = colliderScale;
                     }
 
-                    d.scale = Config.bike.pegLength;
-                    d.EquipSlot.transform.localScale = new Vector3(Vector3.one.x, Vector3.one.y, Config.bike.pegLength);
-                    d.Collider.transform.localScale = new Vector3(Vector3.one.x, Vector3.one.y, Config.bike.pegLength * 0.7f);
-                
-                    // Apply
-                    if (d.Parent != null && d.IsEnabled != enabledNow)
+                    if (d.Parent != null && d.Parent.activeSelf != enabledNow)
                         d.Parent.SetActive(enabledNow);
 
                     d.IsEnabled = enabledNow;
-
-                    // Persist into config (optional)
-                    if (d.IsFrontLeft) Config.bike.frontLeftPegsEnabled = enabledNow;
-                    else if (d.IsFrontRight) Config.bike.frontRightPegsEnabled = enabledNow;
-                    else if (d.IsRearLeft) Config.bike.rearLeftPegsEnabled = enabledNow;
-                    else if (d.IsRearRight) Config.bike.rearRightPegsEnabled = enabledNow;
-
-                    // IMPORTANT: structs are value types → write it back
-                    pegData[i] = d;
+                    pegData[i] = d; // write back struct
                 }
             }
-            
-            
-            /*
-            if (pegsEquipSlots != null)
-            {
-                foreach (var peg in pegsEquipSlots)
-                {
-                    var pegParentTransform = peg.transform.parent.gameObject.transform;;
-                    peg.transform.parent.gameObject.transform.localScale = new Vector3(pegParentTransform.localScale.x, pegParentTransform.localScale.y, Config.bike.pegLength);
-                }
-            }*/
-            
+
             // Update cached values
             lastBarPitch = Config.bike.barPitch;
             lastBarScale = Config.bike.barScale;
@@ -696,6 +653,8 @@ namespace rowemod.Mods
                     DrawPartTab("Select Stem:", stemPrefabs, stemNames, ref selectedStemIndex, ref stemScrollPos, TryReplaceStem);
                     break;
             }
+
+            GUILayout.EndVertical();
         }
         private static void ApplyPegEnabledFromConfig()
         {

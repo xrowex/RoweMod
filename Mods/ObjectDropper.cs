@@ -57,6 +57,10 @@ namespace rowemod.Mods
         private static float previewYRotation = 0f;
         private static UnityEngine.Camera activeCamera;
 
+        // Foldout states for Dropper tab
+        private static bool dropperExpanded = true;
+        private static bool transformControlsExpanded = true;
+
         // Initialize the dropper by finding references
         public static void Initialize()
         {
@@ -536,7 +540,8 @@ namespace rowemod.Mods
             InitializeToggleStyles();
 
             // Displaying header for Object Dropper tab
-            GUILayout.Box("Object Dropper", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+            dropperExpanded = Menu.ModernFoldout("Object Dropper", dropperExpanded);
+            if (!dropperExpanded) return;
 
             if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames.Count == 0)
             {
@@ -637,66 +642,69 @@ namespace rowemod.Mods
             if (selectedObjects.Count > 0)
             {
                 GUILayout.Space(10);
-                GUILayout.Box("Transform Controls", Menu.coloredBoxStyle, GUILayout.Height(Menu.coloredBoxStyle.fixedHeight), GUILayout.ExpandWidth(true));
+                transformControlsExpanded = Menu.ModernFoldout("Transform Controls", transformControlsExpanded);
 
-                // Position sliders with live updates
-                Vector3 prevPositionOffset = positionOffset;
-
-                Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
-                if (positionOffset.x != prevPositionOffset.x)
+                if (transformControlsExpanded)
                 {
-                    ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
-                    if (positionOffset.x == 0f) positionOffset.x = 0f; // Reset to zero if slider is at zero
-                    Log.Msg($"Live-updated Position X by {positionOffset.x - prevPositionOffset.x} for selected objects.");
-                }
+                    // Position sliders with live updates
+                    Vector3 prevPositionOffset = positionOffset;
 
-                prevPositionOffset = positionOffset;
-                Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
-                if (positionOffset.y != prevPositionOffset.y)
-                {
-                    ApplyTransformOffsets(new Vector3(0, positionOffset.y - prevPositionOffset.y, 0), Vector3.zero);
-                    if (positionOffset.y == 0f) positionOffset.y = 0f; // Reset to zero if slider is at zero
-                    Log.Msg($"Live-updated Position Y by {positionOffset.y - prevPositionOffset.y} for selected objects.");
-                }
+                    Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
+                    if (positionOffset.x != prevPositionOffset.x)
+                    {
+                        ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
+                        if (positionOffset.x == 0f) positionOffset.x = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Position X by {positionOffset.x - prevPositionOffset.x} for selected objects.");
+                    }
 
-                prevPositionOffset = positionOffset;
-                Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
-                if (positionOffset.z != prevPositionOffset.z)
-                {
-                    ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);
-                    if (positionOffset.z == 0f) positionOffset.z = 0f; // Reset to zero if slider is at zero
-                    Log.Msg($"Live-updated Position Z by {positionOffset.z - prevPositionOffset.z} for selected objects.");
-                }
-                GUILayout.Space(5);
+                    prevPositionOffset = positionOffset;
+                    Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
+                    if (positionOffset.y != prevPositionOffset.y)
+                    {
+                        ApplyTransformOffsets(new Vector3(0, positionOffset.y - prevPositionOffset.y, 0), Vector3.zero);
+                        if (positionOffset.y == 0f) positionOffset.y = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Position Y by {positionOffset.y - prevPositionOffset.y} for selected objects.");
+                    }
 
-                // Rotation sliders with live updates
-                Vector3 prevRotationOffset = rotationOffset;
-                Menu.ModernSlider("Rotation X", ref rotationOffset.x, -180f, 180f);
-                if (rotationOffset.x != prevRotationOffset.x)
-                {
-                    ApplyTransformOffsets(Vector3.zero, new Vector3(rotationOffset.x - prevRotationOffset.x, 0, 0));
-                    if (rotationOffset.x == 0f) rotationOffset.x = 0f; // Reset to zero if slider is at zero
-                    Log.Msg($"Live-updated Rotation X by {rotationOffset.x - prevRotationOffset.x} for selected objects.");
-                }
+                    prevPositionOffset = positionOffset;
+                    Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
+                    if (positionOffset.z != prevPositionOffset.z)
+                    {
+                        ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);
+                        if (positionOffset.z == 0f) positionOffset.z = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Position Z by {positionOffset.z - prevPositionOffset.z} for selected objects.");
+                    }
+                    GUILayout.Space(5);
 
-                prevRotationOffset = rotationOffset;
-                Menu.ModernSlider("Rotation Y", ref rotationOffset.y, -180f, 180f);
-                if (rotationOffset.y != prevRotationOffset.y)
-                {
-                    ApplyTransformOffsets(Vector3.zero, new Vector3(0, rotationOffset.y - prevRotationOffset.y, 0));
-                    if (rotationOffset.y == 0f) rotationOffset.y = 0f; // Reset to zero if slider is at zero
-                    Log.Msg($"Live-updated Rotation Y by {rotationOffset.y - prevRotationOffset.y} for selected objects.");
-                }
+                    // Rotation sliders with live updates
+                    Vector3 prevRotationOffset = rotationOffset;
+                    Menu.ModernSlider("Rotation X", ref rotationOffset.x, -180f, 180f);
+                    if (rotationOffset.x != prevRotationOffset.x)
+                    {
+                        ApplyTransformOffsets(Vector3.zero, new Vector3(rotationOffset.x - prevRotationOffset.x, 0, 0));
+                        if (rotationOffset.x == 0f) rotationOffset.x = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Rotation X by {rotationOffset.x - prevRotationOffset.x} for selected objects.");
+                    }
 
-                prevRotationOffset = rotationOffset;
-                Menu.ModernSlider("Rotation Z", ref rotationOffset.z, -180f, 180f);
-                if (rotationOffset.z != prevRotationOffset.z)
-                {
-                    ApplyTransformOffsets(Vector3.zero, new Vector3(0, 0, rotationOffset.z - prevRotationOffset.z));
-                    if (rotationOffset.z == 0f) rotationOffset.z = 0f; // Reset to zero if slider is at zero
-                    Log.Msg($"Live-updated Rotation Z by {rotationOffset.z - prevRotationOffset.z} for selected objects.");
+                    prevRotationOffset = rotationOffset;
+                    Menu.ModernSlider("Rotation Y", ref rotationOffset.y, -180f, 180f);
+                    if (rotationOffset.y != prevRotationOffset.y)
+                    {
+                        ApplyTransformOffsets(Vector3.zero, new Vector3(0, rotationOffset.y - prevRotationOffset.y, 0));
+                        if (rotationOffset.y == 0f) rotationOffset.y = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Rotation Y by {rotationOffset.y - prevRotationOffset.y} for selected objects.");
+                    }
+
+                    prevRotationOffset = rotationOffset;
+                    Menu.ModernSlider("Rotation Z", ref rotationOffset.z, -180f, 180f);
+                    if (rotationOffset.z != prevRotationOffset.z)
+                    {
+                        ApplyTransformOffsets(Vector3.zero, new Vector3(0, 0, rotationOffset.z - prevRotationOffset.z));
+                        if (rotationOffset.z == 0f) rotationOffset.z = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Rotation Z by {rotationOffset.z - prevRotationOffset.z} for selected objects.");
+                    }
+                    GUILayout.Space(5);
                 }
-                GUILayout.Space(5);
             }
 
             // Displaying currently selected prefab and number of selected objects
@@ -710,6 +718,7 @@ namespace rowemod.Mods
             // Resetting selected prefab and clear selections
             selectedPrefabName = null;
             ClearSelection();
+            Config.misc.disableDroneCollider = false;
             Log.Msg("Object Dropper tab reset: Selected prefab and objects cleared.");
         }
 

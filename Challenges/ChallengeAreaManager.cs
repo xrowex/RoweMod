@@ -17,20 +17,8 @@ namespace rowemod.Challenges
                 _active = null;
             }
 
-            var root = new GameObject("ChallengeArea");
-            root.transform.position = position;
-            root.transform.rotation = rotation ?? Quaternion.identity;
-            root.transform.localScale = size; // scale the root to set volume dimensions visually
-
-            var area = root.AddComponent<ChallengeArea>();
-            area.playerTag = playerTag;
-
-            // Also set collider size = 1 and rely on root scale for simplicity
-            var bc = root.GetComponent<BoxCollider>();
-            bc.size = Vector3.one;
-
-            _active = area;
-            return area;
+            _active = ChallengeArea.CreateChallengeArea(position, size, rotation ?? Quaternion.identity, playerTag);
+            return _active;
         }
 
         public static void DestroyActive()
@@ -60,6 +48,11 @@ namespace rowemod.Challenges
         public static void SetSize(Vector3 worldSize)
         {
             if (_active != null) _active.transform.localScale = worldSize;
+        }
+
+        public static void SetColor(Color color)
+        {
+            if (_active != null) _active.SetColor(color);
         }
 
         // Callbacks into your challenge/points logic

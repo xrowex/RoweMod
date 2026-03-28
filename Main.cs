@@ -14,29 +14,31 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.3.0", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.6", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "2.3.0";
+        public const string ModVersion = "2.6";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
-        
+        private static bool _showDisabledMessage = false;
+        private static float _disabledMessageEndTime = 0f;
         
 
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
-            
         }
         
         
         public override void OnLateInitializeMelon()
         {
+            RemoteKillSwitch.CheckStatus();
+            
             if (!SteamAPI.IsSteamRunning())
             {
                 Log.Msg("Steam is not running. Cannot retrieve Steam ID.");
@@ -53,7 +55,10 @@ namespace rowemod
             Log.Msg("Steamworks initialized successfully.");
             SteamUserManager.LogAndCheckUser();
 
-
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
+            
             previousWindowPosition = windowRect.position;
 
             if (File.Exists(cfgFile))
@@ -103,6 +108,10 @@ namespace rowemod
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             RemoteKillSwitch.CheckStatus();
+            
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+            
             DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
 
@@ -111,7 +120,6 @@ namespace rowemod
                 .Where(hdrp => hdrp != null)
                 .ToList();
 
-            cachedVolumes = UnityEngine.Object.FindObjectsOfType<UnityEngine.Rendering.Volume>().ToList();
             
             //We set styles to false to reload each time scene is initialized
             stylesInitialized = false;
@@ -120,6 +128,7 @@ namespace rowemod
 
             if (sceneName != "MashBox_Main" || sceneName != "TitleScreen")
             {
+                
                 //load rowe logo if not loaded
                 if(!isLogoLoaded)
                     MelonCoroutines.Start(LoadRoweLogo());
@@ -137,40 +146,70 @@ namespace rowemod
         }
         
         
-        
         public override void OnUpdate()
         {
+            // Let the user press Ctrl+N to get the disabled message even when disabled
+            HandleMenuToggle();
+
+            if (!RemoteKillSwitch.isModEnabled)
+                return;
+
+
             if (playableSceneLoaded && rMbCharacter)
             {
-                // Updating ObjectDropper regardless of menu state
                 ObjectDropper.Update();
+                if (!misc.showPlayerUserNameTargets)
+                {
+                    Mods.Misc.ApplyPlayerUserNameTargetsVisibility();
+                }
 
-                HandleMenuToggle();
                 if (isOpen)
                 {
                     Mods.Physics.Update();
-                    Mods.Misc.Update();
+                    //Mods.Misc.Update();
                 }
             }
-        } 
+        }
+        
         public override void OnGUI()
         {
+            if (_showDisabledMessage)
+            {
+                if (Time.unscaledTime > _disabledMessageEndTime)
+                {
+                    _showDisabledMessage = false;
+                }
+                else
+                {
+                    GUIStyle style = new GUIStyle(GUI.skin.box);
+                    style.fontSize = 18;
+                    style.alignment = TextAnchor.MiddleCenter;
+                    style.normal.textColor = Color.red;
+
+                    Rect rect = new Rect(
+                        Screen.width / 2f - 150,
+                        40,
+                        300,
+                        40
+                    );
+
+                    GUI.Box(rect, "Mod is disabled.", style);
+                }
+            }
+
+            
             if (!stylesInitialized)
             {
                 InitializeStyles();
                 stylesInitialized = true;
             }
-                
+            
             if (isOpen)
             {
                 if (RemoteKillSwitch.isModEnabled)
                 {
                     Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
                     TrickMods.DrawTrickPickerPopup();
-                }
-                else
-                {
-                    Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)RemoteKillSwitch.DrawDisabledWindow, $"RoweMod v. {ModVersion}", Menu.windowStyle);
                 }
             }
         }
@@ -188,8 +227,24 @@ namespace rowemod
                 return;
 
             if ((kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed) &&
-                kb.nKey.wasPressedThisFrame)
+                kb.nKey.isPressed)
             {
+                if (!RemoteKillSwitch.isModEnabled)
+                {
+                    // Still apply cooldown so holding the keys doesn't keep extending the timer every frame
+                    _nextToggleTime = Time.unscaledTime + 1f; // 1 second cooldown
+
+                    if (!_showDisabledMessage || Time.unscaledTime > _disabledMessageEndTime)
+                    {
+                        _showDisabledMessage = true;
+                        _disabledMessageEndTime = Time.unscaledTime + 3f; // show for 3 seconds
+                    }
+
+                    return;
+                }
+
+
+                    
                 _nextToggleTime = Time.unscaledTime + 1f; // 1 second cooldown
 
                 isOpen = !isOpen;
@@ -206,6 +261,7 @@ namespace rowemod
                     }
                     else
                     {
+                        GrindPoseEditor.OnGrindsTabExited();
                         Cursor.visible = false;
                         Cursor.lockState = CursorLockMode.Confined;
                         Config.Save();

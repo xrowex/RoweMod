@@ -31,6 +31,8 @@ using rowemod.Mods;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using System.Collections.Generic;
+using System.Linq;
 using static rowemod.Config;
 using ActiveRagdollBehaviour = Il2CppMashBox.Addons.PhysicsDrivenAnimation.ActiveRagdollBehaviour;
 using Camera = UnityEngine.Camera;
@@ -94,6 +96,7 @@ namespace rowemod.Utils
         public static PumpSystem pumpSystem;
         public static DriftAbility driftAbility;
         public static Rigidbody chassisRb;
+        public static Rigidbody springBody;
         public static Rigidbody droneRb;
         public static GameObject droneBody;
         public static MeshRenderer[] droneMeshRenderers;
@@ -106,6 +109,9 @@ namespace rowemod.Utils
         public static PlayerInputBehaviour playerInputBehaviour;
         public static MGCharacterController mgCharacterController;
         public static ActiveRagdollBehaviour activeRagdollBehaviour;
+        public static AirControlSettings airControlSettings;
+        public static BikeGrindPoser bikeGrindPoser;
+        public static AnimatedVehicleEventResponder animatedVehicleEventResponder;
 
         // Game Events
         public static GameEvent playerSpawned;
@@ -138,7 +144,10 @@ namespace rowemod.Utils
         
         //GRIND MAGNET
         public static GrindMagnetZEM grindMagnetZEM;
-        
+
+        //Pegs
+        public static List<CapsuleCollider> pegColliders = new List<CapsuleCollider>();
+
         //bones
         public static BeyondMeatSystem beyondMeatSystem;
         public static void FindObjects(GameObject player)
@@ -176,30 +185,34 @@ namespace rowemod.Utils
             gameplayCameraBrain = GameObject.FindObjectsOfType<CinemachineBrain>()
                 .FirstOrDefault(brain => brain != null && brain.gameObject.name.Contains("Gameplay Camera"));
 
-            // HUD shit
-            var testInstances = Resources.FindObjectsOfTypeAll<Test>();
-            if (testInstances != null && testInstances.Length > 0)
-            {
-                foreach (Test instance in testInstances)
-                {
-                    if (instance.name != "Fart") // lol (should be only 2 instances, the objects name were loookin for is random)
-                    {
-                        mashBucksHUD = instance;
-                    }
-                }
-            }
+            
             skidmarkManager = GameObject.FindObjectOfType<SkidmarkManager>();
             if (skidmarkManager != null)
                 Log.Msg("SkidmarkManager component found.");
             else
                 Log.Error("SkidmarkManager component not found.");
             
-             beyondMeatSystem = GameObject.FindObjectOfType<BeyondMeatSystem>();
-             if(beyondMeatSystem != null)
-                 Log.Msg("BeyondMeatSystem component found.");
-             else
-                 Log.Error("BeyondMeatSystem component not found.");
-            
+            beyondMeatSystem = GameObject.FindObjectOfType<BeyondMeatSystem>();
+            if(beyondMeatSystem != null)
+                Log.Msg("BeyondMeatSystem component found.");
+            else
+                Log.Error("BeyondMeatSystem component not found.");
+
+            pegColliders.Clear();
+            var allCapsules = GameObject.FindObjectsOfType<CapsuleCollider>();
+            foreach (var capsule in allCapsules)
+            {
+                if (capsule.gameObject.name.Contains("Peg"))
+                {
+                    pegColliders.Add(capsule);
+                }
+            }
+
+            if (pegColliders.Count > 0)
+                Log.Msg($"Found {pegColliders.Count} peg colliders.");
+            else
+                Log.Warning("No peg colliders found with 'Peg' in name.");
+
             // Find specific components inside rMBCharacter instead of using GameObject.Find()
             if (rMbCharacter != null)
             {
@@ -240,7 +253,11 @@ namespace rowemod.Utils
 
                     spinSystem = rMbCharacter.GetComponentInChildren<SpinSystem>();
                     if (spinSystem != null)
+                    {
+                        airControlSettings = spinSystem._airControlSettings;
                         Log.Msg("SpinSystem component found under rMBCharacter.");
+                    }
+                        
                     else
                         Log.Error("SpinSystem component not found under rMBCharacter.");
 
@@ -276,7 +293,7 @@ namespace rowemod.Utils
                         Log.Error("PumpSystem component not found in BMXChassis.");
 
                     vehicleBalance = rMbCharacter.GetComponentInChildren<VehicleBalancePID>();
-                    if (vehicleBalance != null)
+                    if (vehicleBalance != null) 
                         Log.Msg("VehicleBalancePID component found in BMXChassis.");
                     else
                         Log.Error("VehicleBalancePID component not found in BMXChassis.");
@@ -287,12 +304,36 @@ namespace rowemod.Utils
                     else
                         Log.Error("Rigidbody component not found in BMXChassis.");
 
+                    bikeGrindPoser = rMbCharacter.GetComponentInChildren<BikeGrindPoser>();
+                    if(bikeGrindPoser != null)
+                        Log.Msg("BikeGrindPoser component found in BMXChassis.");
+                    else
+                        Log.Error("BikeGrindPoser component not found in BMXChassis.");
+
+                    animatedVehicleEventResponder = null;
+                    if (bikeGrindPoser != null)
+                    {
+                        animatedVehicleEventResponder = bikeGrindPoser.gameObject.GetComponent<AnimatedVehicleEventResponder>();
+                    }
+
+                    if (animatedVehicleEventResponder != null)
+                        Log.Msg("AnimatedVehicleEventResponder component found on the BikeGrindPoser GameObject.");
+                    else
+                        Log.Error("AnimatedVehicleEventResponder component not found on the BikeGrindPoser GameObject.");
+                    
                     driftAbility = rMbCharacter.GetComponentInChildren<DriftAbility>();
                     if (driftAbility != null)
                         Log.Msg("DriftAbility component found in BMXChassis.");
                     else
                         Log.Error("DriftAbility component not found in BMXChassis.");
-
+                    
+                    springBody = driftAbility.transform.FindChild("Spring Body")
+                        .GetComponent<Rigidbody>();
+                    if(springBody != null)
+                        Log.Msg("Rigidbody component found in rMbCharacter parent (Spring Body)");
+                    else
+                        Log.Error("Rigidbody component found in rMbCharacter parent (Spring Body)");
+                    
                     vehicleSettingsInstances = Resources.FindObjectsOfTypeAll<MotorVehicleSettings>();
                     if (vehicleSettingsInstances != null && vehicleSettingsInstances.Length > 0)
                         Log.Msg($"Found {vehicleSettingsInstances.Length} MotorVehicleSettings instances.");
@@ -471,36 +512,9 @@ namespace rowemod.Utils
             {
                 Log.Error($"Exception while finding FreeCam or child SphereCollider: {ex.Message}");
             }
-            
-            
-            
-            /*
-            networkPlayers = GameObject.FindObjectsOfType<NetworkPlayer>(true);
-            networkHumans = GameObject.FindObjectsOfType<NetworkHuman>(true);
-            playerNameDictionary.Clear();
-            if (networkPlayers != null && networkPlayers.Length > 0)
-                foreach (NetworkPlayer eachplayer in networkPlayers)
-                {
-                    if (eachplayer.IsLocalPlayer)
-                    {
-                        localNetworkPlayer = eachplayer;
-                        networkObject = eachplayer._networkObject;
-                        localNetworkHuman = eachplayer.gameObject.GetComponentInParent<NetworkHuman>();
-                        localVisuals = localNetworkHuman._visuals;
-                    }
-                    
-                    NetworkString<_32> playerName = eachplayer._UserName;
-                    playerNameDictionary[playerName] = eachplayer;
-                }*/
 
             Log.Msg("Running GrabTrickData()");
             TrickMods.GrabTrickData();
-
-            // Delayed bike materials load to bypass shop load
-            //MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
-
-            //BikeMaterialsLoader.ApplySavedMaterialsOnSceneLoad();
-            //Custom.LoadPreset(Config.character.lastLoadedPresetCharacter);
 
             Mods.Physics.Update();
             

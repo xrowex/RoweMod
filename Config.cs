@@ -26,6 +26,8 @@ namespace rowemod
         public float bmxMaxSpeed;
         public bool grindAlignAssist;
         public float grindAssistStrength;
+        public float airAngularDrag;
+        public float grindFriction;
     }
 
     // Struct for character model and material paths
@@ -82,6 +84,14 @@ namespace rowemod
         public string lastLoadedFork;
     }
 
+    public struct ChallengeSettings
+    {
+        public bool challengeVisible;
+        public float challengeSizeX;
+        public float challengeSizeY;
+        public float challengeSizeZ;
+    }
+
     // Struct for miscellaneous variables
     public struct Misc
     {
@@ -89,6 +99,7 @@ namespace rowemod
         public float droneMass;
         public bool droneBodyToggle;
         public bool droneEmitterToggle;
+        public bool showPlayerUserNameTargets;
         public float menuAccentR;
         public float menuAccentG;
         public float menuAccentB;
@@ -105,6 +116,32 @@ namespace rowemod
     public struct CustomTricks
     {
         public Dictionary<string, List<TrickEntry>> trickSets;
+    }
+
+    public struct SerializableVector3
+    {
+        public float x;
+        public float y;
+        public float z;
+
+        public SerializableVector3(float x, float y, float z)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
+
+    public class GrindPoseConfigEntry
+    {
+        public Dictionary<string, bool> boolFields { get; set; } = new Dictionary<string, bool>();
+        public Dictionary<string, float> floatFields { get; set; } = new Dictionary<string, float>();
+        public Dictionary<string, SerializableVector3> vector3Fields { get; set; } = new Dictionary<string, SerializableVector3>();
+    }
+
+    public class GrindPoseSettings
+    {
+        public Dictionary<string, GrindPoseConfigEntry> poses { get; set; } = new Dictionary<string, GrindPoseConfigEntry>();
     }
 
     public static class Config
@@ -129,7 +166,9 @@ namespace rowemod
             vertAssistCorrectionStrength = 30f,
             tireFrictionThreshold = 2f,
             bmxForceFactor = 0.07f,
-            bmxMaxSpeed = 7.5f
+            bmxMaxSpeed = 7.5f,
+            airAngularDrag = 2.75f,
+            grindFriction = 0.03f
         };
 
         public static CustomCharacter character = new CustomCharacter
@@ -170,7 +209,7 @@ namespace rowemod
             frontWheelWidth = 1f,
             rearWheelRadius = 1f,
             rearWheelWidth = 1f,
-            pegLength = 0.5f,
+            pegLength = 1f,
             frontLeftPegsEnabled = true,
             frontRightPegsEnabled = true,
             rearLeftPegsEnabled = true,
@@ -185,12 +224,21 @@ namespace rowemod
         };
         
 
+        public static ChallengeSettings challengeSettings = new ChallengeSettings
+        {
+            challengeVisible = true,
+            challengeSizeX = 5f,
+            challengeSizeY = 5f,
+            challengeSizeZ = 5f
+        };
+
         public static Misc misc = new Misc
         {
             neverBail = false,
             droneMass = 10f,
             droneBodyToggle = true,
             droneEmitterToggle = true,
+            showPlayerUserNameTargets = true,
             menuAccentR = 0.3f,
             menuAccentG = 0.3f,
             menuAccentB = 0.3f,
@@ -204,6 +252,8 @@ namespace rowemod
             trickSets = new Dictionary<string, List<TrickEntry>>()
         };
 
+        public static GrindPoseSettings grindPoseData = new GrindPoseSettings();
+
 
 
         // Helper class for JSON deserialization
@@ -214,6 +264,7 @@ namespace rowemod
             public CustomBike customBikeData { get; set; }
             public Misc miscData { get; set; }
             public CustomTricks customTricksData { get; set; }
+            public GrindPoseSettings grindPoseData { get; set; }
         }
 
         public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "RoweMod");
@@ -257,7 +308,8 @@ namespace rowemod
                     },
                     customBikeData = bike,
                     miscData = misc,
-                    customTricksData = tricks
+                    customTricksData = tricks,
+                    grindPoseData = grindPoseData
                 }, Formatting.Indented);
 
                 File.WriteAllText(cfgFile, contents);
@@ -281,6 +333,8 @@ namespace rowemod
 
             Log.Msg($"Loading config from {cfgFile}");
             string jsonContent = File.ReadAllText(cfgFile);
+            bool hasShowPlayerUserNameTargets =
+                jsonContent.IndexOf("\"showPlayerUserNameTargets\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
 
             // Assign values from JSON, preserving defaults if fields are missing
@@ -313,7 +367,16 @@ namespace rowemod
             };
             bike = jsonData.customBikeData;
             misc = jsonData.miscData;
+            if (!hasShowPlayerUserNameTargets)
+            {
+                misc.showPlayerUserNameTargets = true;
+            }
             tricks = jsonData.customTricksData;
+            grindPoseData = jsonData.grindPoseData ?? new GrindPoseSettings();
+            if (grindPoseData.poses == null)
+            {
+                grindPoseData.poses = new Dictionary<string, GrindPoseConfigEntry>();
+            }
 
             //set new config variables to defaults if 0
             if (physics.bmxForceFactor <= 0f) physics.bmxForceFactor = 0.07f;
@@ -382,6 +445,7 @@ namespace rowemod
                 bmxMaxSpeed = 7.5f,
                 grindAlignAssist = false,
                 grindAssistStrength = 0.5f,
+                airAngularDrag = 2.75f
             };
         }
 
@@ -443,6 +507,7 @@ namespace rowemod
             bike.barScale = 1f;
             bike.seatHeight = 0.05f;
             bike.seatPitch = 330f;
+            bike.forkScale = 1f;
             bike.frontWheelRadius = 1f;
             bike.frontWheelWidth = 1f;
             bike.rearWheelRadius = 1f;
@@ -481,6 +546,7 @@ namespace rowemod
                 droneMass = 10f,
                 droneBodyToggle = true,
                 droneEmitterToggle = true,
+                showPlayerUserNameTargets = true,
                 menuAccentR = 0.3f,
                 menuAccentG = 0.3f,
                 menuAccentB = 0.3f,
@@ -489,6 +555,39 @@ namespace rowemod
                 disableDroneCollider = false,
                 customSessionMarker = "None"
             };
+        }
+
+        public static void ResetGrindsTab()
+        {
+            grindPoseData = new GrindPoseSettings
+            {
+                poses = new Dictionary<string, GrindPoseConfigEntry>()
+            };
+        }
+
+        public static GrindPoseConfigEntry GetOrCreateGrindPoseEntry(string poseKey)
+        {
+            if (grindPoseData == null)
+            {
+                grindPoseData = new GrindPoseSettings();
+            }
+
+            if (grindPoseData.poses == null)
+            {
+                grindPoseData.poses = new Dictionary<string, GrindPoseConfigEntry>();
+            }
+
+            if (!grindPoseData.poses.TryGetValue(poseKey, out GrindPoseConfigEntry entry) || entry == null)
+            {
+                entry = new GrindPoseConfigEntry();
+                grindPoseData.poses[poseKey] = entry;
+            }
+
+            entry.boolFields ??= new Dictionary<string, bool>();
+            entry.floatFields ??= new Dictionary<string, float>();
+            entry.vector3Fields ??= new Dictionary<string, SerializableVector3>();
+
+            return entry;
         }
 
         // Convert absolute path to relative path for storage

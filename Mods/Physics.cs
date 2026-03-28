@@ -11,12 +11,20 @@ namespace rowemod.Mods
         public static void Update()
         {
             UnityEngine.Physics.gravity = new Vector3(0f, -physics.gravity, 0f);
-        
+            
             if (rMbCharacter != null)
             {
                 if (spinSystem != null)
                 {
                     spinSystem._torqueMult = physics.spinMultiplier;
+                    if (airControlSettings != null)
+                    {
+                        //airControlSettings._airAngularDrag = physics.airAngularDrag;
+                    }
+                    else
+                    {
+                        Log.Warning("air control settings component not found!");
+                    }
                 }
                 else
                 {
@@ -58,9 +66,15 @@ namespace rowemod.Mods
                     grindMagnetZEM._alignAssist = physics.grindAlignAssist;
                     grindMagnetZEM._forceMult = physics.grindAssistStrength;
                 }
-                    
 
-                
+                foreach (var peg in pegColliders)
+                {
+                    if (peg != null && peg.sharedMaterial != null)
+                    {
+                        peg.sharedMaterial.staticFriction = physics.grindFriction;
+                        peg.sharedMaterial.dynamicFriction = physics.grindFriction;
+                    }
+                }
             }
 
             foreach (MotorVehicleSettings vehicleInstance in vehicleSettingsInstances)
