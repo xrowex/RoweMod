@@ -17,6 +17,9 @@ namespace rowemod.Mods
         private static int _selectedPoseIndex;
         private static float _nextRefreshTime;
         private static Vector2 _poseTabsScroll;
+        private static Vector2 _presetScroll;
+        private static string _newPresetName = string.Empty;
+        private static int _selectedPresetIndex;
         private static readonly Vector3 GrindsTabPlayerOffset = new Vector3(0f, 0.5f, 0f);
         private static bool _isGrindsTabStateApplied;
         private static bool _playerOffsetApplied;
@@ -36,6 +39,7 @@ namespace rowemod.Mods
         private static bool _animatedOnJumpInvokedThisOpen;
         private static int _lastLoggedForcedPoseIndex = -1;
         private static string _lastLoggedForcedPoseName;
+        private const float GrindSliderResetDefault = 2f;
         
         private sealed class PoseDefaults
         {
@@ -74,24 +78,24 @@ namespace rowemod.Mods
             RefreshPoseCache();
 
             GUILayout.Label("Grind Poses", Menu.coloredBoxStyle);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("<b>REFRESH POSES</b>", Menu.highQualityButtonStyle, GUILayout.Width(170f), GUILayout.Height(28f)))
-            {
-                RefreshPoseCache(true);
-            }
-
-            if (GUILayout.Button("<b>APPLY SAVED</b>", Menu.highQualityButtonStyle, GUILayout.Width(170f), GUILayout.Height(28f)))
-            {
-                ApplyConfigToRuntime(true);
-            }
-            GUILayout.EndHorizontal();
             GUILayout.Space(4f);
 
             if (GUILayout.Button("<b>RESET ALL TO DEFAULT</b>", Menu.redButtonStyle, GUILayout.Width(345f), GUILayout.Height(28f)))
             {
                 ResetAllPosesToDefault();
             }
-            GUILayout.Space(6f);
+            GUILayout.Space(6f); 
+
+            float grindPoseLerpSpeed = Config.physics.grindPoseLerpSpeed;
+            DrawResettableSlider("Pose Lerp Speed", ref grindPoseLerpSpeed, 0.1f, 500f, GrindSliderResetDefault, "grinds_pose_lerp_speed");
+            if (!Mathf.Approximately(grindPoseLerpSpeed, Config.physics.grindPoseLerpSpeed))
+            {
+                Config.physics.grindPoseLerpSpeed = grindPoseLerpSpeed;
+                Config.Save();
+            }
+            GUILayout.Space(4f);
+            DrawPresetControls();
+            GUILayout.Space(4f);
 
             if (PoseCache.Count == 0)
             {
@@ -114,6 +118,129 @@ namespace rowemod.Mods
             {
                 Config.Save();
             }
+        }
+
+        private static void DrawPresetControls()
+        {
+            GUILayout.Label("Grind Pose Presets", Menu.labelStyle);
+            _newPresetName = GUILayout.TextField(_newPresetName, 32);
+
+            if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle, GUILayout.Width(170f), GUILayout.Height(24f)))
+            {
+                string presetName = (_newPresetName ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(presetName))
+                {
+                    SaveCurrentPreset(presetName);
+                    _newPresetName = string.Empty;
+                    GUI.FocusControl(null);
+                }
+            }
+
+            List<string> availablePresets = GrindPosePreset.GetAvailablePresets();
+            if (availablePresets.Count == 0)
+            {
+                GUILayout.Label("No grind pose presets saved yet.", Menu.labelStyle);
+                return;
+            }
+
+            _selectedPresetIndex = Mathf.Clamp(_selectedPresetIndex, 0, availablePresets.Count - 1);
+            _presetScroll = GUILayout.BeginScrollView(_presetScroll, GUILayout.Height(110f));
+            bool deletedPreset = false;
+            for (int i = 0; i < availablePresets.Count; i++)
+            {
+                string presetName = availablePresets[i];
+                GUIStyle style = i == _selectedPresetIndex ? Menu.activeTabButtonStyle : Menu.highQualityButtonStyle;
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(presetName, style, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
+                {
+                    _selectedPresetIndex = i;
+                    LoadPresetAndApply(presetName);
+                }
+                if (GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30f), GUILayout.Height(24f)))
+                {
+                    if (GrindPosePreset.Delete(presetName))
+                    {
+                        deletedPreset = true;
+                        if (_selectedPresetIndex >= i)
+                        {
+                            _selectedPresetIndex = Mathf.Max(0, _selectedPresetIndex - 1);
+                        }
+                    }
+                }
+                GUILayout.EndHorizontal();
+
+                if (deletedPreset)
+                    break;
+            }
+
+            GUILayout.EndScrollView();
+        }
+
+        private static void SaveCurrentPreset(string presetName)
+        {
+            GrindPosePreset.Save(new GrindPosePreset
+            {
+                name = presetName,
+                grindPoseLerpSpeed = Config.physics.grindPoseLerpSpeed,
+                grindPoseData = CloneGrindPoseSettings(Config.grindPoseData)
+            });
+        }
+
+        private static void LoadPresetAndApply(string presetName)
+        {
+            GrindPosePreset preset = GrindPosePreset.Load(presetName);
+            if (preset == null)
+            {
+                return;
+            }
+
+            Config.grindPoseData = CloneGrindPoseSettings(preset.grindPoseData);
+            if (preset.grindPoseLerpSpeed > 0f)
+            {
+                Config.physics.grindPoseLerpSpeed = preset.grindPoseLerpSpeed;
+            }
+
+            ApplyConfigToRuntime(true);
+            ApplyForcedPoseFromSelection();
+            Config.Save();
+            Log.Msg($"Loaded grind pose preset '{presetName}'.");
+        }
+
+        private static GrindPoseSettings CloneGrindPoseSettings(GrindPoseSettings source)
+        {
+            var clone = new GrindPoseSettings
+            {
+                poses = new Dictionary<string, GrindPoseConfigEntry>()
+            };
+
+            if (source?.poses == null)
+            {
+                return clone;
+            }
+
+            foreach (var kvp in source.poses)
+            {
+                if (string.IsNullOrWhiteSpace(kvp.Key))
+                {
+                    continue;
+                }
+
+                GrindPoseConfigEntry entry = kvp.Value ?? new GrindPoseConfigEntry();
+                clone.poses[kvp.Key] = new GrindPoseConfigEntry
+                {
+                    boolFields = entry.boolFields != null
+                        ? new Dictionary<string, bool>(entry.boolFields)
+                        : new Dictionary<string, bool>(),
+                    floatFields = entry.floatFields != null
+                        ? new Dictionary<string, float>(entry.floatFields)
+                        : new Dictionary<string, float>(),
+                    vector3Fields = entry.vector3Fields != null
+                        ? new Dictionary<string, SerializableVector3>(entry.vector3Fields)
+                        : new Dictionary<string, SerializableVector3>()
+                };
+            }
+
+            return clone;
         }
 
         public static void OnGrindsTabEntered()
@@ -203,6 +330,8 @@ namespace rowemod.Mods
 
             Memory.bikeGrindPoser._forcePose = true;
             Memory.bikeGrindPoser._forcedGrindPose = selectedPose;
+            Memory.bikeGrindPoser._lerpSpeedAir = Config.physics.grindPoseLerpSpeed;
+            Memory.bikeGrindPoser._lerpSpeed = Config.physics.grindPoseLerpSpeed;
 
             if (_loggedMissingForcePoseField || _loggedForcePoseTypeMismatch)
             {
@@ -451,6 +580,11 @@ namespace rowemod.Mods
         private static bool DrawPoseEditor(BikeGrindPoseData pose, string poseKey)
         {
             bool changed = false;
+            if (!DefaultPoseValues.TryGetValue(pose, out PoseDefaults defaults) || defaults == null)
+            {
+                defaults = CaptureDefaults(pose);
+                DefaultPoseValues[pose] = defaults;
+            }
 
             GUILayout.Label($"Editing: {poseKey}", Menu.coloredBoxStyle);
             if (!string.IsNullOrWhiteSpace(pose.name) && pose.name != pose.GrindName)
@@ -458,38 +592,60 @@ namespace rowemod.Mods
                 GUILayout.Label($"Asset: {pose.name}", Menu.labelStyle);
             }
 
-            changed |= DrawBoolField("Air Pose Only", poseKey, "AirPoseOnly", pose.AirPoseOnly, v => pose.AirPoseOnly = v);
-            changed |= DrawBoolField("Mirror Cranks", poseKey, "MirrorCranks", pose.MirrorCranks, v => pose.MirrorCranks = v);
+            //changed |= DrawBoolField("Air Pose Only", poseKey, "AirPoseOnly", pose.AirPoseOnly, v => pose.AirPoseOnly = v);
+            //changed |= DrawBoolField("Mirror Cranks", poseKey, "MirrorCranks", pose.MirrorCranks, v => pose.MirrorCranks = v);
 
-            changed |= DrawFloatField("Bars Rotation", poseKey, "BarsRotation", pose.BarsRotation, -360f, 360f, v => pose.BarsRotation = v);
-            changed |= DrawFloatField("Cranks Rotation", poseKey, "CranksRotation", pose.CranksRotation, -360f, 360f, v => pose.CranksRotation = v);
-            changed |= DrawFloatField("Front Wheel Collider Rot Yaw", poseKey, "FrontWheelColliderRotYaw", pose.FrontWheelColliderRotYaw, -360f, 360f, v => pose.FrontWheelColliderRotYaw = v);
-            changed |= DrawFloatField("Left Pedal Rotation", poseKey, "LeftPedalRotation", pose.LeftPedalRotation, -360f, 360f, v => pose.LeftPedalRotation = v);
-            changed |= DrawFloatField("Normal Push Offset", poseKey, "NormalPushOffset", pose.NormalPushOffset, -2f, 2f, v => pose.NormalPushOffset = v);
-            changed |= DrawFloatField("Rear Wheel Collider Rot Yaw", poseKey, "RearWheelColliderRotYaw", pose.RearWheelColliderRotYaw, -360f, 360f, v => pose.RearWheelColliderRotYaw = v);
-            changed |= DrawFloatField("Rear Wheel Physics Steer Angle", poseKey, "RearWheelPhysicsSteerAngle", pose.RearWheelPhysicsSteerAngle, -180f, 180f, v => pose.RearWheelPhysicsSteerAngle = v);
+            BeginSectionBox("Bike Controls");
+            changed |= DrawFloatField("Bars Rotation", poseKey, "BarsRotation", pose.BarsRotation, -360f, 360f, defaults.BarsRotation, v => pose.BarsRotation = v);
+            changed |= DrawFloatField("Cranks Rotation", poseKey, "CranksRotation", pose.CranksRotation, -360f, 360f, defaults.CranksRotation, v => pose.CranksRotation = v);
+            changed |= DrawFloatField("Normal Push Offset", poseKey, "NormalPushOffset", pose.NormalPushOffset, -2f, 2f, defaults.NormalPushOffset, v => pose.NormalPushOffset = v);
+            changed |= DrawFloatField("Left Pedal Rotation", poseKey, "LeftPedalRotation", pose.LeftPedalRotation, -360f, 360f, defaults.LeftPedalRotation, v => pose.LeftPedalRotation = v);
+            changed |= DrawFloatField("Right Pedal Rotation", poseKey, "RightPedalRotation", pose.RightPedalRotation, -360f, 360f, defaults.RightPedalRotation, v => pose.RightPedalRotation = v);
+            EndSectionBox();
 
-            changed |= DrawFloatField("Rider Elbows Roll", poseKey, "Rider_ElbowsRoll", pose.Rider_ElbowsRoll, -360f, 360f, v => pose.Rider_ElbowsRoll = v);
-            changed |= DrawFloatField("Rider Head Twist", poseKey, "Rider_HeadTwist", pose.Rider_HeadTwist, -360f, 360f, v => pose.Rider_HeadTwist = v);
-            changed |= DrawFloatField("Rider Knees Roll", poseKey, "Rider_KneesRoll", pose.Rider_KneesRoll, -360f, 360f, v => pose.Rider_KneesRoll = v);
-            changed |= DrawFloatField("Rider Left Elbow Roll", poseKey, "Rider_LeftElbowRoll", pose.Rider_LeftElbowRoll, -360f, 360f, v => pose.Rider_LeftElbowRoll = v);
-            changed |= DrawFloatField("Rider Left Knee Roll", poseKey, "Rider_LeftKneeRoll", pose.Rider_LeftKneeRoll, -360f, 360f, v => pose.Rider_LeftKneeRoll = v);
-            changed |= DrawFloatField("Rider Right Elbow Roll", poseKey, "Rider_RightElbowRoll", pose.Rider_RightElbowRoll, -360f, 360f, v => pose.Rider_RightElbowRoll = v);
-            changed |= DrawFloatField("Rider Right Knee Roll", poseKey, "Rider_RightKneeRoll", pose.Rider_RightKneeRoll, -360f, 360f, v => pose.Rider_RightKneeRoll = v);
-            changed |= DrawFloatField("Rider Spine Curl", poseKey, "Rider_SpineCurl", pose.Rider_SpineCurl, -360f, 360f, v => pose.Rider_SpineCurl = v);
-            changed |= DrawFloatField("Rider Spine Twist", poseKey, "Rider_SpineTwist", pose.Rider_SpineTwist, -360f, 360f, v => pose.Rider_SpineTwist = v);
-            changed |= DrawFloatField("Right Pedal Rotation", poseKey, "RightPedalRotation", pose.RightPedalRotation, -360f, 360f, v => pose.RightPedalRotation = v);
-
-            changed |= DrawVector3Field("Chassis CM", poseKey, "ChassisCM", pose.ChassisCM, -2f, 2f, v => pose.ChassisCM = v);
-            changed |= DrawVector3Field("Driver CM", poseKey, "DriverCM", pose.DriverCM, -2f, 2f, v => pose.DriverCM = v);
-            changed |= DrawVector3Field("Rear Wheel Collider Pos", poseKey, "RearWheelColliderPos", pose.RearWheelColliderPos, -2f, 2f, v => pose.RearWheelColliderPos = v);
-            changed |= DrawVector3Field("Rider Hips Pos", poseKey, "Rider_HipsPos", pose.Rider_HipsPos, -2f, 2f, v => pose.Rider_HipsPos = v);
-            changed |= DrawVector3Field("Rider Hips Rot", poseKey, "Rider_HipsRot", pose.Rider_HipsRot, -360f, 360f, v => pose.Rider_HipsRot = v);
-            changed |= DrawVector3Field("Root Position", poseKey, "RootPosition", pose.RootPosition, -5f, 5f, v => pose.RootPosition = v);
-            changed |= DrawVector3Field("Root Position Connected", poseKey, "RootPositionConnected", pose.RootPositionConnected, -5f, 5f, v => pose.RootPositionConnected = v);
-            changed |= DrawVector3Field("Root Rotation", poseKey, "RootRotation", pose.RootRotation, -360f, 360f, v => pose.RootRotation = v);
+            BeginSectionBox("Rider Pose");
+            changed |= DrawFloatField("Rider Head Twist", poseKey, "Rider_HeadTwist", pose.Rider_HeadTwist, -360f, 360f, defaults.Rider_HeadTwist, v => pose.Rider_HeadTwist = v);
+            changed |= DrawFloatField("Rider Elbows Roll", poseKey, "Rider_ElbowsRoll", pose.Rider_ElbowsRoll, -360f, 360f, defaults.Rider_ElbowsRoll, v => pose.Rider_ElbowsRoll = v);
+            changed |= DrawFloatField("Rider Left Elbow Roll", poseKey, "Rider_LeftElbowRoll", pose.Rider_LeftElbowRoll, -360f, 360f, defaults.Rider_LeftElbowRoll, v => pose.Rider_LeftElbowRoll = v);
+            changed |= DrawFloatField("Rider Right Elbow Roll", poseKey, "Rider_RightElbowRoll", pose.Rider_RightElbowRoll, -360f, 360f, defaults.Rider_RightElbowRoll, v => pose.Rider_RightElbowRoll = v);
+            changed |= DrawFloatField("Rider Knees Roll", poseKey, "Rider_KneesRoll", pose.Rider_KneesRoll, -360f, 360f, defaults.Rider_KneesRoll, v => pose.Rider_KneesRoll = v);
+            changed |= DrawFloatField("Rider Left Knee Roll", poseKey, "Rider_LeftKneeRoll", pose.Rider_LeftKneeRoll, -360f, 360f, defaults.Rider_LeftKneeRoll, v => pose.Rider_LeftKneeRoll = v);
+            changed |= DrawFloatField("Rider Right Knee Roll", poseKey, "Rider_RightKneeRoll", pose.Rider_RightKneeRoll, -360f, 360f, defaults.Rider_RightKneeRoll, v => pose.Rider_RightKneeRoll = v);
+            changed |= DrawFloatField("Rider Spine Curl", poseKey, "Rider_SpineCurl", pose.Rider_SpineCurl, -360f, 360f, defaults.Rider_SpineCurl, v => pose.Rider_SpineCurl = v);
+            changed |= DrawFloatField("Rider Spine Twist", poseKey, "Rider_SpineTwist", pose.Rider_SpineTwist, -360f, 360f, defaults.Rider_SpineTwist, v => pose.Rider_SpineTwist = v);
+            changed |= DrawVector3Field("Rider Hips Pos", poseKey, "Rider_HipsPos", pose.Rider_HipsPos, -2f, 2f, defaults.Rider_HipsPos, v => pose.Rider_HipsPos = v);
+            changed |= DrawVector3Field("Rider Hips Rot", poseKey, "Rider_HipsRot", pose.Rider_HipsRot, -360f, 360f, defaults.Rider_HipsRot, v => pose.Rider_HipsRot = v);
+            EndSectionBox();
+            
+            BeginSectionBox("Center of Mass");
+            changed |= DrawVector3Field("Chassis CM", poseKey, "ChassisCM", pose.ChassisCM, -2f, 2f, defaults.ChassisCM, v => pose.ChassisCM = v);
+            changed |= DrawVector3Field("Driver CM", poseKey, "DriverCM", pose.DriverCM, -2f, 2f, defaults.DriverCM, v => pose.DriverCM = v);
+            EndSectionBox();
+            
+            DrawSectionHeader("Bike Transform");
+            changed |= DrawVector3Field("Bike Position", poseKey, "RootPosition", pose.RootPosition, -5f, 5f, defaults.RootPosition, v => pose.RootPosition = v);
+            changed |= DrawVector3Field("Bike Position Connected", poseKey, "RootPositionConnected", pose.RootPositionConnected, -5f, 5f, defaults.RootPositionConnected, v => pose.RootPositionConnected = v);
+            changed |= DrawVector3Field("Bike Rotation", poseKey, "RootRotation", pose.RootRotation, -360f, 360f, defaults.RootRotation, v => pose.RootRotation = v);
 
             return changed;
+        }
+
+        private static void DrawSectionHeader(string title)
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label(title, Menu.coloredBoxStyle);
+            GUILayout.Space(2f);
+        }
+
+        private static void BeginSectionBox(string title)
+        {
+            DrawSectionHeader(title);
+            GUILayout.BeginVertical(GUI.skin.box);
+        }
+
+        private static void EndSectionBox()
+        {
+            GUILayout.EndVertical();
         }
 
         private static bool DrawBoolField(string label, string poseKey, string fieldName, bool currentValue, Action<bool> apply)
@@ -506,10 +662,10 @@ namespace rowemod.Mods
             return true;
         }
 
-        private static bool DrawFloatField(string label, string poseKey, string fieldName, float currentValue, float min, float max, Action<float> apply)
+        private static bool DrawFloatField(string label, string poseKey, string fieldName, float currentValue, float min, float max, float defaultValue, Action<float> apply)
         {
             float newValue = currentValue;
-            Menu.ModernSlider(label, ref newValue, min, max, $"grinds_{poseKey}_{fieldName}");
+            DrawResettableSlider(label, ref newValue, min, max, defaultValue, $"grinds_{poseKey}_{fieldName}");
             if (Mathf.Approximately(newValue, currentValue))
             {
                 return false;
@@ -520,15 +676,15 @@ namespace rowemod.Mods
             return true;
         }
 
-        private static bool DrawVector3Field(string label, string poseKey, string fieldName, Vector3 currentValue, float min, float max, Action<Vector3> apply)
+        private static bool DrawVector3Field(string label, string poseKey, string fieldName, Vector3 currentValue, float min, float max, Vector3 defaultValue, Action<Vector3> apply)
         {
             float x = currentValue.x;
             float y = currentValue.y;
             float z = currentValue.z;
 
-            Menu.ModernSlider($"{label} X", ref x, min, max, $"grinds_{poseKey}_{fieldName}_x");
-            Menu.ModernSlider($"{label} Y", ref y, min, max, $"grinds_{poseKey}_{fieldName}_y");
-            Menu.ModernSlider($"{label} Z", ref z, min, max, $"grinds_{poseKey}_{fieldName}_z");
+            DrawResettableSlider($"{label} X", ref x, min, max, defaultValue.x, $"grinds_{poseKey}_{fieldName}_x");
+            DrawResettableSlider($"{label} Y", ref y, min, max, defaultValue.y, $"grinds_{poseKey}_{fieldName}_y");
+            DrawResettableSlider($"{label} Z", ref z, min, max, defaultValue.z, $"grinds_{poseKey}_{fieldName}_z");
 
             Vector3 newValue = new Vector3(x, y, z);
             if (Approximately(currentValue, newValue))
@@ -539,6 +695,17 @@ namespace rowemod.Mods
             apply(newValue);
             PersistVector3(poseKey, fieldName, newValue);
             return true;
+        }
+
+        private static void DrawResettableSlider(string label, ref float value, float min, float max, float defaultValue, string controlId)
+        {
+            GUILayout.BeginHorizontal();
+            Menu.ModernSlider(label, ref value, min, max, controlId);
+            if (GUILayout.Button("RESET", Menu.highQualityButtonStyle, GUILayout.Width(64f), GUILayout.Height(25f)))
+            {
+                value = Mathf.Clamp(defaultValue, min, max);
+            }
+            GUILayout.EndHorizontal();
         }
         
         private static void DrawPoseTabs()

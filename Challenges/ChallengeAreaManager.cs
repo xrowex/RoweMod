@@ -55,6 +55,11 @@ namespace rowemod.Challenges
             if (_active != null) _active.SetColor(color);
         }
 
+        public static void SetCompleted(bool completed)
+        {
+            if (_active != null) _active.SetCompleted(completed);
+        }
+
         // Callbacks into your challenge/points logic
         public static void NotifyAreaEnter(ChallengeArea area, Collider who)
         {
@@ -66,6 +71,7 @@ namespace rowemod.Challenges
         public static void NotifyAreaExit(ChallengeArea area, Collider who)
         {
             InZone = false;
+            MultiplayerChallengeManager.NotifyChallengeAreaExited();
         }
 
         public static bool InZone { get; private set; }

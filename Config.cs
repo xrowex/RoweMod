@@ -28,6 +28,14 @@ namespace rowemod
         public float grindAssistStrength;
         public float airAngularDrag;
         public float grindFriction;
+        public float grindPoseLerpSpeed;
+    }
+
+    public class MotorTuningConfigEntry
+    {
+        public float forceFactor { get; set; }
+        public float maxForce { get; set; }
+        public float maxSpeed { get; set; }
     }
 
     // Struct for character model and material paths
@@ -168,7 +176,8 @@ namespace rowemod
             bmxForceFactor = 0.07f,
             bmxMaxSpeed = 7.5f,
             airAngularDrag = 2.75f,
-            grindFriction = 0.03f
+            grindFriction = 0.03f,
+            grindPoseLerpSpeed = 2f
         };
 
         public static CustomCharacter character = new CustomCharacter
@@ -253,6 +262,7 @@ namespace rowemod
         };
 
         public static GrindPoseSettings grindPoseData = new GrindPoseSettings();
+        public static Dictionary<string, MotorTuningConfigEntry> motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
 
 
 
@@ -265,6 +275,7 @@ namespace rowemod
             public Misc miscData { get; set; }
             public CustomTricks customTricksData { get; set; }
             public GrindPoseSettings grindPoseData { get; set; }
+            public Dictionary<string, MotorTuningConfigEntry> motorTuningData { get; set; }
         }
 
         public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "RoweMod");
@@ -275,7 +286,10 @@ namespace rowemod
         {
             try
             {
-                Log.Msg($"Saving config to {cfgFile}");
+                //Log.Msg($"Saving config to {cfgFile}");
+                Directory.CreateDirectory(modFolder);
+                if (tricks.trickSets == null)
+                    tricks.trickSets = new Dictionary<string, List<TrickEntry>>();
 
                 string contents = JsonConvert.SerializeObject(new
                 {
@@ -309,7 +323,8 @@ namespace rowemod
                     customBikeData = bike,
                     miscData = misc,
                     customTricksData = tricks,
-                    grindPoseData = grindPoseData
+                    grindPoseData = grindPoseData,
+                    motorTuningData = motorTuning
                 }, Formatting.Indented);
 
                 File.WriteAllText(cfgFile, contents);
@@ -331,7 +346,7 @@ namespace rowemod
                 return;
             }
 
-            Log.Msg($"Loading config from {cfgFile}");
+            //Log.Msg($"Loading config from {cfgFile}");
             string jsonContent = File.ReadAllText(cfgFile);
             bool hasShowPlayerUserNameTargets =
                 jsonContent.IndexOf("\"showPlayerUserNameTargets\"", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -372,7 +387,12 @@ namespace rowemod
                 misc.showPlayerUserNameTargets = true;
             }
             tricks = jsonData.customTricksData;
+            if (tricks.trickSets == null)
+            {
+                tricks.trickSets = new Dictionary<string, List<TrickEntry>>();
+            }
             grindPoseData = jsonData.grindPoseData ?? new GrindPoseSettings();
+            motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
             if (grindPoseData.poses == null)
             {
                 grindPoseData.poses = new Dictionary<string, GrindPoseConfigEntry>();
@@ -381,6 +401,8 @@ namespace rowemod
             //set new config variables to defaults if 0
             if (physics.bmxForceFactor <= 0f) physics.bmxForceFactor = 0.07f;
             if (physics.bmxMaxSpeed <= 0f) physics.bmxMaxSpeed = 7.5f;
+            if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
+            if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
             
             Log.Msg($"Config loaded successfully.");
         }
@@ -445,8 +467,11 @@ namespace rowemod
                 bmxMaxSpeed = 7.5f,
                 grindAlignAssist = false,
                 grindAssistStrength = 0.5f,
-                airAngularDrag = 2.75f
+                airAngularDrag = 2.75f,
+                grindPoseLerpSpeed = 2f
             };
+
+            motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
         }
 
         // Reset character tab settings to defaults
@@ -498,6 +523,7 @@ namespace rowemod
             };
             
             Memory.roweCharacterManager.InitCharacterData();
+            Memory.roweCharacterManager.InitCharacterData();
         }
 
         // Reset bike tab settings to defaults
@@ -506,13 +532,13 @@ namespace rowemod
             bike.barPitch = 0f;
             bike.barScale = 1f;
             bike.seatHeight = 0.05f;
-            bike.seatPitch = 330f;
+            bike.seatPitch = 350f;
             bike.forkScale = 1f;
             bike.frontWheelRadius = 1f;
             bike.frontWheelWidth = 1f;
             bike.rearWheelRadius = 1f;
             bike.rearWheelWidth = 1f;
-            bike.pegLength = 0.5f;
+            bike.pegLength = 1f;
             bike.frontLeftPegsEnabled = true;
             bike.frontRightPegsEnabled = true;
             bike.rearLeftPegsEnabled = true;
@@ -535,6 +561,8 @@ namespace rowemod
         public static void ResetBikeMaterialsTab()
         {
             bike.bikeMaterials.Clear();
+            Memory.customizableEntity.EquipItems();
+            Memory.customizableEntity.EquipItems();
         }
 
         // Reset misc tab settings to defaults

@@ -7,12 +7,19 @@ namespace rowemod.Challenges
     {
         public string playerTag = "VehicleColliders";      // Make this match your game’s player tag (or set at runtime)
         public bool visible = true;
-        public Color areaColor = new Color(0f, 1f, 0.6f, 0.22f);
+        public Color areaColor = new Color(0.12f, 0.56f, 1f, 0.25f);
 
+        private static readonly Color IncompleteLightBlue = new Color(0.38f, 0.82f, 1f, 0.25f);
+        private static readonly Color IncompleteDarkBlue = new Color(0.04f, 0.16f, 0.62f, 0.25f);
+        private static readonly Color CompletedGreen = new Color(0.1f, 1f, 0.34f, 0.25f);
+        private const float ColorPulseSpeed = 1.4f;
+        
         private BoxCollider _trigger;
         private MeshRenderer _renderer;
+        private Material _material;
         private Transform _visual;
         private bool _initialized;
+        private bool _completed;
 
         public static ChallengeArea CreateChallengeArea(Vector3 position, Vector3 size, Quaternion rotation, string playerTag = "Player", Color? color = null)
         {
@@ -63,9 +70,19 @@ namespace rowemod.Challenges
             _renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
             
             // Transparent material (HDRP-ready; falls back if HDRP/Lit is missing)
-            _renderer.sharedMaterial = BuildTransparentMat(areaColor);
+            _material = BuildTransparentMat(areaColor);
+            _renderer.sharedMaterial = _material;
             
             SetVisible(visible);
+        }
+
+        private void Update()
+        {
+            if (!_initialized || _completed || _renderer == null || !_renderer.enabled)
+                return;
+
+            float pulse = (Mathf.Sin(Time.time * ColorPulseSpeed) + 1f) * 0.5f;
+            SetMaterialColor(Color.Lerp(IncompleteDarkBlue, IncompleteLightBlue, pulse));
         }
 
         public void SetSize(Vector3 size)
@@ -82,9 +99,22 @@ namespace rowemod.Challenges
         public void SetColor(Color color)
         {
             areaColor = color;
-            if (_renderer != null)
+            SetMaterialColor(color);
+        }
+
+        public void SetCompleted(bool completed)
+        {
+            _completed = completed;
+            SetMaterialColor(completed ? CompletedGreen : IncompleteLightBlue);
+        }
+
+        private void SetMaterialColor(Color color)
+        {
+            areaColor = new Color(color.r, color.g, color.b, 0.25f);
+            if (_material != null)
             {
-                _renderer.sharedMaterial = BuildTransparentMat(color);
+                _material.SetColor("_BaseColor", areaColor);
+                _material.color = areaColor;
             }
         }
 

@@ -54,7 +54,7 @@ namespace rowemod.Mods
                     _localMenuHumanSpawnEvent = ev;
                 }
 
-                if (ev.name.Contains("GameEvent_TitleLoop_TransitionTrigger_CloseReplay"))
+                if (ev.name.Contains("GameEvent_SimpleGameLoop_Playing_OnEnter"))
                 {
                     _playerCloseReplay = ev;
                 }
@@ -109,10 +109,10 @@ namespace rowemod.Mods
             if (_playerCloseReplay == null)
             {
                 Log.Error("playerCloseMenu is null!");
-                return;
+                
             }
 
-            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay found! Subscribing to event...");
+            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_Close found! Subscribing to event...");
             UnityAction closeReplayAction =
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseReplay);
             _playerCloseReplay.OnRaise.AddListener(closeReplayAction);
@@ -121,7 +121,6 @@ namespace rowemod.Mods
             if (_titleLoopGameplayEnter == null)
             {
                 Log.Error("titleLoopGameplayEnter is null!");
-                return;
             }
 
             Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter found! Subscribing to event...");
@@ -133,7 +132,6 @@ namespace rowemod.Mods
             if (_mainMenuOpen == null)
             {
                 Log.Error("mainMenuOpen is null!");
-                return;
             }
 
             Log.Msg("GameEvent_UI_OnMenuOpen found! Subscribing to event...");
@@ -150,7 +148,7 @@ namespace rowemod.Mods
         }
         private void OnMainMenuOpen()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_UI_OnMenuOpen triggered!");
@@ -158,7 +156,7 @@ namespace rowemod.Mods
         }
         private void OnPlayerCloseReplay()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
@@ -170,7 +168,7 @@ namespace rowemod.Mods
 
         private void OnPlayerResetAtMarker()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Misc.Update();
@@ -200,7 +198,7 @@ namespace rowemod.Mods
         
         private void OnPlayerSpawned()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
@@ -232,11 +230,12 @@ namespace rowemod.Mods
 
             if (go != null)
             {
-                if (!RemoteKillSwitch.isModEnabled) return;
+                if (!RemoteKillSwitched.isModEnabled) return;
                 Log.Msg($"Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Memory.gamePlayer = go;
+                rowemod.Challenges.MultiplayerChallengeManager.OnLocalPlayerSpawned(go);
             
                 
 
@@ -254,6 +253,7 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                Memory.CopyPlayersBike();
                 Misc.ApplyPlayerUserNameTargetsVisibility(true);
                 PartTweaker.FindParts();
                 GrindPoseEditor.ApplyConfigToRuntime(true);
@@ -296,7 +296,7 @@ namespace rowemod.Mods
 
         private void OnMenuPlayerSpawned()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_LocalMenuHumanSpawned triggered!");
@@ -311,7 +311,7 @@ namespace rowemod.Mods
             var go = unityObj.TryCast<GameObject>();
             if (go != null)
             {
-                if (RemoteKillSwitch.isModEnabled)
+                if (RemoteKillSwitched.isModEnabled)
                 {
                     Log.Msg($"Menu Player Spawned: {go.name}");
                     Memory.physicsDrivenCharacter = go;
@@ -344,7 +344,7 @@ namespace rowemod.Mods
 
         private void OnTitleLoopGameplayOnEnter()
         {
-            if (RemoteKillSwitch.isModEnabled)
+            if (RemoteKillSwitched.isModEnabled)
             {
                 Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
                 // Delayed bike materials load to bypass shop load
@@ -357,26 +357,29 @@ namespace rowemod.Mods
                 MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                 MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
                 
-                //TrickMods.LoadTricksFromConfig();
+                TrickMods.LoadTricksFromConfig();
             }
             
         }
         
         public IEnumerator DelayedLoadPreset()
         {
-            
-            yield return new WaitForSeconds(4f); // Give it time to fully load scene stuff
-
-            if (Config.character.lastLoadedPresetCharacter!=null & RemoteKillSwitch.isModEnabled)
-            { 
-                
-                Log.Msg("Manually invoking LoadPreset on TheShop scene...");
-                MelonCoroutines.Start(Custom.LoadPreset(Config.character.lastLoadedPresetCharacter)); // Now it should work
-            }
-            else
+            if (RemoteKillSwitched.isModEnabled)
             {
-                Log.Warning("Cannot load preset - missing reference or preset name.");
+                yield return new WaitForSeconds(4f); // Give it time to fully load scene stuff
+
+                if (Config.character.lastLoadedPresetCharacter!=null & RemoteKillSwitched.isModEnabled)
+                { 
+                
+                    Log.Msg("Manually invoking LoadPreset on TheShop scene...");
+                    MelonCoroutines.Start(Custom.LoadPreset(Config.character.lastLoadedPresetCharacter)); // Now it should work
+                }
+                else
+                {
+                    Log.Warning("Cannot load preset - missing reference or preset name.");
+                }
             }
+            
         }
     }
 

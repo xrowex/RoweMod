@@ -322,7 +322,7 @@ namespace rowemod.Mods
             {
                 GUILayout.Label("Seat Height", Menu.coloredBoxStyle);
                 float oldSeatHeight = Config.bike.seatHeight;
-                Menu.ModernSlider("Height", ref Config.bike.seatHeight, 0.0f, 0.15f);
+                Menu.ModernSlider("Height", ref Config.bike.seatHeight, -0.15f, 0.15f);
                 if (oldSeatHeight != Config.bike.seatHeight) changed = true;
 
                 GUILayout.Space(10);
@@ -415,8 +415,24 @@ namespace rowemod.Mods
         
         public static void UpdatePartTransforms()
         {
-            Log.Msg("Updating part transforms...");
-            if (Memory.customizableEntity == null) return;
+            Log.Msg("[UpdatePartTransforms] Updating part transforms...");
+            if (Memory.customizableEntity == null)
+            {
+                Log.Warning("[UpdatePartTransforms] Skipped update because Memory.customizableEntity is null.");
+                return;
+            }
+
+            int barsUpdated = 0, barsSkipped = 0;
+            int gripsUpdated = 0, gripsSkipped = 0;
+            int barEndsUpdated = 0, barEndsSkipped = 0;
+            int seatPostUpdated = 0, seatPostSkipped = 0;
+            int seatUpdated = 0, seatSkipped = 0;
+            int wheelsUpdated = 0, wheelsSkipped = 0;
+            int tireBoundsUpdated = 0, tireBoundsSkipped = 0;
+            int forksUpdated = 0, forksSkipped = 0;
+            int pegsTransformUpdated = 0, pegsTransformSkipped = 0;
+            int pegsColliderUpdated = 0, pegsColliderSkipped = 0;
+            int pegsStateUpdated = 0, pegsStateSkipped = 0;
 
             // Bars
             if (barsAnchor != null)
@@ -424,39 +440,84 @@ namespace rowemod.Mods
                 float bScale = Config.bike.barScale <= 0 ? 1f : Config.bike.barScale;
                 barsAnchor.localRotation = Quaternion.Euler(Config.bike.barPitch, 0f, 0f);
                 barsAnchor.localScale = Vector3.one * bScale;
+                barsUpdated++;
+                Log.Msg($"[UpdatePartTransforms] Bars updated: '{barsAnchor.name}' rot={barsAnchor.localRotation.eulerAngles} scale={barsAnchor.localScale}");
+            }
+            else
+            {
+                barsSkipped++;
+                Log.Warning("[UpdatePartTransforms] Bars skipped: barsAnchor is null.");
             }
 
             // Grips
-            if (gripsEquipSlots != null)
+            if (gripsEquipSlots == null || gripsEquipSlots.Length == 0)
+            {
+                Log.Warning("[UpdatePartTransforms] Grips skipped: gripsEquipSlots is null or empty.");
+            }
+            else
             {
                 float bScale = Config.bike.barScale <= 0 ? 1f : Config.bike.barScale;
-                foreach (var grip in gripsEquipSlots)
+                for (int i = 0; i < gripsEquipSlots.Length; i++)
                 {
-                    if (grip != null && grip._anchorTrans != null)
+                    var grip = gripsEquipSlots[i];
+                    if (grip == null)
                     {
-                        // Compensate if already scaled by parent barsAnchor
-                        if (barsAnchor != null && grip._anchorTrans.IsChildOf(barsAnchor))
-                            grip._anchorTrans.localScale = Vector3.one;
-                        else
-                            grip._anchorTrans.localScale = Vector3.one * bScale;
+                        gripsSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] Grip[{i}] skipped: Anchor is null.");
+                        continue;
                     }
+
+                    if (grip._anchorTrans == null)
+                    {
+                        gripsSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] Grip[{i}] '{grip.name}' skipped: _anchorTrans is null.");
+                        continue;
+                    }
+
+                    bool childOfBars = barsAnchor != null && grip._anchorTrans.IsChildOf(barsAnchor);
+                    if (childOfBars)
+                        grip._anchorTrans.localScale = Vector3.one;
+                    else
+                        grip._anchorTrans.localScale = Vector3.one * bScale;
+
+                    gripsUpdated++;
+                    Log.Msg($"[UpdatePartTransforms] Grip[{i}] updated: '{grip._anchorTrans.name}' scale={grip._anchorTrans.localScale} childOfBars={childOfBars}");
                 }
             }
 
             // Bar Ends
-            if (barEndEquipSlots != null)
+            if (barEndEquipSlots == null || barEndEquipSlots.Length == 0)
+            {
+                Log.Warning("[UpdatePartTransforms] Bar ends skipped: barEndEquipSlots is null or empty.");
+            }
+            else
             {
                 float bScale = Config.bike.barScale <= 0 ? 1f : Config.bike.barScale;
-                foreach (var barEnd in barEndEquipSlots)
+                for (int i = 0; i < barEndEquipSlots.Length; i++)
                 {
-                    if (barEnd != null && barEnd._anchorTrans != null)
+                    var barEnd = barEndEquipSlots[i];
+                    if (barEnd == null)
                     {
-                        // Compensate if already scaled by parent barsAnchor
-                        if (barsAnchor != null && barEnd._anchorTrans.IsChildOf(barsAnchor))
-                            barEnd._anchorTrans.localScale = Vector3.one;
-                        else
-                            barEnd._anchorTrans.localScale = Vector3.one * bScale;
+                        barEndsSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] BarEnd[{i}] skipped: Anchor is null.");
+                        continue;
                     }
+
+                    if (barEnd._anchorTrans == null)
+                    {
+                        barEndsSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] BarEnd[{i}] '{barEnd.name}' skipped: _anchorTrans is null.");
+                        continue;
+                    }
+
+                    bool childOfBars = barsAnchor != null && barEnd._anchorTrans.IsChildOf(barsAnchor);
+                    if (childOfBars)
+                        barEnd._anchorTrans.localScale = Vector3.one;
+                    else
+                        barEnd._anchorTrans.localScale = Vector3.one * bScale;
+
+                    barEndsUpdated++;
+                    Log.Msg($"[UpdatePartTransforms] BarEnd[{i}] updated: '{barEnd._anchorTrans.name}' scale={barEnd._anchorTrans.localScale} childOfBars={childOfBars}");
                 }
             }
 
@@ -468,15 +529,33 @@ namespace rowemod.Mods
                     Config.bike.seatHeight,
                     seatPostAnchor.localPosition.z
                 );
+                seatPostUpdated++;
+                Log.Msg($"[UpdatePartTransforms] SeatPost updated: '{seatPostAnchor.name}' pos={seatPostAnchor.localPosition}");
+            }
+            else
+            {
+                seatPostSkipped++;
+                Log.Warning("[UpdatePartTransforms] Seat post skipped: seatPostAnchor is null.");
+            }
 
-                if (seatAnchor != null)
-                {
-                    seatAnchor.localRotation = Quaternion.Euler(Config.bike.seatPitch % 360f, 0f, 0f);
-                }
+            if (seatAnchor != null)
+            {
+                seatAnchor.localRotation = Quaternion.Euler(Config.bike.seatPitch % 360f, 0f, 0f);
+                seatUpdated++;
+                Log.Msg($"[UpdatePartTransforms] Seat updated: '{seatAnchor.name}' rot={seatAnchor.localRotation.eulerAngles}");
+            }
+            else
+            {
+                seatSkipped++;
+                Log.Warning("[UpdatePartTransforms] Seat rotation skipped: seatAnchor is null.");
             }
 
             // Wheels
-            if (wheelMeshes != null)
+            if (wheelMeshes == null || wheelMeshes.Count == 0)
+            {
+                Log.Warning("[UpdatePartTransforms] Wheels skipped: wheelMeshes is null or empty.");
+            }
+            else
             {
                 Vector3 wheelScale = new Vector3(
                     Config.bike.frontWheelWidth,
@@ -484,25 +563,41 @@ namespace rowemod.Mods
                     Config.bike.frontWheelRadius
                 );
 
-                float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
-
-                foreach (var wheelMesh in wheelMeshes)
+                for (int i = 0; i < wheelMeshes.Count; i++)
                 {
-                    if (wheelMesh == null) continue;
-                    
-                    Vector3 actualScale = wheelScale;
-                    wheelMesh.localScale = actualScale;
-                }
-
-                if (tireTest != null)
-                {
-                    foreach (var tire in tireTest)
+                    var wheelMesh = wheelMeshes[i];
+                    if (wheelMesh == null)
                     {
-                        if (tire == null) continue;
-                        
-                        
-                        tire.UpdateBounds();
+                        wheelsSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] Wheel[{i}] skipped: transform is null.");
+                        continue;
                     }
+
+                    wheelMesh.localScale = wheelScale;
+                    wheelsUpdated++;
+                    Log.Msg($"[UpdatePartTransforms] Wheel[{i}] updated: '{wheelMesh.name}' scale={wheelMesh.localScale}");
+                }
+            }
+
+            if (tireTest == null || tireTest.Length == 0)
+            {
+                Log.Warning("[UpdatePartTransforms] Tire bounds refresh skipped: tireTest is null or empty.");
+            }
+            else
+            {
+                for (int i = 0; i < tireTest.Length; i++)
+                {
+                    var tire = tireTest[i];
+                    if (tire == null)
+                    {
+                        tireBoundsSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] TireTest[{i}] skipped: component is null.");
+                        continue;
+                    }
+
+                    tire.UpdateBounds();
+                    tireBoundsUpdated++;
+                    Log.Msg($"[UpdatePartTransforms] TireTest[{i}] bounds updated: '{tire.name}'.");
                 }
             }
 
@@ -511,20 +606,37 @@ namespace rowemod.Mods
             {
                 float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
                 forkAnchor.localScale = Vector3.one * fScale;
+                forksUpdated++;
+                Log.Msg($"[UpdatePartTransforms] Fork updated: '{forkAnchor.name}' scale={forkAnchor.localScale}");
+            }
+            else
+            {
+                forksSkipped++;
+                Log.Warning("[UpdatePartTransforms] Fork skipped: forkAnchor is null.");
             }
 
             // Pegs
-            if (pegData != null && pegData.Count > 0)
+            if (pegData == null || pegData.Count == 0)
+            {
+                Log.Warning("[UpdatePartTransforms] Pegs skipped: pegData is null or empty.");
+            }
+            else
             {
                 for (int i = 0; i < pegData.Count; i++)
                 {
                     var d = pegData[i];
                     bool enabledNow = GetConfigEnabled(d);
-                    
+                    string pegLabel = d.EquipSlot != null
+                        ? d.EquipSlot.name
+                        : d.Parent != null ? d.Parent.name : $"Peg[{i}]";
+
                     d.scale = Config.bike.pegLength;
                     Vector3 pegScale = new Vector3(1f, 1f, Config.bike.pegLength);
-
                     float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
+
+                    bool slotUpdated = false;
+                    bool colliderUpdated = false;
+                    bool parentUpdated = false;
 
                     if (d.EquipSlot != null)
                     {
@@ -536,8 +648,16 @@ namespace rowemod.Mods
                             actualPegScale.z /= fScale;
                         }
                         d.EquipSlot.transform.localScale = actualPegScale;
+                        slotUpdated = true;
+                        pegsTransformUpdated++;
+                        Log.Msg($"[UpdatePartTransforms] Peg[{i}] slot updated: '{d.EquipSlot.name}' scale={d.EquipSlot.transform.localScale}");
                     }
-                    
+                    else
+                    {
+                        pegsTransformSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}' slot skipped: EquipSlot is null.");
+                    }
+
                     if (d.Collider != null)
                     {
                         Vector3 colliderScale = new Vector3(1f, 1f, Config.bike.pegLength * 0.7f);
@@ -548,13 +668,34 @@ namespace rowemod.Mods
                             colliderScale.z /= fScale;
                         }
                         d.Collider.transform.localScale = colliderScale;
+                        colliderUpdated = true;
+                        pegsColliderUpdated++;
+                        Log.Msg($"[UpdatePartTransforms] Peg[{i}] collider updated: '{d.Collider.name}' scale={d.Collider.transform.localScale}");
+                    }
+                    else
+                    {
+                        pegsColliderSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}' collider skipped: Collider is null.");
                     }
 
-                    if (d.Parent != null && d.Parent.activeSelf != enabledNow)
-                        d.Parent.SetActive(enabledNow);
+                    if (d.Parent != null)
+                    {
+                        if (d.Parent.activeSelf != enabledNow)
+                        {
+                            d.Parent.SetActive(enabledNow);
+                            parentUpdated = true;
+                        }
+                        pegsStateUpdated++;
+                    }
+                    else
+                    {
+                        pegsStateSkipped++;
+                        Log.Warning($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}' state skipped: Parent is null.");
+                    }
 
                     d.IsEnabled = enabledNow;
                     pegData[i] = d; // write back struct
+                    Log.Msg($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}': enabled={enabledNow}, slotUpdated={slotUpdated}, colliderUpdated={colliderUpdated}, parentChanged={parentUpdated}");
                 }
             }
 
@@ -566,6 +707,10 @@ namespace rowemod.Mods
             lastPegLength = Config.bike.pegLength;
 
             Memory.customizableEntity.RelaySnap();
+            Log.Msg("[UpdatePartTransforms] RelaySnap triggered.");
+            Log.Msg(
+                $"[UpdatePartTransforms] Summary: bars {barsUpdated} updated/{barsSkipped} skipped, grips {gripsUpdated}/{gripsSkipped}, barEnds {barEndsUpdated}/{barEndsSkipped}, seatPost {seatPostUpdated}/{seatPostSkipped}, seat {seatUpdated}/{seatSkipped}, wheels {wheelsUpdated}/{wheelsSkipped}, tires {tireBoundsUpdated}/{tireBoundsSkipped}, forks {forksUpdated}/{forksSkipped}, pegSlots {pegsTransformUpdated}/{pegsTransformSkipped}, pegColliders {pegsColliderUpdated}/{pegsColliderSkipped}, pegState {pegsStateUpdated}/{pegsStateSkipped}."
+            );
         }
         public static System.Collections.IEnumerator DelayedUpdatePartTransforms()
         {
