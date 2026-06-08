@@ -1,3 +1,4 @@
+using rowemod.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -60,12 +61,19 @@ namespace rowemod.Challenges
             if (_active != null) _active.SetCompleted(completed);
         }
 
+        public static bool IsLocalPlayerInsideActiveArea()
+        {
+            if (_active == null || Memory.physicsDrivenCharacter == null)
+                return false;
+
+            return _active.ContainsWorldPoint(Memory.physicsDrivenCharacter.transform.position);
+        }
+
         // Callbacks into your challenge/points logic
         public static void NotifyAreaEnter(ChallengeArea area, Collider who)
         {
-            // Example: mark “in zone” so your points watcher knows attempts count
             InZone = true;
-            
+            MultiplayerChallengeManager.NotifyChallengeAreaEntered();
         }
 
         public static void NotifyAreaExit(ChallengeArea area, Collider who)

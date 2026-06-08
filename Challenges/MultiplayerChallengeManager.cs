@@ -43,6 +43,12 @@ namespace rowemod.Challenges
         private static ActiveChallenge _activeChallenge;
         private static TrickDetection _trickDetection;
         private static int _lastMatchedHistoryCount = -1;
+        private static float _nextCompletionPollTime;
+        private static bool _wasLocalPlayerInsideArea;
+        private static int _lastSeenHistoryCount;
+        private static string _lastSeenHistorySource = "none";
+        private static string _lastSeenTrickText = "none";
+        private static string _lastCompletionDiagnostic = "Waiting for trick history.";
         private static bool _networkSyncDisabled;
         private static bool _playerScanDisabled;
         private static bool _trickHistoryDisabled;
@@ -98,7 +104,40 @@ namespace rowemod.Challenges
 
         public static void NotifyChallengeAreaExited()
         {
+            _wasLocalPlayerInsideArea = false;
             SafeCheckLocalLineCompletion();
+        }
+
+        public static void NotifyChallengeAreaEntered()
+        {
+            _wasLocalPlayerInsideArea = true;
+            SafeCheckLocalLineCompletion();
+        }
+
+        public static void Update()
+        {
+            if (_activeChallenge == null)
+                return;
+
+            if (Time.unscaledTime < _nextCompletionPollTime)
+                return;
+
+            _nextCompletionPollTime = Time.unscaledTime + 0.15f;
+
+            bool inside = ChallengeAreaManager.IsLocalPlayerInsideActiveArea();
+            if (inside && !_wasLocalPlayerInsideArea)
+            {
+                Log.Msg("[MPChallenge] Local player entered challenge area.");
+            }
+            else if (!inside && _wasLocalPlayerInsideArea)
+            {
+                Log.Msg("[MPChallenge] Local player exited challenge area.");
+            }
+
+            _wasLocalPlayerInsideArea = inside;
+
+            if (inside)
+                SafeCheckLocalLineCompletion();
         }
 
         public static void DrawWindow()
@@ -193,7 +232,7 @@ namespace rowemod.Challenges
 
                     GUILayout.BeginHorizontal();
                     GUILayout.Label(complete ? "\u2713" : "X", Menu.labelStyle, GUILayout.Width(22f));
-                    GUILayout.Label(player.DisplayName, Menu.labelStyle);
+                    GUILayout.Label(GetSafePlayerDisplayName(player), Menu.labelStyle);
                     GUILayout.EndHorizontal();
                 }
             }
@@ -206,7 +245,13 @@ namespace rowemod.Challenges
             {
                 GUILayout.Label("Active Line", Menu.labelStyle);
                 GUILayout.Label(string.Join(" + ", _activeChallenge.Tricks), Menu.subtleLabelStyle);
-                GUILayout.Label($"Created by: {_activeChallenge.CreatorName}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Created by: {GetDisplayNameForKey(_activeChallenge.CreatorKey, _activeChallenge.CreatorName)}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Inside area: {(ChallengeAreaManager.IsLocalPlayerInsideActiveArea() ? "Yes" : "No")}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Your status: {(IsLocalPlayerComplete() ? "Complete" : "Incomplete")}", Menu.subtleLabelStyle);
+                GUILayout.Label($"History count: {_lastSeenHistoryCount}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Last trick seen: {_lastSeenTrickText}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Trick source: {_lastSeenHistorySource}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Match check: {_lastCompletionDiagnostic}", Menu.subtleLabelStyle);
 
                 if (IsLocalCreator() && GUILayout.Button("Clear Active Challenge", Menu.redButtonStyle))
                 {
@@ -334,6 +379,7 @@ namespace rowemod.Challenges
                 _activeChallenge.Size = Vector3ToArray(area.transform.localScale);
             }
 
+            ResetCompletionDiagnostics();
             PublishActiveChallengeState();
             Log.Msg($"[MPChallenge] Accepted local line: {string.Join(" + ", tricks)}");
         }
@@ -536,16 +582,31 @@ namespace rowemod.Challenges
                 return;
 
             List<string> history = GetCurrentTrickHistory();
-            if (history.Count == 0 || history.Count == _lastMatchedHistoryCount)
+            UpdateCompletionDiagnostics(history);
+
+            if (history.Count == 0)
+            {
+                _lastCompletionDiagnostic = "No trick history read yet.";
                 return;
+            }
+
+            if (history.Count == _lastMatchedHistoryCount)
+            {
+                _lastCompletionDiagnostic = "Already checked this history count.";
+                return;
+            }
 
             if (!ContainsLineInOrder(history, _activeChallenge.Tricks))
+            {
+                _lastCompletionDiagnostic = $"No match for {string.Join(" + ", _activeChallenge.Tricks)}.";
                 return;
+            }
 
             _lastMatchedHistoryCount = history.Count;
             _activeChallenge.PlayerCompleted[localKey] = true;
             ChallengeAreaManager.SetCompleted(true);
             PublishActiveChallengeState();
+            _lastCompletionDiagnostic = "Complete.";
             Log.Msg($"[MPChallenge] Local line completed: {string.Join(" + ", _activeChallenge.Tricks)}");
         }
 
@@ -558,6 +619,15 @@ namespace rowemod.Challenges
 
             List<string> history = new List<string>();
             if (_trickDetection == null)
+            {
+                AddPlayerTrickGameplayFallback(history);
+                return history;
+            }
+
+            AddTrickDetectionHistory(history);
+            AddPlayerTrickGameplayFallback(history);
+
+            if (history.Count > 0)
                 return history;
 
             object rawHistory = TryGetMemberValue(_trickDetection, "_trickHistory") ??
@@ -567,24 +637,121 @@ namespace rowemod.Challenges
             if (rawHistory == null)
                 return history;
 
+            AddHistoryItems(history, rawHistory, "_trickHistory");
+            return history;
+        }
+
+        private static void AddTrickDetectionHistory(List<string> history)
+        {
+            if (_trickDetection == null)
+                return;
+
+            try
+            {
+                Il2CppSystem.Collections.Generic.List<string> trickHistory = _trickDetection.GetTrickHistory();
+                if (trickHistory == null)
+                    return;
+
+                int originalCount = history.Count;
+                for (int i = 0; i < trickHistory.Count; i++)
+                {
+                    AddHistoryText(history, trickHistory[(Index)i], "TrickDetection.GetTrickHistory()");
+                }
+
+                if (history.Count == originalCount)
+                    AddHistoryItems(history, trickHistory, "TrickDetection.GetTrickHistory()");
+            }
+            catch (Exception ex)
+            {
+                _lastCompletionDiagnostic = $"GetTrickHistory failed: {ex.Message}";
+            }
+        }
+
+        private static void AddPlayerTrickGameplayFallback(List<string> history)
+        {
+            if (Memory.playerTrickGameplay == null)
+                return;
+
+            try
+            {
+                AddHistoryText(history, Memory.playerTrickGameplay.GetCurrentAbilityTrick(), "PlayerTrickGameplay.GetCurrentAbilityTrick()");
+                AddHistoryText(history, Memory.playerTrickGameplay.GetLastAbilityTrick(), "PlayerTrickGameplay.GetLastAbilityTrick()");
+            }
+            catch (Exception ex)
+            {
+                _lastCompletionDiagnostic = $"PlayerTrickGameplay read failed: {ex.Message}";
+            }
+        }
+
+        private static void AddHistoryItems(List<string> history, object rawHistory, string source)
+        {
+            if (rawHistory == null)
+                return;
+
             if (rawHistory is IEnumerable<string> managedStrings)
             {
-                history.AddRange(managedStrings.Where(value => !string.IsNullOrWhiteSpace(value)));
-                return history;
+                foreach (string value in managedStrings)
+                    AddHistoryText(history, value, source);
+                return;
             }
 
             System.Collections.IEnumerable enumerable = rawHistory as System.Collections.IEnumerable;
             if (enumerable == null)
-                return history;
+            {
+                AddHistoryText(history, rawHistory, source);
+                return;
+            }
 
             foreach (object item in enumerable)
             {
-                string text = item?.ToString();
-                if (!string.IsNullOrWhiteSpace(text))
-                    history.Add(text);
+                AddHistoryText(history, item, source);
             }
+        }
 
-            return history;
+        private static void AddHistoryText(List<string> history, object value, string source)
+        {
+            string text = ExtractTrickText(value);
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            history.Add(text);
+            _lastSeenHistorySource = source;
+        }
+
+        private static string ExtractTrickText(object value)
+        {
+            if (value == null)
+                return null;
+
+            if (value is string text)
+                return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+            if (value is UnityEngine.Object unityObject && !string.IsNullOrWhiteSpace(unityObject.name))
+                return unityObject.name.Trim();
+
+            string readable = ExtractReadableString(value);
+            if (!string.IsNullOrWhiteSpace(readable))
+                return readable.Trim();
+
+            string fallback = value.ToString();
+            return string.IsNullOrWhiteSpace(fallback) || IsTypeLikeDisplayText(fallback) ? null : fallback.Trim();
+        }
+
+        private static void UpdateCompletionDiagnostics(List<string> history)
+        {
+            _lastSeenHistoryCount = history.Count;
+            _lastSeenTrickText = history.Count > 0 ? string.Join(" | ", history.TakeLast(3)) : "none";
+            if (history.Count == 0)
+                _lastSeenHistorySource = "none";
+        }
+
+        private static void ResetCompletionDiagnostics()
+        {
+            _lastMatchedHistoryCount = -1;
+            _lastSeenHistoryCount = 0;
+            _lastSeenHistorySource = "none";
+            _lastSeenTrickText = "none";
+            _lastCompletionDiagnostic = "Waiting for trick history.";
         }
 
         private static bool ContainsLineInOrder(List<string> history, List<string> requiredTricks)
@@ -765,7 +932,7 @@ namespace rowemod.Challenges
             _activeChallenge = new ActiveChallenge
             {
                 CreatorKey = state.CreatorKey,
-                CreatorName = state.CreatorName,
+                CreatorName = GetDisplayNameForKey(state.CreatorKey, state.CreatorName),
                 Tricks = state.Tricks.ToList(),
                 PlayerCompleted = state.PlayerCompleted != null
                     ? new Dictionary<string, bool>(state.PlayerCompleted, StringComparer.OrdinalIgnoreCase)
@@ -981,15 +1148,21 @@ namespace rowemod.Challenges
             string name = TryGetStringMember(player, "DisplayName") ??
                           TryGetStringMember(player, "PlayerName") ??
                           TryGetStringMember(player, "UserName") ??
+                          TryGetStringMember(player, "Username") ??
+                          TryGetStringMember(player, "NickName") ??
+                          TryGetStringMember(player, "Nickname") ??
                           TryGetStringMember(player, "Name") ??
                           TryGetStringMember(player, "_displayName") ??
                           TryGetStringMember(player, "_playerName") ??
-                          TryGetStringMember(player, "_userName");
+                          TryGetStringMember(player, "_userName") ??
+                          TryGetStringMember(player, "_username") ??
+                          TryGetStringMember(player, "_nickName") ??
+                          TryGetStringMember(player, "_nickname");
 
             if (!string.IsNullOrWhiteSpace(name))
-                return name;
+                return SanitizePlayerDisplayName(name, player);
 
-            return player.gameObject != null ? player.gameObject.name : "Unknown Player";
+            return SanitizePlayerDisplayName(player.gameObject != null ? player.gameObject.name : null, player);
         }
 
         private static bool TryGetBoolMember(object target, string memberName, out bool value)
@@ -1008,8 +1181,162 @@ namespace rowemod.Challenges
         private static string TryGetStringMember(object target, string memberName)
         {
             object value = TryGetMemberValue(target, memberName);
-            string text = value?.ToString();
-            return string.IsNullOrWhiteSpace(text) ? null : text;
+            return ExtractReadableString(value);
+        }
+
+        private static string ExtractReadableString(object value)
+        {
+            if (value == null)
+                return null;
+
+            if (value is string directString)
+                return IsUsableDisplayText(directString) && !IsTypeLikeDisplayText(directString) ? directString.Trim() : null;
+
+            const System.Reflection.BindingFlags Flags =
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic;
+
+            string[] memberNames =
+            {
+                "Value",
+                "String",
+                "Text",
+                "Name",
+                "_value",
+                "_string",
+                "_text",
+                "_name",
+                "m_Value",
+                "m_String",
+                "m_Text"
+            };
+
+            Type type = value.GetType();
+            foreach (string memberName in memberNames)
+            {
+                System.Reflection.PropertyInfo property = type.GetProperty(memberName, Flags);
+                if (property != null && property.CanRead)
+                {
+                    try
+                    {
+                        string nested = ExtractReadableString(property.GetValue(value, null));
+                        if (!string.IsNullOrWhiteSpace(nested))
+                            return nested;
+                    }
+                    catch
+                    {
+                        // Ignore unavailable IL2CPP members.
+                    }
+                }
+
+                System.Reflection.FieldInfo field = type.GetField(memberName, Flags);
+                if (field != null)
+                {
+                    try
+                    {
+                        string nested = ExtractReadableString(field.GetValue(value));
+                        if (!string.IsNullOrWhiteSpace(nested))
+                            return nested;
+                    }
+                    catch
+                    {
+                        // Ignore unavailable IL2CPP members.
+                    }
+                }
+            }
+
+            string text = value.ToString();
+            return IsUsableDisplayText(text) && !IsTypeLikeDisplayText(text) ? text.Trim() : null;
+        }
+
+        private static string GetSafePlayerDisplayName(RowePlayer player)
+        {
+            if (player == null)
+                return "Unknown Player";
+
+            return SanitizePlayerDisplayName(player.DisplayName, player.NetworkPlayer);
+        }
+
+        private static string GetDisplayNameForKey(string playerKey, string displayName)
+        {
+            if (!IsUsableDisplayText(displayName) || IsTypeLikeDisplayText(displayName))
+            {
+                if (!string.IsNullOrEmpty(playerKey) &&
+                    string.Equals(playerKey, GetLocalPlayerKey(), StringComparison.OrdinalIgnoreCase))
+                {
+                    return GetSteamPersonaName() ?? "Local Player";
+                }
+
+                RowePlayer knownPlayer = _rowePlayers.FirstOrDefault(player =>
+                    string.Equals(player.Key, playerKey, StringComparison.OrdinalIgnoreCase));
+                if (knownPlayer != null)
+                    return GetSafePlayerDisplayName(knownPlayer);
+
+                if (_rowePlayers.Count == 1)
+                    return GetSafePlayerDisplayName(_rowePlayers[0]);
+            }
+
+            return SanitizePlayerDisplayName(displayName, null);
+        }
+
+        private static string SanitizePlayerDisplayName(string displayName, NetworkPlayer player)
+        {
+            if (IsUsableDisplayText(displayName) && !IsTypeLikeDisplayText(displayName))
+                return displayName.Trim();
+
+            if (player != null && IsLocalNetworkPlayer(player))
+            {
+                string steamName = GetSteamPersonaName();
+                if (!string.IsNullOrWhiteSpace(steamName))
+                    return steamName;
+            }
+
+            string gameObjectName = player != null && player.gameObject != null ? player.gameObject.name : null;
+            if (IsUsableDisplayText(gameObjectName) && !IsTypeLikeDisplayText(gameObjectName))
+                return gameObjectName.Trim();
+
+            return player != null ? $"Player {Math.Abs(player.GetInstanceID())}" : "Unknown Player";
+        }
+
+        private static bool IsLocalNetworkPlayer(NetworkPlayer player)
+        {
+            return player != null && TryGetBoolMember(player, "_isLocal", out bool isLocal) && isLocal;
+        }
+
+        private static string GetSteamPersonaName()
+        {
+            try
+            {
+                string personaName = Il2CppSteamworks.SteamFriends.GetPersonaName();
+                return IsUsableDisplayText(personaName) && !IsTypeLikeDisplayText(personaName)
+                    ? personaName.Trim()
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsUsableDisplayText(string text)
+        {
+            return !string.IsNullOrWhiteSpace(text) &&
+                   !string.Equals(text, "null", StringComparison.OrdinalIgnoreCase) &&
+                   !string.Equals(text, "(null)", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsTypeLikeDisplayText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            string trimmed = text.Trim();
+            return trimmed.StartsWith("Il2Cpp", StringComparison.Ordinal) ||
+                   trimmed.StartsWith("System.", StringComparison.Ordinal) ||
+                   trimmed.Contains("NetworkString`") ||
+                   trimmed.Contains("`1[") ||
+                   trimmed.Contains("[Il2Cpp");
         }
 
         private static object TryGetMemberValue(object target, string memberName)

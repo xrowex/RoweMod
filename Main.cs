@@ -227,6 +227,8 @@ namespace rowemod
                     Mods.Misc.ApplyPlayerUserNameTargetsVisibility();
                 }
 
+                rowemod.Challenges.MultiplayerChallengeManager.Update();
+
                 if (isOpen)
                 {
                     Mods.Physics.Update();
