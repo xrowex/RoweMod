@@ -1,4 +1,5 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	<Import Condition=" '$(EAZFUSCATOR_NET_HOME)' != '' and Exists('$(EAZFUSCATOR_NET_HOME)/Integration/MSBuild/Eazfuscator.NET.props') " Project="$(EAZFUSCATOR_NET_HOME)/Integration/MSBuild/Eazfuscator.NET.props" />
 	<PropertyGroup>
 		<TargetFramework>net6.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -14,6 +15,12 @@
 		<Prefer32Bit>false</Prefer32Bit>
 		<LangVersion>latest</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
+	<PropertyGroup>
+		<!-- Eazfuscator.NET is integrated with this project at MSBuild level: https://help.gapotchenko.com/eazfuscator.net/kb/100036 -->
+		<EazfuscatorIntegration>MSBuild</EazfuscatorIntegration>
+		<EazfuscatorActiveConfiguration>Release</EazfuscatorActiveConfiguration>
+		<EazfuscatorCompatibilityVersion>2026.1</EazfuscatorCompatibilityVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -76,6 +83,15 @@
 		</Reference>
 		<Reference Include="Il2CppMashBox.Core.Runtime">
 		  <HintPath>D:\SteamLibrary\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.Runtime.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppMashBoxBridge">
+		  <HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBoxBridge.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppMashBoxSDK">
+		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBoxSDK.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppMashBoxSDK.ContentTools">
+		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBoxSDK.ContentTools.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2CppMGPainter">
 			<HintPath>D:\SteamLibrary\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMGPainter.dll</HintPath>
@@ -145,6 +161,9 @@
 		</Reference>
 		<Reference Include="Il2Cpp__Generated">
 			<HintPath>D:\SteamLibrary\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2Cpp__Generated.dll</HintPath>
+		</Reference>
+		<Reference Include="MashBox.Core.Runtime">
+		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Dependencies\Il2CppAssemblyGenerator\Cpp2IL\cpp2il_out\MashBox.Core.Runtime.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.Addressables">
 			<HintPath>D:\SteamLibrary\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Unity.Addressables.dll</HintPath>
@@ -457,6 +476,7 @@
 	<ItemGroup>
 		<Compile Include="Challenges\ChallengeArea.cs" />
 		<Compile Include="Challenges\ChallengeAreaManager.cs" />
+		<Compile Include="Challenges\MultiplayerChallengeManager.cs" />
 		<Compile Include="Config.cs" />
 		<Compile Include="JsonData.cs" />
 		<Compile Include="Menu.cs" />
@@ -464,12 +484,14 @@
 		<Compile Include="Mods\AudioPatchie.cs" />
 		<Compile Include="Mods\BikeMaterialPreset.cs" />
 		<Compile Include="Mods\BikeMaterialsLoader.cs" />
+		<Compile Include="Mods\BikePoseEditor.cs" />
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\Custom.cs" />
 		<Compile Include="Mods\DroneEvents.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\GrindPoseEditor.cs" />
+		<Compile Include="Mods\GrindPosePreset.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\MotorVehicleUtils.cs" />
 		<Compile Include="Mods\ObjectDropper.cs" />
@@ -498,4 +520,5 @@
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
 		<Exec Command="echo [RoweMod] Copying build output...&#xD;&#xA;IF NOT EXIST &quot;$(ProjectDir)DLL&quot; mkdir &quot;$(ProjectDir)DLL&quot;&#xD;&#xA;copy /Y &quot;$(TargetPath)&quot; &quot;$(ProjectDir)DLL\&quot; || (echo [RoweMod] FAILED: Could not copy DLL to project DLL folder. &amp; exit /b 1)&#xD;&#xA;copy /Y &quot;$(TargetPath)&quot; &quot;D:\SteamLibrary\steamapps\common\BMX Streets\Mods\&quot; || (echo [RoweMod] FAILED: Could not copy DLL to BMX Streets Mods folder. Close the game and rebuild. &amp; exit /b 1)&#xD;&#xA;copy /Y &quot;$(TargetDir)$(TargetName).pdb&quot; &quot;D:\SteamLibrary\steamapps\common\BMX Streets\Mods\&quot; || (echo [RoweMod] FAILED: Could not copy PDB to BMX Streets Mods folder. Close the game and rebuild. &amp; exit /b 1)&#xD;&#xA;echo [RoweMod] SUCCESS: Copied rowemod.dll and rowemod.pdb to BMX Streets Mods folder." />
 	</Target>
+	<Import Condition=" '$(EAZFUSCATOR_NET_HOME)' != '' and Exists('$(EAZFUSCATOR_NET_HOME)/Integration/MSBuild/Eazfuscator.NET.targets') " Project="$(EAZFUSCATOR_NET_HOME)/Integration/MSBuild/Eazfuscator.NET.targets" />
 </Project>

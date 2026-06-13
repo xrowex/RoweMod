@@ -70,7 +70,6 @@ namespace rowemod
         public float barRotationAngle { get; set; }
         public float seatHeight { get; set; }   
         public float seatRotationX { get; set; }
-        public float pegLength { get; set; }
         // Trick sets (key = TrickSet name, value = list of trick names in slot order)
         public Dictionary<string, List<TrickEntry>> customTricks { get; set; }
             = new Dictionary<string, List<TrickEntry>>();

@@ -33,6 +33,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Linq;
+using Il2CppMashBox.Addons.SessionMarker;
 using static rowemod.Config;
 using ActiveRagdollBehaviour = Il2CppMashBox.Addons.PhysicsDrivenAnimation.ActiveRagdollBehaviour;
 using Camera = UnityEngine.Camera;
@@ -58,6 +59,7 @@ namespace rowemod.Utils
         public static GameObject menuPlayer;
         public static GameObject gamePlayer;
 
+        public static Transform activeMarkerTransform;
         // HUD
         public static Test mashBucksHUD;
         
@@ -105,6 +107,7 @@ namespace rowemod.Utils
         public static Joint[] joints;
         public static PhysicsBasedEventEmitter[] droneEmitters;
         public static CustomizableEntity customizableEntity;
+        public static GameObject playersBike;
         public static PhysicsSeatEventRelay physicsSeatEventRelay;
         public static PlayerInputBehaviour playerInputBehaviour;
         public static MGCharacterController mgCharacterController;
@@ -144,9 +147,6 @@ namespace rowemod.Utils
         
         //GRIND MAGNET
         public static GrindMagnetZEM grindMagnetZEM;
-
-        //Pegs
-        public static List<CapsuleCollider> pegColliders = new List<CapsuleCollider>();
 
         //bones
         public static BeyondMeatSystem beyondMeatSystem;
@@ -198,21 +198,6 @@ namespace rowemod.Utils
             else
                 Log.Error("BeyondMeatSystem component not found.");
 
-            pegColliders.Clear();
-            var allCapsules = GameObject.FindObjectsOfType<CapsuleCollider>();
-            foreach (var capsule in allCapsules)
-            {
-                if (capsule.gameObject.name.Contains("Peg"))
-                {
-                    pegColliders.Add(capsule);
-                }
-            }
-
-            if (pegColliders.Count > 0)
-                Log.Msg($"Found {pegColliders.Count} peg colliders.");
-            else
-                Log.Warning("No peg colliders found with 'Peg' in name.");
-
             // Find specific components inside rMBCharacter instead of using GameObject.Find()
             if (rMbCharacter != null)
             {
@@ -247,7 +232,10 @@ namespace rowemod.Utils
                     
                     customizableEntity = rMbCharacter.GetComponentInChildren<CustomizableEntity>();
                     if (customizableEntity != null)
+                    {
                         Log.Msg($"Found customizable entity: {customizableEntity.name}");
+                        playersBike = customizableEntity.gameObject;
+                    }
                     else
                         Log.Error("CustomizableEntity is null!");
 
@@ -482,6 +470,23 @@ namespace rowemod.Utils
                 Log.Error($"Exception while finding PlayerTrickGameplay: {ex.Message}");
             }
 
+            try
+            {
+                Log.Msg("Starting to find SessionMarker...");
+                activeMarkerTransform = rMbCharacter.GetComponentInChildren<SessionMarker>(true).Root;
+                if (activeMarkerTransform != null)
+                {
+                    Log.Msg("SessionMarker component found.");
+                }
+                else
+                {
+                    Log.Warning("SessionMarker component not found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Exception while finding SessionMarker.");
+            }
 
 
             // FreeCam collider toggle
@@ -1012,6 +1017,89 @@ namespace rowemod.Utils
             }
 
             return null;
+        }
+        public static void CopyPlayersBike()
+        {
+            if (playersBike == null)
+            {
+                Log.Error("CopyPlayersBike: playersBike is null!");
+                return;
+            }
+
+            Log.Msg("Copying player's bike...");
+            GameObject copiedBike = GameObject.Instantiate(playersBike);
+            copiedBike.name = "Copied Bike";
+            
+            // Disable all scripts on the copied bike and its children
+            var scripts = copiedBike.GetComponentsInChildren<MonoBehaviour>(true);
+            foreach (var script in scripts)
+            {
+                if (script == null) continue;
+                script.enabled = false;
+            }
+
+            // Make all rigidbodies kinematic
+            var rigidbodies = copiedBike.GetComponentsInChildren<Rigidbody>(true);
+            foreach (var rb in rigidbodies)
+            {
+                if (rb == null) continue;
+                rb.isKinematic = true;
+                rb.useGravity = false;
+            }
+
+            // Ensure the copied bike is inactive initially or positioned away
+            copiedBike.SetActive(false);
+
+            // Create a root object to adjust the origin to the bottom
+            GameObject bikeRoot = new GameObject("Copied Bike Root");
+            bikeRoot.SetActive(false);
+            
+            // Calculate bounds to find the bottom
+            Bounds combinedBounds = new Bounds(Vector3.zero, Vector3.zero);
+            bool boundsInitialized = false;
+            var renderers = copiedBike.GetComponentsInChildren<Renderer>(true);
+            foreach (var renderer in renderers)
+            {
+                if (!boundsInitialized)
+                {
+                    combinedBounds = renderer.bounds;
+                    boundsInitialized = true;
+                }
+                else
+                {
+                    combinedBounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            if (boundsInitialized)
+            {
+                // Move the bike so its bottom center is at (0,0,0) relative to the root
+                Vector3 bottomCenter = new Vector3(combinedBounds.center.x, combinedBounds.min.y, combinedBounds.center.z);
+                copiedBike.transform.position -= bottomCenter;
+                copiedBike.transform.SetParent(bikeRoot.transform, true);
+                Log.Msg($"Adjusted origin for copied bike. Offset applied: {-bottomCenter}");
+            }
+            else
+            {
+                copiedBike.transform.SetParent(bikeRoot.transform, true);
+                Log.Warning("Could not calculate bounds for copied bike; origin remains unchanged.");
+            }
+            
+            // Add to dropper list
+            if (!dropperPrefabNames.Contains("Copied Bike"))
+            {
+                dropperPrefabs.Add(bikeRoot);
+                dropperPrefabNames.Add("Copied Bike");
+                Log.Msg("Copied bike added to object dropper list.");
+            }
+            else
+            {
+                int index = dropperPrefabNames.IndexOf("Copied Bike");
+                GameObject oldRoot = dropperPrefabs[index];
+                dropperPrefabs[index] = bikeRoot;
+                GameObject.Destroy(oldRoot);
+                Log.Msg("Updated copied bike in object dropper list.");
+            }
         }
     }
 }

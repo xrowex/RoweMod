@@ -6,7 +6,7 @@ using UnityEngine.Networking;
 
 namespace rowemod.Mods
 {
-    public class RemoteKillSwitch
+    public class RemoteKillSwitched
     {
         private const string SheetUrl =
             "https://docs.google.com/spreadsheets/d/1XEMWSpsjujTKIm3MnduRMTWiQJjoPG34CPySNIKozi4/edit?usp=sharing";

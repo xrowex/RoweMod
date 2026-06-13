@@ -67,24 +67,39 @@ namespace rowemod.Mods
                     grindMagnetZEM._forceMult = physics.grindAssistStrength;
                 }
 
-                foreach (var peg in pegColliders)
-                {
-                    if (peg != null && peg.sharedMaterial != null)
-                    {
-                        peg.sharedMaterial.staticFriction = physics.grindFriction;
-                        peg.sharedMaterial.dynamicFriction = physics.grindFriction;
-                    }
-                }
             }
+
+            if (vehicleSettingsInstances == null)
+                return;
 
             foreach (MotorVehicleSettings vehicleInstance in vehicleSettingsInstances)
             {
+                if (vehicleInstance == null)
+                    continue;
+
                 try
                 {
-                    vehicleInstance.JumpSettings.JumpVelocity[0] = physics.smallHopForce;
-                    vehicleInstance.JumpSettings.JumpVelocity[1] = physics.smallHopForce;
-                    vehicleInstance.EngineSettings._forceFactor = physics.bmxForceFactor;
-                    vehicleInstance.EngineSettings._maxSpeed = physics.bmxMaxSpeed;
+                    if (vehicleInstance.JumpSettings != null)
+                    {
+                        vehicleInstance.JumpSettings.JumpVelocity[0] = physics.smallHopForce;
+                        vehicleInstance.JumpSettings.JumpVelocity[1] = physics.smallHopForce;
+                    }
+
+                    if (vehicleInstance.EngineSettings == null)
+                        continue;
+
+                    string tuneKey = string.IsNullOrEmpty(vehicleInstance.name) ? "MotorVehicleSettings" : vehicleInstance.name;
+                    if (motorTuning != null && motorTuning.TryGetValue(tuneKey, out MotorTuningConfigEntry tune) && tune != null)
+                    {
+                        vehicleInstance.EngineSettings._forceFactor = tune.forceFactor;
+                        vehicleInstance.EngineSettings._maxForce = tune.maxForce;
+                        vehicleInstance.EngineSettings._maxSpeed = tune.maxSpeed;
+                    }
+                    else
+                    {
+                        vehicleInstance.EngineSettings._forceFactor = physics.bmxForceFactor;
+                        vehicleInstance.EngineSettings._maxSpeed = physics.bmxMaxSpeed;
+                    }
                     //vehicleInstance.JumpSettings.JumpVelocity[2] = hopForce;
                 }
                 catch (Exception ex)

@@ -32,6 +32,7 @@ namespace rowemod.Mods
         // NEW: Track toggle state per TrickSet and cache originals so we can restore.
         public static readonly Dictionary<string, bool[]> _trickEnabled = new();
         private static readonly Dictionary<string, UnityEngine.Object?[]> _originalRefs = new();
+        private static readonly Dictionary<string, UnityEngine.Object?[]> _configuredRefs = new();
 
 
         // We'll store the extracted trick names in a dictionary: TrickSetData.name -> List of strings
@@ -127,12 +128,15 @@ namespace rowemod.Mods
 
             try
             {
-                var newVal = enabled ? originals[index] : null;
+                if (!_configuredRefs.TryGetValue(setKey, out var configured) || configured.Length <= index)
+                    configured = originals;
+
+                var newVal = enabled ? configured[index] : null;
                 set._dataList[(Index)index] = newVal;
 
                 // UPDATED: keep the UI list in sync, but with cleaned names
                 if (trickDictionary.TryGetValue(setKey, out var names) && index < names.Count)
-                    names[index] = CleanTrickName(newVal as UnityEngine.Object);
+                    names[index] = CleanTrickName(configured[index]);
 
                 ForceRefreshTrickRuntime();
                 Log.Msg($"{(enabled ? "Restored" : "Disabled")} {setKey}[{index}]");
@@ -149,13 +153,14 @@ namespace rowemod.Mods
             if (set == null || set._dataList == null) return;
             var setKey = set.name;
             if (!_originalRefs.TryGetValue(setKey, out var originals)) return;
+            if (!_configuredRefs.TryGetValue(setKey, out var configured)) configured = originals;
             if (!_trickEnabled.TryGetValue(setKey, out var flags)) return;
 
-            int count = Math.Min(set._dataList.Count, Math.Min(originals.Length, flags.Length));
+            int count = Math.Min(set._dataList.Count, Math.Min(configured.Length, flags.Length));
             for (int i = 0; i < count; i++)
             {
                 flags[i] = enableAll;
-                set._dataList[(Index)i] = enableAll ? originals[i] : null;
+                set._dataList[(Index)i] = enableAll ? configured[i] : null;
             }
 
             // one refresh is enough for bulk ops
@@ -351,17 +356,17 @@ namespace rowemod.Mods
             if (bmxSetsFromAsset != null && bmxSetsFromAsset.Length > 0)
             {
                 rTrickSetData = bmxSetsFromAsset;
-                Log.Msg($"Using Scooter_TrickDataSets asset: {rTrickSetData.Length} sets.");
+                Log.Msg($"Using BMX TrickDataSets asset: {rTrickSetData.Length} sets.");
             }
             else
             {
-                // Fallback: keep only sets whose names indicate Scooter
+                // Fallback: keep only sets whose names indicate BMX.
                 var all = Resources.FindObjectsOfTypeAll<TrickSetData>();
                 rTrickSetData = (all == null || all.Length == 0)
                     ? Array.Empty<TrickSetData>()
-                    : FilterScooterSets(all);
+                    : FilterBmxSets(all);
 
-                Log.Msg($"Using name filter fallback: {rTrickSetData.Length} scooter sets.");
+                Log.Msg($"Using name filter fallback: {rTrickSetData.Length} BMX sets.");
             }
 
             // DO NOT overwrite rTrickSetData again here.
@@ -374,7 +379,7 @@ namespace rowemod.Mods
 
             if (rTrickSetData != null && rTrickSetData.Length > 0)
             {
-                Log.Msg($"TrickSetData (Scooter only) Found: {rTrickSetData.Length}");
+                Log.Msg($"TrickSetData found: {rTrickSetData.Length}");
 
                 for (int t = 0; t < rTrickSetData.Length; t++)
                 {
@@ -407,6 +412,7 @@ namespace rowemod.Mods
                         }
 
                         _originalRefs[trickSetData.name] = originals;
+                        _configuredRefs[trickSetData.name] = (UnityEngine.Object?[])originals.Clone();
                         _trickEnabled[trickSetData.name] = enabled;
                     }
                     catch (System.Exception ex)
@@ -419,7 +425,7 @@ namespace rowemod.Mods
             }
             else
             {
-                Log.Msg("No Scooter TrickSetData objects found!");
+                Log.Msg("No BMX TrickSetData objects found!");
             }
 
             if (rTrickSystemBrain != null)
@@ -433,7 +439,7 @@ namespace rowemod.Mods
                 trickSet6InputAction = rTrickSystemBrain._trickSet6InputAction;
             }
 
-            BuildTrickMenuDisplay(); // operates on Scooter-only rTrickSetData
+            BuildTrickMenuDisplay();
             BuildCatalog();
         }
 
@@ -447,6 +453,7 @@ namespace rowemod.Mods
 
         // tiny “dirty” flag so we only rebuild runtime when something changed
         private static bool _pendingRefresh;
+        private static float _lastTrickDataRefreshAttempt = -10f;
 
         public static void DrawTrickMenuPro()
         {
@@ -473,15 +480,18 @@ namespace rowemod.Mods
             GUILayout.EndHorizontal();
 
             GUILayout.Space(4);
+            EnsureTrickDataReadyForMenu();
+
             _uiScroll = GUILayout.BeginScrollView(_uiScroll);
 
-            if (rTrickSetData == null || rTrickSetData.Length == 0)
+            if (!HasUsableTrickSetData())
             {
-                GUILayout.Label("No Trick Sets found…");
+                GUILayout.Label("No trick sets are loaded yet. Enter gameplay or respawn, then reopen this tab.");
                 GUILayout.EndScrollView();
                 return;
             }
 
+            int visibleSetCount = 0;
             foreach (var set in rTrickSetData)
             {
                 if (set == null) continue;
@@ -494,6 +504,7 @@ namespace rowemod.Mods
 
                 // filter: if search text is present and none of this set’s tricks match, skip
                 if (!SetMatchesSearch(setKey, set)) continue;
+                visibleSetCount++;
 
                 // card
                 GUILayout.BeginVertical(_card);
@@ -516,12 +527,14 @@ namespace rowemod.Mods
                 if (GUILayout.Button("Enable All", _pillOn, GUILayout.Height(22)))
                 {
                     ApplyAll(set, true);
+                    SaveTricksToConfig();
                     _pendingRefresh = true;
                 }
 
                 if (GUILayout.Button("Disable All", _pill, GUILayout.Height(22)))
                 {
                     ApplyAll(set, false);
+                    SaveTricksToConfig();
                     _pendingRefresh = true;
                 }
 
@@ -546,6 +559,7 @@ namespace rowemod.Mods
                         var obj = set._dataList[(Index)i] as UnityEngine.Object;
                         string dir = (i < DefaultDirectionLabels.Length) ? DefaultDirectionLabels[i] : $"Index {i}";
                         string trickName = CleanTrickName(obj);
+                        if (!RowMatchesSearch(dir, trickName)) continue;
 
                         // row background zebra
                         DrawRowBackground(i);
@@ -557,11 +571,6 @@ namespace rowemod.Mods
                         //GUILayout.Label(dir, _rowLabelLeft);
                         DrawDirectionCell(dir);
 
-                        // right side: trick label (grays out when disabled)
-                        using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
-                        {
-                            GUILayout.Label(trickName, _rowLabelRight);
-                        }
                         // right side: trick label (grays out when disabled)
                         using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
                         {
@@ -607,14 +616,16 @@ namespace rowemod.Mods
                             _pendingRefresh = true;
                             SaveTricksToConfig();
                         }
-
-                        // search quick-skip: if searching and neither dir nor trick text matches, hide quickly
-                        if (!RowMatchesSearch(dir, trickName)) continue;
                     }
                 }
 
                 GUILayout.EndVertical(); // card
                 GUILayout.Space(8);
+            }
+
+            if (visibleSetCount == 0)
+            {
+                GUILayout.Label($"No tricks match \"{_uiSearch.Trim()}\".", _rowLabelRight);
             }
 
             GUILayout.EndScrollView();
@@ -643,6 +654,15 @@ namespace rowemod.Mods
             }
 
             var newTrick = _catalog[newIndex];
+            if (!_configuredRefs.TryGetValue(set.name, out var configured) || configured.Length <= index)
+            {
+                EnsureBackingArrays(set);
+                _configuredRefs.TryGetValue(set.name, out configured);
+            }
+
+            if (configured != null && index < configured.Length)
+                configured[index] = newTrick;
+
             set._dataList[(Index)index] = newTrick;
 
             if (trickDictionary.TryGetValue(set.name, out var names) && index < names.Count)
@@ -714,6 +734,14 @@ namespace rowemod.Mods
                 {
                     for (int i = 0; i < set._dataList.Count && i < originals.Length; i++)
                         set._dataList[(Index)i] = originals[i];
+
+                    _configuredRefs[setKey] = (UnityEngine.Object?[])originals.Clone();
+
+                    if (trickDictionary.TryGetValue(setKey, out var names))
+                    {
+                        for (int i = 0; i < names.Count && i < originals.Length; i++)
+                            names[i] = CleanTrickName(originals[i]);
+                    }
                 }
             }
 
@@ -736,13 +764,15 @@ namespace rowemod.Mods
                 if (set == null || set._dataList == null) continue;
 
                 var entries = new List<TrickEntry>();
+                _configuredRefs.TryGetValue(set.name, out var configured);
+                _trickEnabled.TryGetValue(set.name, out var flags);
+
                 for (int i = 0; i < set._dataList.Count; i++)
                 {
                     var obj = set._dataList[(Index)i] as UnityEngine.Object;
-                    string name = CleanTrickName(obj);
-
-                    // TODO: Replace with your real enable/disable logic
-                    bool enabled = obj != null;
+                    var configuredObj = configured != null && i < configured.Length ? configured[i] : obj;
+                    string name = CleanTrickName(configuredObj);
+                    bool enabled = flags != null && i < flags.Length ? flags[i] : obj != null;
 
                     entries.Add(new TrickEntry { Name = name, Enabled = enabled });
                 }
@@ -758,6 +788,7 @@ namespace rowemod.Mods
         public static void LoadTricksFromConfig()
         {
             if (rTrickSetData == null || Config.tricks.trickSets == null) return;
+            if (_catalogIndexByName.Count == 0) BuildCatalog();
 
             foreach (var set in rTrickSetData)
             {
@@ -765,20 +796,72 @@ namespace rowemod.Mods
 
                 if (!Config.tricks.trickSets.TryGetValue(set.name, out var savedTricks)) continue;
 
+                EnsureBackingArrays(set);
+                if (!_configuredRefs.TryGetValue(set.name, out var configured))
+                {
+                    configured = new UnityEngine.Object?[set._dataList.Count];
+                    _configuredRefs[set.name] = configured;
+                }
+
+                if (!_trickEnabled.TryGetValue(set.name, out var flags))
+                {
+                    flags = new bool[set._dataList.Count];
+                    _trickEnabled[set.name] = flags;
+                }
+
                 for (int i = 0; i < set._dataList.Count && i < savedTricks.Count; i++)
                 {
                     var entry = savedTricks[i];
-                    if (_catalogIndexByName.TryGetValue(entry.Name, out int newIndex))
+                    UnityEngine.Object configuredTrick = null;
+                    if (entry != null && _catalogIndexByName.TryGetValue(entry.Name, out int newIndex))
                     {
-                        set._dataList[(Index)i] = entry.Enabled
-                            ? _catalog[newIndex]
-                            : null; // disabled → empty slot
+                        configuredTrick = _catalog[newIndex];
                     }
+
+                    bool isEnabled = entry?.Enabled == true && configuredTrick != null;
+
+                    if (i < configured.Length)
+                        configured[i] = configuredTrick;
+
+                    if (i < flags.Length)
+                        flags[i] = isEnabled;
+
+                    set._dataList[(Index)i] = isEnabled
+                        ? configuredTrick
+                        : null;
+
+                    if (trickDictionary.TryGetValue(set.name, out var names) && i < names.Count)
+                        names[i] = CleanTrickName(configuredTrick);
                 }
             }
 
             ForceRefreshTrickRuntime();
+            BuildTrickMenuDisplay();
             Log.Msg("Custom tricks (with enabled state) restored from config.");
+        }
+
+        public static string[] GetAvailableTrickNames()
+        {
+            if (_catalogNames == null || _catalogNames.Length == 0)
+            {
+                BuildCatalog();
+            }
+
+            if (_catalogNames != null && _catalogNames.Length > 0)
+            {
+                return _catalogNames
+                    .Where(name => !string.IsNullOrWhiteSpace(name) && name != "(null)")
+                    .Distinct(System.StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name)
+                    .ToArray();
+            }
+
+            return trickDictionary.Values
+                .SelectMany(names => names)
+                .Where(name => !string.IsNullOrWhiteSpace(name) && name != "(null)")
+                .Distinct(System.StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name)
+                .ToArray();
         }
 
 
@@ -1082,8 +1165,53 @@ namespace rowemod.Mods
                     flags[i] = obj != null;
                 }
                 _originalRefs[setKey] = originals;
+                _configuredRefs[setKey] = (UnityEngine.Object?[])originals.Clone();
                 _trickEnabled[setKey] = flags;
                 if (!_foldouts.ContainsKey(setKey)) _foldouts[setKey] = true;
+            }
+            else if (!_configuredRefs.ContainsKey(setKey) &&
+                     _originalRefs.TryGetValue(setKey, out var originals))
+            {
+                _configuredRefs[setKey] = (UnityEngine.Object?[])originals.Clone();
+            }
+        }
+
+        private static bool HasUsableTrickSetData()
+        {
+            if (rTrickSetData == null || rTrickSetData.Length == 0) return false;
+
+            for (int i = 0; i < rTrickSetData.Length; i++)
+            {
+                var set = rTrickSetData[i];
+                if (set == null) continue;
+
+                try
+                {
+                    if (set._dataList != null) return true;
+                }
+                catch (System.Exception ex)
+                {
+                    Log.Warning($"[Tricks] Ignoring stale TrickSetData reference: {ex.Message}");
+                }
+            }
+
+            return false;
+        }
+
+        private static void EnsureTrickDataReadyForMenu()
+        {
+            if (HasUsableTrickSetData()) return;
+
+            float now = Time.realtimeSinceStartup;
+            if (now - _lastTrickDataRefreshAttempt < 2f) return;
+            _lastTrickDataRefreshAttempt = now;
+
+            Log.Msg("[Tricks] No usable trick-set data in menu; refreshing trick data.");
+            GrabTrickData();
+
+            if (HasUsableTrickSetData() && Config.tricks.trickSets != null && Config.tricks.trickSets.Count > 0)
+            {
+                LoadTricksFromConfig();
             }
         }
 
@@ -1182,7 +1310,7 @@ namespace rowemod.Mods
             }
         }
 
-        private static TrickSetData[] FilterScooterSets(TrickSetData[] all)
+        private static TrickSetData[] FilterBmxSets(TrickSetData[] all)
         {
             var list = new List<TrickSetData>(all.Length);
             for (int i = 0; i < all.Length; i++)
@@ -1190,9 +1318,8 @@ namespace rowemod.Mods
                 var s = all[i];
                 if (s == null) continue;
                 var n = s.name ?? "";
-                // accept anything clearly scooter-specific
-                if (n.IndexOf("Scooter", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    n.IndexOf("_TrickSetData_Scooter", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (n.IndexOf("BMX", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    n.IndexOf("_TrickSetData_BMX", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     list.Add(s);
                 }
