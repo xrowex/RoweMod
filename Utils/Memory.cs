@@ -674,9 +674,13 @@ namespace rowemod.Utils
         public static GameObject roweSpokes, roweBars;
         public static GameObject newSessionMarker;
         public static Dictionary<GameObject, string> prefabToBundleMap = new();
+        private static bool assetBundlesLoaded = false;
 
-        public static void LoadAllAssetBundles()
+        public static void LoadAllAssetBundles(bool forceReload = false)
         {
+            if (assetBundlesLoaded && !forceReload)
+                return;
+
             Log.Msg($"Looking for AssetBundles in: {bundlesFolderPath}");
 
             string[] bundleFiles = Directory.GetFiles(bundlesFolderPath, "*", SearchOption.AllDirectories);
@@ -684,6 +688,7 @@ namespace rowemod.Utils
             if (bundleFiles.Length == 0)
             {
                 Log.Msg("No files found in the mods folder.");
+                assetBundlesLoaded = true;
                 return;
             }
 
@@ -694,6 +699,7 @@ namespace rowemod.Utils
             loadedBundles.Clear();
             prefabNames.Clear();
             dropperPrefabNames.Clear();
+            prefabToBundleMap.Clear();
 
             foreach (string bundlePath in bundleFiles)
             {
@@ -778,6 +784,8 @@ namespace rowemod.Utils
                 Log.Msg($"Loaded {sessionMarkers.Count} session marker prefabs.");
                 Log.Msg($"Loaded {dropperPrefabs.Count} dropper prefabs.");
             }
+
+            assetBundlesLoaded = true;
         }
 
         public static void ReloadAssetsFromCachedBundles()
@@ -806,8 +814,6 @@ namespace rowemod.Utils
                 string fileName = Path.GetFileNameWithoutExtension(bundlePath).ToLower();
                 foreach (var assetName in assetNames)
                 {
-                    Log.Msg($"Processing cached asset: {assetName}");
-
                     // Handle marker prefabs
                     if (assetName.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                     {
@@ -816,7 +822,6 @@ namespace rowemod.Utils
                         {
                             // Handle general prefabs
                             prefabList.Add(asset);
-                            Log.Msg($"[Prefabs] Loaded prefab: {asset.name}");
 
 
                             // Handle session markers
@@ -839,11 +844,10 @@ namespace rowemod.Utils
                                 string displayName = fileName.Substring("dropper_".Length);
                                 if (!string.IsNullOrEmpty(displayName))
                                 {
-                                    dropperPrefabs.Add(asset);
-                                    dropperPrefabNames.Add(displayName);
-                                    Log.Msg($"[Dropper] Loaded dropper prefab from cache: {asset.name} (display name: {displayName})");
-                                }
+                                dropperPrefabs.Add(asset);
+                                dropperPrefabNames.Add(displayName);
                             }
+                        }
                         }
                     }
                 }

@@ -774,7 +774,7 @@ namespace rowemod.Mods
         //added custom stem loading and replacing methods
         private static void EnsureStemLoaded()
         {
-            if (stemListInitialized && stemPrefabs.Count > 0)
+            if (stemListInitialized)
                 return;
         
             stemPrefabs = Memory.prefabList
@@ -811,7 +811,7 @@ namespace rowemod.Mods
         }
         private static void EnsureBarsLoaded()
         {
-            if (barListInitialized && barPrefabs.Count > 0)
+            if (barListInitialized)
                 return;
 
             barPrefabs = Memory.prefabList
@@ -850,7 +850,7 @@ namespace rowemod.Mods
         }
         private static void EnsureFramesLoaded()
         {
-            if (frameListInitialized && framePrefabs.Count > 0)
+            if (frameListInitialized)
                 return;
 
             framePrefabs = Memory.prefabList
