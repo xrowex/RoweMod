@@ -141,7 +141,7 @@ namespace rowemod.Mods
 
         private void OnMainMenuOpen()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_UI_OnMenuOpen triggered!");
@@ -149,7 +149,7 @@ namespace rowemod.Mods
         }
         private void OnPlayerCloseReplay()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
@@ -161,7 +161,7 @@ namespace rowemod.Mods
 
         private void OnPlayerResetAtMarker()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Misc.Update();
@@ -191,7 +191,7 @@ namespace rowemod.Mods
         
         private void OnPlayerSpawned()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_MainPlayerHumanSpawned triggered!");
@@ -223,7 +223,7 @@ namespace rowemod.Mods
 
             if (go != null)
             {
-                if (!RemoteKillSwitch.isModEnabled) return;
+                if (!RemoteKillSwitched.isModEnabled) return;
                 Log.Msg($"Player Spawned: {go.name}");
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
@@ -288,7 +288,7 @@ namespace rowemod.Mods
 
         private void OnMenuPlayerSpawned()
         {
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             Log.Msg("GameEvent_LocalMenuHumanSpawned triggered!");
@@ -303,7 +303,7 @@ namespace rowemod.Mods
             var go = unityObj.TryCast<GameObject>();
             if (go != null)
             {
-                if (RemoteKillSwitch.isModEnabled)
+                if (RemoteKillSwitched.isModEnabled)
                 {
                     Log.Msg($"Menu Player Spawned: {go.name}");
                     Memory.physicsDrivenCharacter = go;
@@ -337,7 +337,7 @@ namespace rowemod.Mods
 
         private void OnTitleLoopGameplayOnEnter()
         {
-            if (RemoteKillSwitch.isModEnabled)
+            if (RemoteKillSwitched.isModEnabled)
             {
                 Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
                 // Delayed bike materials load to bypass shop load
@@ -360,7 +360,7 @@ namespace rowemod.Mods
             
             yield return new WaitForSeconds(4f); // Give it time to fully load scene stuff
 
-            if (Config.character.lastLoadedPresetCharacter!=null & RemoteKillSwitch.isModEnabled)
+            if (Config.character.lastLoadedPresetCharacter!=null & RemoteKillSwitched.isModEnabled)
             { 
                 
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");

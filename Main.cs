@@ -39,7 +39,7 @@ namespace rowemod
         
         public override void OnLateInitializeMelon()
         {
-            RemoteKillSwitch.CheckStatus();
+            RemoteKillSwitched.CheckStatus();
             
             if (!SteamAPI.IsSteamRunning())
             {
@@ -57,7 +57,7 @@ namespace rowemod
             Log.Msg("Steamworks initialized successfully.");
             SteamUserManager.LogAndCheckUser();
 
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
 
             previousWindowPosition = windowRect.position;
@@ -112,9 +112,9 @@ namespace rowemod
         }
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
-            RemoteKillSwitch.CheckStatus();
+            RemoteKillSwitched.CheckStatus();
             
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
             
             DisableMeshCombiners();
@@ -157,7 +157,7 @@ namespace rowemod
             // Let the user press Ctrl+N to get the disabled message even when disabled
             HandleMenuToggle();
 
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
 
             if (playableSceneLoaded && rMbCharacter)
@@ -223,7 +223,7 @@ namespace rowemod
             
             if (isOpen)
             {
-                if (RemoteKillSwitch.isModEnabled)
+                if (RemoteKillSwitched.isModEnabled)
                 {
                     Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
                     TrickMods.DrawTrickPickerPopup();
@@ -231,7 +231,7 @@ namespace rowemod
                 }
             }
 
-            if (RemoteKillSwitch.isModEnabled)
+            if (RemoteKillSwitched.isModEnabled)
                 PieMenu.Draw();
         }
 
@@ -255,7 +255,7 @@ namespace rowemod
             if ((kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed) &&
                 kb.nKey.isPressed)
             {
-                if (!RemoteKillSwitch.isModEnabled)
+                if (!RemoteKillSwitched.isModEnabled)
                 {
                     // Still apply cooldown so holding the keys doesn't keep extending the timer every frame
                     _nextToggleTime = Time.unscaledTime + 1f; // 1 second cooldown
