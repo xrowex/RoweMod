@@ -181,6 +181,7 @@ namespace rowemod
             Log.Msg("Starting game event listener...");
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
+            rowemod.Challenges.MultiplayerChallengeManager.InstallTrickCapturePatch();
 
             StartAutoSkipIntroIfEnabled();
             MelonCoroutines.Start(LoadAssetBundlesAfterStartup());

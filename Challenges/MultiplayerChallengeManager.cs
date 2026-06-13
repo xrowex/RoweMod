@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HarmonyLib;
 using Il2CppInterop.Runtime;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.BMX_Physics_Development;
@@ -35,6 +36,8 @@ namespace rowemod.Challenges
         private const int MaxPlayers = 64;
         private const int MaxTricks = 16;
         private const int MaxTextLength = 64;
+        private const int MaxCapturedAttemptTricks = 64;
+        private const string TrickCaptureHarmonyId = "rowemod.mpchallenge.trickcapture";
         private static readonly JsonSerializerSettings NetworkJsonSettings = new JsonSerializerSettings
         {
             MaxDepth = 16,
@@ -66,6 +69,7 @@ namespace rowemod.Challenges
         private static ActiveChallenge _activeChallenge;
         private static TrickDetection _trickDetection;
         private static readonly List<string> _entryHistorySnapshot = new List<string>();
+        private static readonly List<string> _capturedAttemptTricks = new List<string>();
         private static string _lastCheckedAttemptSignature;
         private static float _nextCompletionPollTime;
         private static bool _wasLocalPlayerInsideArea;
@@ -100,6 +104,8 @@ namespace rowemod.Challenges
         private static float _nextPlayerScanRetryTime;
         private static float _nextTrickHistoryRetryTime;
         private static float _nextUpdateErrorLogTime;
+        private static HarmonyLib.Harmony _trickCaptureHarmony;
+        private static bool _trickCapturePatchInstalled;
         
         public static ActivityTracker ActivityTracker { get; set; }
         
@@ -168,9 +174,40 @@ namespace rowemod.Challenges
         public static void OnLocalPlayerSpawned(GameObject playerObject)
         {
             TryEnsureLocalModMarker(playerObject);
+            InstallTrickCapturePatch();
+            ResolveLocalTrickDetection(playerObject);
             RestartNetworkBridge();
             SafeRefreshPlayers();
             BroadcastPresence();
+        }
+
+        public static void InstallTrickCapturePatch()
+        {
+            if (_trickCapturePatchInstalled)
+                return;
+
+            try
+            {
+                System.Reflection.MethodInfo target = AccessTools.Method(
+                    typeof(TrickDetection),
+                    nameof(TrickDetection.RecordTrickToHistory),
+                    new[] { typeof(string) });
+                if (target == null)
+                    throw new MissingMethodException(typeof(TrickDetection).FullName, nameof(TrickDetection.RecordTrickToHistory));
+
+                _trickCaptureHarmony = new HarmonyLib.Harmony(TrickCaptureHarmonyId);
+                _trickCaptureHarmony.Patch(
+                    target,
+                    postfix: new HarmonyMethod(
+                        typeof(TrickDetectionHistoryPatch),
+                        nameof(TrickDetectionHistoryPatch.Postfix)));
+                _trickCapturePatchInstalled = true;
+                Log.Msg("[MPChallenge][Tricks] Direct TrickDetection capture installed.");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Tricks] Direct capture install failed; using polling fallback: {ex}");
+            }
         }
 
         public static void OnSceneInitialized()
@@ -230,6 +267,8 @@ namespace rowemod.Challenges
             if (_activeChallenge == null)
                 return;
 
+            UpdateChallengeAreaResizeEditing();
+
             if (Time.unscaledTime < _nextCompletionPollTime)
                 return;
 
@@ -251,6 +290,50 @@ namespace rowemod.Challenges
 
             if (inside)
                 SafeCheckLocalLineCompletion();
+        }
+
+        private static void UpdateChallengeAreaResizeEditing()
+        {
+            ChallengeArea area = ChallengeAreaManager.Active;
+            if (area == null || _activeChallenge == null)
+                return;
+
+            bool editable = IsLocalCreator() && Menu.isOpen && _isOpen;
+            area.SetResizeEditing(editable, editable && IsPointerOverChallengeUi());
+            if (!area.TryConsumeResizeUpdate(
+                    out Vector3 position,
+                    out Vector3 size,
+                    out bool committed))
+            {
+                return;
+            }
+
+            _activeChallenge.Position = Vector3ToArray(position);
+            _activeChallenge.Size = Vector3ToArray(size);
+            _activeAreaStateSignature = BuildAreaStateSignature(_activeChallenge);
+
+            Config.challengeSettings.challengeSizeX = size.x;
+            Config.challengeSettings.challengeSizeY = size.y;
+            Config.challengeSettings.challengeSizeZ = size.z;
+
+            if (!committed)
+                return;
+
+            _activeChallenge.Revision++;
+            PublishActiveChallengeState();
+            Log.Msg(
+                $"[MPChallenge][Area] Resize committed: pos={FormatVector3(position)}, size={FormatVector3(size)}.");
+        }
+
+        private static bool IsPointerOverChallengeUi()
+        {
+            UnityEngine.InputSystem.Mouse mouse = UnityEngine.InputSystem.Mouse.current;
+            if (mouse == null)
+                return false;
+
+            Vector2 screenPosition = mouse.position.ReadValue();
+            Vector2 guiPosition = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+            return Menu.windowRect.Contains(guiPosition) || _windowRect.Contains(guiPosition);
         }
 
         public static void DrawWindow()
@@ -356,6 +439,16 @@ namespace rowemod.Challenges
                 GUILayout.Label($"Created by: {GetDisplayNameForKey(_activeChallenge.CreatorKey, _activeChallenge.CreatorName)}", Menu.subtleLabelStyle);
                 GUILayout.Label($"Inside area: {(ChallengeAreaManager.IsLocalPlayerInsideActiveArea() ? "Yes" : "No")}", Menu.subtleLabelStyle);
                 GUILayout.Label($"Your status: {(IsLocalPlayerComplete() ? "Complete" : "Incomplete")}", Menu.subtleLabelStyle);
+                if (IsLocalCreator() && ChallengeAreaManager.Active != null)
+                {
+                    Vector3 areaSize = ChallengeAreaManager.Active.transform.localScale;
+                    GUILayout.Label(
+                        $"Area size: {areaSize.x:0.00} x {areaSize.y:0.00} x {areaSize.z:0.00}",
+                        Menu.subtleLabelStyle);
+                    GUILayout.Label(
+                        "Drag a square on any face to resize. The opposite face stays fixed.",
+                        Menu.subtleLabelStyle);
+                }
                 GUILayout.Label($"History count: {_lastSeenHistoryCount}", Menu.subtleLabelStyle);
                 GUILayout.Label($"Last trick seen: {_lastSeenTrickText}", Menu.subtleLabelStyle);
                 GUILayout.Label($"Trick source: {_lastSeenHistorySource}", Menu.subtleLabelStyle);
@@ -724,7 +817,9 @@ namespace rowemod.Challenges
 
             List<string> history = GetCurrentTrickHistory();
             UpdateCompletionDiagnostics(history);
-            List<string> attemptHistory = GetHistorySinceEntry(history);
+            List<string> attemptHistory = _capturedAttemptTricks.Count > 0
+                ? new List<string>(_capturedAttemptTricks)
+                : GetHistorySinceEntry(history);
 
             if (attemptHistory.Count == 0)
             {
@@ -753,10 +848,35 @@ namespace rowemod.Challenges
 
         private static void BeginLocalAttempt()
         {
+            _capturedAttemptTricks.Clear();
             _entryHistorySnapshot.Clear();
             _entryHistorySnapshot.AddRange(GetCurrentTrickHistory());
             _lastCheckedAttemptSignature = null;
             _lastCompletionDiagnostic = "Tracking tricks performed inside the area.";
+        }
+
+        private static void CaptureLocalTrick(TrickDetection source, string trickName)
+        {
+            if (_activeChallenge == null ||
+                source == null ||
+                string.IsNullOrWhiteSpace(trickName) ||
+                !IsLocalTrickDetection(source) ||
+                !ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
+            {
+                return;
+            }
+
+            string captured = trickName.Trim();
+            if (_capturedAttemptTricks.Count >= MaxCapturedAttemptTricks)
+                _capturedAttemptTricks.RemoveAt(0);
+
+            _capturedAttemptTricks.Add(captured);
+            _lastSeenHistoryCount = _capturedAttemptTricks.Count;
+            _lastSeenHistorySource = "TrickDetection.RecordTrickToHistory()";
+            _lastSeenTrickText = string.Join(" | ", _capturedAttemptTricks.TakeLast(3));
+            _lastCheckedAttemptSignature = null;
+            Log.Msg($"[MPChallenge][Tricks] Captured local trick: '{captured}'.");
+            SafeCheckLocalLineCompletion();
         }
 
         private static List<string> GetHistorySinceEntry(List<string> history)
@@ -803,9 +923,7 @@ namespace rowemod.Challenges
         private static List<string> GetCurrentTrickHistory()
         {
             if (_trickDetection == null)
-            {
-                _trickDetection = UnityEngine.Object.FindObjectOfType<TrickDetection>();
-            }
+                ResolveLocalTrickDetection(null);
 
             List<string> history = new List<string>();
             if (_trickDetection == null)
@@ -829,6 +947,36 @@ namespace rowemod.Challenges
 
             AddHistoryItems(history, rawHistory, "_trickHistory");
             return history;
+        }
+
+        private static void ResolveLocalTrickDetection(GameObject playerObject)
+        {
+            TrickDetection local = null;
+
+            if (Memory.rMbCharacter != null)
+                local = Memory.rMbCharacter.GetComponentInChildren<TrickDetection>(true);
+            if (local == null && Memory.physicsDrivenCharacter != null)
+                local = Memory.physicsDrivenCharacter.GetComponentInChildren<TrickDetection>(true);
+            if (local == null && playerObject != null)
+                local = playerObject.GetComponentInChildren<TrickDetection>(true);
+
+            if (local == null || local == _trickDetection)
+                return;
+
+            _trickDetection = local;
+            Log.Msg($"[MPChallenge][Tricks] Bound local TrickDetection on '{local.gameObject.name}'.");
+        }
+
+        private static bool IsLocalTrickDetection(TrickDetection candidate)
+        {
+            if (candidate == null)
+                return false;
+
+            if (_trickDetection == null)
+                ResolveLocalTrickDetection(null);
+
+            return _trickDetection != null &&
+                   candidate.GetInstanceID() == _trickDetection.GetInstanceID();
         }
 
         private static void AddTrickDetectionHistory(List<string> history)
@@ -937,6 +1085,7 @@ namespace rowemod.Challenges
 
         private static void ResetCompletionDiagnostics()
         {
+            _capturedAttemptTricks.Clear();
             _entryHistorySnapshot.Clear();
             _lastCheckedAttemptSignature = null;
             _lastSeenHistoryCount = 0;
@@ -1077,9 +1226,18 @@ namespace rowemod.Challenges
                 GameObject root = new GameObject("RoweMod_MPChallenge_NetworkBridge");
                 root.hideFlags = HideFlags.HideAndDontSave;
                 root.SetActive(false);
+                _networkBridgeRoot = root;
 
-                setupStage = "create state event";
-                _stateEvent = root.AddComponent(Il2CppType.Of<MBNetworkedEvent>()).Cast<MBNetworkedEvent>();
+                setupStage = "create state event object";
+                GameObject stateEventObject = new GameObject("ChallengeStateEvent");
+                stateEventObject.transform.SetParent(root.transform, false);
+
+                setupStage = "add state event component";
+                _stateEvent = stateEventObject
+                    .AddComponent(Il2CppType.Of<MBNetworkedEvent>())
+                    .Cast<MBNetworkedEvent>();
+
+                setupStage = "configure state event";
                 _stateEvent.eventKey = ChallengeStateEventKey;
                 _stateEvent.applyStoredStateOnEnable = true;
                 EnsureNetworkEventCallbacks(_stateEvent);
@@ -1096,8 +1254,16 @@ namespace rowemod.Challenges
                 _stateEvent.onString.AddListener(_stateStringListener);
                 _stateEvent.onStateCleared.AddListener(_stateClearedListener);
 
-                setupStage = "create command event";
-                _commandEvent = root.AddComponent(Il2CppType.Of<MBNetworkedEvent>()).Cast<MBNetworkedEvent>();
+                setupStage = "create command event object";
+                GameObject commandEventObject = new GameObject("ChallengeCommandEvent");
+                commandEventObject.transform.SetParent(root.transform, false);
+
+                setupStage = "add command event component";
+                _commandEvent = commandEventObject
+                    .AddComponent(Il2CppType.Of<MBNetworkedEvent>())
+                    .Cast<MBNetworkedEvent>();
+
+                setupStage = "configure command event";
                 _commandEvent.eventKey = ChallengeCommandEventKey;
                 _commandEvent.applyStoredStateOnEnable = false;
                 EnsureNetworkEventCallbacks(_commandEvent);
@@ -1111,7 +1277,6 @@ namespace rowemod.Challenges
                 setupStage = "register command listener";
                 _commandEvent.onString.AddListener(_commandStringListener);
 
-                _networkBridgeRoot = root;
                 setupStage = "activate bridge";
                 root.SetActive(true);
                 _networkStatus = "Connected; listeners ready.";
@@ -1156,6 +1321,7 @@ namespace rowemod.Challenges
 
         private static void ShutdownNetworkBridge()
         {
+            GameObject root = _networkBridgeRoot;
             try
             {
                 if (_stateEvent != null)
@@ -1173,15 +1339,23 @@ namespace rowemod.Challenges
                     _commandEvent.onString.RemoveListener(_commandStringListener);
                 }
 
-                if (_networkBridgeRoot != null)
-                {
-                    _networkBridgeRoot.SetActive(false);
-                    UnityEngine.Object.Destroy(_networkBridgeRoot);
-                }
             }
             catch (Exception ex)
             {
                 Log.Warning($"[MPChallenge][Net] Listener shutdown failed: {ex.Message}");
+            }
+
+            try
+            {
+                if (root != null)
+                {
+                    root.SetActive(false);
+                    UnityEngine.Object.Destroy(root);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Net] Bridge destruction failed: {ex.Message}");
             }
 
             _networkBridgeRoot = null;
@@ -1683,6 +1857,21 @@ namespace rowemod.Challenges
             _nextPlayerScanRetryTime = 0f;
             _nextTrickHistoryRetryTime = 0f;
             _nextUpdateErrorLogTime = 0f;
+        }
+
+        private static class TrickDetectionHistoryPatch
+        {
+            public static void Postfix(TrickDetection __instance, string __0)
+            {
+                try
+                {
+                    CaptureLocalTrick(__instance, __0);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[MPChallenge][Tricks] Direct capture failed: {ex.Message}");
+                }
+            }
         }
 
         private static string BuildAreaStateSignature(ActiveChallenge challenge)
