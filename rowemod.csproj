@@ -486,6 +486,7 @@
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\Custom.cs" />
+		<Compile Include="Mods\DroneEvents.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\GrindPoseEditor.cs" />
 		<Compile Include="Mods\GrindPosePreset.cs" />
@@ -494,7 +495,10 @@
 		<Compile Include="Mods\ObjectDropper.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\Physics.cs" />
+		<Compile Include="Mods\PieMenu.cs" />
 		<Compile Include="Mods\RemoteKillSwitch.cs" />
+		<Compile Include="Mods\ReplayInputBindingDisabler.cs" />
+		<Compile Include="Mods\ReplayInputPatch.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
 		<Compile Include="Mods\TrickMods.cs" />

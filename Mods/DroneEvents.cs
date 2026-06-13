@@ -36,7 +36,7 @@ namespace rowemod.Mods
                 return;
 
             // Check if the mod features are enabled
-            if (!RemoteKillSwitch.isModEnabled)
+            if (!RemoteKillSwitched.isModEnabled)
                 return;
 
             DroneEvents.OnBallShot(__instance, pos, rot, velocity);

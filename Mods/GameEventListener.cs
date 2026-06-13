@@ -245,6 +245,7 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                rowemod.Challenges.MultiplayerChallengeManager.OnLocalPlayerSpawned(go);
                 Memory.LoadAllAssetBundles();
                 Misc.ApplyPlayerUserNameTargetsVisibility(true);
                 PartTweaker.FindParts();

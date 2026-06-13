@@ -104,8 +104,6 @@ namespace rowemod.Mods
         {
             isOpen = false;
             selectedIndex = -1;
-            ReplayInputPatch.CancelReplayOpenAuthorization();
-            RestoreSuppressedReplayActions();
             buttonStyle = null;
             selectedButtonStyle = null;
             centerStyle = null;
@@ -126,14 +124,6 @@ namespace rowemod.Mods
             if (gamepad == null && keyboard == null)
                 return;
 
-            SuppressNativeReplayEditorIfNeeded();
-
-            if (keyboard?.f9Key.wasPressedThisFrame == true)
-            {
-                Log.Msg("[PieMenuDiag] Manual F9 replay input scan requested.");
-                EnforceReplayDpadRightUnbound();
-            }
-            
             bool togglePressed = gamepad?.dpad.right.wasPressedThisFrame == true;
 
             if (keyboard?.escapeKey.wasPressedThisFrame == true && isOpen)
@@ -147,14 +137,12 @@ namespace rowemod.Mods
             {
                 consumedInputThisFrame = true;
                 Log.Msg($"[PieMenuDiag] Right D-pad pressed. pieOpen={isOpen} time={Time.unscaledTime:F2}.");
-                StartNativeReplaySuppression();
                 if (isOpen)
                     Close();
                 else
                     Open();
 
                 nextToggleTime = Time.unscaledTime + ToggleCooldown;
-                SuppressNativeReplayEditorIfNeeded();
                 return;
             }
 
@@ -298,15 +286,12 @@ namespace rowemod.Mods
                     return;
                 }
 
-                ReplayInputPatch.AuthorizeNextReplayOpen();
-                suppressNativeReplayUntilTime = 0f;
                 replaySystem.CommandOpenReplay();
                 Log.Msg("[PieMenu] Extra 3 requested replay open.");
             }
             catch (System.Exception ex)
             {
                 Log.Error($"[PieMenu] Extra 3 failed to open replay: {ex.Message}");
-                ReplayInputPatch.CancelReplayOpenAuthorization();
             }
         }
 

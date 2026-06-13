@@ -106,6 +106,7 @@ namespace rowemod.Challenges
         private static float _nextUpdateErrorLogTime;
         private static HarmonyLib.Harmony _trickCaptureHarmony;
         private static bool _trickCapturePatchInstalled;
+        private static bool _autoOpenTriggeredForSession;
         
         public static ActivityTracker ActivityTracker { get; set; }
         
@@ -671,6 +672,7 @@ namespace rowemod.Challenges
             {
                 _playerScanDisabled = false;
                 RefreshPlayers();
+                TryAutoOpenForRemoteRowePlayer();
                 Log.Msg($"[MPChallenge][Players] Refreshed RoweMod players: count={_rowePlayers.Count}, localKey='{_cachedLocalPlayerKey ?? "null"}', localName='{_cachedLocalPlayerName ?? "null"}'.");
             }
             catch (Exception ex)
@@ -679,6 +681,33 @@ namespace rowemod.Challenges
                 _nextPlayerScanRetryTime = Time.unscaledTime + LocalLookupRetryInterval;
                 Log.Warning($"[MPChallenge] Player scanning failed; retrying: {ex.Message}");
             }
+        }
+
+        private static void TryAutoOpenForRemoteRowePlayer()
+        {
+            if (_autoOpenTriggeredForSession)
+                return;
+
+            string localKey = GetLocalPlayerKey();
+            if (!IsStableNetworkPlayerKey(localKey))
+                return;
+
+            RowePlayer remotePlayer = _rowePlayers.FirstOrDefault(player =>
+                player != null &&
+                IsStableNetworkPlayerKey(player.Key) &&
+                !string.Equals(player.Key, localKey, StringComparison.OrdinalIgnoreCase));
+            if (remotePlayer == null)
+                return;
+
+            _autoOpenTriggeredForSession = true;
+            _isOpen = true;
+            Menu.isOpen = true;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+
+            Log.Msg(
+                $"[MPChallenge][UI] Auto-opened challenge UI after detecting RoweMod player " +
+                $"'{GetSafePlayerDisplayName(remotePlayer)}' ({remotePlayer.Key}).");
         }
 
         private static void SafeCheckLocalLineCompletion()
@@ -1857,6 +1886,7 @@ namespace rowemod.Challenges
             _nextPlayerScanRetryTime = 0f;
             _nextTrickHistoryRetryTime = 0f;
             _nextUpdateErrorLogTime = 0f;
+            _autoOpenTriggeredForSession = false;
         }
 
         private static class TrickDetectionHistoryPatch

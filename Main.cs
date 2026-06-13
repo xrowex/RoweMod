@@ -14,14 +14,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "2.6", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "2.6";
+        public const string ModVersion = "3.0";
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
@@ -116,6 +116,8 @@ namespace rowemod
             
             if (!RemoteKillSwitched.isModEnabled)
                 return;
+
+            rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
             
             DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
@@ -165,12 +167,11 @@ namespace rowemod
                 if (!_replayInputPatchApplied)
                 {
                     DisableDroneDpadShortcutPatch.EnsureApplied(HarmonyInstance);
-                    ReplayInputPatch.ApplyLatePatch(HarmonyInstance);
-                    PieMenu.EnforceReplayDpadRightUnbound();
                     _replayInputPatchApplied = true;
                 }
 
                 PieMenu.Update();
+                rowemod.Challenges.MultiplayerChallengeManager.Update();
 
                 if (!PieMenu.IsOpen && !PieMenu.ConsumedInputThisFrame)
                     ObjectDropper.Update();
@@ -226,6 +227,7 @@ namespace rowemod
                 if (RemoteKillSwitched.isModEnabled)
                 {
                     Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
+                    rowemod.Challenges.MultiplayerChallengeManager.DrawWindow();
                     TrickMods.DrawTrickPickerPopup();
                     ObjectDropper.DrawNotPlaceableWarning();
                 }
@@ -237,6 +239,7 @@ namespace rowemod
 
         public override void OnDeinitializeMelon()
         {
+            rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
             PieMenu.Cleanup();
         }
         
