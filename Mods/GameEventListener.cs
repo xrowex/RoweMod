@@ -34,11 +34,6 @@ namespace rowemod.Mods
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
-                UnityAction genericListener =
-                    Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(() => OnAnyGameEvent(ev.name));
-                ev.OnRaise.AddListener(genericListener);
-
-                Log.Msg(ev.name);
                 if (ev.name.Contains("GameEvent_OnResetAtMarker"))
                 {
                     _playerResetAtMarker = ev;
@@ -144,10 +139,6 @@ namespace rowemod.Mods
 
         }
 
-        private void OnAnyGameEvent(string eventName)
-        {
-            Log.Msg($"[GameEventListener] Event raised: {eventName}");
-        }
         private void OnMainMenuOpen()
         {
             if (!RemoteKillSwitch.isModEnabled)
@@ -254,6 +245,7 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                Memory.LoadAllAssetBundles();
                 Misc.ApplyPlayerUserNameTargetsVisibility(true);
                 PartTweaker.FindParts();
                 GrindPoseEditor.ApplyConfigToRuntime(true);
@@ -327,6 +319,7 @@ namespace rowemod.Mods
                     
                     
                     Memory.FindObjects(go);
+                    Memory.LoadAllAssetBundles();
                     Misc.ApplyPlayerUserNameTargetsVisibility(true);
                     MelonCoroutines.Start(DelayedLoadPreset());
                     MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());

@@ -13,33 +13,52 @@ namespace rowemod.Mods
 
         private static float checkInterval = 60f; // check every minute
         public static bool isModEnabled = true;
+        private static bool isCheckingStatus = false;
+        private static float lastCheckTime = -999f;
         private static Rect windowRect = new Rect(20, 20, 250, 100);
         private static Rect disabledWindowRect = new Rect(300, 20, 250, 100); // Position for second window
         private static bool showWindow = true;
         private static string statusText = "Checking mod status...";
         private static string disabledText = "The mod is disabled!";
 
-        public static void CheckStatus()
+        public static void CheckStatus(bool force = false)
         {
-            UnityWebRequest www = UnityWebRequest.Get(SheetUrl);
+            if (isCheckingStatus)
+                return;
+
+            if (!force && Time.unscaledTime - lastCheckTime < checkInterval)
+                return;
+
+            MelonCoroutines.Start(CheckStatusRoutine());
+        }
+
+        private static IEnumerator CheckStatusRoutine()
+        {
+            isCheckingStatus = true;
+            lastCheckTime = Time.unscaledTime;
+
+            UnityWebRequest www = null;
+            try
+            {
+                www = UnityWebRequest.Get(SheetUrl);
+                www.timeout = 5;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[RemoteKillSwitch] Could not start request: " + ex.Message);
+                isCheckingStatus = false;
+                yield break;
+            }
+
+            yield return www.SendWebRequest();
 
             try
             {
-                // Send the request
-                www.SendWebRequest();
-
-                // Wait until the request is done
-                while (!www.isDone)
-                {
-                    // Without blocking the Unity main thread, and to avoid freezing,
-                    // you could optionally check other things or include a slight delay here.
-                }
-
                 // Check for errors
                 if (www.result != UnityWebRequest.Result.Success)
                 {
                     Log.Warning("[RemoteKillSwitch] Could not fetch sheet: " + www.error);
-                    return;
+                    yield break;
                 }
 
                 // Get the response text
@@ -48,7 +67,7 @@ namespace rowemod.Mods
                 if (string.IsNullOrEmpty(data))
                 {
                     Log.Warning("[RemoteKillSwitch] Empty or invalid response from server.");
-                    return;
+                    yield break;
                 }
 
 
@@ -57,14 +76,14 @@ namespace rowemod.Mods
                 {
                     isModEnabled = false;
                     UpdateStatus("Mod has been remotely disabled!");
-                    return;
+                    yield break;
                 }
 
                 if (data.Contains("modenabled"))
                 {
                     isModEnabled = true;
                     UpdateStatus("Mod is running normally");
-                    return;
+                    yield break;
                 }
 
                 // If nothing matches, log a warning
@@ -78,6 +97,7 @@ namespace rowemod.Mods
             {
                 // Ensure the UnityWebRequest is disposed properly
                 www.Dispose();
+                isCheckingStatus = false;
             }
         }
 
@@ -94,7 +114,7 @@ namespace rowemod.Mods
             if (GUILayout.Button("Recheck Status"))
             {
                 // Optionally, trigger the status check manually
-                CheckStatus();
+                CheckStatus(true);
             }
             GUI.DragWindow();
         }

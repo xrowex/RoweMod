@@ -27,11 +27,13 @@ namespace rowemod
         private bool _isProcessingVehicleChange;
         private static bool _showDisabledMessage = false;
         private static float _disabledMessageEndTime = 0f;
+        private bool _replayInputPatchApplied;
         
 
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
+            HarmonyInstance.PatchAll();
         }
         
         
@@ -57,11 +59,11 @@ namespace rowemod
 
             if (!RemoteKillSwitch.isModEnabled)
                 return;
-            
-            
+
             previousWindowPosition = windowRect.position;
 
-            if (File.Exists(cfgFile))
+            bool configExists = File.Exists(cfgFile);
+            if (configExists)
             {
 
                 try
@@ -74,13 +76,16 @@ namespace rowemod
                 }
             }
 
-            try
+            if (!configExists)
             {
-                Config.Save(); // creates a file if it doesn't exist
-            }
-            catch (Exception ex)
-            {
-                Log.Msg($"Failed to save configuration: {ex.Message}");
+                try
+                {
+                    Config.Save(); // creates a file if it doesn't exist
+                }
+                catch (Exception ex)
+                {
+                    Log.Msg($"Failed to save configuration: {ex.Message}");
+                }
             }
 
             // Set up event listener
@@ -88,8 +93,7 @@ namespace rowemod
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
 
-            Log.Msg("Starting Bundle loading...");
-            Memory.LoadAllAssetBundles();
+            Log.Msg("Bundle loading deferred until player context is available.");
             
         }
         
@@ -126,7 +130,7 @@ namespace rowemod
 
 
 
-            if (sceneName != "MashBox_Main" || sceneName != "TitleScreen")
+            if (sceneName != "MashBox_Main" && sceneName != "TitleScreen")
             {
                 
                 //load rowe logo if not loaded
@@ -134,7 +138,8 @@ namespace rowemod
                     MelonCoroutines.Start(LoadRoweLogo());
             
                 // Reload assets from cached bundles
-                Memory.ReloadAssetsFromCachedBundles();
+                if (Memory.loadedBundles.Count > 0)
+                    Memory.ReloadAssetsFromCachedBundles();
             
                 //Initialize bike materials
                 //BikeMaterialsLoader.Initialize();
@@ -154,10 +159,21 @@ namespace rowemod
             if (!RemoteKillSwitch.isModEnabled)
                 return;
 
-
             if (playableSceneLoaded && rMbCharacter)
             {
-                ObjectDropper.Update();
+                if (!_replayInputPatchApplied)
+                {
+                    DisableDroneDpadShortcutPatch.EnsureApplied(HarmonyInstance);
+                    ReplayInputPatch.ApplyLatePatch(HarmonyInstance);
+                    PieMenu.EnforceReplayDpadRightUnbound();
+                    _replayInputPatchApplied = true;
+                }
+
+                PieMenu.Update();
+
+                if (!PieMenu.IsOpen && !PieMenu.ConsumedInputThisFrame)
+                    ObjectDropper.Update();
+
                 if (!misc.showPlayerUserNameTargets)
                 {
                     Mods.Misc.ApplyPlayerUserNameTargetsVisibility();
@@ -210,8 +226,17 @@ namespace rowemod
                 {
                     Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
                     TrickMods.DrawTrickPickerPopup();
+                    ObjectDropper.DrawNotPlaceableWarning();
                 }
             }
+
+            if (RemoteKillSwitch.isModEnabled)
+                PieMenu.Draw();
+        }
+
+        public override void OnDeinitializeMelon()
+        {
+            PieMenu.Cleanup();
         }
         
         // 1-second cooldown shared across all instances (prevents double-toggle issues)
