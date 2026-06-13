@@ -4,7 +4,9 @@ using static rowemod.Config;
 using static rowemod.Mods.Misc;
 using static rowemod.Mods.Custom;
 using static rowemod.Mods.BikeMaterialsLoader;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppMashBox.Addons.ContentManagment;
+using Il2CppMashBox.Addons.NetworkingFusion;
 using rowemod.Utils;
 using MelonLoader.Utils;
 using UnityEngine.InputSystem;
@@ -35,6 +37,7 @@ namespace rowemod
         {
             Physics,
             Bike,
+            BikePoser,
             Grinds,
             Tricks,
             Character,
@@ -81,6 +84,7 @@ namespace rowemod
             ("Physics", Tab.Physics),
             ("Tricks", Tab.Tricks),
             ("Bike", Tab.Bike),
+            ("Bike Poser", Tab.BikePoser),
             ("Grinds", Tab.Grinds),
             ("Materials", Tab.BikeMaterials),
             ("Character", Tab.Character),
@@ -185,9 +189,10 @@ namespace rowemod
         private static bool otherExpanded = true;
         private static bool sessionMarkersExpanded = true;
         private static bool playerLabelsExpanded = true;
+        private static bool mpPlayersExpanded = true;
         private static bool challengeSettingsExpanded = true;
-        private static bool grindsExpanded = true;
         private static bool lightSettingsExpanded = true;
+        private static string _mpKickStatus = "Host/master only. Join or host a multiplayer session to manage players.";
         private static bool _motorTuningNeedsRefresh = true;
         private static string _motorTuningStatusText = "Open Motor Tuning to load values.";
         private static readonly List<MotorTuningEntry> _motorTuningEntries = new List<MotorTuningEntry>();
@@ -335,18 +340,15 @@ namespace rowemod
                         }
                         EndSectionCard();
 
-                        if (BeginSectionCard("Grinds", ref grindsExpanded))
-                        {
-                            Slider("Grind Friction", ref physics.grindFriction, 0.03f, 0f, 5f);
-                        }
-                        EndSectionCard();
-                         
                         break;
                     case Tab.Bike:
                         PartTweaker.DrawPartTweaker();
 
 
                         PartTweaker.DrawPartSelectorUI();
+                        break;
+                    case Tab.BikePoser:
+                        BikePoseEditor.DrawTab();
                         break;
                     case Tab.Grinds:
                         GrindPoseEditor.DrawGrindPoseTab();
@@ -448,6 +450,12 @@ namespace rowemod
                             {
                                 stylesInitialized = false;
                             }
+                        }
+                        EndSectionCard();
+
+                        if (BeginSectionCard("Players", ref mpPlayersExpanded))
+                        {
+                            DrawMultiplayerPlayerKickList();
                         }
                         EndSectionCard();
                         break;
@@ -805,6 +813,9 @@ namespace rowemod
                     Memory.FindObjects(Memory.rMbCharacter);
                     Log.Msg("Bike Tab reset!");
                     break;
+                case Tab.BikePoser:
+                    BikePoseEditor.ResetTab();
+                    break;
                 case Tab.Grinds:
                     GrindPoseEditor.ResetAllPosesToDefault();
                     break;
@@ -832,8 +843,407 @@ namespace rowemod
                 case Tab.Multiplayer:
                     misc.showPlayerUserNameTargets = true;
                     ApplyPlayerUserNameTargetsVisibility(true);
+                    _mpKickStatus = "Host/master only. Join or host a multiplayer session to manage players.";
                     break;
             }
+        }
+
+        private static void DrawMultiplayerPlayerKickList()
+        {
+            NetworkPlayer[] players;
+            try
+            {
+                players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
+            }
+            catch (Exception ex)
+            {
+                GUILayout.Label($"Could not read network players: {ex.Message}", subtleLabelStyle);
+                return;
+            }
+
+            if (players == null || players.Length == 0)
+            {
+                GUILayout.Label("No network players found.", subtleLabelStyle);
+                GUILayout.Label(_mpKickStatus, subtleLabelStyle);
+                return;
+            }
+
+            bool anyKickAuthority = false;
+            foreach (NetworkPlayer player in players)
+            {
+                if (player == null)
+                    continue;
+
+                if (RunnerCanKick(SafeGetRunner(player)))
+                {
+                    anyKickAuthority = true;
+                    break;
+                }
+            }
+
+            GUILayout.Label(anyKickAuthority
+                ? "Kick sends a Fusion disconnect request for that player."
+                : "Kick controls require host/server or shared-mode master authority.", subtleLabelStyle);
+
+            foreach (NetworkPlayer player in players)
+            {
+                if (player == null)
+                    continue;
+
+                DrawMultiplayerPlayerKickRow(player);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_mpKickStatus))
+            {
+                GUILayout.Space(4f);
+                GUILayout.Label(_mpKickStatus, subtleLabelStyle);
+            }
+        }
+
+        private static void DrawMultiplayerPlayerKickRow(NetworkPlayer player)
+        {
+            string displayName = ResolveNetworkPlayerDisplayName(player);
+            bool isLocalPlayer = IsLocalNetworkPlayerForMenu(player);
+            Il2CppFusion.NetworkRunner runner = SafeGetRunner(player);
+            bool hasKickAuthority = RunnerCanKick(runner);
+            bool hasValidPlayerRef = TryGetNetworkPlayerRef(player, out Il2CppFusion.PlayerRef playerRef);
+            bool canKick = !isLocalPlayer && hasKickAuthority && hasValidPlayerRef;
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(isLocalPlayer ? $"{displayName} (You)" : displayName, labelStyle, GUILayout.MinWidth(220f));
+
+            string status = GetNetworkPlayerKickStatus(isLocalPlayer, runner, hasKickAuthority, hasValidPlayerRef, playerRef);
+            GUILayout.Label(status, subtleLabelStyle, GUILayout.MinWidth(160f));
+
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && canKick;
+            if (GUILayout.Button("Kick", redButtonStyle, GUILayout.Width(86f)))
+            {
+                TryKickNetworkPlayer(player);
+            }
+            GUI.enabled = previousEnabled;
+            GUILayout.EndHorizontal();
+        }
+
+        private static string GetNetworkPlayerKickStatus(bool isLocalPlayer, Il2CppFusion.NetworkRunner runner, bool hasKickAuthority, bool hasValidPlayerRef, Il2CppFusion.PlayerRef playerRef)
+        {
+            if (isLocalPlayer)
+                return "local";
+
+            if (runner == null)
+                return "no runner";
+
+            if (!IsRunnerInSession(runner))
+                return "not in session";
+
+            if (!hasKickAuthority)
+                return "host only";
+
+            if (!hasValidPlayerRef)
+                return "invalid ref";
+
+            return $"ref {playerRef.RawEncoded}";
+        }
+
+        private static bool TryKickNetworkPlayer(NetworkPlayer player)
+        {
+            if (player == null)
+            {
+                _mpKickStatus = "Kick failed: no player selected.";
+                return false;
+            }
+
+            string displayName = ResolveNetworkPlayerDisplayName(player);
+            if (IsLocalNetworkPlayerForMenu(player))
+            {
+                _mpKickStatus = "Kick blocked: refusing to disconnect the local player.";
+                return false;
+            }
+
+            Il2CppFusion.NetworkRunner runner = SafeGetRunner(player);
+            if (!RunnerCanKick(runner))
+            {
+                _mpKickStatus = "Kick failed: host/server or shared-mode master authority required.";
+                return false;
+            }
+
+            if (!TryGetNetworkPlayerRef(player, out Il2CppFusion.PlayerRef playerRef))
+            {
+                _mpKickStatus = "Kick failed: invalid player reference.";
+                return false;
+            }
+
+            try
+            {
+                runner.Disconnect(playerRef, new Il2CppStructArray<byte>(0));
+                _mpKickStatus = $"Kick requested for {displayName}.";
+                Log.Msg($"[MP] Kick requested for {displayName} (PlayerRef {playerRef.RawEncoded}).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _mpKickStatus = $"Kick failed: {ex.Message}";
+                Log.Warning($"[MP] Kick failed for {displayName}: {ex}");
+                return false;
+            }
+        }
+
+        private static Il2CppFusion.NetworkRunner SafeGetRunner(NetworkPlayer player)
+        {
+            try
+            {
+                return player != null ? player.Runner : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool RunnerCanKick(Il2CppFusion.NetworkRunner runner)
+        {
+            try
+            {
+                return runner != null &&
+                       runner.IsRunning &&
+                       runner.IsInSession &&
+                       (runner.IsServer || runner.IsSharedModeMasterClient);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsRunnerInSession(Il2CppFusion.NetworkRunner runner)
+        {
+            try
+            {
+                return runner != null && runner.IsRunning && runner.IsInSession;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryGetNetworkPlayerRef(NetworkPlayer player, out Il2CppFusion.PlayerRef playerRef)
+        {
+            playerRef = Il2CppFusion.PlayerRef.Invalid;
+            if (player == null)
+                return false;
+
+            try
+            {
+                playerRef = player.PlayerReference;
+                return playerRef.IsRealPlayer;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsLocalNetworkPlayerForMenu(NetworkPlayer player)
+        {
+            if (player == null)
+                return false;
+
+            try
+            {
+                if (player.IsLocalPlayer)
+                    return true;
+            }
+            catch
+            {
+                // Fall back to reflected fields/properties below.
+            }
+
+            return TryGetBoolMemberForMenu(player, "_isLocal", out bool isLocal) && isLocal;
+        }
+
+        private static string ResolveNetworkPlayerDisplayName(NetworkPlayer player)
+        {
+            if (player == null)
+                return "Unknown Player";
+
+            string name = TryGetStringMemberForMenu(player, "DisplayName") ??
+                          TryGetStringMemberForMenu(player, "PlayerName") ??
+                          TryGetStringMemberForMenu(player, "UserName") ??
+                          TryGetStringMemberForMenu(player, "Username") ??
+                          TryGetStringMemberForMenu(player, "NickName") ??
+                          TryGetStringMemberForMenu(player, "Nickname") ??
+                          TryGetStringMemberForMenu(player, "Name") ??
+                          TryGetStringMemberForMenu(player, "_displayName") ??
+                          TryGetStringMemberForMenu(player, "_playerName") ??
+                          TryGetStringMemberForMenu(player, "_userName") ??
+                          TryGetStringMemberForMenu(player, "_username") ??
+                          TryGetStringMemberForMenu(player, "_nickName") ??
+                          TryGetStringMemberForMenu(player, "_nickname");
+
+            if (IsUsableNetworkPlayerText(name))
+                return name.Trim();
+
+            if (IsLocalNetworkPlayerForMenu(player))
+            {
+                string steamName = GetSteamPersonaNameForMenu();
+                if (IsUsableNetworkPlayerText(steamName))
+                    return steamName.Trim();
+            }
+
+            try
+            {
+                string gameObjectName = player.gameObject != null ? player.gameObject.name : null;
+                if (IsUsableNetworkPlayerText(gameObjectName))
+                    return gameObjectName.Trim();
+            }
+            catch
+            {
+                // Ignore unavailable IL2CPP game object data.
+            }
+
+            return $"Player {Math.Abs(player.GetInstanceID())}";
+        }
+
+        private static bool TryGetBoolMemberForMenu(object target, string memberName, out bool value)
+        {
+            value = false;
+            object raw = TryGetMemberValueForMenu(target, memberName);
+            if (raw is bool boolValue)
+            {
+                value = boolValue;
+                return true;
+            }
+
+            return raw != null && bool.TryParse(raw.ToString(), out value);
+        }
+
+        private static string TryGetStringMemberForMenu(object target, string memberName)
+        {
+            return ExtractReadableNetworkPlayerText(TryGetMemberValueForMenu(target, memberName));
+        }
+
+        private static object TryGetMemberValueForMenu(object target, string memberName)
+        {
+            if (target == null || string.IsNullOrEmpty(memberName))
+                return null;
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            Type type = target.GetType();
+
+            try
+            {
+                PropertyInfo property = type.GetProperty(memberName, flags);
+                if (property != null && property.CanRead)
+                    return property.GetValue(target, null);
+            }
+            catch
+            {
+                // Ignore reflected IL2CPP property access failures.
+            }
+
+            try
+            {
+                FieldInfo field = type.GetField(memberName, flags);
+                if (field != null)
+                    return field.GetValue(target);
+            }
+            catch
+            {
+                // Ignore reflected IL2CPP field access failures.
+            }
+
+            return null;
+        }
+
+        private static string ExtractReadableNetworkPlayerText(object value)
+        {
+            if (value == null)
+                return null;
+
+            if (value is string directString)
+                return IsUsableNetworkPlayerText(directString) ? directString.Trim() : null;
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            string[] memberNames =
+            {
+                "Value",
+                "String",
+                "Text",
+                "Name",
+                "_value",
+                "_string",
+                "_text",
+                "_name",
+                "m_Value",
+                "m_String",
+                "m_Text"
+            };
+
+            Type type = value.GetType();
+            foreach (string memberName in memberNames)
+            {
+                try
+                {
+                    PropertyInfo property = type.GetProperty(memberName, flags);
+                    if (property != null && property.CanRead)
+                    {
+                        string nestedValue = ExtractReadableNetworkPlayerText(property.GetValue(value, null));
+                        if (IsUsableNetworkPlayerText(nestedValue))
+                            return nestedValue.Trim();
+                    }
+                }
+                catch
+                {
+                    // Continue trying other reflected members.
+                }
+
+                try
+                {
+                    FieldInfo field = type.GetField(memberName, flags);
+                    if (field != null)
+                    {
+                        string nestedValue = ExtractReadableNetworkPlayerText(field.GetValue(value));
+                        if (IsUsableNetworkPlayerText(nestedValue))
+                            return nestedValue.Trim();
+                    }
+                }
+                catch
+                {
+                    // Continue trying other reflected members.
+                }
+            }
+
+            string text = value.ToString();
+            return IsUsableNetworkPlayerText(text) ? text.Trim() : null;
+        }
+
+        private static string GetSteamPersonaNameForMenu()
+        {
+            try
+            {
+                string personaName = Il2CppSteamworks.SteamFriends.GetPersonaName();
+                return IsUsableNetworkPlayerText(personaName) ? personaName.Trim() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsUsableNetworkPlayerText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            string trimmed = text.Trim();
+            return !string.Equals(trimmed, "null", StringComparison.OrdinalIgnoreCase) &&
+                   !string.Equals(trimmed, "(null)", StringComparison.OrdinalIgnoreCase) &&
+                   !trimmed.StartsWith("Il2Cpp", StringComparison.Ordinal) &&
+                   !trimmed.StartsWith("System.", StringComparison.Ordinal) &&
+                   !trimmed.Contains("NetworkString`") &&
+                   !trimmed.Contains("`1[") &&
+                   !trimmed.Contains("[Il2Cpp");
         }
 
         //-------------------------------------------------------------------
@@ -849,9 +1259,19 @@ namespace rowemod
                     GrindPoseEditor.OnGrindsTabExited();
                 }
 
+                if (currentTab == Tab.BikePoser)
+                {
+                    BikePoseEditor.OnTabExited();
+                }
+
                 if (newTab == Tab.Grinds)
                 {
                     GrindPoseEditor.OnGrindsTabEntered();
+                }
+
+                if (newTab == Tab.BikePoser)
+                {
+                    BikePoseEditor.OnTabEntered();
                 }
 
                 scrollOffset = 0;

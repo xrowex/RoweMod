@@ -148,9 +148,6 @@ namespace rowemod.Utils
         //GRIND MAGNET
         public static GrindMagnetZEM grindMagnetZEM;
 
-        //Pegs
-        public static List<CapsuleCollider> pegColliders = new List<CapsuleCollider>();
-
         //bones
         public static BeyondMeatSystem beyondMeatSystem;
         public static void FindObjects(GameObject player)
@@ -200,21 +197,6 @@ namespace rowemod.Utils
                 Log.Msg("BeyondMeatSystem component found.");
             else
                 Log.Error("BeyondMeatSystem component not found.");
-
-            pegColliders.Clear();
-            var allCapsules = GameObject.FindObjectsOfType<CapsuleCollider>();
-            foreach (var capsule in allCapsules)
-            {
-                if (capsule.gameObject.name.Contains("Peg"))
-                {
-                    pegColliders.Add(capsule);
-                }
-            }
-
-            if (pegColliders.Count > 0)
-                Log.Msg($"Found {pegColliders.Count} peg colliders.");
-            else
-                Log.Warning("No peg colliders found with 'Peg' in name.");
 
             // Find specific components inside rMBCharacter instead of using GameObject.Find()
             if (rMbCharacter != null)

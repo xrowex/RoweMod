@@ -20,7 +20,7 @@ namespace rowemod.Mods
         public static List<Transform> wheelMeshes;
         public static EquipSlotVehicle[] pegsEquipSlots;
         public static GameObject FrontLeftPeg, FrontRightPeg, RearLeftPeg, RearRightPeg;
-        private static float lastBarPitch, lastBarScale, lastSeatHeight, lastSeatPitch, lastPegLength;
+        private static float lastBarPitch, lastBarScale, lastSeatHeight, lastSeatPitch;
         public enum PartTypeTab
         {
             Bars,
@@ -65,8 +65,6 @@ namespace rowemod.Mods
             public bool IsRearRight;
             public bool IsEnabled;
             public GameObject Parent;
-            public CapsuleCollider Collider;
-            public float scale;
         }
         
         private static List<PegData> pegData = new();
@@ -109,7 +107,6 @@ namespace rowemod.Mods
                     EquipSlot = slot.GetComponentInChildren<EquipSlotVehicle>(),
                     Parent = parentGo,
                     Peg = parentGo,
-                    Collider = parentGo.GetComponentInChildren<CapsuleCollider>(),
                     IsFrontLeft = isFL,
                     IsFrontRight = isFR,
                     IsRearLeft = isRL,
@@ -117,7 +114,6 @@ namespace rowemod.Mods
                 };
 
                 data.IsEnabled = GetConfigEnabled(data);
-                data.scale = Config.bike.pegLength;
 
                 pegData.Add(data);
 
@@ -372,15 +368,6 @@ namespace rowemod.Mods
                 if (oldForkScale != Config.bike.forkScale) changed = true;
             }*/
 
-            if (pegsAnchor != null || pegData.Count > 0)
-            {
-                GUILayout.Space(10);
-                GUILayout.Label("Peg Length", Menu.coloredBoxStyle);
-                float oldPegLength = Config.bike.pegLength;
-                Menu.ModernSlider("Length", ref Config.bike.pegLength, 0f, 3f);
-                if (oldPegLength != Config.bike.pegLength) changed = true;
-            }
-
             if (pegData != null && pegData.Count > 0)
             {
                 GUILayout.Space(10);
@@ -430,8 +417,6 @@ namespace rowemod.Mods
             int wheelsUpdated = 0, wheelsSkipped = 0;
             int tireBoundsUpdated = 0, tireBoundsSkipped = 0;
             int forksUpdated = 0, forksSkipped = 0;
-            int pegsTransformUpdated = 0, pegsTransformSkipped = 0;
-            int pegsColliderUpdated = 0, pegsColliderSkipped = 0;
             int pegsStateUpdated = 0, pegsStateSkipped = 0;
 
             // Bars
@@ -630,53 +615,7 @@ namespace rowemod.Mods
                         ? d.EquipSlot.name
                         : d.Parent != null ? d.Parent.name : $"Peg[{i}]";
 
-                    d.scale = Config.bike.pegLength;
-                    Vector3 pegScale = new Vector3(1f, 1f, Config.bike.pegLength);
-                    float fScale = Config.bike.forkScale <= 0 ? 1f : Config.bike.forkScale;
-
-                    bool slotUpdated = false;
-                    bool colliderUpdated = false;
                     bool parentUpdated = false;
-
-                    if (d.EquipSlot != null)
-                    {
-                        Vector3 actualPegScale = pegScale;
-                        if (forkAnchor != null && d.EquipSlot.transform.IsChildOf(forkAnchor))
-                        {
-                            actualPegScale.x /= fScale;
-                            actualPegScale.y /= fScale;
-                            actualPegScale.z /= fScale;
-                        }
-                        d.EquipSlot.transform.localScale = actualPegScale;
-                        slotUpdated = true;
-                        pegsTransformUpdated++;
-                        Log.Msg($"[UpdatePartTransforms] Peg[{i}] slot updated: '{d.EquipSlot.name}' scale={d.EquipSlot.transform.localScale}");
-                    }
-                    else
-                    {
-                        pegsTransformSkipped++;
-                        Log.Warning($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}' slot skipped: EquipSlot is null.");
-                    }
-
-                    if (d.Collider != null)
-                    {
-                        Vector3 colliderScale = new Vector3(1f, 1f, Config.bike.pegLength * 0.7f);
-                        if (forkAnchor != null && d.Collider.transform.IsChildOf(forkAnchor))
-                        {
-                            colliderScale.x /= fScale;
-                            colliderScale.y /= fScale;
-                            colliderScale.z /= fScale;
-                        }
-                        d.Collider.transform.localScale = colliderScale;
-                        colliderUpdated = true;
-                        pegsColliderUpdated++;
-                        Log.Msg($"[UpdatePartTransforms] Peg[{i}] collider updated: '{d.Collider.name}' scale={d.Collider.transform.localScale}");
-                    }
-                    else
-                    {
-                        pegsColliderSkipped++;
-                        Log.Warning($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}' collider skipped: Collider is null.");
-                    }
 
                     if (d.Parent != null)
                     {
@@ -695,7 +634,7 @@ namespace rowemod.Mods
 
                     d.IsEnabled = enabledNow;
                     pegData[i] = d; // write back struct
-                    Log.Msg($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}': enabled={enabledNow}, slotUpdated={slotUpdated}, colliderUpdated={colliderUpdated}, parentChanged={parentUpdated}");
+                    Log.Msg($"[UpdatePartTransforms] Peg[{i}] '{pegLabel}': enabled={enabledNow}, parentChanged={parentUpdated}");
                 }
             }
 
@@ -704,12 +643,11 @@ namespace rowemod.Mods
             lastBarScale = Config.bike.barScale;
             lastSeatHeight = Config.bike.seatHeight;
             lastSeatPitch = Config.bike.seatPitch;
-            lastPegLength = Config.bike.pegLength;
 
             Memory.customizableEntity.RelaySnap();
             Log.Msg("[UpdatePartTransforms] RelaySnap triggered.");
             Log.Msg(
-                $"[UpdatePartTransforms] Summary: bars {barsUpdated} updated/{barsSkipped} skipped, grips {gripsUpdated}/{gripsSkipped}, barEnds {barEndsUpdated}/{barEndsSkipped}, seatPost {seatPostUpdated}/{seatPostSkipped}, seat {seatUpdated}/{seatSkipped}, wheels {wheelsUpdated}/{wheelsSkipped}, tires {tireBoundsUpdated}/{tireBoundsSkipped}, forks {forksUpdated}/{forksSkipped}, pegSlots {pegsTransformUpdated}/{pegsTransformSkipped}, pegColliders {pegsColliderUpdated}/{pegsColliderSkipped}, pegState {pegsStateUpdated}/{pegsStateSkipped}."
+                $"[UpdatePartTransforms] Summary: bars {barsUpdated} updated/{barsSkipped} skipped, grips {gripsUpdated}/{gripsSkipped}, barEnds {barEndsUpdated}/{barEndsSkipped}, seatPost {seatPostUpdated}/{seatPostSkipped}, seat {seatUpdated}/{seatSkipped}, wheels {wheelsUpdated}/{wheelsSkipped}, tires {tireBoundsUpdated}/{tireBoundsSkipped}, forks {forksUpdated}/{forksSkipped}, pegState {pegsStateUpdated}/{pegsStateSkipped}."
             );
         }
         public static System.Collections.IEnumerator DelayedUpdatePartTransforms()

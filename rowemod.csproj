@@ -79,6 +79,9 @@
 		<Reference Include="Il2CppMashBox.Core.Runtime">
 		  <HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBox.Core.Runtime.dll</HintPath>
 		</Reference>
+		<Reference Include="Il2CppMashBoxBridge">
+		  <HintPath>C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBoxBridge.dll</HintPath>
+		</Reference>
 		<Reference Include="Il2CppMashBoxSDK">
 		  <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\BMX Streets\MelonLoader\Il2CppAssemblies\Il2CppMashBoxSDK.dll</HintPath>
 		</Reference>
@@ -479,6 +482,7 @@
 		<Compile Include="Mods\AudioPatchie.cs" />
 		<Compile Include="Mods\BikeMaterialPreset.cs" />
 		<Compile Include="Mods\BikeMaterialsLoader.cs" />
+		<Compile Include="Mods\BikePoseEditor.cs" />
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\Custom.cs" />

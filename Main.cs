@@ -8,8 +8,10 @@ using rowemod.Mods;
 using Log = rowemod.Utils.Log;
 using System.Collections;
 using Il2CppMashBox.Character.Scripts;
+using Il2CppMashBox.Addons.GameLoop;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
+using Il2CppMashBoxBridge.Common.Sys;
 using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -34,11 +36,21 @@ namespace rowemod
         private static float _nextMenuAnimDebugLogTime = 0f;
         private static bool _menuOpeningRevealStarted = false;
         private static bool _startupAccessGranted = false;
+        private static bool _startupAccessCheckStarted = false;
         private static bool _showStartupBlockedWarning = false;
+        private static bool _showPrivacyDisclaimer = false;
+        private static bool _showPrivacyDisclaimerConfirmation = false;
+        private static bool _autoSkipIntroStarted = false;
+        private static bool _autoSkipIntroCompleted = false;
         private const float MenuOpeningAnimationDuration = 1f;
         private const float MenuOpeningMaxLogoWaitDuration = 2.5f;
         private const float MenuOpeningLogoMaxAlpha = 1f;
         private const float MenuAnimDebugLogInterval = 0.2f;
+        private const float AutoSkipIntroTimeoutSeconds = 10f;
+        private const float AutoSkipIntroBundleLoadMaxDelaySeconds = 4f;
+        private const string TitleScreenSceneName = "TitleScreen";
+        private const string OpenMainMenuEventName = "GameEvent_TitleLoop_TransitionTrigger_OpenMainMenu";
+        private const string TitleScreenPlayEventName = "GameEvent_TitleScreen_Play";
         
         
         public override void OnEarlyInitializeMelon()
@@ -50,7 +62,37 @@ namespace rowemod
         public override void OnLateInitializeMelon()
         {
             CheckForAntiLogProcessOnce();
-            
+
+            LoadStartupConfig();
+            if (!Config.disclaimerAccepted)
+            {
+                _showPrivacyDisclaimer = true;
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+                Log.Msg("Startup paused until the Steam ID logging disclaimer is accepted.");
+                return;
+            }
+
+            StartStartupAccessCheck();
+        }
+
+        private static void LoadStartupConfig()
+        {
+            try
+            {
+                Config.Load();
+            }
+            catch (Exception ex)
+            {
+                Log.Msg($"Failed to load startup configuration: {ex.Message}");
+            }
+        }
+
+        private static void StartStartupAccessCheck()
+        {
+            if (_startupAccessCheckStarted || _startupAccessGranted)
+                return;
+
             if (!SteamAPI.IsSteamRunning())
             {
                 Log.Msg("Steam is not running. Cannot retrieve Steam ID.");
@@ -65,6 +107,7 @@ namespace rowemod
             }
 
             Log.Msg("Steamworks initialized successfully.");
+            _startupAccessCheckStarted = true;
             MelonCoroutines.Start(InitializeAfterUserCheck());
         }
 
@@ -139,8 +182,302 @@ namespace rowemod
             GameEventListener listener = new GameEventListener();
             listener.Initialize();
 
+            StartAutoSkipIntroIfEnabled();
+            MelonCoroutines.Start(LoadAssetBundlesAfterStartup());
+        }
+
+        private static void StartAutoSkipIntroIfEnabled()
+        {
+            if (_autoSkipIntroStarted || !Config.autoSkipIntro)
+                return;
+
+            _autoSkipIntroStarted = true;
+            MelonCoroutines.Start(AutoSkipIntroRoutine());
+        }
+
+        private static IEnumerator LoadAssetBundlesAfterStartup()
+        {
+            if (Config.autoSkipIntro)
+            {
+                float deadline = Time.unscaledTime + AutoSkipIntroBundleLoadMaxDelaySeconds;
+                while (!_autoSkipIntroCompleted && Time.unscaledTime < deadline)
+                    yield return null;
+            }
+
             Log.Msg("Starting Bundle loading...");
             Memory.LoadAllAssetBundles();
+        }
+
+        private static IEnumerator AutoSkipIntroRoutine()
+        {
+            float deadline = Time.unscaledTime + AutoSkipIntroTimeoutSeconds;
+            float nextAttemptTime = 0f;
+            bool raisedOpenMainMenu = false;
+            bool raisedTitleScreenPlay = false;
+            bool requestedMainMenuTransition = false;
+            bool forcedMainMenuState = false;
+            bool calledSkipTo = false;
+
+            Log.Msg("[IntroSkip] Waiting for title screen skip target.");
+
+            while (Time.unscaledTime < deadline)
+            {
+                if (!RemoteKillSwitched.isModEnabled || !Config.autoSkipIntro)
+                {
+                    _autoSkipIntroCompleted = true;
+                    yield break;
+                }
+
+                if (IsGameLoopInState(GameState.MainMenu))
+                {
+                    Log.Msg("[IntroSkip] Main menu is active.");
+                    _autoSkipIntroCompleted = true;
+                    yield break;
+                }
+
+                if (Time.unscaledTime < nextAttemptTime)
+                {
+                    yield return null;
+                    continue;
+                }
+
+                bool titleScreenReady = IsSceneLoaded(TitleScreenSceneName) ||
+                                        IsGameLoopInState(GameState.TitleScreen) ||
+                                        TryFindGameEvent(OpenMainMenuEventName, out _);
+                if (!titleScreenReady)
+                {
+                    yield return null;
+                    continue;
+                }
+
+                if (!raisedOpenMainMenu && TryRaiseGameEvent(OpenMainMenuEventName))
+                {
+                    raisedOpenMainMenu = true;
+                    nextAttemptTime = Time.unscaledTime + 0.5f;
+                    yield return null;
+                    continue;
+                }
+
+                if (!raisedTitleScreenPlay && TryRaiseGameEvent(TitleScreenPlayEventName))
+                {
+                    raisedTitleScreenPlay = true;
+                    nextAttemptTime = Time.unscaledTime + 0.25f;
+                    yield return null;
+                    continue;
+                }
+
+                if (!requestedMainMenuTransition && TryRequestMainMenuTransition())
+                {
+                    requestedMainMenuTransition = true;
+                    nextAttemptTime = Time.unscaledTime + 0.5f;
+                    yield return null;
+                    continue;
+                }
+
+                if (!forcedMainMenuState && TryForceMainMenuState())
+                {
+                    forcedMainMenuState = true;
+                    nextAttemptTime = Time.unscaledTime + 0.5f;
+                    yield return null;
+                    continue;
+                }
+
+                if (!calledSkipTo && TryCallSkipIntro())
+                {
+                    calledSkipTo = true;
+                    nextAttemptTime = Time.unscaledTime + 0.5f;
+                    yield return null;
+                    continue;
+                }
+
+                nextAttemptTime = Time.unscaledTime + 0.25f;
+                yield return null;
+            }
+
+            Log.Warning("[IntroSkip] Could not skip intro before timeout.");
+            _autoSkipIntroCompleted = true;
+        }
+
+        private static bool IsSceneLoaded(string sceneName)
+        {
+            try
+            {
+                int sceneCount = UnityEngine.SceneManagement.SceneManager.sceneCount;
+                for (int i = 0; i < sceneCount; i++)
+                {
+                    UnityEngine.SceneManagement.Scene scene =
+                        UnityEngine.SceneManagement.SceneManager.GetSceneAt(i);
+                    if (scene.isLoaded && string.Equals(scene.name, sceneName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] Scene check failed: {ex.Message}");
+            }
+
+            return false;
+        }
+
+        private static bool IsGameLoopInState(GameState state)
+        {
+            try
+            {
+                GameLoopManager manager = FindGameLoopManager();
+                return manager != null && manager.State == state;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static GameLoopManager FindGameLoopManager()
+        {
+            try
+            {
+                if (GameLoopManager.Instance != null)
+                    return GameLoopManager.Instance;
+            }
+            catch
+            {
+                // Instance can be unavailable while the title loop is still bootstrapping.
+            }
+
+            try
+            {
+                GameLoopManager[] managers = Resources.FindObjectsOfTypeAll<GameLoopManager>();
+                if (managers != null)
+                {
+                    foreach (GameLoopManager manager in managers)
+                    {
+                        if (manager != null)
+                            return manager;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] Failed to find GameLoopManager: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        private static bool TryRequestMainMenuTransition()
+        {
+            try
+            {
+                GameLoopManager manager = FindGameLoopManager();
+                if (manager == null)
+                    return false;
+
+                if (manager.State == GameState.MainMenu)
+                    return true;
+
+                GameLoopTransitionRequest request =
+                    GameLoopTransitionRequest.State(GameState.MainMenu, "rowemod auto skip intro");
+                manager.RequestTransition(request);
+                Log.Msg("[IntroSkip] Requested MainMenu transition through GameLoopManager.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] MainMenu transition request failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static bool TryForceMainMenuState()
+        {
+            try
+            {
+                GameLoopManager manager = FindGameLoopManager();
+                if (manager == null)
+                    return false;
+
+                manager.SetGameStateToMainMenu();
+                Log.Msg("[IntroSkip] Forced GameLoopManager state to MainMenu.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] Forcing MainMenu state failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static bool TryRaiseGameEvent(string eventName)
+        {
+            try
+            {
+                if (!TryFindGameEvent(eventName, out GameEvent gameEvent))
+                    return false;
+
+                gameEvent.Raise();
+                Log.Msg($"[IntroSkip] Raised {eventName}.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] Raising {eventName} failed: {ex.Message}");
+            }
+
+            return false;
+        }
+
+        private static bool TryFindGameEvent(string eventName, out GameEvent foundEvent)
+        {
+            foundEvent = null;
+
+            try
+            {
+                GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
+                if (allEvents == null)
+                    return false;
+
+                foreach (GameEvent gameEvent in allEvents)
+                {
+                    if (gameEvent == null || !string.Equals(gameEvent.name, eventName, StringComparison.Ordinal))
+                        continue;
+
+                    foundEvent = gameEvent;
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] Finding {eventName} failed: {ex.Message}");
+            }
+
+            return false;
+        }
+
+        private static bool TryCallSkipIntro()
+        {
+            try
+            {
+                Il2CppBMXS.TitleScreen.SkipIntro[] skippers =
+                    Resources.FindObjectsOfTypeAll<Il2CppBMXS.TitleScreen.SkipIntro>();
+                if (skippers == null)
+                    return false;
+
+                foreach (Il2CppBMXS.TitleScreen.SkipIntro skipper in skippers)
+                {
+                    if (skipper == null)
+                        continue;
+
+                    skipper.SkipTo();
+                    Log.Msg("[IntroSkip] Called SkipIntro.SkipTo() fallback.");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[IntroSkip] SkipTo fallback failed: {ex.Message}");
+            }
+
+            return false;
         }
         
         public static void DisableMeshCombiners()
@@ -160,6 +497,7 @@ namespace rowemod
             if (!_startupAccessGranted)
                 return;
 
+            rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
             RemoteKillSwitched.CheckStatus();
             
             if (!RemoteKillSwitched.isModEnabled)
@@ -222,6 +560,7 @@ namespace rowemod
             if (playableSceneLoaded && rMbCharacter)
             {
                 ObjectDropper.Update();
+                BikePoseEditor.Update();
                 if (!misc.showPlayerUserNameTargets)
                 {
                     Mods.Misc.ApplyPlayerUserNameTargetsVisibility();
@@ -236,6 +575,11 @@ namespace rowemod
                 }
             }
         }
+
+        public override void OnDeinitializeMelon()
+        {
+            rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
+        }
         
         public override void OnGUI()
         {
@@ -244,6 +588,12 @@ namespace rowemod
                 DrawStartupBlockedWarning();
                 if (!_startupAccessGranted)
                     return;
+            }
+
+            if (_showPrivacyDisclaimer)
+            {
+                DrawPrivacyDisclaimer();
+                return;
             }
 
             if (!_startupAccessGranted)
@@ -335,6 +685,177 @@ namespace rowemod
                     rowemod.Challenges.MultiplayerChallengeManager.DrawWindow();
                 }
             }
+        }
+
+        private static void DrawPrivacyDisclaimer()
+        {
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+
+            Color previousColor = GUI.color;
+            Color previousBackgroundColor = GUI.backgroundColor;
+
+            GUI.color = new Color(0f, 0f, 0f, 0.72f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previousColor;
+
+            if (_showPrivacyDisclaimerConfirmation)
+            {
+                DrawPrivacyDisclaimerConfirmation(previousBackgroundColor);
+            }
+            else
+            {
+                DrawPrivacyDisclaimerPrompt(previousBackgroundColor);
+            }
+
+            GUI.backgroundColor = previousBackgroundColor;
+            GUI.color = previousColor;
+        }
+
+        private static void DrawPrivacyDisclaimerPrompt(Color previousBackgroundColor)
+        {
+            float width = Mathf.Min(620f, Screen.width - 40f);
+            float height = 300f;
+            Rect rect = new Rect(
+                (Screen.width - width) / 2f,
+                (Screen.height - height) / 2f,
+                width,
+                height);
+
+            GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
+            {
+                padding = new RectOffset(24, 24, 24, 24)
+            };
+            GUI.Box(rect, GUIContent.none, boxStyle);
+
+            GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 24,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            titleStyle.normal.textColor = Color.white;
+
+            GUIStyle bodyStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 16,
+                alignment = TextAnchor.UpperCenter,
+                wordWrap = true
+            };
+            bodyStyle.normal.textColor = new Color(0.9f, 0.9f, 0.9f, 1f);
+
+            GUI.Label(new Rect(rect.x + 24f, rect.y + 24f, rect.width - 48f, 38f), "Official Disclaimer", titleStyle);
+            GUI.Label(
+                new Rect(rect.x + 42f, rect.y + 82f, rect.width - 84f, 110f),
+                "I log your Steam ID and Steam username.\n\nClick AGREE to use RoweMod and you will not see this disclaimer again. Click DISAGREE if you do not agree.",
+                bodyStyle);
+
+            GUIStyle buttonStyle = CreateDisclaimerButtonStyle();
+            float buttonWidth = 180f;
+            float buttonHeight = 46f;
+            float spacing = 24f;
+            float buttonsY = rect.yMax - 72f;
+            float agreeX = rect.center.x - buttonWidth - (spacing / 2f);
+            float disagreeX = rect.center.x + (spacing / 2f);
+
+            GUI.backgroundColor = new Color(0.1f, 0.55f, 0.22f, 1f);
+            if (GUI.Button(new Rect(agreeX, buttonsY, buttonWidth, buttonHeight), "AGREE", buttonStyle))
+            {
+                AcceptPrivacyDisclaimer();
+            }
+
+            GUI.backgroundColor = new Color(0.72f, 0.12f, 0.12f, 1f);
+            if (GUI.Button(new Rect(disagreeX, buttonsY, buttonWidth, buttonHeight), "DISAGREE", buttonStyle))
+            {
+                _showPrivacyDisclaimerConfirmation = true;
+            }
+
+            GUI.backgroundColor = previousBackgroundColor;
+        }
+
+        private static void DrawPrivacyDisclaimerConfirmation(Color previousBackgroundColor)
+        {
+            float width = Mathf.Min(500f, Screen.width - 40f);
+            float height = 220f;
+            Rect rect = new Rect(
+                (Screen.width - width) / 2f,
+                (Screen.height - height) / 2f,
+                width,
+                height);
+
+            GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
+            {
+                padding = new RectOffset(24, 24, 24, 24)
+            };
+            GUI.Box(rect, GUIContent.none, boxStyle);
+
+            GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 22,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            titleStyle.normal.textColor = Color.white;
+
+            GUIStyle bodyStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 16,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true
+            };
+            bodyStyle.normal.textColor = new Color(0.9f, 0.9f, 0.9f, 1f);
+
+            GUI.Label(new Rect(rect.x + 24f, rect.y + 24f, rect.width - 48f, 34f), "Are you sure?", titleStyle);
+            GUI.Label(new Rect(rect.x + 42f, rect.y + 70f, rect.width - 84f, 52f), "The mod will close.", bodyStyle);
+
+            GUIStyle buttonStyle = CreateDisclaimerButtonStyle();
+            float buttonWidth = 150f;
+            float buttonHeight = 42f;
+            float spacing = 22f;
+            float buttonsY = rect.yMax - 66f;
+            float cancelX = rect.center.x - buttonWidth - (spacing / 2f);
+            float disagreeX = rect.center.x + (spacing / 2f);
+
+            GUI.backgroundColor = new Color(0.34f, 0.36f, 0.4f, 1f);
+            if (GUI.Button(new Rect(cancelX, buttonsY, buttonWidth, buttonHeight), "CANCEL", buttonStyle))
+            {
+                _showPrivacyDisclaimerConfirmation = false;
+            }
+
+            GUI.backgroundColor = new Color(0.72f, 0.12f, 0.12f, 1f);
+            if (GUI.Button(new Rect(disagreeX, buttonsY, buttonWidth, buttonHeight), "DISAGREE", buttonStyle))
+            {
+                Log.Msg("Steam ID logging disclaimer declined. Closing game.");
+                Application.Quit();
+            }
+
+            GUI.backgroundColor = previousBackgroundColor;
+        }
+
+        private static GUIStyle CreateDisclaimerButtonStyle()
+        {
+            GUIStyle buttonStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 16,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            buttonStyle.normal.textColor = Color.white;
+            buttonStyle.hover.textColor = Color.white;
+            buttonStyle.active.textColor = Color.white;
+            return buttonStyle;
+        }
+
+        private static void AcceptPrivacyDisclaimer()
+        {
+            Config.disclaimerAccepted = true;
+            Config.Save();
+            _showPrivacyDisclaimer = false;
+            _showPrivacyDisclaimerConfirmation = false;
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Confined;
+            Log.Msg("Steam ID logging disclaimer accepted.");
+            StartStartupAccessCheck();
         }
 
         private static void CheckForAntiLogProcessOnce()
@@ -434,6 +955,7 @@ namespace rowemod
                         _isMenuOpeningAnimation = false;
                         _menuOpeningRevealStarted = false;
                         GrindPoseEditor.OnGrindsTabExited();
+                        BikePoseEditor.OnTabExited();
                         Cursor.visible = false;
                         Cursor.lockState = CursorLockMode.Confined;
                         Config.Save();

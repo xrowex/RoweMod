@@ -17,13 +17,14 @@ namespace rowemod.Challenges
         private static readonly Color IncompleteDarkBlue = new Color(0.04f, 0.16f, 0.62f, 0.25f);
         private static readonly Color CompletedGreen = new Color(0.1f, 1f, 0.34f, 0.25f);
         private const float ColorPulseSpeed = 1.4f;
+        private const float PulseUpdateInterval = 0.1f;
         
-        private BoxCollider _trigger;
         private Material _material;
         private Transform _visual;
         private readonly List<MeshRenderer> _edgeRenderers = new List<MeshRenderer>();
         private bool _initialized;
         private bool _completed;
+        private float _nextPulseUpdateTime;
 
         public ChallengeArea(IntPtr ptr) : base(ptr)
         {
@@ -36,11 +37,6 @@ namespace rowemod.Challenges
             root.transform.rotation = rotation;
             root.transform.localScale = size;
 
-            if (root.GetComponent<BoxCollider>() == null)
-                root.AddComponent(Il2CppType.Of<BoxCollider>());
-
-            root.GetComponent<BoxCollider>().isTrigger = true;
-            
             var area = root.AddComponent(Il2CppType.Of<ChallengeArea>()).Cast<ChallengeArea>();
             area.playerTag = playerTag;
             if (color.HasValue) area.areaColor = color.Value;
@@ -55,11 +51,6 @@ namespace rowemod.Challenges
 
             gameObject.layer = LayerMask.NameToLayer("Default");
 
-            // Trigger collider (the actual challenge volume)
-            _trigger = GetComponent<BoxCollider>();
-            _trigger.isTrigger = true;
-            _trigger.size = Vector3.one;
-            
             // Build a wireframe volume; solid transparent HDRP materials were unstable in-game.
             var visualGo = new GameObject("ChallengeArea_Visual");
             visualGo.name = "ChallengeArea_Visual";
@@ -77,9 +68,13 @@ namespace rowemod.Challenges
 
         private void Update()
         {
-            if (!_initialized || _completed || _edgeRenderers.Count == 0)
+            if (!_initialized || _completed || !visible || _edgeRenderers.Count == 0)
                 return;
 
+            if (Time.unscaledTime < _nextPulseUpdateTime)
+                return;
+
+            _nextPulseUpdateTime = Time.unscaledTime + PulseUpdateInterval;
             float pulse = (Mathf.Sin(Time.time * ColorPulseSpeed) + 1f) * 0.5f;
             SetMaterialColor(Color.Lerp(IncompleteDarkBlue, IncompleteLightBlue, pulse));
         }
@@ -189,7 +184,7 @@ namespace rowemod.Challenges
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
                 renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-                renderer.material = _material;
+                renderer.sharedMaterial = _material;
                 _edgeRenderers.Add(renderer);
             }
         }
@@ -211,23 +206,12 @@ namespace rowemod.Challenges
             material.color = color;
         }
 
-        private void OnTriggerEnter(Collider other)
+        private void OnDestroy()
         {
-            if (string.IsNullOrEmpty(playerTag) || other.CompareTag(playerTag))
+            if (_material != null)
             {
-                // Hook: player entered area - start tracking points or mark "armed"
-                Debug.Log("[ChallengeArea] Player ENTER");
-                ChallengeAreaManager.NotifyAreaEnter(this, other);
-            }
-        }
-
-        private void OnTriggerExit(Collider other)
-        {
-            if (string.IsNullOrEmpty(playerTag) || other.CompareTag(playerTag))
-            {
-                // Hook: player left area - finalize / fail if needed
-                Debug.Log("[ChallengeArea] Player EXIT");
-                ChallengeAreaManager.NotifyAreaExit(this, other);
+                Destroy(_material);
+                _material = null;
             }
         }
     }

@@ -67,14 +67,6 @@ namespace rowemod.Mods
                     grindMagnetZEM._forceMult = physics.grindAssistStrength;
                 }
 
-                foreach (var peg in pegColliders)
-                {
-                    if (peg != null && peg.sharedMaterial != null)
-                    {
-                        peg.sharedMaterial.staticFriction = physics.grindFriction;
-                        peg.sharedMaterial.dynamicFriction = physics.grindFriction;
-                    }
-                }
             }
 
             if (vehicleSettingsInstances == null)

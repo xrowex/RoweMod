@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Il2CppInterop.Runtime;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.Core.Runtime.Gameplay.ActivityTracking;
+using Il2CppMashBoxSDK.Maps.Rigging;
 using Il2CppMashBoxSDK.Services;
 using Newtonsoft.Json;
 using rowemod.Mods;
 using rowemod.Utils;
 using UnityEngine;
+using UnityEngine.Events;
 
 namespace rowemod.Challenges
 {
@@ -17,7 +20,27 @@ namespace rowemod.Challenges
         public const string RoweModMarkerName = "I_HAVE_ROWE_MOD";
 
         private const int WindowId = 0x524f5745;
-        private const string ChallengeEventKey = "rowemod.mp.challenge.v1";
+        private const int ProtocolVersion = 2;
+        private const string ChallengeStateEventKey = "rowemod.mp.challenge.state.v2";
+        private const string ChallengeCommandEventKey = "rowemod.mp.challenge.command.v2";
+        private const float CompletionPollInterval = 0.25f;
+        private const float LocalPlayerCacheRefreshInterval = 2f;
+        private const float PlayerListRefreshInterval = 2f;
+        private const float PresenceBroadcastInterval = 5f;
+        private const float PresenceExpirySeconds = 16f;
+        private const float CompletionRetryInterval = 2f;
+        private const float LocalLookupRetryInterval = 5f;
+        private const int MaxStateJsonLength = 16384;
+        private const int MaxCommandJsonLength = 2048;
+        private const int MaxPlayers = 64;
+        private const int MaxTricks = 16;
+        private const int MaxTextLength = 64;
+        private static readonly JsonSerializerSettings NetworkJsonSettings = new JsonSerializerSettings
+        {
+            MaxDepth = 16,
+            MissingMemberHandling = MissingMemberHandling.Ignore,
+            TypeNameHandling = TypeNameHandling.None
+        };
         private static Rect _windowRect = new Rect(180f, 120f, 460f, 560f);
         private static bool _isOpen;
         private static Vector2 _playerScroll;
@@ -42,16 +65,41 @@ namespace rowemod.Challenges
         };
         private static ActiveChallenge _activeChallenge;
         private static TrickDetection _trickDetection;
-        private static int _lastMatchedHistoryCount = -1;
+        private static readonly List<string> _entryHistorySnapshot = new List<string>();
+        private static string _lastCheckedAttemptSignature;
         private static float _nextCompletionPollTime;
         private static bool _wasLocalPlayerInsideArea;
         private static int _lastSeenHistoryCount;
         private static string _lastSeenHistorySource = "none";
         private static string _lastSeenTrickText = "none";
         private static string _lastCompletionDiagnostic = "Waiting for trick history.";
-        private static bool _networkSyncDisabled;
+        private static string _cachedLocalPlayerKey;
+        private static string _cachedLocalPlayerName;
+        private static int _cachedLocalPlayerObjectId;
+        private static float _nextLocalPlayerCacheRefreshTime;
+        private static float _nextPlayerListRefreshTime;
+        private static string _activeAreaStateSignature;
+        private static readonly Dictionary<string, PresenceRecord> _presenceByKey =
+            new Dictionary<string, PresenceRecord>(StringComparer.OrdinalIgnoreCase);
+        private static GameObject _networkBridgeRoot;
+        private static MBNetworkedEvent _stateEvent;
+        private static MBNetworkedEvent _commandEvent;
+        private static UnityAction<string> _stateStringListener;
+        private static UnityAction<string> _commandStringListener;
+        private static UnityAction _stateClearedListener;
+        private static float _nextPresenceBroadcastTime;
+        private static float _nextNetworkRetryTime;
+        private static int _networkFailureCount;
+        private static string _networkStatus = "Waiting for multiplayer networking.";
+        private static bool _statePublishPending;
+        private static bool _clearStatePending;
+        private static string _pendingLocalCompletionChallengeId;
+        private static float _nextCompletionRetryTime;
         private static bool _playerScanDisabled;
         private static bool _trickHistoryDisabled;
+        private static float _nextPlayerScanRetryTime;
+        private static float _nextTrickHistoryRetryTime;
+        private static float _nextUpdateErrorLogTime;
         
         public static ActivityTracker ActivityTracker { get; set; }
         
@@ -62,8 +110,17 @@ namespace rowemod.Challenges
             public NetworkPlayer NetworkPlayer;
         }
 
+        private sealed class PresenceRecord
+        {
+            public string DisplayName;
+            public float LastSeenTime;
+        }
+
         private sealed class ActiveChallenge
         {
+            public int Version;
+            public string ChallengeId;
+            public int Revision;
             public string CreatorKey;
             public string CreatorName;
             public List<string> Tricks = new List<string>();
@@ -75,6 +132,9 @@ namespace rowemod.Challenges
 
         private sealed class NetworkChallengeState
         {
+            public int Version { get; set; }
+            public string ChallengeId { get; set; }
+            public int Revision { get; set; }
             public string CreatorKey { get; set; }
             public string CreatorName { get; set; }
             public List<string> Tricks { get; set; }
@@ -82,6 +142,15 @@ namespace rowemod.Challenges
             public float[] Position { get; set; }
             public float[] Rotation { get; set; }
             public float[] Size { get; set; }
+        }
+
+        private sealed class NetworkChallengeCommand
+        {
+            public int Version { get; set; }
+            public string Type { get; set; }
+            public string ChallengeId { get; set; }
+            public string PlayerKey { get; set; }
+            public string PlayerName { get; set; }
         }
 
         public static bool IsOpen => _isOpen;
@@ -99,38 +168,82 @@ namespace rowemod.Challenges
         public static void OnLocalPlayerSpawned(GameObject playerObject)
         {
             TryEnsureLocalModMarker(playerObject);
+            RestartNetworkBridge();
             SafeRefreshPlayers();
+            BroadcastPresence();
         }
 
-        public static void NotifyChallengeAreaExited()
+        public static void OnSceneInitialized()
         {
-            _wasLocalPlayerInsideArea = false;
-            SafeCheckLocalLineCompletion();
+            ClearOwnedNetworkStateBestEffort();
+            ShutdownNetworkBridge();
+            ResetLocalSessionState();
         }
 
-        public static void NotifyChallengeAreaEntered()
+        public static void Shutdown()
         {
-            _wasLocalPlayerInsideArea = true;
-            SafeCheckLocalLineCompletion();
+            ClearOwnedNetworkStateBestEffort();
+            ShutdownNetworkBridge();
+            ResetLocalSessionState();
         }
 
         public static void Update()
         {
+            try
+            {
+                UpdateInternal();
+            }
+            catch (Exception ex)
+            {
+                _nextNetworkRetryTime = Time.unscaledTime + 1f;
+                _networkStatus = "Update failed; retrying.";
+                if (Time.unscaledTime >= _nextUpdateErrorLogTime)
+                {
+                    _nextUpdateErrorLogTime = Time.unscaledTime + 2f;
+                    Log.Error($"[MPChallenge] Update failed: {ex}");
+                }
+            }
+        }
+
+        private static void UpdateInternal()
+        {
+            EnsureNetworkBridge();
+            RetryPendingNetworkOperations();
+
+            if (Time.unscaledTime >= _nextPresenceBroadcastTime)
+            {
+                BroadcastPresence();
+            }
+
+            if (Time.unscaledTime >= _nextPlayerListRefreshTime)
+            {
+                _nextPlayerListRefreshTime = Time.unscaledTime + PlayerListRefreshInterval;
+                SafeRefreshPlayers();
+            }
+
+            if (!string.IsNullOrEmpty(_pendingLocalCompletionChallengeId) &&
+                Time.unscaledTime >= _nextCompletionRetryTime)
+            {
+                SendLocalCompletionCommand();
+            }
+
             if (_activeChallenge == null)
                 return;
 
             if (Time.unscaledTime < _nextCompletionPollTime)
                 return;
 
-            _nextCompletionPollTime = Time.unscaledTime + 0.15f;
+            _nextCompletionPollTime = Time.unscaledTime + CompletionPollInterval;
 
             bool inside = ChallengeAreaManager.IsLocalPlayerInsideActiveArea();
             if (inside && !_wasLocalPlayerInsideArea)
             {
                 Log.Msg("[MPChallenge] Local player entered challenge area.");
+                BeginLocalAttempt();
             }
             else if (!inside && _wasLocalPlayerInsideArea)
             {
+                SafeCheckLocalLineCompletion();
                 Log.Msg("[MPChallenge] Local player exited challenge area.");
             }
 
@@ -157,9 +270,7 @@ namespace rowemod.Challenges
             if (string.IsNullOrEmpty(key))
                 return;
 
-            _activeChallenge.PlayerCompleted[key] = true;
-            ChallengeAreaManager.SetCompleted(true);
-            PublishActiveChallengeState();
+            CompleteLocalChallenge(key);
         }
 
         private static void DrawWindowContents(int windowId)
@@ -197,10 +308,7 @@ namespace rowemod.Challenges
 
         private static void DrawStatusMessages()
         {
-            if (_networkSyncDisabled)
-            {
-                GUILayout.Label("Network challenge sync is disabled after an SDK error.", Menu.subtleLabelStyle);
-            }
+            GUILayout.Label($"Network: {_networkStatus}", Menu.subtleLabelStyle);
 
             if (_playerScanDisabled)
             {
@@ -334,10 +442,11 @@ namespace rowemod.Challenges
         private static void AcceptChallenge()
         {
             RefreshNow();
+            EnsureLocalPlayerCache(true);
             string creatorKey = GetLocalPlayerKey();
-            if (string.IsNullOrEmpty(creatorKey))
+            if (!IsStableNetworkPlayerKey(creatorKey))
             {
-                Log.Warning("[MPChallenge] Cannot accept challenge without a local RoweMod player marker.");
+                Log.Warning("[MPChallenge] Cannot create a network challenge until the local NetworkPlayer is ready.");
                 return;
             }
 
@@ -349,18 +458,11 @@ namespace rowemod.Challenges
             if (tricks.Count == 0)
                 return;
 
-            if (TryReadNetworkChallengeState(out NetworkChallengeState existingState) &&
-                existingState != null &&
-                existingState.Tricks != null &&
-                existingState.Tricks.Count > 0)
-            {
-                ApplyNetworkState(existingState);
-                Log.Warning("[MPChallenge] A challenge is already active on the network.");
-                return;
-            }
-
             _activeChallenge = new ActiveChallenge
             {
+                Version = ProtocolVersion,
+                ChallengeId = Guid.NewGuid().ToString("N"),
+                Revision = 1,
                 CreatorKey = creatorKey,
                 CreatorName = GetLocalPlayerName(),
                 Tricks = tricks
@@ -377,27 +479,39 @@ namespace rowemod.Challenges
                 _activeChallenge.Position = Vector3ToArray(area.transform.position);
                 _activeChallenge.Rotation = QuaternionToArray(area.transform.rotation);
                 _activeChallenge.Size = Vector3ToArray(area.transform.localScale);
+                _activeAreaStateSignature = BuildAreaStateSignature(_activeChallenge);
+                Log.Msg($"[MPChallenge][Area] Local challenge area spawned: {DescribeArea(area)}");
+            }
+            else
+            {
+                Log.Warning("[MPChallenge][Area] Failed to spawn local challenge area. Network state will publish without area transform data.");
             }
 
             ResetCompletionDiagnostics();
             PublishActiveChallengeState();
-            Log.Msg($"[MPChallenge] Accepted local line: {string.Join(" + ", tricks)}");
+            Log.Msg($"[MPChallenge] Accepted local line: {DescribeActiveChallenge(_activeChallenge)}");
         }
 
         private static ChallengeArea SpawnLocalChallengeArea()
         {
             Vector3 spawnPos = Vector3.zero;
             Quaternion spawnRot = Quaternion.identity;
+            string spawnSource = "camera/default";
 
-            if (Memory.physicsDrivenCharacter != null)
+            if (ChallengeAreaManager.TryGetLocalPlayerPose(
+                    out Vector3 playerPosition,
+                    out Quaternion playerRotation,
+                    out string playerPoseSource))
             {
-                spawnPos = Memory.physicsDrivenCharacter.transform.position;
-                spawnRot = Memory.physicsDrivenCharacter.transform.rotation;
+                spawnPos = playerPosition;
+                spawnRot = playerRotation;
+                spawnSource = playerPoseSource;
             }
             else if (UnityEngine.Camera.main != null)
             {
                 spawnPos = UnityEngine.Camera.main.transform.position + UnityEngine.Camera.main.transform.forward * 5f;
                 spawnRot = UnityEngine.Camera.main.transform.rotation;
+                spawnSource = "camera";
             }
 
             ChallengeArea area = ChallengeAreaManager.Create(
@@ -408,6 +522,7 @@ namespace rowemod.Challenges
 
             ChallengeAreaManager.SetVisible(Config.challengeSettings.challengeVisible);
             ChallengeAreaManager.SetCompleted(false);
+            Log.Msg($"[MPChallenge][Area] SpawnLocalChallengeArea source={spawnSource} pos={FormatVector3(spawnPos)} rot={FormatQuaternion(spawnRot)} size={FormatVector3(area != null ? area.transform.localScale : Vector3.zero)} visible={Config.challengeSettings.challengeVisible}");
             return area;
         }
 
@@ -419,7 +534,10 @@ namespace rowemod.Challenges
 
             Transform existing = markerRoot.transform.Find(RoweModMarkerName);
             if (existing != null)
+            {
+                Log.Msg($"[MPChallenge][Marker] Local RoweMod marker already exists under '{markerRoot.name}'.");
                 return;
+            }
 
             GameObject marker = new GameObject(RoweModMarkerName);
             marker.transform.SetParent(markerRoot.transform, false);
@@ -427,13 +545,15 @@ namespace rowemod.Challenges
             marker.transform.localRotation = Quaternion.identity;
             marker.transform.localScale = Vector3.one;
             marker.hideFlags = HideFlags.DontSave;
+            Log.Msg($"[MPChallenge][Marker] Created local RoweMod marker under '{markerRoot.name}'.");
         }
 
         private static void RefreshNow()
         {
             TryEnsureLocalModMarker();
-            SafePollNetworkState();
+            EnsureNetworkBridge();
             SafeRefreshPlayers();
+            BroadcastPresence();
             EnsureTrickNames();
         }
 
@@ -449,56 +569,50 @@ namespace rowemod.Challenges
             }
         }
 
-        private static void SafePollNetworkState()
-        {
-            if (_networkSyncDisabled)
-                return;
-
-            try
-            {
-                PollNetworkState();
-            }
-            catch (Exception ex)
-            {
-                DisableNetworkSync($"poll failed: {ex.Message}");
-            }
-        }
-
         private static void SafeRefreshPlayers()
         {
-            if (_playerScanDisabled)
+            if (_playerScanDisabled && Time.unscaledTime < _nextPlayerScanRetryTime)
                 return;
 
             try
             {
+                _playerScanDisabled = false;
                 RefreshPlayers();
+                Log.Msg($"[MPChallenge][Players] Refreshed RoweMod players: count={_rowePlayers.Count}, localKey='{_cachedLocalPlayerKey ?? "null"}', localName='{_cachedLocalPlayerName ?? "null"}'.");
             }
             catch (Exception ex)
             {
                 _playerScanDisabled = true;
-                Log.Warning($"[MPChallenge] Disabled player scanning after lookup failed: {ex.Message}");
+                _nextPlayerScanRetryTime = Time.unscaledTime + LocalLookupRetryInterval;
+                Log.Warning($"[MPChallenge] Player scanning failed; retrying: {ex.Message}");
             }
         }
 
         private static void SafeCheckLocalLineCompletion()
         {
-            if (_trickHistoryDisabled)
+            if (_trickHistoryDisabled && Time.unscaledTime < _nextTrickHistoryRetryTime)
                 return;
 
             try
             {
+                _trickHistoryDisabled = false;
                 CheckLocalLineCompletion();
             }
             catch (Exception ex)
             {
                 _trickHistoryDisabled = true;
-                Log.Warning($"[MPChallenge] Disabled trick history checking after lookup failed: {ex.Message}");
+                _nextTrickHistoryRetryTime = Time.unscaledTime + LocalLookupRetryInterval;
+                Log.Warning($"[MPChallenge] Trick history lookup failed; retrying: {ex.Message}");
             }
         }
 
         private static void RefreshPlayers()
         {
             _rowePlayers.Clear();
+            _cachedLocalPlayerKey = null;
+            _cachedLocalPlayerName = null;
+            _cachedLocalPlayerObjectId = 0;
+            ExpirePresenceRecords();
 
             NetworkPlayer[] players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
             foreach (NetworkPlayer player in players)
@@ -506,37 +620,64 @@ namespace rowemod.Challenges
                 if (player == null || player.gameObject == null)
                     continue;
 
-                if (!HasRoweModMarker(player.gameObject))
-                    continue;
-
                 string name = ResolvePlayerDisplayName(player);
                 string key = ResolvePlayerKey(player, name);
+                bool isLocal = IsLocalNetworkPlayer(player);
+                if (isLocal)
+                {
+                    CacheLocalPlayer(key, name);
+                }
+
+                if (!isLocal && !_presenceByKey.ContainsKey(key))
+                    continue;
+
+                if (_presenceByKey.TryGetValue(key, out PresenceRecord presence) &&
+                    IsUsableDisplayText(presence.DisplayName))
+                {
+                    name = presence.DisplayName;
+                }
+
                 _rowePlayers.Add(new RowePlayer
                 {
                     Key = key,
                     DisplayName = name,
                     NetworkPlayer = player
                 });
-
-                if (_activeChallenge != null && !_activeChallenge.PlayerCompleted.ContainsKey(key))
-                {
-                    _activeChallenge.PlayerCompleted[key] = false;
-                }
             }
 
             AddLocalFallbackPlayerIfNeeded();
-        }
 
-        private static bool HasRoweModMarker(GameObject playerObject)
-        {
-            Transform[] children = playerObject.GetComponentsInChildren<Transform>(true);
-            foreach (Transform child in children)
+            foreach (KeyValuePair<string, PresenceRecord> entry in _presenceByKey)
             {
-                if (child != null && string.Equals(child.name, RoweModMarkerName, StringComparison.Ordinal))
-                    return true;
+                if (_rowePlayers.Any(player => string.Equals(player.Key, entry.Key, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                _rowePlayers.Add(new RowePlayer
+                {
+                    Key = entry.Key,
+                    DisplayName = entry.Value.DisplayName,
+                    NetworkPlayer = null
+                });
             }
 
-            return false;
+            if (_activeChallenge != null && IsLocalCreator())
+            {
+                bool changed = false;
+                foreach (RowePlayer player in _rowePlayers)
+                {
+                    if (_activeChallenge.PlayerCompleted.ContainsKey(player.Key))
+                        continue;
+
+                    _activeChallenge.PlayerCompleted[player.Key] = false;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    _activeChallenge.Revision++;
+                    PublishActiveChallengeState();
+                }
+            }
         }
 
         private static void EnsureTrickNames()
@@ -583,31 +724,80 @@ namespace rowemod.Challenges
 
             List<string> history = GetCurrentTrickHistory();
             UpdateCompletionDiagnostics(history);
+            List<string> attemptHistory = GetHistorySinceEntry(history);
 
-            if (history.Count == 0)
+            if (attemptHistory.Count == 0)
             {
-                _lastCompletionDiagnostic = "No trick history read yet.";
+                _lastCompletionDiagnostic = "No new tricks since entering the area.";
                 return;
             }
 
-            if (history.Count == _lastMatchedHistoryCount)
+            string attemptSignature = string.Join("\u001f", attemptHistory.Select(NormalizeTrickName));
+            if (string.Equals(attemptSignature, _lastCheckedAttemptSignature, StringComparison.Ordinal))
             {
-                _lastCompletionDiagnostic = "Already checked this history count.";
+                _lastCompletionDiagnostic = "Already checked this attempt history.";
                 return;
             }
 
-            if (!ContainsLineInOrder(history, _activeChallenge.Tricks))
+            _lastCheckedAttemptSignature = attemptSignature;
+            if (!ContainsLineInOrder(attemptHistory, _activeChallenge.Tricks))
             {
                 _lastCompletionDiagnostic = $"No match for {string.Join(" + ", _activeChallenge.Tricks)}.";
                 return;
             }
 
-            _lastMatchedHistoryCount = history.Count;
-            _activeChallenge.PlayerCompleted[localKey] = true;
-            ChallengeAreaManager.SetCompleted(true);
-            PublishActiveChallengeState();
+            CompleteLocalChallenge(localKey);
             _lastCompletionDiagnostic = "Complete.";
             Log.Msg($"[MPChallenge] Local line completed: {string.Join(" + ", _activeChallenge.Tricks)}");
+        }
+
+        private static void BeginLocalAttempt()
+        {
+            _entryHistorySnapshot.Clear();
+            _entryHistorySnapshot.AddRange(GetCurrentTrickHistory());
+            _lastCheckedAttemptSignature = null;
+            _lastCompletionDiagnostic = "Tracking tricks performed inside the area.";
+        }
+
+        private static List<string> GetHistorySinceEntry(List<string> history)
+        {
+            if (history == null || history.Count == 0)
+                return new List<string>();
+
+            int commonPrefix = 0;
+            int maxPrefix = Math.Min(history.Count, _entryHistorySnapshot.Count);
+            while (commonPrefix < maxPrefix &&
+                   string.Equals(
+                       NormalizeTrickName(history[commonPrefix]),
+                       NormalizeTrickName(_entryHistorySnapshot[commonPrefix]),
+                       StringComparison.Ordinal))
+            {
+                commonPrefix++;
+            }
+
+            if (commonPrefix == history.Count && commonPrefix == _entryHistorySnapshot.Count)
+                return new List<string>();
+
+            return history.Skip(commonPrefix).ToList();
+        }
+
+        private static void CompleteLocalChallenge(string localKey)
+        {
+            if (_activeChallenge == null || string.IsNullOrEmpty(localKey))
+                return;
+
+            _activeChallenge.PlayerCompleted[localKey] = true;
+            ChallengeAreaManager.SetCompleted(true);
+
+            if (IsLocalCreator())
+            {
+                _activeChallenge.Revision++;
+                PublishActiveChallengeState();
+                return;
+            }
+
+            _pendingLocalCompletionChallengeId = _activeChallenge.ChallengeId;
+            SendLocalCompletionCommand();
         }
 
         private static List<string> GetCurrentTrickHistory()
@@ -747,7 +937,8 @@ namespace rowemod.Challenges
 
         private static void ResetCompletionDiagnostics()
         {
-            _lastMatchedHistoryCount = -1;
+            _entryHistorySnapshot.Clear();
+            _lastCheckedAttemptSignature = null;
             _lastSeenHistoryCount = 0;
             _lastSeenHistorySource = "none";
             _lastSeenTrickText = "none";
@@ -780,14 +971,12 @@ namespace rowemod.Challenges
                 return ContainsDegreeToken(normalizedActual, requiredDegrees);
 
             if (normalizedRequired == "nose manual")
-                return normalizedActual.Contains("nose manual");
+                return normalizedActual == "nose manual";
 
             if (normalizedRequired == "manual")
-                return normalizedActual.Contains("manual") && !normalizedActual.Contains("nose manual");
+                return normalizedActual == "manual";
 
-            return normalizedActual.Equals(normalizedRequired, StringComparison.OrdinalIgnoreCase) ||
-                   normalizedActual.Contains(normalizedRequired) ||
-                   normalizedRequired.Contains(normalizedActual);
+            return normalizedActual.Equals(normalizedRequired, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string NormalizeTrickName(string trickName)
@@ -799,7 +988,12 @@ namespace rowemod.Challenges
             normalized = normalized.Replace("_", " ");
             normalized = normalized.Replace("-", " ");
             normalized = normalized.Replace("nosemanual", "nose manual");
+            normalized = normalized.Replace("nosey", "nose manual");
+            normalized = normalized.Replace("nosemanny", "nose manual");
+            normalized = normalized.Replace("nose manny", "nose manual");
             normalized = normalized.Replace("nose manual", "nose manual");
+            normalized = normalized.Replace("mannie", "manual");
+            normalized = normalized.Replace("manny", "manual");
             normalized = normalized.Replace("degrees", string.Empty);
             normalized = normalized.Replace("degree", string.Empty);
             normalized = normalized.Replace("rotation", string.Empty);
@@ -868,69 +1062,225 @@ namespace rowemod.Challenges
             return false;
         }
 
-        private static void PollNetworkState()
+        private static void EnsureNetworkBridge()
         {
-            if (TryReadNetworkChallengeState(out NetworkChallengeState state))
-            {
-                ApplyNetworkState(state);
-            }
-        }
-
-        private static bool TryReadNetworkChallengeState(out NetworkChallengeState state)
-        {
-            state = null;
-
-            if (_networkSyncDisabled)
-                return false;
-
-            try
-            {
-                if (!NetworkedEventService.TryGetState(ChallengeEventKey, out MBNetworkedEventPayload payload))
-                    return false;
-
-                if (string.IsNullOrWhiteSpace(payload.StringValue))
-                    return false;
-
-                state = JsonConvert.DeserializeObject<NetworkChallengeState>(payload.StringValue);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                DisableNetworkSync($"read failed: {ex.Message}");
-                return false;
-            }
-        }
-
-        private static void HandleNetworkPayload(MBNetworkedEventPayload payload)
-        {
-            if (_networkSyncDisabled)
+            if (_networkBridgeRoot != null)
+                return;
+            if (Time.unscaledTime < _nextNetworkRetryTime)
+                return;
+            if (!CanUseNetwork())
                 return;
 
+            string setupStage = "create bridge root";
             try
             {
-                if (string.IsNullOrWhiteSpace(payload.StringValue))
-                    return;
+                GameObject root = new GameObject("RoweMod_MPChallenge_NetworkBridge");
+                root.hideFlags = HideFlags.HideAndDontSave;
+                root.SetActive(false);
 
-                NetworkChallengeState state = JsonConvert.DeserializeObject<NetworkChallengeState>(payload.StringValue);
-                ApplyNetworkState(state);
+                setupStage = "create state event";
+                _stateEvent = root.AddComponent(Il2CppType.Of<MBNetworkedEvent>()).Cast<MBNetworkedEvent>();
+                _stateEvent.eventKey = ChallengeStateEventKey;
+                _stateEvent.applyStoredStateOnEnable = true;
+                EnsureNetworkEventCallbacks(_stateEvent);
+
+                setupStage = "create state listeners";
+                _stateStringListener =
+                    DelegateSupport.ConvertDelegate<UnityAction<string>>(HandleNetworkStateJson);
+                _stateClearedListener =
+                    DelegateSupport.ConvertDelegate<UnityAction>(HandleNetworkStateCleared);
+                if (_stateStringListener == null || _stateClearedListener == null)
+                    throw new InvalidOperationException("State listener delegate conversion returned null.");
+
+                setupStage = "register state listeners";
+                _stateEvent.onString.AddListener(_stateStringListener);
+                _stateEvent.onStateCleared.AddListener(_stateClearedListener);
+
+                setupStage = "create command event";
+                _commandEvent = root.AddComponent(Il2CppType.Of<MBNetworkedEvent>()).Cast<MBNetworkedEvent>();
+                _commandEvent.eventKey = ChallengeCommandEventKey;
+                _commandEvent.applyStoredStateOnEnable = false;
+                EnsureNetworkEventCallbacks(_commandEvent);
+
+                setupStage = "create command listener";
+                _commandStringListener =
+                    DelegateSupport.ConvertDelegate<UnityAction<string>>(HandleNetworkCommandJson);
+                if (_commandStringListener == null)
+                    throw new InvalidOperationException("Command listener delegate conversion returned null.");
+
+                setupStage = "register command listener";
+                _commandEvent.onString.AddListener(_commandStringListener);
+
+                _networkBridgeRoot = root;
+                setupStage = "activate bridge";
+                root.SetActive(true);
+                _networkStatus = "Connected; listeners ready.";
+                Log.Msg("[MPChallenge][Net] Registered pushed state and command listeners.");
             }
             catch (Exception ex)
             {
-                DisableNetworkSync($"payload handling failed: {ex.Message}");
+                RecordNetworkFailure(
+                    $"listener setup failed during '{setupStage}' ({ex.GetType().Name}): {ex.Message}");
+                ShutdownNetworkBridge();
             }
         }
 
-        private static void ApplyNetworkState(NetworkChallengeState state)
+        private static void EnsureNetworkEventCallbacks(MBNetworkedEvent networkEvent)
         {
-            if (state == null || state.Tricks == null || state.Tricks.Count == 0)
+            if (networkEvent == null)
+                throw new InvalidOperationException("MBNetworkedEvent component creation returned null.");
+
+            if (networkEvent.onReceived == null)
+                networkEvent.onReceived = new UnityEvent();
+            if (networkEvent.onRaised == null)
+                networkEvent.onRaised = new UnityEvent();
+            if (networkEvent.onStateApplied == null)
+                networkEvent.onStateApplied = new UnityEvent();
+            if (networkEvent.onStateCleared == null)
+                networkEvent.onStateCleared = new UnityEvent();
+            if (networkEvent.onBool == null)
+                networkEvent.onBool = new MBBoolEvent();
+            if (networkEvent.onInt == null)
+                networkEvent.onInt = new MBIntEvent();
+            if (networkEvent.onFloat == null)
+                networkEvent.onFloat = new MBFloatEvent();
+            if (networkEvent.onString == null)
+                networkEvent.onString = new MBStringEvent();
+        }
+
+        private static void RestartNetworkBridge()
+        {
+            ShutdownNetworkBridge();
+            EnsureNetworkBridge();
+        }
+
+        private static void ShutdownNetworkBridge()
+        {
+            try
             {
-                _activeChallenge = null;
-                ChallengeAreaManager.DestroyActive();
+                if (_stateEvent != null)
+                {
+                    if (_stateStringListener != null && _stateEvent.onString != null)
+                        _stateEvent.onString.RemoveListener(_stateStringListener);
+                    if (_stateClearedListener != null && _stateEvent.onStateCleared != null)
+                        _stateEvent.onStateCleared.RemoveListener(_stateClearedListener);
+                }
+
+                if (_commandEvent != null &&
+                    _commandStringListener != null &&
+                    _commandEvent.onString != null)
+                {
+                    _commandEvent.onString.RemoveListener(_commandStringListener);
+                }
+
+                if (_networkBridgeRoot != null)
+                {
+                    _networkBridgeRoot.SetActive(false);
+                    UnityEngine.Object.Destroy(_networkBridgeRoot);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Net] Listener shutdown failed: {ex.Message}");
+            }
+
+            _networkBridgeRoot = null;
+            _stateEvent = null;
+            _commandEvent = null;
+            _stateStringListener = null;
+            _commandStringListener = null;
+            _stateClearedListener = null;
+        }
+
+        private static void HandleNetworkStateJson(string json)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(json) || json.Length > MaxStateJsonLength)
+                {
+                    Log.Warning("[MPChallenge][Net] Ignored empty or oversized challenge state.");
+                    return;
+                }
+
+                NetworkChallengeState state =
+                    JsonConvert.DeserializeObject<NetworkChallengeState>(json, NetworkJsonSettings);
+                if (!ValidateNetworkState(state, out string reason))
+                {
+                    Log.Warning($"[MPChallenge][Net] Ignored invalid challenge state: {reason}");
+                    return;
+                }
+
+                ApplyNetworkState(state, "listener");
+                RecordNetworkSuccess("Challenge state synchronized.");
+            }
+            catch (Exception ex)
+            {
+                RecordNetworkFailure($"state handling failed: {ex.Message}");
+            }
+        }
+
+        private static void HandleNetworkStateCleared()
+        {
+            Log.Msg("[MPChallenge][Net] Stored challenge state was cleared.");
+            ResetActiveChallenge();
+            RecordNetworkSuccess("No active network challenge.");
+        }
+
+        private static void HandleNetworkCommandJson(string json)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(json) || json.Length > MaxCommandJsonLength)
+                    return;
+
+                NetworkChallengeCommand command =
+                    JsonConvert.DeserializeObject<NetworkChallengeCommand>(json, NetworkJsonSettings);
+                if (!ValidateNetworkCommand(command))
+                    return;
+
+                if (string.Equals(command.Type, "presence", StringComparison.Ordinal))
+                {
+                    RegisterPresence(command.PlayerKey, command.PlayerName);
+                    return;
+                }
+
+                if (!string.Equals(command.Type, "complete", StringComparison.Ordinal) ||
+                    _activeChallenge == null ||
+                    !IsLocalCreator() ||
+                    !string.Equals(command.ChallengeId, _activeChallenge.ChallengeId, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                RegisterPresence(command.PlayerKey, command.PlayerName);
+                if (_activeChallenge.PlayerCompleted.TryGetValue(command.PlayerKey, out bool completed) && completed)
+                    return;
+
+                _activeChallenge.PlayerCompleted[command.PlayerKey] = true;
+                _activeChallenge.Revision++;
+                PublishActiveChallengeState();
+                Log.Msg($"[MPChallenge][Net] Accepted completion from {command.PlayerName} ({command.PlayerKey}).");
+            }
+            catch (Exception ex)
+            {
+                RecordNetworkFailure($"command handling failed: {ex.Message}");
+            }
+        }
+
+        private static void ApplyNetworkState(NetworkChallengeState state, string source)
+        {
+            if (_activeChallenge != null &&
+                string.Equals(_activeChallenge.ChallengeId, state.ChallengeId, StringComparison.Ordinal) &&
+                state.Revision <= _activeChallenge.Revision)
+            {
                 return;
             }
 
             _activeChallenge = new ActiveChallenge
             {
+                Version = state.Version,
+                ChallengeId = state.ChallengeId,
+                Revision = state.Revision,
                 CreatorKey = state.CreatorKey,
                 CreatorName = GetDisplayNameForKey(state.CreatorKey, state.CreatorName),
                 Tricks = state.Tricks.ToList(),
@@ -942,16 +1292,28 @@ namespace rowemod.Challenges
                 Size = state.Size
             };
 
+            string localKey = GetLocalPlayerKey();
+            if (!string.IsNullOrEmpty(localKey) &&
+                _activeChallenge.PlayerCompleted.TryGetValue(localKey, out bool localCompleted) &&
+                localCompleted)
+            {
+                _pendingLocalCompletionChallengeId = null;
+            }
+
+            Log.Msg($"[MPChallenge][Net] Applying active challenge state from {source}: {DescribeActiveChallenge(_activeChallenge)}");
             SyncChallengeAreaFromActiveState();
         }
 
         private static void PublishActiveChallengeState()
         {
-            if (_activeChallenge == null)
+            if (_activeChallenge == null || !IsLocalCreator())
                 return;
 
             NetworkChallengeState state = new NetworkChallengeState
             {
+                Version = ProtocolVersion,
+                ChallengeId = _activeChallenge.ChallengeId,
+                Revision = _activeChallenge.Revision,
                 CreatorKey = _activeChallenge.CreatorKey,
                 CreatorName = _activeChallenge.CreatorName,
                 Tricks = _activeChallenge.Tricks.ToList(),
@@ -961,34 +1323,177 @@ namespace rowemod.Challenges
                 Size = _activeChallenge.Size
             };
 
-            string json = JsonConvert.SerializeObject(state);
-            TryPublishNetworkState(json);
+            string json = JsonConvert.SerializeObject(state, NetworkJsonSettings);
+            if (json.Length > MaxStateJsonLength)
+            {
+                _networkStatus = "Challenge state is too large to publish.";
+                Log.Warning($"[MPChallenge][Net] Refused oversized challenge state ({json.Length} bytes).");
+                return;
+            }
+
+            Log.Msg($"[MPChallenge][Net] Publishing active challenge state: len={json.Length}, hash={json.GetHashCode()}, {DescribeActiveChallenge(_activeChallenge)}");
+            _statePublishPending = !TryPublishNetworkState(json);
         }
 
         private static bool TryPublishNetworkState(string json)
         {
-            if (_networkSyncDisabled)
+            if (_stateEvent == null || !CanUseNetwork())
                 return false;
 
             try
             {
-                NetworkedEventService.SetState(MBNetworkedEventPayload.String(ChallengeEventKey, json));
+                _stateEvent.SetStringState(json);
+                RecordNetworkSuccess("Challenge state published.");
                 return true;
             }
             catch (Exception ex)
             {
-                DisableNetworkSync($"publish failed: {ex.Message}");
+                RecordNetworkFailure($"publish failed: {ex.Message}");
                 return false;
             }
         }
 
-        private static void DisableNetworkSync(string reason)
+        private static void SendLocalCompletionCommand()
         {
-            if (_networkSyncDisabled)
+            if (_activeChallenge == null ||
+                string.IsNullOrEmpty(_pendingLocalCompletionChallengeId) ||
+                !string.Equals(_pendingLocalCompletionChallengeId, _activeChallenge.ChallengeId, StringComparison.Ordinal))
+            {
+                _pendingLocalCompletionChallengeId = null;
+                return;
+            }
+
+            NetworkChallengeCommand command = new NetworkChallengeCommand
+            {
+                Version = ProtocolVersion,
+                Type = "complete",
+                ChallengeId = _activeChallenge.ChallengeId,
+                PlayerKey = GetLocalPlayerKey(),
+                PlayerName = GetLocalPlayerName()
+            };
+
+            TryRaiseCommand(command);
+            _nextCompletionRetryTime = Time.unscaledTime + CompletionRetryInterval;
+        }
+
+        private static void BroadcastPresence()
+        {
+            _nextPresenceBroadcastTime = Time.unscaledTime + PresenceBroadcastInterval;
+            string localKey = GetLocalPlayerKey();
+            if (!IsStableNetworkPlayerKey(localKey))
                 return;
 
-            _networkSyncDisabled = true;
-            Log.Warning($"[MPChallenge] Disabled network challenge sync because {reason}");
+            RegisterPresence(localKey, GetLocalPlayerName());
+            TryRaiseCommand(new NetworkChallengeCommand
+            {
+                Version = ProtocolVersion,
+                Type = "presence",
+                PlayerKey = localKey,
+                PlayerName = GetLocalPlayerName()
+            });
+        }
+
+        private static bool TryRaiseCommand(NetworkChallengeCommand command)
+        {
+            if (_commandEvent == null || !CanUseNetwork())
+                return false;
+
+            try
+            {
+                string json = JsonConvert.SerializeObject(command, NetworkJsonSettings);
+                if (json.Length > MaxCommandJsonLength)
+                    return false;
+
+                _commandEvent.RaiseString(json);
+                RecordNetworkSuccess("Connected.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RecordNetworkFailure($"command send failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static bool CanUseNetwork()
+        {
+            if (Time.unscaledTime < _nextNetworkRetryTime)
+                return false;
+
+            try
+            {
+                INetworkedEventService service = NetworkedEventService.Service;
+                bool available = service != null && service.IsAvailable;
+                if (!available)
+                {
+                    _networkStatus = "Waiting for an active multiplayer session.";
+                    _nextNetworkRetryTime = Time.unscaledTime + 1f;
+                }
+                return available;
+            }
+            catch (Exception ex)
+            {
+                RecordNetworkFailure($"availability check failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void RetryPendingNetworkOperations()
+        {
+            if (Time.unscaledTime < _nextNetworkRetryTime)
+                return;
+
+            if (_clearStatePending)
+            {
+                TryClearNetworkState();
+                return;
+            }
+
+            if (_statePublishPending && _activeChallenge != null && IsLocalCreator())
+                PublishActiveChallengeState();
+        }
+
+        private static bool TryClearNetworkState()
+        {
+            if (_stateEvent == null || !CanUseNetwork())
+                return false;
+
+            try
+            {
+                _stateEvent.ClearState();
+                _clearStatePending = false;
+                RecordNetworkSuccess("Challenge cleared.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RecordNetworkFailure($"clear failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void ClearOwnedNetworkStateBestEffort()
+        {
+            if (_activeChallenge == null || !IsLocalCreator())
+                return;
+
+            TryClearNetworkState();
+        }
+
+        private static void RecordNetworkSuccess(string status)
+        {
+            _networkFailureCount = 0;
+            _nextNetworkRetryTime = 0f;
+            _networkStatus = status;
+        }
+
+        private static void RecordNetworkFailure(string reason)
+        {
+            _networkFailureCount++;
+            float delay = Mathf.Min(10f, Mathf.Pow(2f, Mathf.Min(_networkFailureCount - 1, 3)));
+            _nextNetworkRetryTime = Time.unscaledTime + delay;
+            _networkStatus = $"Retrying in {delay:0}s.";
+            Log.Warning($"[MPChallenge][Net] {reason}");
         }
 
         private static void SyncChallengeAreaFromActiveState()
@@ -1000,21 +1505,259 @@ namespace rowemod.Challenges
             Quaternion rotation = ArrayToQuaternion(_activeChallenge.Rotation, Quaternion.identity);
             Vector3 size = ArrayToVector3(_activeChallenge.Size,
                 new Vector3(Config.challengeSettings.challengeSizeX, Config.challengeSettings.challengeSizeY, Config.challengeSettings.challengeSizeZ));
+            string areaStateSignature = BuildAreaStateSignature(_activeChallenge);
 
             ChallengeArea active = ChallengeAreaManager.Active;
-            if (active == null)
+            if (active == null || !string.Equals(_activeAreaStateSignature, areaStateSignature, StringComparison.Ordinal))
             {
                 ChallengeAreaManager.Create(position, size, rotation, "VehicleColliders");
+                _activeAreaStateSignature = areaStateSignature;
+                _wasLocalPlayerInsideArea = false;
+                ResetCompletionDiagnostics();
+                Log.Msg($"[MPChallenge][Area] Recreated synced challenge area: pos={FormatVector3(position)}, rot={FormatQuaternion(rotation)}, size={FormatVector3(size)}, signatureHash={areaStateSignature?.GetHashCode() ?? 0}.");
             }
             else
             {
                 ChallengeAreaManager.SetPosition(position);
                 ChallengeAreaManager.SetRotation(rotation);
                 ChallengeAreaManager.SetSize(size);
+                Log.Msg($"[MPChallenge][Area] Updated existing synced challenge area: pos={FormatVector3(position)}, rot={FormatQuaternion(rotation)}, size={FormatVector3(size)}.");
             }
 
             ChallengeAreaManager.SetVisible(Config.challengeSettings.challengeVisible);
             ChallengeAreaManager.SetCompleted(IsLocalPlayerComplete());
+            Log.Msg($"[MPChallenge][Area] Synced challenge area flags: visible={Config.challengeSettings.challengeVisible}, completed={IsLocalPlayerComplete()}, activeExists={ChallengeAreaManager.Active != null}.");
+        }
+
+        private static bool ValidateNetworkState(NetworkChallengeState state, out string reason)
+        {
+            reason = null;
+            if (state == null)
+                return FailValidation("state is null", out reason);
+            if (state.Version != ProtocolVersion)
+                return FailValidation($"unsupported version {state.Version}", out reason);
+            if (!IsBoundedText(state.ChallengeId) || !Guid.TryParseExact(state.ChallengeId, "N", out _))
+                return FailValidation("invalid challenge id", out reason);
+            if (state.Revision < 1)
+                return FailValidation("invalid revision", out reason);
+            if (!IsBoundedText(state.CreatorKey) || !IsBoundedText(state.CreatorName))
+                return FailValidation("invalid creator identity", out reason);
+            if (state.Tricks == null || state.Tricks.Count == 0 || state.Tricks.Count > MaxTricks)
+                return FailValidation("invalid trick count", out reason);
+            if (state.Tricks.Any(trick => !IsBoundedText(trick)))
+                return FailValidation("invalid trick name", out reason);
+            if (state.PlayerCompleted == null || state.PlayerCompleted.Count > MaxPlayers)
+                return FailValidation("invalid player completion map", out reason);
+            if (state.PlayerCompleted.Keys.Any(key => !IsBoundedText(key)))
+                return FailValidation("invalid player key", out reason);
+            if (!IsValidVector(state.Position, 3, -100000f, 100000f))
+                return FailValidation("invalid position", out reason);
+            if (!IsValidQuaternion(state.Rotation))
+                return FailValidation("invalid rotation", out reason);
+            if (!IsValidVector(state.Size, 3, 0.1f, 1000f))
+                return FailValidation("invalid size", out reason);
+
+            return true;
+        }
+
+        private static bool ValidateNetworkCommand(NetworkChallengeCommand command)
+        {
+            if (command == null ||
+                command.Version != ProtocolVersion ||
+                !IsBoundedText(command.PlayerKey) ||
+                !IsBoundedText(command.PlayerName))
+            {
+                return false;
+            }
+
+            if (string.Equals(command.Type, "presence", StringComparison.Ordinal))
+                return string.IsNullOrEmpty(command.ChallengeId);
+
+            return string.Equals(command.Type, "complete", StringComparison.Ordinal) &&
+                   Guid.TryParseExact(command.ChallengeId, "N", out _);
+        }
+
+        private static bool FailValidation(string message, out string reason)
+        {
+            reason = message;
+            return false;
+        }
+
+        private static bool IsBoundedText(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) && value.Length <= MaxTextLength;
+        }
+
+        private static bool IsStableNetworkPlayerKey(string value)
+        {
+            return !string.IsNullOrEmpty(value) &&
+                   (value.StartsWith("fusion:", StringComparison.Ordinal) ||
+                    value.StartsWith("token:", StringComparison.Ordinal));
+        }
+
+        private static bool IsValidVector(float[] values, int requiredLength, float minimum, float maximum)
+        {
+            if (values == null || values.Length != requiredLength)
+                return false;
+
+            return values.All(value => IsFinite(value) && value >= minimum && value <= maximum);
+        }
+
+        private static bool IsValidQuaternion(float[] values)
+        {
+            if (values == null || values.Length != 4 || values.Any(value => !IsFinite(value)))
+                return false;
+
+            float magnitudeSquared = values.Sum(value => value * value);
+            return magnitudeSquared > 0.5f && magnitudeSquared < 1.5f;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static void RegisterPresence(string playerKey, string playerName)
+        {
+            if (!IsBoundedText(playerKey) || !IsBoundedText(playerName))
+                return;
+
+            bool isNew = !_presenceByKey.ContainsKey(playerKey);
+            _presenceByKey[playerKey] = new PresenceRecord
+            {
+                DisplayName = playerName,
+                LastSeenTime = Time.unscaledTime
+            };
+
+            if (isNew)
+            {
+                _nextPlayerListRefreshTime = 0f;
+                Log.Msg($"[MPChallenge][Players] Presence discovered: {playerName} ({playerKey}).");
+            }
+        }
+
+        private static void ExpirePresenceRecords()
+        {
+            float cutoff = Time.unscaledTime - PresenceExpirySeconds;
+            string localKey = GetLocalPlayerKey();
+            string[] expiredKeys = _presenceByKey
+                .Where(entry =>
+                    entry.Value.LastSeenTime < cutoff &&
+                    !string.Equals(entry.Key, localKey, StringComparison.OrdinalIgnoreCase))
+                .Select(entry => entry.Key)
+                .ToArray();
+
+            foreach (string key in expiredKeys)
+                _presenceByKey.Remove(key);
+        }
+
+        private static void ResetActiveChallenge()
+        {
+            _activeChallenge = null;
+            _activeAreaStateSignature = null;
+            _pendingLocalCompletionChallengeId = null;
+            _statePublishPending = false;
+            _wasLocalPlayerInsideArea = false;
+            ResetCompletionDiagnostics();
+            ChallengeAreaManager.DestroyActive();
+        }
+
+        private static void ResetLocalSessionState()
+        {
+            ResetActiveChallenge();
+            _presenceByKey.Clear();
+            _rowePlayers.Clear();
+            _cachedLocalPlayerKey = null;
+            _cachedLocalPlayerName = null;
+            _cachedLocalPlayerObjectId = 0;
+            _nextLocalPlayerCacheRefreshTime = 0f;
+            _nextPlayerListRefreshTime = 0f;
+            _nextPresenceBroadcastTime = 0f;
+            _clearStatePending = false;
+            _networkFailureCount = 0;
+            _nextNetworkRetryTime = 0f;
+            _networkStatus = "Waiting for multiplayer networking.";
+            _trickDetection = null;
+            _playerScanDisabled = false;
+            _trickHistoryDisabled = false;
+            _nextPlayerScanRetryTime = 0f;
+            _nextTrickHistoryRetryTime = 0f;
+            _nextUpdateErrorLogTime = 0f;
+        }
+
+        private static string BuildAreaStateSignature(ActiveChallenge challenge)
+        {
+            if (challenge == null)
+                return null;
+
+            return string.Join("|",
+                challenge.ChallengeId ?? string.Empty,
+                challenge.CreatorKey ?? string.Empty,
+                challenge.CreatorName ?? string.Empty,
+                challenge.Tricks != null ? string.Join(",", challenge.Tricks) : string.Empty,
+                FloatArraySignature(challenge.Position),
+                FloatArraySignature(challenge.Rotation),
+                FloatArraySignature(challenge.Size));
+        }
+
+        private static string FloatArraySignature(float[] values)
+        {
+            if (values == null || values.Length == 0)
+                return string.Empty;
+
+            return string.Join(",", values.Select(value => value.ToString("R")));
+        }
+
+        private static string DescribeActiveChallenge(ActiveChallenge challenge)
+        {
+            if (challenge == null)
+                return "null challenge";
+
+            string tricks = challenge.Tricks != null ? string.Join(" + ", challenge.Tricks) : "none";
+            int completionCount = challenge.PlayerCompleted != null ? challenge.PlayerCompleted.Count : 0;
+            return $"id='{challenge.ChallengeId ?? "null"}', revision={challenge.Revision}, creatorKey='{challenge.CreatorKey ?? "null"}', creatorName='{challenge.CreatorName ?? "null"}', tricks='{tricks}', players={completionCount}, pos={FormatArray3(challenge.Position)}, rot={FormatArray4(challenge.Rotation)}, size={FormatArray3(challenge.Size)}";
+        }
+
+        private static string DescribeArea(ChallengeArea area)
+        {
+            if (area == null)
+                return "null area";
+
+            return $"id={area.GetInstanceID()}, go='{area.gameObject.name}', pos={FormatVector3(area.transform.position)}, rot={FormatQuaternion(area.transform.rotation)}, size={FormatVector3(area.transform.localScale)}, active={area.gameObject.activeSelf}";
+        }
+
+        private static string FormatArray3(float[] values)
+        {
+            if (values == null || values.Length < 3)
+                return "(null)";
+
+            return $"({values[0]:0.###}, {values[1]:0.###}, {values[2]:0.###})";
+        }
+
+        private static string FormatArray4(float[] values)
+        {
+            if (values == null || values.Length < 4)
+                return "(null)";
+
+            return $"({values[0]:0.###}, {values[1]:0.###}, {values[2]:0.###}, {values[3]:0.###})";
+        }
+
+        private static string FormatVector3(Vector3 value)
+        {
+            return $"({value.x:0.###}, {value.y:0.###}, {value.z:0.###})";
+        }
+
+        private static string FormatQuaternion(Quaternion value)
+        {
+            return $"({value.x:0.###}, {value.y:0.###}, {value.z:0.###}, {value.w:0.###})";
+        }
+
+        private static string TrimForLog(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+
+            return text.Length <= 500 ? text : text.Substring(0, 500) + "...";
         }
 
         private static bool IsLocalPlayerComplete()
@@ -1056,9 +1799,12 @@ namespace rowemod.Challenges
 
         private static void ClearActiveChallenge()
         {
-            ChallengeAreaManager.DestroyActive();
-            _activeChallenge = null;
-            TryPublishNetworkState("{}");
+            if (!IsLocalCreator())
+                return;
+
+            Log.Msg("[MPChallenge] ClearActiveChallenge requested by local creator.");
+            _clearStatePending = !TryClearNetworkState();
+            ResetActiveChallenge();
         }
 
         private static void AddLocalFallbackPlayerIfNeeded()
@@ -1080,11 +1826,6 @@ namespace rowemod.Challenges
                 DisplayName = GetLocalPlayerName(),
                 NetworkPlayer = null
             });
-
-            if (_activeChallenge != null && !_activeChallenge.PlayerCompleted.ContainsKey(key))
-            {
-                _activeChallenge.PlayerCompleted[key] = false;
-            }
         }
 
         private static bool IsLocalCreator()
@@ -1095,6 +1836,33 @@ namespace rowemod.Challenges
 
         private static string GetLocalPlayerKey()
         {
+            EnsureLocalPlayerCache(false);
+            return _cachedLocalPlayerKey;
+        }
+
+        private static string GetLocalPlayerName()
+        {
+            EnsureLocalPlayerCache(false);
+            return !string.IsNullOrWhiteSpace(_cachedLocalPlayerName) ? _cachedLocalPlayerName : "Local Player";
+        }
+
+        private static void EnsureLocalPlayerCache(bool forceRefresh)
+        {
+            int currentObjectId = Memory.physicsDrivenCharacter != null ? Memory.physicsDrivenCharacter.GetInstanceID() : 0;
+            bool cacheMatchesCharacter = currentObjectId == 0 ||
+                                         _cachedLocalPlayerObjectId == 0 ||
+                                         _cachedLocalPlayerObjectId == currentObjectId;
+
+            if (!forceRefresh &&
+                cacheMatchesCharacter &&
+                !string.IsNullOrEmpty(_cachedLocalPlayerKey) &&
+                Time.unscaledTime < _nextLocalPlayerCacheRefreshTime)
+            {
+                return;
+            }
+
+            _nextLocalPlayerCacheRefreshTime = Time.unscaledTime + LocalPlayerCacheRefreshInterval;
+
             NetworkPlayer[] players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
             foreach (NetworkPlayer player in players)
             {
@@ -1105,31 +1873,54 @@ namespace rowemod.Challenges
                     continue;
 
                 string name = ResolvePlayerDisplayName(player);
-                return ResolvePlayerKey(player, name);
+                string key = ResolvePlayerKey(player, name);
+                CacheLocalPlayer(key, name);
+                return;
             }
 
-            return Memory.physicsDrivenCharacter != null
-                ? $"local:{Memory.physicsDrivenCharacter.GetInstanceID()}"
-                : null;
+            if (Memory.physicsDrivenCharacter != null)
+            {
+                CacheLocalPlayer($"local:{Memory.physicsDrivenCharacter.GetInstanceID()}", "Local Player");
+                return;
+            }
+
+            _cachedLocalPlayerKey = null;
+            _cachedLocalPlayerName = null;
+            _cachedLocalPlayerObjectId = 0;
         }
 
-        private static string GetLocalPlayerName()
+        private static void CacheLocalPlayer(string key, string name)
         {
-            NetworkPlayer[] players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
-            foreach (NetworkPlayer player in players)
-            {
-                if (player == null)
-                    continue;
+            if (string.IsNullOrEmpty(key))
+                return;
 
-                if (TryGetBoolMember(player, "_isLocal", out bool isLocal) && isLocal)
-                    return ResolvePlayerDisplayName(player);
-            }
-
-            return "Local Player";
+            _cachedLocalPlayerKey = key;
+            _cachedLocalPlayerName = !string.IsNullOrWhiteSpace(name) ? name : "Local Player";
+            _cachedLocalPlayerObjectId = Memory.physicsDrivenCharacter != null ? Memory.physicsDrivenCharacter.GetInstanceID() : 0;
         }
 
         private static string ResolvePlayerKey(NetworkPlayer player, string displayName)
         {
+            try
+            {
+                if (player.PlayerReference.IsRealPlayer)
+                    return $"fusion:{player.PlayerReference.RawEncoded}";
+            }
+            catch
+            {
+                // Fall back to older game builds that do not expose PlayerReference cleanly.
+            }
+
+            try
+            {
+                if (player.Token != 0)
+                    return $"token:{player.Token}";
+            }
+            catch
+            {
+                // Continue through compatibility fallbacks.
+            }
+
             string playerId = TryGetStringMember(player, "PlayerId") ??
                               TryGetStringMember(player, "playerId") ??
                               TryGetStringMember(player, "Network_playerId") ??
@@ -1145,7 +1936,18 @@ namespace rowemod.Challenges
 
         private static string ResolvePlayerDisplayName(NetworkPlayer player)
         {
-            string name = TryGetStringMember(player, "DisplayName") ??
+            string name = null;
+            try
+            {
+                name = player.GetUsername();
+            }
+            catch
+            {
+                // Continue through compatibility fallbacks.
+            }
+
+            name = name ??
+                          TryGetStringMember(player, "DisplayName") ??
                           TryGetStringMember(player, "PlayerName") ??
                           TryGetStringMember(player, "UserName") ??
                           TryGetStringMember(player, "Username") ??
