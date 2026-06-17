@@ -541,6 +541,7 @@ namespace rowemod.Mods
             if (PoseCache.Count == 0)
             {
                 Config.ResetGrindsTab();
+                ApplyLerpSpeedToRuntime();
                 Config.Save();
                 return;
             }
@@ -565,8 +566,18 @@ namespace rowemod.Mods
             }
 
             Config.ResetGrindsTab();
+            ApplyLerpSpeedToRuntime();
             Config.Save();
             Log.Msg($"Reset {resetCount} grind poses to captured defaults.");
+        }
+
+        private static void ApplyLerpSpeedToRuntime()
+        {
+            if (Memory.bikeGrindPoser == null)
+                return;
+
+            Memory.bikeGrindPoser._lerpSpeedAir = Config.physics.grindPoseLerpSpeed;
+            Memory.bikeGrindPoser._lerpSpeed = Config.physics.grindPoseLerpSpeed;
         }
 
         public static IEnumerator DelayedApplyConfigRoutine()
@@ -807,6 +818,52 @@ namespace rowemod.Mods
             }
 
             return $"{RequiredPosePrefix}Grind Pose {index + 1}";
+        }
+
+        public static string[] GetAvailableGrindNames()
+        {
+            var names = new List<string>();
+
+            try
+            {
+                BikeGrindPoseData[] foundPoses = Resources.FindObjectsOfTypeAll<BikeGrindPoseData>();
+                if (foundPoses != null)
+                {
+                    foreach (BikeGrindPoseData pose in foundPoses)
+                    {
+                        if (pose == null)
+                            continue;
+
+                        AddGrindName(
+                            names,
+                            !string.IsNullOrWhiteSpace(pose.GrindName)
+                                ? pose.GrindName
+                                : pose.name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"Failed to discover grind names for challenge picker: {ex.Message}");
+            }
+
+            if (Config.grindPoseData?.poses != null)
+            {
+                foreach (string poseKey in Config.grindPoseData.poses.Keys)
+                    AddGrindName(names, poseKey);
+            }
+
+            return names
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name)
+                .ToArray();
+        }
+
+        private static void AddGrindName(List<string> names, string name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                names.Add(name.Trim());
         }
 
         private static bool TryGetConfigEntryForPose(BikeGrindPoseData pose, string poseKey, out GrindPoseConfigEntry entry)

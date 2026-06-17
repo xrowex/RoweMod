@@ -16,20 +16,33 @@ namespace rowemod.Mods
 
         private const int AxisCount = 3;
         private const int RingSegments = 64;
+        private const int TubeSegments = 10;
+        private const int ArrowSegments = 16;
         private const float HandlePickRadius = 14f;
+        private static readonly string[] FrontEndPoseTransformNames =
+        {
+            "Headset Visuals",
+            "Front Wheel Visuals",
+            "Front Wheel Front"
+        };
         private static readonly Color[] AxisColors =
         {
-            new Color(0.95f, 0.22f, 0.22f),
-            new Color(0.28f, 0.92f, 0.35f),
-            new Color(0.25f, 0.55f, 1f)
+            new Color(1f, 0.05f, 0.05f),
+            new Color(0.05f, 1f, 0.12f),
+            new Color(0.05f, 0.35f, 1f)
         };
+        private static readonly Color HoverColor = new Color(1f, 0.78f, 0.05f);
 
         private static GameObject posedBike;
         private static GameObject placementBike;
         private static GameObject gizmoRoot;
-        private static readonly LineRenderer[] moveLines = new LineRenderer[AxisCount];
-        private static readonly LineRenderer[] rotationRings = new LineRenderer[AxisCount];
-        private static Material gizmoMaterial;
+        private static readonly GameObject[] moveHandles = new GameObject[AxisCount];
+        private static readonly GameObject[] rotationHandles = new GameObject[AxisCount];
+        private static readonly MeshRenderer[] moveRenderers = new MeshRenderer[AxisCount];
+        private static readonly MeshRenderer[] rotationRenderers = new MeshRenderer[AxisCount];
+        private static readonly Material[] gizmoMaterials = new Material[AxisCount];
+        private static Mesh moveHandleMesh;
+        private static Mesh rotationHandleMesh;
         private static UnityEngine.Camera activeCamera;
 
         private static GizmoMode gizmoMode = GizmoMode.Move;
@@ -98,7 +111,11 @@ namespace rowemod.Mods
 
             RefreshCamera();
             if (activeCamera == null)
+            {
+                if (isPlacing)
+                    statusText = "No active camera was found for bike placement.";
                 return;
+            }
 
             if (isPlacing)
             {
@@ -320,14 +337,22 @@ namespace rowemod.Mods
             if (mouse == null)
                 return;
 
-            if (TryGetCursorPlacement(mouse.position.ReadValue(), out Vector3 point, out Quaternion rotation))
+            bool hasPlacement = TryGetCursorPlacement(
+                mouse.position.ReadValue(),
+                out Vector3 point,
+                out Quaternion rotation,
+                out string placementFailureReason);
+
+            if (hasPlacement)
             {
                 placementBike.SetActive(true);
                 placementBike.transform.SetPositionAndRotation(point, rotation);
+                statusText = "Left-click to place the bike. Right-click cancels.";
             }
             else
             {
                 placementBike.SetActive(false);
+                statusText = placementFailureReason;
             }
 
             if (mouse.rightButton.wasPressedThisFrame)
@@ -336,7 +361,22 @@ namespace rowemod.Mods
                 return;
             }
 
-            if (!IsMouseOverMenu() && mouse.leftButton.wasPressedThisFrame && placementBike.activeSelf)
+            if (!mouse.leftButton.wasPressedThisFrame)
+                return;
+
+            if (IsMouseOverMenu())
+            {
+                statusText = "Move the cursor off the RoweMod menu before placing.";
+                return;
+            }
+
+            if (!placementBike.activeSelf)
+            {
+                statusText = placementFailureReason;
+                return;
+            }
+
+            if (placementBike.activeSelf)
             {
                 if (posedBike != null)
                     DestroyVisualBike(posedBike);
@@ -355,13 +395,24 @@ namespace rowemod.Mods
             }
         }
 
-        private static bool TryGetCursorPlacement(Vector2 screenPosition, out Vector3 point, out Quaternion rotation)
+        private static bool TryGetCursorPlacement(
+            Vector2 screenPosition,
+            out Vector3 point,
+            out Quaternion rotation,
+            out string failureReason)
         {
             point = Vector3.zero;
             rotation = Quaternion.identity;
+            failureReason = null;
+
+            if (activeCamera == null)
+            {
+                failureReason = "No active camera was found for bike placement.";
+                return false;
+            }
 
             Ray ray = activeCamera.ScreenPointToRay(screenPosition);
-            if (!TryRaycastWorld(ray, 500f, out RaycastHit hit))
+            if (!TryRaycastWorld(ray, 500f, out RaycastHit hit, out failureReason))
                 return false;
 
             Vector3 normal = hit.normal.normalized;
@@ -371,6 +422,7 @@ namespace rowemod.Mods
 
             point = hit.point;
             rotation = Quaternion.LookRotation(forward.normalized, normal);
+            failureReason = null;
             return true;
         }
 
@@ -527,11 +579,11 @@ namespace rowemod.Mods
             Dictionary<Transform, Transform> transformMap,
             BikeVisualRig rig)
         {
-            Transform frontEndSource = FindBestPosePivot(sourceRoot, GetFrontEndPivotScore);
-            AddIndependentFrontEndPivot(sourceRoot, transformMap, rig, frontEndSource);
-
-            Transform barsSource = FindBestPosePivot(sourceRoot, GetHandlebarPivotScore);
-            AddIndependentFrontEndPivot(sourceRoot, transformMap, rig, barsSource);
+            foreach (string transformName in FrontEndPoseTransformNames)
+            {
+                Transform sourcePivot = FindPosePivotByName(sourceRoot, transformName);
+                AddFrontEndPivot(sourceRoot, transformMap, rig, sourcePivot);
+            }
 
             Transform bottomBracketSource = FindBestPosePivot(sourceRoot, GetBottomBracketPivotScore);
             if (bottomBracketSource != null &&
@@ -541,6 +593,21 @@ namespace rowemod.Mods
                 rig.BottomBracketBaseLocalRotation = bottomBracketPivot.localRotation;
                 rig.BottomBracketPath = GetTransformPath(bottomBracketSource, sourceRoot);
             }
+        }
+
+        private static Transform FindPosePivotByName(Transform sourceRoot, string transformName)
+        {
+            foreach (Transform candidate in sourceRoot.GetComponentsInChildren<Transform>(true))
+            {
+                if (candidate != null &&
+                    candidate != sourceRoot &&
+                    candidate.name == transformName)
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
         }
 
         private static Transform FindBestPosePivot(Transform sourceRoot, Func<string, int> getScore)
@@ -564,7 +631,7 @@ namespace rowemod.Mods
             return best;
         }
 
-        private static void AddIndependentFrontEndPivot(
+        private static void AddFrontEndPivot(
             Transform sourceRoot,
             Dictionary<Transform, Transform> transformMap,
             BikeVisualRig rig,
@@ -576,54 +643,12 @@ namespace rowemod.Mods
                 return;
             }
 
-            for (int i = rig.FrontEndPivots.Count - 1; i >= 0; i--)
-            {
-                Transform existing = rig.FrontEndPivots[i].Transform;
-                if (clonePivot.IsChildOf(existing))
-                    return;
-
-                if (existing.IsChildOf(clonePivot))
-                    rig.FrontEndPivots.RemoveAt(i);
-            }
-
             rig.FrontEndPivots.Add(new PosePivot
             {
                 Transform = clonePivot,
                 BaseLocalRotation = clonePivot.localRotation,
                 Path = GetTransformPath(sourcePivot, sourceRoot)
             });
-        }
-
-        private static int GetFrontEndPivotScore(string normalizedName)
-        {
-            return normalizedName switch
-            {
-                "steeringpivot" => 100,
-                "steerpivot" => 98,
-                "steering" => 96,
-                "frontendpivot" => 94,
-                "frontend" => 92,
-                "forkanchor" => 90,
-                "forksanchor" => 90,
-                "forks" => 86,
-                "fork" => 84,
-                _ when normalizedName.Contains("steering") => 70,
-                _ when normalizedName.Contains("fork") && normalizedName.Contains("anchor") => 68,
-                _ => 0
-            };
-        }
-
-        private static int GetHandlebarPivotScore(string normalizedName)
-        {
-            return normalizedName switch
-            {
-                "barsanchor" => 100,
-                "handlebarsanchor" => 100,
-                "bars" => 90,
-                "handlebars" => 90,
-                _ when normalizedName.Contains("bars") && normalizedName.Contains("anchor") => 80,
-                _ => 0
-            };
         }
 
         private static int GetBottomBracketPivotScore(string normalizedName)
@@ -842,6 +867,15 @@ namespace rowemod.Mods
 
         private static bool TryRaycastWorld(Ray ray, float maxDistance, out RaycastHit hit)
         {
+            return TryRaycastWorld(ray, maxDistance, out hit, out _);
+        }
+
+        private static bool TryRaycastWorld(
+            Ray ray,
+            float maxDistance,
+            out RaycastHit hit,
+            out string failureReason)
+        {
             int placementMask = UnityEngine.Physics.DefaultRaycastLayers & ~(1 << 31);
             RaycastHit[] hits = UnityEngine.Physics.RaycastAll(
                 ray,
@@ -850,25 +884,62 @@ namespace rowemod.Mods
                 QueryTriggerInteraction.Ignore);
             Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
 
-            Transform playerRoot = Memory.rMbCharacter != null ? Memory.rMbCharacter.transform : null;
+            int colliderHits = 0;
+            int ignoredHits = 0;
             foreach (RaycastHit candidate in hits)
             {
                 if (candidate.collider == null)
                     continue;
 
+                colliderHits++;
                 Transform hitTransform = candidate.collider.transform;
-                if (playerRoot != null &&
-                    (hitTransform == playerRoot || hitTransform.IsChildOf(playerRoot)))
+                if (ShouldIgnorePlacementHit(hitTransform))
                 {
+                    ignoredHits++;
                     continue;
                 }
 
                 hit = candidate;
+                failureReason = null;
                 return true;
             }
 
             hit = default;
+            failureReason = colliderHits == 0
+                ? "No solid collider was hit under the cursor. Aim at world geometry."
+                : ignoredHits == colliderHits
+                    ? "Only hit the player/current bike/posed bike. Aim at the ground or another solid surface."
+                    : "No valid placement surface was found under the cursor.";
             return false;
+        }
+
+        private static bool ShouldIgnorePlacementHit(Transform hitTransform)
+        {
+            if (hitTransform == null)
+                return true;
+
+            return IsPartOfObject(hitTransform, Memory.rMbCharacter) ||
+                   IsPartOfObject(hitTransform, Memory.gamePlayer) ||
+                   IsPartOfObject(hitTransform, Memory.physicsDrivenCharacter) ||
+                   IsPartOfObject(hitTransform, Memory.playersBike) ||
+                   IsPartOfObject(hitTransform, placementBike) ||
+                   IsPartOfObject(hitTransform, posedBike) ||
+                   IsPartOfBody(hitTransform, Memory.springBody) ||
+                   IsPartOfBody(hitTransform, Memory.chassisRb);
+        }
+
+        private static bool IsPartOfObject(Transform hitTransform, GameObject root)
+        {
+            return root != null &&
+                   root.transform != null &&
+                   (hitTransform == root.transform || hitTransform.IsChildOf(root.transform));
+        }
+
+        private static bool IsPartOfBody(Transform hitTransform, Rigidbody body)
+        {
+            return body != null &&
+                   body.transform != null &&
+                   (hitTransform == body.transform || hitTransform.IsChildOf(body.transform));
         }
 
         private static void ResetTransform()
@@ -886,33 +957,46 @@ namespace rowemod.Mods
                 return;
 
             gizmoRoot = new GameObject("Bike Poser Gizmo");
-            gizmoMaterial = CreateGizmoMaterial();
-            if (gizmoMaterial == null)
-            {
-                Object.Destroy(gizmoRoot);
-                gizmoRoot = null;
-                statusText = "Bike placed, but the transform gizmo shader was unavailable.";
-                return;
-            }
 
             try
             {
+                moveHandleMesh = CreateMoveHandleMesh();
+                rotationHandleMesh = CreateRotationHandleMesh();
+
                 for (int axis = 0; axis < AxisCount; axis++)
                 {
-                    moveLines[axis] = CreateLineRenderer($"Move Axis {axis}", false);
-                    rotationRings[axis] = CreateLineRenderer($"Rotation Ring {axis}", true);
+                    gizmoMaterials[axis] = CreateGizmoMaterial(AxisColors[axis], axis);
+                    if (gizmoMaterials[axis] == null)
+                        throw new InvalidOperationException("A transform gizmo material could not be created.");
+
+                    moveHandles[axis] = CreateMeshHandle(
+                        $"Move Axis {axis}",
+                        moveHandleMesh,
+                        gizmoMaterials[axis],
+                        out moveRenderers[axis]);
+                    rotationHandles[axis] = CreateMeshHandle(
+                        $"Rotation Ring {axis}",
+                        rotationHandleMesh,
+                        gizmoMaterials[axis],
+                        out rotationRenderers[axis]);
                 }
+
+                Log.Msg(
+                    $"[BikePoser] Mesh gizmo created with shader " +
+                    $"'{gizmoMaterials[0].shader?.name ?? "unknown"}'.");
             }
             catch (Exception ex)
             {
                 Object.Destroy(gizmoRoot);
                 gizmoRoot = null;
-                gizmoMaterial = null;
+                DestroyGizmoMaterials();
+                DestroyGizmoMeshes();
+                statusText = "Bike placed, but the transform gizmo could not be created.";
                 Log.Error($"[BikePoser] Gizmo creation failed: {ex}");
             }
         }
 
-        private static Material CreateGizmoMaterial()
+        private static Material CreateGizmoMaterial(Color color, int axis)
         {
             Shader shader = Shader.Find("HDRP/Unlit") ??
                             Shader.Find("Sprites/Default") ??
@@ -926,35 +1010,270 @@ namespace rowemod.Mods
 
             Material material = new Material(shader)
             {
-                name = "Bike Poser Gizmo Material",
-                renderQueue = 4000
+                name = $"Bike Poser Gizmo Axis {axis} Material",
+                renderQueue = 3100
             };
 
-            if (material.HasProperty("_BaseColor"))
-                material.SetColor("_BaseColor", Color.white);
-            if (material.HasProperty("_UnlitColor"))
-                material.SetColor("_UnlitColor", Color.white);
+            material.SetOverrideTag("RenderType", "Opaque");
             if (material.HasProperty("_ZWrite"))
                 material.SetInt("_ZWrite", 0);
             if (material.HasProperty("_ZTest"))
-                material.SetInt("_ZTest", 8);
+                material.SetInt("_ZTest", (int)CompareFunction.Always);
+            if (material.HasProperty("_SurfaceType"))
+                material.SetFloat("_SurfaceType", 0f);
+            if (material.HasProperty("_AlphaCutoffEnable"))
+                material.SetFloat("_AlphaCutoffEnable", 0f);
+            if (material.HasProperty("_DoubleSidedEnable"))
+                material.SetFloat("_DoubleSidedEnable", 1f);
+
+            SetGizmoMaterialColor(material, color);
             return material;
         }
 
-        private static LineRenderer CreateLineRenderer(string name, bool loop)
+        private static GameObject CreateMeshHandle(
+            string name,
+            Mesh mesh,
+            Material material,
+            out MeshRenderer renderer)
         {
-            GameObject lineObject = new GameObject(name);
-            lineObject.transform.SetParent(gizmoRoot.transform, false);
-            LineRenderer line = lineObject.AddComponent<LineRenderer>();
-            line.sharedMaterial = gizmoMaterial;
-            line.useWorldSpace = true;
-            line.loop = loop;
-            line.numCapVertices = 6;
-            line.numCornerVertices = 4;
-            line.shadowCastingMode = ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.positionCount = loop ? RingSegments : 2;
-            return line;
+            GameObject handle = new GameObject(name);
+            handle.transform.SetParent(gizmoRoot.transform, false);
+
+            MeshFilter filter = handle.AddComponent<MeshFilter>();
+            filter.sharedMesh = mesh;
+
+            renderer = handle.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            renderer.sortingOrder = short.MaxValue;
+            return handle;
+        }
+
+        private static Mesh CreateMoveHandleMesh()
+        {
+            List<Vector3> vertices = new List<Vector3>();
+            List<int> triangles = new List<int>();
+
+            AddCylinder(vertices, triangles, 0f, 0.76f, 0.025f, ArrowSegments);
+            AddCone(vertices, triangles, 0.72f, 1f, 0.10f, ArrowSegments);
+
+            Mesh mesh = new Mesh
+            {
+                name = "Bike Poser Move Handle Mesh"
+            };
+            mesh.vertices = vertices.ToArray();
+            mesh.triangles = triangles.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static Mesh CreateRotationHandleMesh()
+        {
+            List<Vector3> vertices = new List<Vector3>(RingSegments * TubeSegments);
+            List<int> triangles = new List<int>(RingSegments * TubeSegments * 6);
+            const float ringRadius = 0.78f;
+            const float tubeRadius = 0.035f;
+
+            for (int ring = 0; ring < RingSegments; ring++)
+            {
+                float ringAngle = ring * Mathf.PI * 2f / RingSegments;
+                Vector3 radial = new Vector3(Mathf.Cos(ringAngle), Mathf.Sin(ringAngle), 0f);
+                Vector3 center = radial * ringRadius;
+
+                for (int tube = 0; tube < TubeSegments; tube++)
+                {
+                    float tubeAngle = tube * Mathf.PI * 2f / TubeSegments;
+                    vertices.Add(
+                        center +
+                        radial * (Mathf.Cos(tubeAngle) * tubeRadius) +
+                        Vector3.forward * (Mathf.Sin(tubeAngle) * tubeRadius));
+                }
+            }
+
+            for (int ring = 0; ring < RingSegments; ring++)
+            {
+                int nextRing = (ring + 1) % RingSegments;
+                for (int tube = 0; tube < TubeSegments; tube++)
+                {
+                    int nextTube = (tube + 1) % TubeSegments;
+                    int current = ring * TubeSegments + tube;
+                    int currentNext = ring * TubeSegments + nextTube;
+                    int next = nextRing * TubeSegments + tube;
+                    int nextNext = nextRing * TubeSegments + nextTube;
+
+                    triangles.Add(current);
+                    triangles.Add(next);
+                    triangles.Add(currentNext);
+                    triangles.Add(currentNext);
+                    triangles.Add(next);
+                    triangles.Add(nextNext);
+                }
+            }
+
+            Mesh mesh = new Mesh
+            {
+                name = "Bike Poser Rotation Handle Mesh"
+            };
+            mesh.vertices = vertices.ToArray();
+            mesh.triangles = triangles.ToArray();
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static void AddCylinder(
+            List<Vector3> vertices,
+            List<int> triangles,
+            float start,
+            float end,
+            float radius,
+            int segments)
+        {
+            int sideStart = vertices.Count;
+            for (int segment = 0; segment < segments; segment++)
+            {
+                float angle = segment * Mathf.PI * 2f / segments;
+                float x = Mathf.Cos(angle) * radius;
+                float y = Mathf.Sin(angle) * radius;
+                vertices.Add(new Vector3(x, y, start));
+                vertices.Add(new Vector3(x, y, end));
+            }
+
+            for (int segment = 0; segment < segments; segment++)
+            {
+                int next = (segment + 1) % segments;
+                int bottom = sideStart + segment * 2;
+                int top = bottom + 1;
+                int nextBottom = sideStart + next * 2;
+                int nextTop = nextBottom + 1;
+
+                triangles.Add(bottom);
+                triangles.Add(nextBottom);
+                triangles.Add(top);
+                triangles.Add(nextBottom);
+                triangles.Add(nextTop);
+                triangles.Add(top);
+            }
+
+            AddDisc(vertices, triangles, start, radius, segments, false);
+            AddDisc(vertices, triangles, end, radius, segments, true);
+        }
+
+        private static void AddCone(
+            List<Vector3> vertices,
+            List<int> triangles,
+            float start,
+            float end,
+            float radius,
+            int segments)
+        {
+            int ringStart = vertices.Count;
+            for (int segment = 0; segment < segments; segment++)
+            {
+                float angle = segment * Mathf.PI * 2f / segments;
+                vertices.Add(new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    Mathf.Sin(angle) * radius,
+                    start));
+            }
+
+            int tip = vertices.Count;
+            vertices.Add(new Vector3(0f, 0f, end));
+            for (int segment = 0; segment < segments; segment++)
+            {
+                int next = (segment + 1) % segments;
+                triangles.Add(ringStart + segment);
+                triangles.Add(ringStart + next);
+                triangles.Add(tip);
+            }
+
+            AddDisc(vertices, triangles, start, radius, segments, false);
+        }
+
+        private static void AddDisc(
+            List<Vector3> vertices,
+            List<int> triangles,
+            float z,
+            float radius,
+            int segments,
+            bool faceForward)
+        {
+            int center = vertices.Count;
+            vertices.Add(new Vector3(0f, 0f, z));
+            int ringStart = vertices.Count;
+            for (int segment = 0; segment < segments; segment++)
+            {
+                float angle = segment * Mathf.PI * 2f / segments;
+                vertices.Add(new Vector3(
+                    Mathf.Cos(angle) * radius,
+                    Mathf.Sin(angle) * radius,
+                    z));
+            }
+
+            for (int segment = 0; segment < segments; segment++)
+            {
+                int next = (segment + 1) % segments;
+                if (faceForward)
+                {
+                    triangles.Add(center);
+                    triangles.Add(ringStart + segment);
+                    triangles.Add(ringStart + next);
+                }
+                else
+                {
+                    triangles.Add(center);
+                    triangles.Add(ringStart + next);
+                    triangles.Add(ringStart + segment);
+                }
+            }
+        }
+
+        private static void SetGizmoMaterialColor(Material material, Color color)
+        {
+            if (material == null)
+                return;
+
+            material.color = color;
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", color);
+            if (material.HasProperty("_UnlitColor"))
+                material.SetColor("_UnlitColor", color);
+
+            Color emissive = color * 3f;
+            emissive.a = 1f;
+            if (material.HasProperty("_EmissiveColor"))
+                material.SetColor("_EmissiveColor", emissive);
+            if (material.HasProperty("_EmissionColor"))
+                material.SetColor("_EmissionColor", emissive);
+        }
+
+        private static void DestroyGizmoMaterials()
+        {
+            for (int axis = 0; axis < gizmoMaterials.Length; axis++)
+            {
+                if (gizmoMaterials[axis] != null)
+                    Object.Destroy(gizmoMaterials[axis]);
+
+                gizmoMaterials[axis] = null;
+            }
+        }
+
+        private static void DestroyGizmoMeshes()
+        {
+            if (moveHandleMesh != null)
+                Object.Destroy(moveHandleMesh);
+            if (rotationHandleMesh != null)
+                Object.Destroy(rotationHandleMesh);
+
+            moveHandleMesh = null;
+            rotationHandleMesh = null;
         }
 
         private static void UpdateGizmoGeometry()
@@ -966,45 +1285,26 @@ namespace rowemod.Mods
             Vector3 center = posedBike.transform.position;
             float distance = Vector3.Distance(activeCamera.transform.position, center);
             float size = Mathf.Clamp(distance * 0.12f, 0.65f, 3f) * gizmoScale;
-            float width = Mathf.Clamp(size * 0.025f, 0.012f, 0.07f);
 
             for (int axisIndex = 0; axisIndex < AxisCount; axisIndex++)
             {
                 Vector3 axis = GetAxis(axisIndex);
                 Color color = axisIndex == draggedAxis || axisIndex == hoveredAxis
-                    ? new Color(1f, 0.82f, 0.2f)
+                    ? HoverColor
                     : AxisColors[axisIndex];
+                SetGizmoMaterialColor(gizmoMaterials[axisIndex], color);
 
                 bool moveActive = gizmoMode == GizmoMode.Move;
-                moveLines[axisIndex].gameObject.SetActive(moveActive);
-                rotationRings[axisIndex].gameObject.SetActive(!moveActive);
+                moveHandles[axisIndex].SetActive(moveActive);
+                rotationHandles[axisIndex].SetActive(!moveActive);
 
-                if (moveActive)
-                {
-                    moveLines[axisIndex].startWidth = width;
-                    moveLines[axisIndex].endWidth = width * 1.8f;
-                    moveLines[axisIndex].startColor = color;
-                    moveLines[axisIndex].endColor = color;
-                    moveLines[axisIndex].SetPosition(0, center);
-                    moveLines[axisIndex].SetPosition(1, center + axis * size);
-                }
-                else
-                {
-                    LineRenderer ring = rotationRings[axisIndex];
-                    ring.startWidth = width;
-                    ring.endWidth = width;
-                    ring.startColor = color;
-                    ring.endColor = color;
-                    GetRingBasis(axis, out Vector3 tangent, out Vector3 bitangent);
-                    float radius = size * 0.78f;
-                    for (int segment = 0; segment < RingSegments; segment++)
-                    {
-                        float angle = segment * Mathf.PI * 2f / RingSegments;
-                        Vector3 ringPoint = center +
-                                            (tangent * Mathf.Cos(angle) + bitangent * Mathf.Sin(angle)) * radius;
-                        ring.SetPosition(segment, ringPoint);
-                    }
-                }
+                GameObject activeHandle = moveActive
+                    ? moveHandles[axisIndex]
+                    : rotationHandles[axisIndex];
+                activeHandle.transform.SetPositionAndRotation(
+                    center,
+                    Quaternion.FromToRotation(Vector3.forward, axis));
+                activeHandle.transform.localScale = Vector3.one * size;
             }
         }
 

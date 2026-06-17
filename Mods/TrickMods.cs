@@ -712,7 +712,16 @@ namespace rowemod.Mods
         }
         public static void ResetCustomTricks()
         {
-            if (rTrickSetData == null) return;
+            if (Config.tricks.trickSets == null)
+                Config.tricks.trickSets = new Dictionary<string, List<TrickEntry>>();
+
+            if (rTrickSetData == null)
+            {
+                Config.tricks.trickSets.Clear();
+                Config.Save();
+                Log.Warning("Trick runtime data was unavailable; cleared saved trick overrides only.");
+                return;
+            }
 
             foreach (var set in rTrickSetData)
             {

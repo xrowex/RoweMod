@@ -7,6 +7,11 @@ namespace rowemod.Challenges
 {
     public static class ChallengeAreaManager
     {
+        private const float GroundProbeStartOffset = 2.5f;
+        private const float GroundProbeDistance = 200f;
+        private const float GroundClearance = 0.02f;
+        private const float MinimumGroundNormalY = 0.1f;
+
         private static ChallengeArea _active;
         public static ChallengeArea Active => _active;
 
@@ -167,6 +172,82 @@ namespace rowemod.Challenges
                 out source);
         }
 
+        public static bool TryGetLocalPlayerGroundPlacement(
+            Vector3 areaSize,
+            out Vector3 position,
+            out Quaternion rotation,
+            out string source)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            source = "none";
+
+            if (!TryGetLocalPlayerPose(
+                    out Vector3 playerPosition,
+                    out Quaternion playerRotation,
+                    out string poseSource))
+            {
+                return false;
+            }
+
+            Vector3 forward = GetPreferredPlayerForward(playerRotation);
+            bool foundGround = TryGetGroundAlignedPlacement(
+                playerPosition,
+                forward,
+                areaSize,
+                out position,
+                out rotation,
+                out string groundSource);
+
+            source = foundGround
+                ? $"{poseSource}, heading={GetPreferredPlayerForwardSource()}, ground={groundSource}"
+                : $"{poseSource}, heading={GetPreferredPlayerForwardSource()}, ground=fallback";
+            return true;
+        }
+
+        public static bool TryGetGroundAlignedPlacement(
+            Vector3 referencePosition,
+            Vector3 referenceForward,
+            Vector3 areaSize,
+            out Vector3 position,
+            out Quaternion rotation,
+            out string groundSource)
+        {
+            position = referencePosition;
+            rotation = BuildGroundAlignedRotation(referenceForward, Vector3.up);
+            groundSource = "none";
+
+            Ray ray = new Ray(
+                referencePosition + Vector3.up * GroundProbeStartOffset,
+                Vector3.down);
+            RaycastHit[] hits = UnityEngine.Physics.RaycastAll(
+                ray,
+                GroundProbeStartOffset + GroundProbeDistance,
+                UnityEngine.Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+
+            foreach (RaycastHit hit in hits)
+            {
+                if (hit.collider == null ||
+                    hit.normal.y < MinimumGroundNormalY ||
+                    ShouldIgnoreGroundHit(hit.collider.transform))
+                {
+                    continue;
+                }
+
+                Vector3 groundNormal = hit.normal.normalized;
+                float halfHeight = Mathf.Max(Mathf.Abs(areaSize.y), 0.01f) * 0.5f;
+                position = hit.point + groundNormal * (halfHeight + GroundClearance);
+                rotation = BuildGroundAlignedRotation(referenceForward, groundNormal);
+                groundSource =
+                    $"{hit.collider.name ?? "unnamed collider"} normal={FormatVector3(groundNormal)}";
+                return true;
+            }
+
+            return false;
+        }
+
         public static bool IsLocalPlayerInsideActiveArea()
         {
             if (_active == null ||
@@ -176,6 +257,102 @@ namespace rowemod.Challenges
             }
 
             return _active.ContainsWorldPoint(position);
+        }
+
+        private static Vector3 GetPreferredPlayerForward(Quaternion fallbackRotation)
+        {
+            Transform transform = GetPreferredPlayerForwardTransform();
+            if (transform != null)
+            {
+                Vector3 transformForward = transform.forward;
+                if (IsFinite(transformForward) && transformForward.sqrMagnitude > 0.001f)
+                    return transformForward.normalized;
+            }
+
+            Vector3 fallbackForward = fallbackRotation * Vector3.forward;
+            return IsFinite(fallbackForward) && fallbackForward.sqrMagnitude > 0.001f
+                ? fallbackForward.normalized
+                : Vector3.forward;
+        }
+
+        private static string GetPreferredPlayerForwardSource()
+        {
+            Transform transform = GetPreferredPlayerForwardTransform();
+            return transform != null ? transform.name : "pose rotation";
+        }
+
+        private static Transform GetPreferredPlayerForwardTransform()
+        {
+            if (IsUsableTransform(Memory.physicsDrivenCharacter != null
+                    ? Memory.physicsDrivenCharacter.transform
+                    : null))
+            {
+                return Memory.physicsDrivenCharacter.transform;
+            }
+
+            if (IsUsableTransform(Memory.gamePlayer != null ? Memory.gamePlayer.transform : null))
+                return Memory.gamePlayer.transform;
+
+            return IsUsableTransform(Memory.rMbCharacter != null ? Memory.rMbCharacter.transform : null)
+                ? Memory.rMbCharacter.transform
+                : null;
+        }
+
+        private static Quaternion BuildGroundAlignedRotation(Vector3 referenceForward, Vector3 groundNormal)
+        {
+            Vector3 up = IsFinite(groundNormal) && groundNormal.sqrMagnitude > 0.001f
+                ? groundNormal.normalized
+                : Vector3.up;
+            Vector3 forward = IsFinite(referenceForward)
+                ? Vector3.ProjectOnPlane(referenceForward, up)
+                : Vector3.zero;
+
+            if (forward.sqrMagnitude < 0.001f)
+                forward = Vector3.ProjectOnPlane(Vector3.forward, up);
+            if (forward.sqrMagnitude < 0.001f)
+                forward = Vector3.ProjectOnPlane(Vector3.right, up);
+
+            return Quaternion.LookRotation(forward.normalized, up);
+        }
+
+        private static bool ShouldIgnoreGroundHit(Transform hitTransform)
+        {
+            if (hitTransform == null)
+                return true;
+
+            if (_active != null &&
+                _active.transform != null &&
+                (hitTransform == _active.transform || hitTransform.IsChildOf(_active.transform)))
+            {
+                return true;
+            }
+
+            return IsPartOfObject(hitTransform, Memory.rMbCharacter) ||
+                   IsPartOfObject(hitTransform, Memory.gamePlayer) ||
+                   IsPartOfObject(hitTransform, Memory.physicsDrivenCharacter) ||
+                   IsPartOfBody(hitTransform, Memory.springBody) ||
+                   IsPartOfBody(hitTransform, Memory.chassisRb);
+        }
+
+        private static bool IsPartOfObject(Transform hitTransform, GameObject root)
+        {
+            return root != null &&
+                   root.transform != null &&
+                   (hitTransform == root.transform || hitTransform.IsChildOf(root.transform));
+        }
+
+        private static bool IsPartOfBody(Transform hitTransform, Rigidbody body)
+        {
+            return body != null &&
+                   body.transform != null &&
+                   (hitTransform == body.transform || hitTransform.IsChildOf(body.transform));
+        }
+
+        private static bool IsUsableTransform(Transform transform)
+        {
+            return transform != null &&
+                   transform.gameObject != null &&
+                   transform.gameObject.activeInHierarchy;
         }
 
         private static bool TryGetRigidbodyPose(

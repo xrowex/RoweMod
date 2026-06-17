@@ -18,10 +18,15 @@ namespace rowemod.Challenges
 
             if (Menu.ModernButton("Spawn Challenge Area", 250f))
             {
+                Vector3 areaSize = new Vector3(
+                    Config.challengeSettings.challengeSizeX,
+                    Config.challengeSettings.challengeSizeY,
+                    Config.challengeSettings.challengeSizeZ);
                 Vector3 spawnPos = Vector3.zero;
                 Quaternion spawnRot = Quaternion.identity;
 
-                if (ChallengeAreaManager.TryGetLocalPlayerPose(
+                if (ChallengeAreaManager.TryGetLocalPlayerGroundPlacement(
+                        areaSize,
                         out Vector3 playerPosition,
                         out Quaternion playerRotation,
                         out _))
@@ -31,13 +36,23 @@ namespace rowemod.Challenges
                 }
                 else if (Camera.main != null)
                 {
-                    spawnPos = Camera.main.transform.position + Camera.main.transform.forward * 5f;
-                    spawnRot = Camera.main.transform.rotation;
+                    Vector3 cameraTarget =
+                        Camera.main.transform.position + Camera.main.transform.forward * 5f;
+                    if (!ChallengeAreaManager.TryGetGroundAlignedPlacement(
+                            cameraTarget,
+                            Camera.main.transform.forward,
+                            areaSize,
+                            out spawnPos,
+                            out spawnRot,
+                            out _))
+                    {
+                        spawnPos = cameraTarget;
+                    }
                 }
 
                 ChallengeAreaManager.Create(
                     spawnPos,
-                    new Vector3(Config.challengeSettings.challengeSizeX, Config.challengeSettings.challengeSizeY, Config.challengeSettings.challengeSizeZ),
+                    areaSize,
                     spawnRot
                 );
 
@@ -65,7 +80,8 @@ namespace rowemod.Challenges
 
                 if (Menu.ModernButton("Teleport to Me", 200f))
                 {
-                    if (ChallengeAreaManager.TryGetLocalPlayerPose(
+                    if (ChallengeAreaManager.TryGetLocalPlayerGroundPlacement(
+                            active.transform.localScale,
                             out Vector3 playerPosition,
                             out Quaternion playerRotation,
                             out _))

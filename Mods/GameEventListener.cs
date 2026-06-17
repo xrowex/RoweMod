@@ -9,12 +9,22 @@ using Il2CppMashBox.Character;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 using Log = rowemod.Utils.Log;
 
 namespace rowemod.Mods
 {
     public class GameEventListener : MelonMod
     {
+        private const string OpenMainMenuEventName =
+            "GameEvent_TitleLoop_TransitionTrigger_OpenMainMenu";
+        private const int IntroSkipMaxAttempts = 24;
+        private const float IntroSkipInitialDelay = 0.5f;
+        private const float IntroSkipRetryDelay = 0.25f;
+
+        private static bool _introSkipRoutineRunning;
+        private static bool _introSkipCompleted;
+
         private GameEvent _localGameplayHumanSpawnEvent;
         private GameEvent _localMenuHumanSpawnEvent;
         private GameEvent _playerResetAtMarker;
@@ -64,6 +74,8 @@ namespace rowemod.Mods
                 }
 
             }
+
+            ScheduleAutoIntroSkip("event listener initialization");
 
             //PLAYER SPAWNN
             if (_localGameplayHumanSpawnEvent == null)
@@ -137,6 +149,105 @@ namespace rowemod.Mods
             _mainMenuOpen.OnRaise.AddListener(mainMenuOpen);
 
 
+        }
+
+        public static void OnSceneInitialized(string sceneName)
+        {
+            if (!IsTitleScene(sceneName))
+                return;
+
+            ScheduleAutoIntroSkip($"scene '{sceneName}'");
+        }
+
+        private static void ScheduleAutoIntroSkip(string source)
+        {
+            if (!Config.autoSkipIntro || _introSkipCompleted || _introSkipRoutineRunning)
+                return;
+
+            string activeSceneName = SceneManager.GetActiveScene().name;
+            if (!IsTitleScene(activeSceneName))
+            {
+                Log.Msg(
+                    $"[IntroSkip] Waiting for a title scene. " +
+                    $"source={source}, activeScene='{activeSceneName}'.");
+                return;
+            }
+
+            _introSkipRoutineRunning = true;
+            MelonCoroutines.Start(AutoSkipIntroRoutine(source));
+        }
+
+        private static IEnumerator AutoSkipIntroRoutine(string source)
+        {
+            yield return new WaitForSecondsRealtime(IntroSkipInitialDelay);
+
+            for (int attempt = 1; attempt <= IntroSkipMaxAttempts; attempt++)
+            {
+                if (!Config.autoSkipIntro || _introSkipCompleted)
+                {
+                    _introSkipRoutineRunning = false;
+                    yield break;
+                }
+
+                string activeSceneName = SceneManager.GetActiveScene().name;
+                if (!IsTitleScene(activeSceneName))
+                {
+                    _introSkipRoutineRunning = false;
+                    yield break;
+                }
+
+                GameEvent openMainMenuEvent = FindGameEvent(OpenMainMenuEventName);
+                if (openMainMenuEvent != null)
+                {
+                    try
+                    {
+                        openMainMenuEvent.Raise();
+                        _introSkipCompleted = true;
+                        _introSkipRoutineRunning = false;
+                        Log.Msg(
+                            $"[IntroSkip] Raised '{OpenMainMenuEventName}' " +
+                            $"from {source} on attempt {attempt}.");
+                        yield break;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Log.Warning(
+                            $"[IntroSkip] Failed to raise '{OpenMainMenuEventName}' " +
+                            $"on attempt {attempt}: {ex.Message}");
+                    }
+                }
+
+                yield return new WaitForSecondsRealtime(IntroSkipRetryDelay);
+            }
+
+            _introSkipRoutineRunning = false;
+            Log.Warning(
+                $"[IntroSkip] Could not find '{OpenMainMenuEventName}' " +
+                $"after {IntroSkipMaxAttempts} attempts.");
+        }
+
+        private static GameEvent FindGameEvent(string eventName)
+        {
+            GameEvent[] events = Resources.FindObjectsOfTypeAll<GameEvent>();
+            if (events == null)
+                return null;
+
+            foreach (GameEvent gameEvent in events)
+            {
+                if (gameEvent != null &&
+                    string.Equals(gameEvent.name, eventName, System.StringComparison.Ordinal))
+                {
+                    return gameEvent;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsTitleScene(string sceneName)
+        {
+            return string.Equals(sceneName, "MashBox_Main", System.StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(sceneName, "TitleScreen", System.StringComparison.OrdinalIgnoreCase);
         }
 
         private void OnMainMenuOpen()

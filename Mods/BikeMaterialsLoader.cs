@@ -84,6 +84,20 @@ namespace rowemod.Mods
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
 
+        public static void ResetTabState()
+        {
+            _selectedCategory = null;
+            _selectedFolder = string.Empty;
+            _newPresetName = string.Empty;
+            _selectedPresetIndex = 0;
+
+            foreach (string categoryKey in categories.Keys)
+            {
+                _categoryVisibility[categoryKey] = true;
+                SetRenderersActive(categoryKey, true);
+            }
+        }
+
         public static void DrawBikeMaterialsTabUI()
         {
             try

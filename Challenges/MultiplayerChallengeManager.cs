@@ -13,6 +13,7 @@ using rowemod.Mods;
 using rowemod.Utils;
 using UnityEngine;
 using UnityEngine.Events;
+using PlayerTrickGameplay = Il2CppMashBox.Core.Runtime.Gameplay.ActivityTracking.PlayerTrickGameplay;
 
 namespace rowemod.Challenges
 {
@@ -25,18 +26,31 @@ namespace rowemod.Challenges
         private const string ChallengeStateEventKey = "rowemod.mp.challenge.state.v2";
         private const string ChallengeCommandEventKey = "rowemod.mp.challenge.command.v2";
         private const float CompletionPollInterval = 0.25f;
-        private const float LocalPlayerCacheRefreshInterval = 2f;
-        private const float PlayerListRefreshInterval = 2f;
+        private const float LocalPlayerCacheRefreshInterval = 30f;
+        private const float PlayerListRefreshInterval = 120f;
+        private const float PlayerListRefreshDebounceInterval = 0.25f;
         private const float PresenceBroadcastInterval = 5f;
         private const float PresenceExpirySeconds = 16f;
+        private const float PresenceExpiryCheckInterval = 2f;
+        private const float IdleUpdateInterval = 1f;
         private const float CompletionRetryInterval = 2f;
         private const float LocalLookupRetryInterval = 5f;
+        private const float TrickCatalogRefreshInterval = 2f;
+        private const float TrickGameplayBindRetryInterval = 5f;
         private const int MaxStateJsonLength = 16384;
         private const int MaxCommandJsonLength = 2048;
         private const int MaxPlayers = 64;
         private const int MaxTricks = 16;
         private const int MaxTextLength = 64;
         private const int MaxCapturedAttemptTricks = 64;
+        private const float StaleRepeatCaptureWindow = 0.45f;
+        private const float WindowLogoMaxWidth = 96f;
+        private const float WindowLogoMaxHeight = 18f;
+        private const float DefaultWindowWidth = 560f;
+        private const float DefaultWindowHeight = 420f;
+        private const float DropdownWindowHeight = 540f;
+        private const float ActiveWindowHeight = 320f;
+        private const float DetailsWindowHeight = 680f;
         private const string TrickCaptureHarmonyId = "rowemod.mpchallenge.trickcapture";
         private static readonly JsonSerializerSettings NetworkJsonSettings = new JsonSerializerSettings
         {
@@ -44,15 +58,20 @@ namespace rowemod.Challenges
             MissingMemberHandling = MissingMemberHandling.Ignore,
             TypeNameHandling = TypeNameHandling.None
         };
-        private static Rect _windowRect = new Rect(180f, 120f, 460f, 560f);
+        private static Rect _windowRect = new Rect(180f, 120f, DefaultWindowWidth, DefaultWindowHeight);
         private static bool _isOpen;
+        private static bool _showChallengeDetails;
         private static Vector2 _playerScroll;
         private static Vector2 _lineScroll;
+        private static string _trickSearchText = string.Empty;
         private static readonly List<RowePlayer> _rowePlayers = new List<RowePlayer>();
         private static readonly List<int> _lineTrickIndexes = new List<int> { 0 };
         private static readonly List<bool> _dropdownOpen = new List<bool> { false };
         private static readonly List<Vector2> _dropdownScroll = new List<Vector2> { Vector2.zero };
+        private static readonly HashSet<string> _observedChallengeNames =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static string[] _trickNames = Array.Empty<string>();
+        private static float _nextTrickCatalogRefreshTime;
         private static readonly string[] ChallengeExtraTrickNames =
         {
             "180",
@@ -70,9 +89,11 @@ namespace rowemod.Challenges
         private static TrickDetection _trickDetection;
         private static readonly List<string> _entryHistorySnapshot = new List<string>();
         private static readonly List<string> _capturedAttemptTricks = new List<string>();
+        private static readonly List<float> _capturedAttemptTrickTimes = new List<float>();
         private static string _lastCheckedAttemptSignature;
         private static float _nextCompletionPollTime;
         private static bool _wasLocalPlayerInsideArea;
+        private static bool _currentAttemptHasConfirmedLanding;
         private static int _lastSeenHistoryCount;
         private static string _lastSeenHistorySource = "none";
         private static string _lastSeenTrickText = "none";
@@ -82,6 +103,11 @@ namespace rowemod.Challenges
         private static int _cachedLocalPlayerObjectId;
         private static float _nextLocalPlayerCacheRefreshTime;
         private static float _nextPlayerListRefreshTime;
+        private static float _nextPlayerListFallbackRefreshTime;
+        private static float _nextPresenceExpiryCheckTime;
+        private static bool _playerListRefreshRequested = true;
+        private static string _lastPlayerListSignature;
+        private static float _nextIdleUpdateTime;
         private static string _activeAreaStateSignature;
         private static readonly Dictionary<string, PresenceRecord> _presenceByKey =
             new Dictionary<string, PresenceRecord>(StringComparer.OrdinalIgnoreCase);
@@ -103,10 +129,32 @@ namespace rowemod.Challenges
         private static bool _trickHistoryDisabled;
         private static float _nextPlayerScanRetryTime;
         private static float _nextTrickHistoryRetryTime;
+        private static float _nextTrickGameplayBindRetryTime;
+        private static PlayerTrickGameplay _subscribedTrickGameplay;
+        private static UnityAction _onAbilityPerformedListener;
+        private static UnityAction _onAbilityComboConfirmedListener;
+        private static UnityAction _onConfirmLandingListener;
+        private static UnityAction _onEndLineConfirmedListener;
+        private static UnityAction _onComboFailedListener;
+        private static Action<NetworkPlayer> _networkPlayerSpawnedListener;
+        private static HarmonyLib.Harmony _networkPlayerLifecycleHarmony;
+        private static bool _networkPlayerLifecycleHooksInstalled;
+        private static float _nextActivePlayerLookupWarningTime;
         private static float _nextUpdateErrorLogTime;
         private static HarmonyLib.Harmony _trickCaptureHarmony;
         private static bool _trickCapturePatchInstalled;
         private static bool _autoOpenTriggeredForSession;
+        private static GUIStyle _challengeTitleStyle;
+        private static GUIStyle _challengeLineStyle;
+        private static GUIStyle _challengeHintStyle;
+        private static GUIStyle _challengeTrickButtonStyle;
+        private static GUIStyle _challengeDropdownButtonStyle;
+        private static GUIStyle _challengeNumberStyle;
+        private static GUIStyle _challengeStatusStyle;
+        private static GUIStyle _challengeCompleteStatusStyle;
+        private static GUIStyle _challengeDetailsBoxStyle;
+        private static GUIStyle _challengeSmallButtonStyle;
+        private static GUIStyle _challengeSmallDangerButtonStyle;
         
         public static ActivityTracker ActivityTracker { get; set; }
         
@@ -172,11 +220,36 @@ namespace rowemod.Challenges
             }
         }
 
+        private static void OpenWindow()
+        {
+            _isOpen = true;
+        }
+
+        public static void ResetWindowState()
+        {
+            _windowRect = new Rect(180f, 120f, DefaultWindowWidth, DefaultWindowHeight);
+            _showChallengeDetails = false;
+            _playerScroll = Vector2.zero;
+            _lineScroll = Vector2.zero;
+            _trickSearchText = string.Empty;
+            _lineTrickIndexes.Clear();
+            _lineTrickIndexes.Add(0);
+            _dropdownOpen.Clear();
+            _dropdownOpen.Add(false);
+            _dropdownScroll.Clear();
+            _dropdownScroll.Add(Vector2.zero);
+            _observedChallengeNames.Clear();
+            _trickNames = Array.Empty<string>();
+            _nextTrickCatalogRefreshTime = 0f;
+        }
+
         public static void OnLocalPlayerSpawned(GameObject playerObject)
         {
+            InstallNetworkPlayerLifecycleHooks();
             TryEnsureLocalModMarker(playerObject);
             InstallTrickCapturePatch();
             ResolveLocalTrickDetection(playerObject);
+            BindPlayerTrickGameplayEvents(playerObject);
             RestartNetworkBridge();
             SafeRefreshPlayers();
             BroadcastPresence();
@@ -211,9 +284,110 @@ namespace rowemod.Challenges
             }
         }
 
+        private static void InstallNetworkPlayerLifecycleHooks()
+        {
+            if (_networkPlayerLifecycleHooksInstalled)
+                return;
+
+            int hookCount = 0;
+            try
+            {
+                _networkPlayerSpawnedListener ??= HandleNetworkPlayerSpawned;
+                NetworkPlayer.LocalPlayerSpawned -= _networkPlayerSpawnedListener;
+                NetworkPlayer.LocalPlayerSpawned += _networkPlayerSpawnedListener;
+                hookCount++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Players] LocalPlayerSpawned hook failed: {ex.Message}");
+            }
+
+            try
+            {
+                _networkPlayerLifecycleHarmony = new HarmonyLib.Harmony("rowemod.mpchallenge.networkplayerlifecycle");
+
+                System.Reflection.MethodInfo spawned = AccessTools.Method(typeof(NetworkPlayer), nameof(NetworkPlayer.Spawned));
+                if (spawned != null)
+                {
+                    _networkPlayerLifecycleHarmony.Patch(
+                        spawned,
+                        postfix: new HarmonyMethod(
+                            typeof(NetworkPlayerSpawnedPatch),
+                            nameof(NetworkPlayerSpawnedPatch.Postfix)));
+                    hookCount++;
+                }
+
+                System.Reflection.MethodInfo despawned = AccessTools.Method(typeof(NetworkPlayer), nameof(NetworkPlayer.Despawned));
+                if (despawned != null)
+                {
+                    _networkPlayerLifecycleHarmony.Patch(
+                        despawned,
+                        postfix: new HarmonyMethod(
+                            typeof(NetworkPlayerDespawnedPatch),
+                            nameof(NetworkPlayerDespawnedPatch.Postfix)));
+                    hookCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Players] NetworkPlayer lifecycle patch failed: {ex.Message}");
+            }
+
+            _networkPlayerLifecycleHooksInstalled = hookCount > 0;
+            if (_networkPlayerLifecycleHooksInstalled)
+                Log.Msg($"[MPChallenge][Players] Installed event-driven NetworkPlayer lifecycle hooks ({hookCount}).");
+        }
+
+        private static void UnbindNetworkPlayerLifecycleHooks()
+        {
+            try
+            {
+                if (_networkPlayerSpawnedListener != null)
+                    NetworkPlayer.LocalPlayerSpawned -= _networkPlayerSpawnedListener;
+
+                _networkPlayerLifecycleHarmony?.UnpatchSelf();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Players] NetworkPlayer lifecycle unhook failed: {ex.Message}");
+            }
+
+            _networkPlayerSpawnedListener = null;
+            _networkPlayerLifecycleHarmony = null;
+            _networkPlayerLifecycleHooksInstalled = false;
+        }
+
+        private static void HandleNetworkPlayerSpawned(NetworkPlayer player)
+        {
+            HandleNetworkPlayerLifecycleChanged(player, "LocalPlayerSpawned");
+        }
+
+        private static void HandleNetworkPlayerLifecycleChanged(NetworkPlayer player, string source)
+        {
+            try
+            {
+                if (player != null && IsLocalNetworkPlayer(player))
+                {
+                    string name = ResolvePlayerDisplayName(player);
+                    string key = ResolvePlayerKey(player, name);
+                    CacheLocalPlayer(key, name);
+                }
+
+                RequestPlayerListRefresh();
+                _nextIdleUpdateTime = 0f;
+                _nextPresenceBroadcastTime = 0f;
+                _nextPlayerListFallbackRefreshTime = Time.unscaledTime + PlayerListRefreshInterval;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Players] NetworkPlayer {source} handling failed: {ex.Message}");
+            }
+        }
+
         public static void OnSceneInitialized()
         {
             ClearOwnedNetworkStateBestEffort();
+            UnbindPlayerTrickGameplayEvents();
             ShutdownNetworkBridge();
             ResetLocalSessionState();
         }
@@ -221,6 +395,8 @@ namespace rowemod.Challenges
         public static void Shutdown()
         {
             ClearOwnedNetworkStateBestEffort();
+            UnbindPlayerTrickGameplayEvents();
+            UnbindNetworkPlayerLifecycleHooks();
             ShutdownNetworkBridge();
             ResetLocalSessionState();
         }
@@ -233,11 +409,11 @@ namespace rowemod.Challenges
             }
             catch (Exception ex)
             {
-                _nextNetworkRetryTime = Time.unscaledTime + 1f;
+                _nextNetworkRetryTime = Time.unscaledTime + 20f;
                 _networkStatus = "Update failed; retrying.";
                 if (Time.unscaledTime >= _nextUpdateErrorLogTime)
                 {
-                    _nextUpdateErrorLogTime = Time.unscaledTime + 2f;
+                    _nextUpdateErrorLogTime = Time.unscaledTime + 40f;
                     Log.Error($"[MPChallenge] Update failed: {ex}");
                 }
             }
@@ -245,6 +421,9 @@ namespace rowemod.Challenges
 
         private static void UpdateInternal()
         {
+            if (ShouldThrottleIdleUpdate())
+                return;
+
             EnsureNetworkBridge();
             RetryPendingNetworkOperations();
 
@@ -253,9 +432,18 @@ namespace rowemod.Challenges
                 BroadcastPresence();
             }
 
-            if (Time.unscaledTime >= _nextPlayerListRefreshTime)
+            if (Time.unscaledTime >= _nextPresenceExpiryCheckTime)
             {
-                _nextPlayerListRefreshTime = Time.unscaledTime + PlayerListRefreshInterval;
+                _nextPresenceExpiryCheckTime = Time.unscaledTime + PresenceExpiryCheckInterval;
+                if (ExpirePresenceRecords())
+                    RequestPlayerListRefresh();
+            }
+
+            if (!_playerListRefreshRequested && Time.unscaledTime >= _nextPlayerListFallbackRefreshTime)
+                RequestPlayerListRefresh();
+
+            if (_playerListRefreshRequested && Time.unscaledTime >= _nextPlayerListRefreshTime)
+            {
                 SafeRefreshPlayers();
             }
 
@@ -290,7 +478,7 @@ namespace rowemod.Challenges
             _wasLocalPlayerInsideArea = inside;
 
             if (inside)
-                SafeCheckLocalLineCompletion();
+                BindPlayerTrickGameplayEvents(null);
         }
 
         private static void UpdateChallengeAreaResizeEditing()
@@ -337,12 +525,31 @@ namespace rowemod.Challenges
             return Menu.windowRect.Contains(guiPosition) || _windowRect.Contains(guiPosition);
         }
 
+        private static bool ShouldThrottleIdleUpdate()
+        {
+            if (_isOpen ||
+                _activeChallenge != null ||
+                _statePublishPending ||
+                _clearStatePending ||
+                !string.IsNullOrEmpty(_pendingLocalCompletionChallengeId))
+            {
+                return false;
+            }
+
+            if (Time.unscaledTime < _nextIdleUpdateTime)
+                return true;
+
+            _nextIdleUpdateTime = Time.unscaledTime + IdleUpdateInterval;
+            return false;
+        }
+
         public static void DrawWindow()
         {
             if (!_isOpen)
                 return;
 
-            _windowRect = GUI.Window(WindowId, _windowRect, (GUI.WindowFunction)DrawWindowContents, "RoweMod MP Challenge", Menu.windowStyle);
+            FitWindowSizeForCurrentMode();
+            _windowRect = GUI.Window(WindowId, _windowRect, (GUI.WindowFunction)DrawWindowContents, "RoweMod Challenge", Menu.windowStyle);
         }
 
         public static void NotifyLocalChallengeCompleted()
@@ -361,24 +568,26 @@ namespace rowemod.Challenges
         {
             try
             {
+                EnsureChallengeStyles();
+                DrawWindowLogo();
                 GUILayout.BeginVertical();
 
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Refresh", Menu.highQualityButtonStyle, GUILayout.Width(100f)))
+                GUILayout.Label("Challenge Line", _challengeTitleStyle);
+                GUILayout.FlexibleSpace();
+                string detailsLabel = _showChallengeDetails ? "Hide Details" : "Details";
+                if (GUILayout.Button(detailsLabel, _challengeSmallButtonStyle, GUILayout.Width(92f), GUILayout.Height(24f)))
                 {
-                    RefreshNow();
+                    _showChallengeDetails = !_showChallengeDetails;
                 }
 
-                if (GUILayout.Button("Close", Menu.redButtonStyle, GUILayout.Width(100f)))
+                if (GUILayout.Button("X", _challengeSmallDangerButtonStyle, GUILayout.Width(34f), GUILayout.Height(24f)))
                 {
                     _isOpen = false;
                 }
                 GUILayout.EndHorizontal();
 
-                GUILayout.Space(8f);
-                DrawStatusMessages();
-                DrawPlayerList();
-                GUILayout.Space(10f);
+                GUILayout.Space(6f);
                 DrawChallengeBuilder();
 
                 GUILayout.EndVertical();
@@ -388,6 +597,169 @@ namespace rowemod.Challenges
             {
                 Log.Error($"[MPChallenge] Draw failed: {ex.Message}");
             }
+        }
+
+        private static void DrawWindowLogo()
+        {
+            Texture2D logo = Menu.logoTexture;
+            if (logo == null || logo.width <= 0 || logo.height <= 0)
+                return;
+
+            float scale = Mathf.Min(
+                WindowLogoMaxWidth / logo.width,
+                WindowLogoMaxHeight / logo.height);
+            float width = logo.width * scale;
+            float height = logo.height * scale;
+            Rect logoRect = new Rect(8f, 3f, width, height);
+
+            Color previousColor = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(logoRect, logo, ScaleMode.ScaleToFit, true);
+            GUI.color = previousColor;
+        }
+
+        private static void FitWindowSizeForCurrentMode()
+        {
+            float targetWidth = DefaultWindowWidth;
+            if (Screen.width > 120)
+                targetWidth = Mathf.Min(targetWidth, Screen.width - 40f);
+
+            _windowRect.width = Mathf.Max(_windowRect.width, targetWidth);
+            if (Screen.width > 120)
+                _windowRect.width = Mathf.Min(_windowRect.width, Screen.width - 40f);
+
+            float targetHeight = _showChallengeDetails
+                ? DetailsWindowHeight
+                : _activeChallenge != null
+                    ? ActiveWindowHeight
+                    : _dropdownOpen.Any(open => open)
+                        ? DropdownWindowHeight
+                        : DefaultWindowHeight;
+
+            if (Screen.height > 120)
+                targetHeight = Mathf.Min(targetHeight, Screen.height - 40f);
+
+            _windowRect.height = Mathf.Max(ActiveWindowHeight, targetHeight);
+
+            if (Screen.width > 120)
+                _windowRect.x = Mathf.Clamp(_windowRect.x, 20f, Mathf.Max(20f, Screen.width - _windowRect.width - 20f));
+            if (Screen.height > 120)
+                _windowRect.y = Mathf.Clamp(_windowRect.y, 20f, Mathf.Max(20f, Screen.height - _windowRect.height - 20f));
+        }
+
+        private static void EnsureChallengeStyles()
+        {
+            if (_challengeTrickButtonStyle != null)
+                return;
+
+            Color panelColor = new Color(0.07f, 0.08f, 0.11f, 0.95f);
+            Color panelAltColor = new Color(0.10f, 0.115f, 0.155f, 0.96f);
+            Color panelHoverColor = new Color(0.14f, 0.16f, 0.21f, 0.98f);
+            Color accentColor = new Color(0.32f, 0.72f, 1f, 0.95f);
+            Color accentSoftColor = new Color(0.18f, 0.36f, 0.56f, 0.75f);
+            Color borderColor = new Color(1f, 1f, 1f, 0.14f);
+            Font trickFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+            _challengeTitleStyle = new GUIStyle(Menu.sectionHeaderStyle ?? Menu.labelStyle ?? GUI.skin.label)
+            {
+                fontSize = 16,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft
+            };
+            _challengeTitleStyle.normal.textColor = Color.white;
+
+            _challengeHintStyle = new GUIStyle(Menu.subtleLabelStyle ?? GUI.skin.label)
+            {
+                fontSize = 12,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleLeft
+            };
+
+            _challengeLineStyle = new GUIStyle(GUI.skin.box)
+            {
+                fontSize = 18,
+                fontStyle = FontStyle.Bold,
+                wordWrap = true,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(14, 14, 10, 10),
+                margin = new RectOffset(0, 0, 2, 8),
+                border = new RectOffset(10, 10, 10, 10)
+            };
+            _challengeLineStyle.normal.background =
+                Menu.MakeRoundedTex(64, 42, accentSoftColor, 10, 1, new Color(accentColor.r, accentColor.g, accentColor.b, 0.72f));
+            _challengeLineStyle.normal.textColor = Color.white;
+            if (trickFont != null)
+                _challengeLineStyle.font = trickFont;
+
+            _challengeTrickButtonStyle = new GUIStyle(Menu.highQualityButtonStyle ?? GUI.skin.button)
+            {
+                fontSize = 15,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(14, 12, 5, 5),
+                border = new RectOffset(8, 8, 8, 8)
+            };
+            _challengeTrickButtonStyle.normal.background = Menu.MakeRoundedTex(64, 32, panelAltColor, 8, 1, borderColor);
+            _challengeTrickButtonStyle.hover.background = Menu.MakeRoundedTex(64, 32, panelHoverColor, 8, 1, new Color(accentColor.r, accentColor.g, accentColor.b, 0.58f));
+            _challengeTrickButtonStyle.active.background = Menu.MakeRoundedTex(64, 32, panelColor, 8, 1, new Color(accentColor.r, accentColor.g, accentColor.b, 0.82f));
+            _challengeTrickButtonStyle.normal.textColor = Color.white;
+            _challengeTrickButtonStyle.hover.textColor = Color.white;
+            _challengeTrickButtonStyle.active.textColor = Color.white;
+            if (trickFont != null)
+                _challengeTrickButtonStyle.font = trickFont;
+
+            _challengeDropdownButtonStyle = new GUIStyle(_challengeTrickButtonStyle)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Normal,
+                padding = new RectOffset(12, 10, 4, 4)
+            };
+
+            _challengeNumberStyle = new GUIStyle(GUI.skin.box)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                border = new RectOffset(8, 8, 8, 8)
+            };
+            _challengeNumberStyle.normal.background = Menu.MakeRoundedTex(32, 32, accentSoftColor, 8, 1, new Color(accentColor.r, accentColor.g, accentColor.b, 0.72f));
+            _challengeNumberStyle.normal.textColor = Color.white;
+
+            _challengeStatusStyle = new GUIStyle(Menu.labelStyle ?? GUI.skin.label)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = true
+            };
+            _challengeStatusStyle.normal.textColor = new Color(0.88f, 0.92f, 1f, 1f);
+
+            _challengeCompleteStatusStyle = new GUIStyle(_challengeStatusStyle);
+            _challengeCompleteStatusStyle.normal.textColor = new Color(0.52f, 1f, 0.65f, 1f);
+
+            _challengeDetailsBoxStyle = new GUIStyle(GUI.skin.box)
+            {
+                padding = new RectOffset(10, 10, 8, 8),
+                margin = new RectOffset(0, 0, 4, 4),
+                border = new RectOffset(9, 9, 9, 9)
+            };
+            _challengeDetailsBoxStyle.normal.background = Menu.MakeRoundedTex(64, 64, panelColor, 9, 1, borderColor);
+
+            _challengeSmallButtonStyle = new GUIStyle(Menu.highQualityButtonStyle ?? GUI.skin.button)
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(8, 8, 4, 4)
+            };
+
+            _challengeSmallDangerButtonStyle = new GUIStyle(Menu.redButtonStyle ?? _challengeSmallButtonStyle)
+            {
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(8, 8, 4, 4)
+            };
         }
 
         private static void DrawStatusMessages()
@@ -435,25 +807,7 @@ namespace rowemod.Challenges
         {
             if (_activeChallenge != null)
             {
-                GUILayout.Label("Active Line", Menu.labelStyle);
-                GUILayout.Label(string.Join(" + ", _activeChallenge.Tricks), Menu.subtleLabelStyle);
-                GUILayout.Label($"Created by: {GetDisplayNameForKey(_activeChallenge.CreatorKey, _activeChallenge.CreatorName)}", Menu.subtleLabelStyle);
-                GUILayout.Label($"Inside area: {(ChallengeAreaManager.IsLocalPlayerInsideActiveArea() ? "Yes" : "No")}", Menu.subtleLabelStyle);
-                GUILayout.Label($"Your status: {(IsLocalPlayerComplete() ? "Complete" : "Incomplete")}", Menu.subtleLabelStyle);
-                if (IsLocalCreator() && ChallengeAreaManager.Active != null)
-                {
-                    Vector3 areaSize = ChallengeAreaManager.Active.transform.localScale;
-                    GUILayout.Label(
-                        $"Area size: {areaSize.x:0.00} x {areaSize.y:0.00} x {areaSize.z:0.00}",
-                        Menu.subtleLabelStyle);
-                    GUILayout.Label(
-                        "Drag a square on any face to resize. The opposite face stays fixed.",
-                        Menu.subtleLabelStyle);
-                }
-                GUILayout.Label($"History count: {_lastSeenHistoryCount}", Menu.subtleLabelStyle);
-                GUILayout.Label($"Last trick seen: {_lastSeenTrickText}", Menu.subtleLabelStyle);
-                GUILayout.Label($"Trick source: {_lastSeenHistorySource}", Menu.subtleLabelStyle);
-                GUILayout.Label($"Match check: {_lastCompletionDiagnostic}", Menu.subtleLabelStyle);
+                DrawActiveChallengeSummary();
 
                 if (IsLocalCreator() && GUILayout.Button("Clear Active Challenge", Menu.redButtonStyle))
                 {
@@ -461,33 +815,42 @@ namespace rowemod.Challenges
                     return;
                 }
 
+                if (_showChallengeDetails)
+                    DrawChallengeDetails();
+
                 return;
             }
 
-            GUILayout.Label("Build Line", Menu.labelStyle);
+            GUILayout.Label("Pick the tricks for this line.", _challengeHintStyle);
             EnsureTrickNames();
 
             if (_trickNames.Length == 0)
             {
-                GUILayout.Label("No tricks loaded yet. Open the Tricks tab or respawn to load trick data.", Menu.subtleLabelStyle);
+                GUILayout.Label("No tricks or grinds loaded yet. Respawn to load trick data.", Menu.subtleLabelStyle);
                 return;
             }
 
-            _lineScroll = GUILayout.BeginScrollView(_lineScroll, GUILayout.Height(210f));
+            float lineHeight = _dropdownOpen.Any(open => open) ? 292f : 220f;
+            _lineScroll = GUILayout.BeginScrollView(_lineScroll, GUILayout.Height(lineHeight));
             for (int i = 0; i < _lineTrickIndexes.Count; i++)
             {
                 EnsureLineState(i);
 
                 GUILayout.BeginHorizontal();
-                GUILayout.Label($"{i + 1}.", Menu.labelStyle, GUILayout.Width(22f));
+                GUILayout.Label($"{i + 1}", _challengeNumberStyle, GUILayout.Width(28f), GUILayout.Height(30f));
 
                 int trickIndex = Mathf.Clamp(_lineTrickIndexes[i], 0, _trickNames.Length - 1);
-                if (GUILayout.Button(_trickNames[trickIndex], Menu.highQualityButtonStyle))
+                if (GUILayout.Button(_trickNames[trickIndex], _challengeTrickButtonStyle, GUILayout.Height(30f)))
                 {
-                    _dropdownOpen[i] = !_dropdownOpen[i];
+                    bool open = !_dropdownOpen[i];
+                    CloseAllDropdowns();
+                    _dropdownOpen[i] = open;
+                    if (open)
+                        _trickSearchText = string.Empty;
                 }
 
-                if (_lineTrickIndexes.Count > 1 && GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(34f)))
+                if (_lineTrickIndexes.Count > 1 &&
+                    GUILayout.Button("X", _challengeSmallDangerButtonStyle, GUILayout.Width(34f), GUILayout.Height(30f)))
                 {
                     _lineTrickIndexes.RemoveAt(i);
                     _dropdownOpen.RemoveAt(i);
@@ -505,32 +868,129 @@ namespace rowemod.Challenges
             GUILayout.EndScrollView();
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("+", Menu.highQualityButtonStyle, GUILayout.Width(44f)))
+            if (_lineTrickIndexes.Count < MaxTricks &&
+                GUILayout.Button("Add Trick", _challengeSmallButtonStyle, GUILayout.Width(104f), GUILayout.Height(30f)))
             {
                 _lineTrickIndexes.Add(0);
                 _dropdownOpen.Add(false);
                 _dropdownScroll.Add(Vector2.zero);
             }
 
-            if (GUILayout.Button("Accept", Menu.highQualityButtonStyle))
+            if (GUILayout.Button("Start Challenge", _challengeTrickButtonStyle, GUILayout.Height(30f)))
             {
                 AcceptChallenge();
             }
             GUILayout.EndHorizontal();
+
+            if (_showChallengeDetails)
+                DrawChallengeDetails();
         }
 
         private static void DrawTrickDropdown(int lineIndex)
         {
-            _dropdownScroll[lineIndex] = GUILayout.BeginScrollView(_dropdownScroll[lineIndex], GUILayout.Height(160f));
+            GUILayout.BeginVertical(_challengeDetailsBoxStyle);
+            _trickSearchText = GUILayout.TextField(
+                _trickSearchText ?? string.Empty,
+                Menu.textFieldStyle ?? GUI.skin.textField,
+                GUILayout.Height(26f));
+
+            string search = _trickSearchText;
+            _dropdownScroll[lineIndex] = GUILayout.BeginScrollView(_dropdownScroll[lineIndex], GUILayout.Height(168f));
+            bool found = false;
             for (int j = 0; j < _trickNames.Length; j++)
             {
-                if (GUILayout.Button(_trickNames[j], Menu.highQualityButtonStyle))
+                if (!string.IsNullOrWhiteSpace(search) &&
+                    _trickNames[j].IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                found = true;
+                if (GUILayout.Button(_trickNames[j], _challengeDropdownButtonStyle, GUILayout.Height(26f)))
                 {
                     _lineTrickIndexes[lineIndex] = j;
                     _dropdownOpen[lineIndex] = false;
+                    _trickSearchText = string.Empty;
                 }
             }
+
+            if (!found)
+                GUILayout.Label("No matching tricks.", _challengeHintStyle);
+
             GUILayout.EndScrollView();
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawActiveChallengeSummary()
+        {
+            bool complete = IsLocalPlayerComplete();
+            bool inside = ChallengeAreaManager.IsLocalPlayerInsideActiveArea();
+            string status = complete
+                ? "Complete"
+                : inside
+                    ? "In the area. Land the line."
+                    : "Enter the box and do the line.";
+
+            GUILayout.Label(string.Join("  +  ", _activeChallenge.Tricks), _challengeLineStyle);
+            GUILayout.Label(status, complete ? _challengeCompleteStatusStyle : _challengeStatusStyle);
+            GUILayout.Label($"Progress: {GetCompletedPlayerCount()} / {GetChallengePlayerCount()} players", _challengeHintStyle);
+        }
+
+        private static void DrawChallengeDetails()
+        {
+            GUILayout.Space(6f);
+            GUILayout.BeginVertical(_challengeDetailsBoxStyle);
+            if (_activeChallenge != null)
+            {
+                GUILayout.Label(
+                    $"Created by: {GetDisplayNameForKey(_activeChallenge.CreatorKey, _activeChallenge.CreatorName)}",
+                    Menu.subtleLabelStyle);
+            }
+
+            DrawStatusMessages();
+            DrawPlayerList();
+
+            if (_activeChallenge != null)
+            {
+                if (IsLocalCreator() && ChallengeAreaManager.Active != null)
+                {
+                    Vector3 areaSize = ChallengeAreaManager.Active.transform.localScale;
+                    GUILayout.Label(
+                        $"Area size: {areaSize.x:0.00} x {areaSize.y:0.00} x {areaSize.z:0.00}",
+                        Menu.subtleLabelStyle);
+                    GUILayout.Label("Drag challenge face handles to resize.", Menu.subtleLabelStyle);
+                }
+
+                GUILayout.Label($"Last trick: {_lastSeenTrickText}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Match: {_lastCompletionDiagnostic}", Menu.subtleLabelStyle);
+            }
+
+            if (GUILayout.Button("Refresh Players", _challengeSmallButtonStyle, GUILayout.Height(26f)))
+                RefreshNow();
+
+            GUILayout.EndVertical();
+        }
+
+        private static void CloseAllDropdowns()
+        {
+            for (int i = 0; i < _dropdownOpen.Count; i++)
+                _dropdownOpen[i] = false;
+        }
+
+        private static int GetCompletedPlayerCount()
+        {
+            if (_activeChallenge?.PlayerCompleted == null)
+                return 0;
+
+            return _activeChallenge.PlayerCompleted.Values.Count(value => value);
+        }
+
+        private static int GetChallengePlayerCount()
+        {
+            if (_activeChallenge?.PlayerCompleted == null)
+                return Math.Max(1, _rowePlayers.Count);
+
+            return Math.Max(1, Math.Max(_activeChallenge.PlayerCompleted.Count, _rowePlayers.Count));
         }
 
         private static void AcceptChallenge()
@@ -561,6 +1021,7 @@ namespace rowemod.Challenges
                 CreatorName = GetLocalPlayerName(),
                 Tricks = tricks
             };
+            OpenWindow();
 
             foreach (RowePlayer player in _rowePlayers)
             {
@@ -588,11 +1049,16 @@ namespace rowemod.Challenges
 
         private static ChallengeArea SpawnLocalChallengeArea()
         {
+            Vector3 areaSize = new Vector3(
+                Config.challengeSettings.challengeSizeX,
+                Config.challengeSettings.challengeSizeY,
+                Config.challengeSettings.challengeSizeZ);
             Vector3 spawnPos = Vector3.zero;
             Quaternion spawnRot = Quaternion.identity;
             string spawnSource = "camera/default";
 
-            if (ChallengeAreaManager.TryGetLocalPlayerPose(
+            if (ChallengeAreaManager.TryGetLocalPlayerGroundPlacement(
+                    areaSize,
                     out Vector3 playerPosition,
                     out Quaternion playerRotation,
                     out string playerPoseSource))
@@ -603,14 +1069,24 @@ namespace rowemod.Challenges
             }
             else if (UnityEngine.Camera.main != null)
             {
-                spawnPos = UnityEngine.Camera.main.transform.position + UnityEngine.Camera.main.transform.forward * 5f;
-                spawnRot = UnityEngine.Camera.main.transform.rotation;
-                spawnSource = "camera";
+                Vector3 cameraTarget =
+                    UnityEngine.Camera.main.transform.position +
+                    UnityEngine.Camera.main.transform.forward * 5f;
+                bool foundGround = ChallengeAreaManager.TryGetGroundAlignedPlacement(
+                    cameraTarget,
+                    UnityEngine.Camera.main.transform.forward,
+                    areaSize,
+                    out spawnPos,
+                    out spawnRot,
+                    out string groundSource);
+                spawnSource = foundGround
+                    ? $"camera, ground={groundSource}"
+                    : "camera, ground=fallback";
             }
 
             ChallengeArea area = ChallengeAreaManager.Create(
                 spawnPos,
-                new Vector3(Config.challengeSettings.challengeSizeX, Config.challengeSettings.challengeSizeY, Config.challengeSettings.challengeSizeZ),
+                areaSize,
                 spawnRot,
                 "VehicleColliders");
 
@@ -644,6 +1120,7 @@ namespace rowemod.Challenges
 
         private static void RefreshNow()
         {
+            InstallNetworkPlayerLifecycleHooks();
             TryEnsureLocalModMarker();
             EnsureNetworkBridge();
             SafeRefreshPlayers();
@@ -666,19 +1143,39 @@ namespace rowemod.Challenges
         private static void SafeRefreshPlayers()
         {
             if (_playerScanDisabled && Time.unscaledTime < _nextPlayerScanRetryTime)
+            {
+                _nextPlayerListRefreshTime = _nextPlayerScanRetryTime;
+                _nextPlayerListFallbackRefreshTime = _nextPlayerScanRetryTime;
                 return;
+            }
 
+            if (_networkBridgeRoot == null && _activeChallenge == null && _presenceByKey.Count == 0)
+            {
+                _playerListRefreshRequested = false;
+                _nextPlayerListFallbackRefreshTime = Time.unscaledTime + PlayerListRefreshInterval;
+                return;
+            }
+
+            _playerListRefreshRequested = false;
             try
             {
                 _playerScanDisabled = false;
                 RefreshPlayers();
                 TryAutoOpenForRemoteRowePlayer();
-                Log.Msg($"[MPChallenge][Players] Refreshed RoweMod players: count={_rowePlayers.Count}, localKey='{_cachedLocalPlayerKey ?? "null"}', localName='{_cachedLocalPlayerName ?? "null"}'.");
+                _nextPlayerListFallbackRefreshTime = Time.unscaledTime + PlayerListRefreshInterval;
+                string signature = BuildPlayerListSignature();
+                if (!string.Equals(signature, _lastPlayerListSignature, StringComparison.Ordinal))
+                {
+                    _lastPlayerListSignature = signature;
+                    Log.Msg($"[MPChallenge][Players] Refreshed RoweMod players: count={_rowePlayers.Count}, localKey='{_cachedLocalPlayerKey ?? "null"}', localName='{_cachedLocalPlayerName ?? "null"}'.");
+                }
             }
             catch (Exception ex)
             {
                 _playerScanDisabled = true;
                 _nextPlayerScanRetryTime = Time.unscaledTime + LocalLookupRetryInterval;
+                _nextPlayerListFallbackRefreshTime = _nextPlayerScanRetryTime;
+                RequestPlayerListRefresh(LocalLookupRetryInterval);
                 Log.Warning($"[MPChallenge] Player scanning failed; retrying: {ex.Message}");
             }
         }
@@ -700,8 +1197,7 @@ namespace rowemod.Challenges
                 return;
 
             _autoOpenTriggeredForSession = true;
-            _isOpen = true;
-            Menu.isOpen = true;
+            OpenWindow();
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
 
@@ -736,7 +1232,7 @@ namespace rowemod.Challenges
             _cachedLocalPlayerObjectId = 0;
             ExpirePresenceRecords();
 
-            NetworkPlayer[] players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
+            List<NetworkPlayer> players = GetKnownNetworkPlayers(true);
             foreach (NetworkPlayer player in players)
             {
                 if (player == null || player.gameObject == null)
@@ -802,16 +1298,93 @@ namespace rowemod.Challenges
             }
         }
 
-        private static void EnsureTrickNames()
+        private static List<NetworkPlayer> GetKnownNetworkPlayers(bool allowSceneFallback)
         {
-            if (_trickNames.Length > 0)
+            List<NetworkPlayer> players = new List<NetworkPlayer>();
+            HashSet<int> seen = new HashSet<int>();
+
+            try
+            {
+                int activePlayerCount = NetworkPlayer.ActivePlayerCount;
+                for (int i = 0; i < activePlayerCount; i++)
+                {
+                    AddNetworkPlayerIfUnique(players, seen, NetworkPlayer.GetActivePlayer(i));
+                }
+
+                if (players.Count > 0 || !allowSceneFallback)
+                    return players;
+            }
+            catch (Exception ex)
+            {
+                if (Time.unscaledTime >= _nextActivePlayerLookupWarningTime)
+                {
+                    _nextActivePlayerLookupWarningTime = Time.unscaledTime + LocalLookupRetryInterval;
+                    Log.Warning($"[MPChallenge][Players] ActivePlayers lookup failed; using fallback scan: {ex.Message}");
+                }
+            }
+
+            if (!allowSceneFallback)
+                return players;
+
+            NetworkPlayer[] scenePlayers = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
+            foreach (NetworkPlayer player in scenePlayers)
+                AddNetworkPlayerIfUnique(players, seen, player);
+
+            return players;
+        }
+
+        private static void AddNetworkPlayerIfUnique(List<NetworkPlayer> players, HashSet<int> seen, NetworkPlayer player)
+        {
+            if (player == null)
                 return;
 
-            _trickNames = ChallengeExtraTrickNames
+            int id = player.GetInstanceID();
+            if (!seen.Add(id))
+                return;
+
+            players.Add(player);
+        }
+
+        private static void EnsureTrickNames()
+        {
+            if (_trickNames.Length > 0 && Time.unscaledTime < _nextTrickCatalogRefreshTime)
+                return;
+
+            _nextTrickCatalogRefreshTime = Time.unscaledTime + TrickCatalogRefreshInterval;
+            string[] selectedNames = _lineTrickIndexes
+                .Select(index => _trickNames.Length > 0
+                    ? _trickNames[Mathf.Clamp(index, 0, _trickNames.Length - 1)]
+                    : null)
+                .ToArray();
+
+            string[] grindNames = GrindPoseEditor.GetAvailableGrindNames();
+            string[] refreshedNames = ChallengeExtraTrickNames
                 .Concat(TrickMods.GetAvailableTrickNames().OrderBy(name => name))
+                .Concat(grindNames)
+                .Concat(_observedChallengeNames)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(GetChallengeDisplayName)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
+            if (_trickNames.SequenceEqual(refreshedNames, StringComparer.OrdinalIgnoreCase))
+                return;
+
+            _trickNames = refreshedNames;
+            Log.Msg(
+                $"[MPChallenge][Picker] Loaded {_trickNames.Length} names, " +
+                $"including {grindNames.Length} runtime grind entries.");
+            for (int i = 0; i < _lineTrickIndexes.Count; i++)
+            {
+                int selectedIndex = i < selectedNames.Length && !string.IsNullOrWhiteSpace(selectedNames[i])
+                    ? Array.FindIndex(
+                        _trickNames,
+                        name => string.Equals(name, selectedNames[i], StringComparison.OrdinalIgnoreCase))
+                    : -1;
+                _lineTrickIndexes[i] = selectedIndex >= 0 ? selectedIndex : 0;
+            }
         }
 
         private static void EnsureLineState(int index)
@@ -843,6 +1416,12 @@ namespace rowemod.Challenges
 
             if (_activeChallenge.PlayerCompleted.TryGetValue(localKey, out bool alreadyComplete) && alreadyComplete)
                 return;
+
+            if (!_currentAttemptHasConfirmedLanding)
+            {
+                _lastCompletionDiagnostic = "Waiting for landing confirmation.";
+                return;
+            }
 
             List<string> history = GetCurrentTrickHistory();
             UpdateCompletionDiagnostics(history);
@@ -878,9 +1457,11 @@ namespace rowemod.Challenges
         private static void BeginLocalAttempt()
         {
             _capturedAttemptTricks.Clear();
+            _capturedAttemptTrickTimes.Clear();
             _entryHistorySnapshot.Clear();
             _entryHistorySnapshot.AddRange(GetCurrentTrickHistory());
             _lastCheckedAttemptSignature = null;
+            _currentAttemptHasConfirmedLanding = false;
             _lastCompletionDiagnostic = "Tracking tricks performed inside the area.";
         }
 
@@ -889,23 +1470,111 @@ namespace rowemod.Challenges
             if (_activeChallenge == null ||
                 source == null ||
                 string.IsNullOrWhiteSpace(trickName) ||
-                !IsLocalTrickDetection(source) ||
-                !ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
+                !IsLocalTrickDetection(source))
             {
                 return;
             }
 
-            string captured = trickName.Trim();
+            CaptureAttemptTrick(trickName, "TrickDetection.RecordTrickToHistory()", false);
+        }
+
+        private static bool CaptureAttemptTrick(object trickValue, string source, bool checkCompletion)
+        {
+            if (_activeChallenge == null)
+                return false;
+
+            string captured = ExtractTrickText(trickValue);
+            if (string.IsNullOrWhiteSpace(captured))
+                return false;
+
+            if (!ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
+                return false;
+
+            if (!_wasLocalPlayerInsideArea)
+            {
+                Log.Msg("[MPChallenge] Local player entered challenge area.");
+                BeginLocalAttempt();
+                _wasLocalPlayerInsideArea = true;
+            }
+
+            captured = captured.Trim();
+            RememberChallengeName(captured);
+            float now = Time.unscaledTime;
+            if (IsLikelyStaleRepeatedCapture(captured, now))
+            {
+                _lastCompletionDiagnostic = $"Ignored stale repeat: {GetChallengeDisplayName(captured)}.";
+                Log.Msg($"[MPChallenge][Tricks] Ignored stale repeat trick from {source}: '{captured}'.");
+                return false;
+            }
+
             if (_capturedAttemptTricks.Count >= MaxCapturedAttemptTricks)
+            {
                 _capturedAttemptTricks.RemoveAt(0);
+                if (_capturedAttemptTrickTimes.Count > 0)
+                    _capturedAttemptTrickTimes.RemoveAt(0);
+            }
 
             _capturedAttemptTricks.Add(captured);
+            _capturedAttemptTrickTimes.Add(now);
             _lastSeenHistoryCount = _capturedAttemptTricks.Count;
-            _lastSeenHistorySource = "TrickDetection.RecordTrickToHistory()";
+            _lastSeenHistorySource = source;
             _lastSeenTrickText = string.Join(" | ", _capturedAttemptTricks.TakeLast(3));
             _lastCheckedAttemptSignature = null;
-            Log.Msg($"[MPChallenge][Tricks] Captured local trick: '{captured}'.");
-            SafeCheckLocalLineCompletion();
+            Log.Msg($"[MPChallenge][Tricks] Captured local trick from {source}: '{captured}'.");
+            if (checkCompletion)
+                SafeCheckLocalLineCompletion();
+            return true;
+        }
+
+        private static bool IsLikelyStaleRepeatedCapture(string trickName, float now)
+        {
+            if (_capturedAttemptTricks.Count == 0)
+                return false;
+
+            if (_capturedAttemptTrickTimes.Count != _capturedAttemptTricks.Count)
+                return false;
+
+            string normalized = NormalizeTrickName(trickName);
+            if (string.IsNullOrEmpty(normalized))
+                return false;
+
+            string previousNormalized = NormalizeTrickName(_capturedAttemptTricks[_capturedAttemptTricks.Count - 1]);
+            float elapsedSincePreviousCapture = now - _capturedAttemptTrickTimes[_capturedAttemptTrickTimes.Count - 1];
+            if (string.Equals(previousNormalized, normalized, StringComparison.Ordinal))
+            {
+                return elapsedSincePreviousCapture >= 0f &&
+                       elapsedSincePreviousCapture <= StaleRepeatCaptureWindow;
+            }
+
+            if (!ActiveChallengeRequiresRepeatedTrick(normalized))
+                return false;
+
+            bool alreadyCapturedThisTrick = _capturedAttemptTricks
+                .Any(captured => string.Equals(NormalizeTrickName(captured), normalized, StringComparison.Ordinal));
+            if (!alreadyCapturedThisTrick)
+                return false;
+
+            return elapsedSincePreviousCapture >= 0f &&
+                   elapsedSincePreviousCapture <= StaleRepeatCaptureWindow;
+        }
+
+        private static bool ActiveChallengeRequiresRepeatedTrick(string normalizedTrickName)
+        {
+            if (_activeChallenge?.Tricks == null || string.IsNullOrEmpty(normalizedTrickName))
+                return false;
+
+            int count = 0;
+            foreach (string requiredTrick in _activeChallenge.Tricks)
+            {
+                if (!string.Equals(NormalizeTrickName(requiredTrick), normalizedTrickName, StringComparison.Ordinal))
+                    continue;
+
+                count++;
+                if (count > 1)
+                    return true;
+            }
+
+            return false;
         }
 
         private static List<string> GetHistorySinceEntry(List<string> history)
@@ -996,6 +1665,245 @@ namespace rowemod.Challenges
             Log.Msg($"[MPChallenge][Tricks] Bound local TrickDetection on '{local.gameObject.name}'.");
         }
 
+        private static void BindPlayerTrickGameplayEvents(GameObject playerObject)
+        {
+            PlayerTrickGameplay gameplay = ResolvePlayerTrickGameplay(playerObject);
+            if (gameplay == null)
+                return;
+
+            if (_subscribedTrickGameplay != null &&
+                _subscribedTrickGameplay.GetInstanceID() == gameplay.GetInstanceID())
+            {
+                return;
+            }
+
+            if (Time.unscaledTime < _nextTrickGameplayBindRetryTime)
+                return;
+
+            UnbindPlayerTrickGameplayEvents();
+            EnsurePlayerTrickGameplayDelegates();
+
+            bool addedAny = false;
+            addedAny |= AddTrickGameplayListener(
+                GetPlayerTrickUnityEvent(gameplay, "OnAbilityPerformed"),
+                _onAbilityPerformedListener,
+                "OnAbilityPerformed");
+            addedAny |= AddTrickGameplayListener(
+                GetPlayerTrickUnityEvent(gameplay, "OnAbilityComboConfirmed"),
+                _onAbilityComboConfirmedListener,
+                "OnAbilityComboConfirmed");
+            addedAny |= AddTrickGameplayListener(
+                GetPlayerTrickUnityEvent(gameplay, "OnConfirmLanding"),
+                _onConfirmLandingListener,
+                "OnConfirmLanding");
+            addedAny |= AddTrickGameplayListener(
+                GetPlayerTrickUnityEvent(gameplay, "OnEndLineConfirmed"),
+                _onEndLineConfirmedListener,
+                "OnEndLineConfirmed");
+            addedAny |= AddTrickGameplayListener(
+                GetPlayerTrickUnityEvent(gameplay, "OnComboFailed"),
+                _onComboFailedListener,
+                "OnComboFailed");
+
+            if (!addedAny)
+            {
+                _nextTrickGameplayBindRetryTime = Time.unscaledTime + TrickGameplayBindRetryInterval;
+                Log.Warning("[MPChallenge][Tricks] PlayerTrickGameplay events were not available; will retry.");
+                return;
+            }
+
+            _subscribedTrickGameplay = gameplay;
+            _nextTrickGameplayBindRetryTime = 0f;
+            Log.Msg($"[MPChallenge][Tricks] Bound PlayerTrickGameplay events on '{gameplay.gameObject.name}'.");
+        }
+
+        private static PlayerTrickGameplay ResolvePlayerTrickGameplay(GameObject playerObject)
+        {
+            PlayerTrickGameplay gameplay = null;
+
+            if (Memory.playerTrickGameplay != null)
+                gameplay = Memory.playerTrickGameplay;
+            if (gameplay == null && Memory.rMbCharacter != null)
+                gameplay = Memory.rMbCharacter.GetComponentInChildren<PlayerTrickGameplay>(true);
+            if (gameplay == null && Memory.physicsDrivenCharacter != null)
+                gameplay = Memory.physicsDrivenCharacter.GetComponentInChildren<PlayerTrickGameplay>(true);
+            if (gameplay == null && playerObject != null)
+                gameplay = playerObject.GetComponentInChildren<PlayerTrickGameplay>(true);
+
+            if (gameplay != null)
+                Memory.playerTrickGameplay = gameplay;
+
+            return gameplay;
+        }
+
+        private static void UnbindPlayerTrickGameplayEvents()
+        {
+            if (_subscribedTrickGameplay == null)
+                return;
+
+            try
+            {
+                RemoveTrickGameplayListener(
+                    GetPlayerTrickUnityEvent(_subscribedTrickGameplay, "OnAbilityPerformed"),
+                    _onAbilityPerformedListener);
+                RemoveTrickGameplayListener(
+                    GetPlayerTrickUnityEvent(_subscribedTrickGameplay, "OnAbilityComboConfirmed"),
+                    _onAbilityComboConfirmedListener);
+                RemoveTrickGameplayListener(
+                    GetPlayerTrickUnityEvent(_subscribedTrickGameplay, "OnConfirmLanding"),
+                    _onConfirmLandingListener);
+                RemoveTrickGameplayListener(
+                    GetPlayerTrickUnityEvent(_subscribedTrickGameplay, "OnEndLineConfirmed"),
+                    _onEndLineConfirmedListener);
+                RemoveTrickGameplayListener(
+                    GetPlayerTrickUnityEvent(_subscribedTrickGameplay, "OnComboFailed"),
+                    _onComboFailedListener);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Tricks] Failed to unbind PlayerTrickGameplay events: {ex.Message}");
+            }
+            finally
+            {
+                _subscribedTrickGameplay = null;
+            }
+        }
+
+        private static void EnsurePlayerTrickGameplayDelegates()
+        {
+            if (_onAbilityPerformedListener == null)
+                _onAbilityPerformedListener =
+                    DelegateSupport.ConvertDelegate<UnityAction>(HandleAbilityPerformed);
+            if (_onAbilityComboConfirmedListener == null)
+                _onAbilityComboConfirmedListener =
+                    DelegateSupport.ConvertDelegate<UnityAction>(HandleAbilityComboConfirmed);
+            if (_onConfirmLandingListener == null)
+                _onConfirmLandingListener =
+                    DelegateSupport.ConvertDelegate<UnityAction>(HandleConfirmLanding);
+            if (_onEndLineConfirmedListener == null)
+                _onEndLineConfirmedListener =
+                    DelegateSupport.ConvertDelegate<UnityAction>(HandleEndLineConfirmed);
+            if (_onComboFailedListener == null)
+                _onComboFailedListener =
+                    DelegateSupport.ConvertDelegate<UnityAction>(HandleComboFailed);
+        }
+
+        private static UnityEvent GetPlayerTrickUnityEvent(PlayerTrickGameplay gameplay, string eventName)
+        {
+            return TryGetMemberValue(gameplay, eventName) as UnityEvent;
+        }
+
+        private static bool AddTrickGameplayListener(UnityEvent unityEvent, UnityAction listener, string eventName)
+        {
+            if (unityEvent == null || listener == null)
+                return false;
+
+            unityEvent.RemoveListener(listener);
+            unityEvent.AddListener(listener);
+            Log.Msg($"[MPChallenge][Tricks] Subscribed to PlayerTrickGameplay.{eventName}.");
+            return true;
+        }
+
+        private static void RemoveTrickGameplayListener(UnityEvent unityEvent, UnityAction listener)
+        {
+            if (unityEvent == null || listener == null)
+                return;
+
+            unityEvent.RemoveListener(listener);
+        }
+
+        private static void HandleAbilityPerformed()
+        {
+            HandlePlayerTrickGameplayEvent("OnAbilityPerformed", false, false);
+        }
+
+        private static void HandleAbilityComboConfirmed()
+        {
+            HandlePlayerTrickGameplayEvent("OnAbilityComboConfirmed", false, false);
+        }
+
+        private static void HandleConfirmLanding()
+        {
+            HandlePlayerTrickGameplayEvent("OnConfirmLanding", true, true);
+        }
+
+        private static void HandleEndLineConfirmed()
+        {
+            HandlePlayerTrickGameplayEvent("OnEndLineConfirmed", true, true);
+        }
+
+        private static void HandleComboFailed()
+        {
+            try
+            {
+                if (_activeChallenge == null || !ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
+                    return;
+
+                BeginLocalAttempt();
+                _lastCompletionDiagnostic = "Combo failed; restarted local attempt.";
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Tricks] OnComboFailed handling failed: {ex.Message}");
+            }
+        }
+
+        private static void HandlePlayerTrickGameplayEvent(
+            string eventName,
+            bool confirmsLanding,
+            bool checkCompletion)
+        {
+            try
+            {
+                if (_activeChallenge == null)
+                    return;
+
+                if (!ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
+                    return;
+
+                CapturePlayerTrickGameplaySnapshot(eventName);
+                if (confirmsLanding)
+                    _currentAttemptHasConfirmedLanding = true;
+
+                if (checkCompletion)
+                    SafeCheckLocalLineCompletion();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[MPChallenge][Tricks] {eventName} handling failed: {ex.Message}");
+            }
+        }
+
+        private static void CapturePlayerTrickGameplaySnapshot(string eventName)
+        {
+            PlayerTrickGameplay gameplay = ResolvePlayerTrickGameplay(null);
+            if (gameplay == null)
+                return;
+
+            HashSet<string> capturedThisEvent = new HashSet<string>(StringComparer.Ordinal);
+            CaptureUniqueGameplayTrick(
+                gameplay.GetCurrentAbilityTrick(),
+                $"PlayerTrickGameplay.{eventName}.GetCurrentAbilityTrick()",
+                capturedThisEvent);
+            CaptureUniqueGameplayTrick(
+                gameplay.GetLastAbilityTrick(),
+                $"PlayerTrickGameplay.{eventName}.GetLastAbilityTrick()",
+                capturedThisEvent);
+        }
+
+        private static void CaptureUniqueGameplayTrick(
+            object trickValue,
+            string source,
+            HashSet<string> capturedThisEvent)
+        {
+            string text = ExtractTrickText(trickValue);
+            string normalized = NormalizeTrickName(text);
+            if (string.IsNullOrEmpty(normalized) || !capturedThisEvent.Add(normalized))
+                return;
+
+            CaptureAttemptTrick(text, source, false);
+        }
+
         private static bool IsLocalTrickDetection(TrickDetection candidate)
         {
             if (candidate == null)
@@ -1082,7 +1990,16 @@ namespace rowemod.Challenges
                 return;
 
             history.Add(text);
+            RememberChallengeName(text);
             _lastSeenHistorySource = source;
+        }
+
+        private static void RememberChallengeName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || !_observedChallengeNames.Add(name.Trim()))
+                return;
+
+            _nextTrickCatalogRefreshTime = 0f;
         }
 
         private static string ExtractTrickText(object value)
@@ -1115,8 +2032,10 @@ namespace rowemod.Challenges
         private static void ResetCompletionDiagnostics()
         {
             _capturedAttemptTricks.Clear();
+            _capturedAttemptTrickTimes.Clear();
             _entryHistorySnapshot.Clear();
             _lastCheckedAttemptSignature = null;
+            _currentAttemptHasConfirmedLanding = false;
             _lastSeenHistoryCount = 0;
             _lastSeenHistorySource = "none";
             _lastSeenTrickText = "none";
@@ -1162,9 +2081,7 @@ namespace rowemod.Challenges
             if (string.IsNullOrWhiteSpace(trickName))
                 return string.Empty;
 
-            string normalized = InsertWordBoundaries(trickName.Trim()).ToLowerInvariant();
-            normalized = normalized.Replace("_", " ");
-            normalized = normalized.Replace("-", " ");
+            string normalized = GetChallengeDisplayName(trickName).ToLowerInvariant();
             normalized = normalized.Replace("nosemanual", "nose manual");
             normalized = normalized.Replace("nosey", "nose manual");
             normalized = normalized.Replace("nosemanny", "nose manual");
@@ -1177,11 +2094,38 @@ namespace rowemod.Challenges
             normalized = normalized.Replace("rotation", string.Empty);
             normalized = normalized.Replace("rot", string.Empty);
             normalized = normalized.Replace("spin", string.Empty);
-            normalized = normalized.Replace("left", string.Empty);
-            normalized = normalized.Replace("right", string.Empty);
             while (normalized.Contains("  "))
                 normalized = normalized.Replace("  ", " ");
             return normalized.Trim();
+        }
+
+        private static string GetChallengeDisplayName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            string separated = InsertWordBoundaries(name.Trim())
+                .Replace("_", " ")
+                .Replace("-", " ");
+            string[] tokens = separated.Split(
+                new[] { ' ' },
+                StringSplitOptions.RemoveEmptyEntries);
+
+            List<string> displayTokens = tokens
+                .Where(token =>
+                    !string.Equals(token, "BMX", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(token, "Left", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(token, "Right", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (displayTokens.Count >= 2 &&
+                string.Equals(displayTokens[0], "Grind", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(displayTokens[1], "Pose", StringComparison.OrdinalIgnoreCase))
+            {
+                displayTokens.RemoveRange(0, 2);
+            }
+
+            return string.Join(" ", displayTokens);
         }
 
         private static string InsertWordBoundaries(string value)
@@ -1308,6 +2252,7 @@ namespace rowemod.Challenges
 
                 setupStage = "activate bridge";
                 root.SetActive(true);
+                _nextPresenceBroadcastTime = 0f;
                 _networkStatus = "Connected; listeners ready.";
                 Log.Msg("[MPChallenge][Net] Registered pushed state and command listeners.");
             }
@@ -1472,6 +2417,10 @@ namespace rowemod.Challenges
 
         private static void ApplyNetworkState(NetworkChallengeState state, string source)
         {
+            bool isNewChallenge =
+                _activeChallenge == null ||
+                !string.Equals(_activeChallenge.ChallengeId, state.ChallengeId, StringComparison.Ordinal);
+
             if (_activeChallenge != null &&
                 string.Equals(_activeChallenge.ChallengeId, state.ChallengeId, StringComparison.Ordinal) &&
                 state.Revision <= _activeChallenge.Revision)
@@ -1495,6 +2444,9 @@ namespace rowemod.Challenges
                 Size = state.Size
             };
 
+            if (isNewChallenge)
+                OpenWindow();
+
             string localKey = GetLocalPlayerKey();
             if (!string.IsNullOrEmpty(localKey) &&
                 _activeChallenge.PlayerCompleted.TryGetValue(localKey, out bool localCompleted) &&
@@ -1504,6 +2456,7 @@ namespace rowemod.Challenges
             }
 
             Log.Msg($"[MPChallenge][Net] Applying active challenge state from {source}: {DescribeActiveChallenge(_activeChallenge)}");
+            RequestPlayerListRefresh(PlayerListRefreshDebounceInterval);
             SyncChallengeAreaFromActiveState();
         }
 
@@ -1582,9 +2535,17 @@ namespace rowemod.Challenges
         private static void BroadcastPresence()
         {
             _nextPresenceBroadcastTime = Time.unscaledTime + PresenceBroadcastInterval;
+            if (_commandEvent == null || !CanUseNetwork())
+                return;
+
             string localKey = GetLocalPlayerKey();
             if (!IsStableNetworkPlayerKey(localKey))
-                return;
+            {
+                EnsureLocalPlayerCache(true);
+                localKey = _cachedLocalPlayerKey;
+                if (!IsStableNetworkPlayerKey(localKey))
+                    return;
+            }
 
             RegisterPresence(localKey, GetLocalPlayerName());
             TryRaiseCommand(new NetworkChallengeCommand
@@ -1826,20 +2787,52 @@ namespace rowemod.Challenges
                 return;
 
             bool isNew = !_presenceByKey.ContainsKey(playerKey);
+            bool nameChanged = !isNew &&
+                               _presenceByKey.TryGetValue(playerKey, out PresenceRecord previous) &&
+                               !string.Equals(previous.DisplayName, playerName, StringComparison.Ordinal);
             _presenceByKey[playerKey] = new PresenceRecord
             {
                 DisplayName = playerName,
                 LastSeenTime = Time.unscaledTime
             };
 
-            if (isNew)
+            if (isNew || nameChanged)
             {
-                _nextPlayerListRefreshTime = 0f;
+                RequestPlayerListRefresh(PlayerListRefreshDebounceInterval);
+                TryAutoOpenForRemotePresence(playerKey, playerName);
                 Log.Msg($"[MPChallenge][Players] Presence discovered: {playerName} ({playerKey}).");
             }
         }
 
-        private static void ExpirePresenceRecords()
+        private static void TryAutoOpenForRemotePresence(string playerKey, string playerName)
+        {
+            if (_autoOpenTriggeredForSession || !IsStableNetworkPlayerKey(playerKey))
+                return;
+
+            string localKey = GetLocalPlayerKey();
+            if (!IsStableNetworkPlayerKey(localKey))
+            {
+                EnsureLocalPlayerCache(true);
+                localKey = _cachedLocalPlayerKey;
+            }
+
+            if (!string.IsNullOrEmpty(localKey) &&
+                string.Equals(playerKey, localKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _autoOpenTriggeredForSession = true;
+            OpenWindow();
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+
+            Log.Msg(
+                $"[MPChallenge][UI] Auto-opened challenge UI after remote RoweMod presence from " +
+                $"'{playerName}' ({playerKey}).");
+        }
+
+        private static bool ExpirePresenceRecords()
         {
             float cutoff = Time.unscaledTime - PresenceExpirySeconds;
             string localKey = GetLocalPlayerKey();
@@ -1852,6 +2845,8 @@ namespace rowemod.Challenges
 
             foreach (string key in expiredKeys)
                 _presenceByKey.Remove(key);
+
+            return expiredKeys.Length > 0;
         }
 
         private static void ResetActiveChallenge()
@@ -1875,6 +2870,11 @@ namespace rowemod.Challenges
             _cachedLocalPlayerObjectId = 0;
             _nextLocalPlayerCacheRefreshTime = 0f;
             _nextPlayerListRefreshTime = 0f;
+            _nextPlayerListFallbackRefreshTime = 0f;
+            _nextPresenceExpiryCheckTime = 0f;
+            _playerListRefreshRequested = true;
+            _lastPlayerListSignature = null;
+            _nextIdleUpdateTime = 0f;
             _nextPresenceBroadcastTime = 0f;
             _clearStatePending = false;
             _networkFailureCount = 0;
@@ -1886,6 +2886,7 @@ namespace rowemod.Challenges
             _nextPlayerScanRetryTime = 0f;
             _nextTrickHistoryRetryTime = 0f;
             _nextUpdateErrorLogTime = 0f;
+            _nextActivePlayerLookupWarningTime = 0f;
             _autoOpenTriggeredForSession = false;
         }
 
@@ -1901,6 +2902,22 @@ namespace rowemod.Challenges
                 {
                     Log.Warning($"[MPChallenge][Tricks] Direct capture failed: {ex.Message}");
                 }
+            }
+        }
+
+        private static class NetworkPlayerSpawnedPatch
+        {
+            public static void Postfix(NetworkPlayer __instance)
+            {
+                HandleNetworkPlayerLifecycleChanged(__instance, "Spawned");
+            }
+        }
+
+        private static class NetworkPlayerDespawnedPatch
+        {
+            public static void Postfix(NetworkPlayer __instance)
+            {
+                HandleNetworkPlayerLifecycleChanged(__instance, "Despawned");
             }
         }
 
@@ -2065,6 +3082,23 @@ namespace rowemod.Challenges
             return !string.IsNullOrWhiteSpace(_cachedLocalPlayerName) ? _cachedLocalPlayerName : "Local Player";
         }
 
+        private static void RequestPlayerListRefresh(float delaySeconds = 0f)
+        {
+            bool wasRequested = _playerListRefreshRequested;
+            float requestedTime = Time.unscaledTime + Mathf.Max(0f, delaySeconds);
+            _playerListRefreshRequested = true;
+
+            if (!wasRequested || _nextPlayerListRefreshTime <= 0f || requestedTime < _nextPlayerListRefreshTime)
+                _nextPlayerListRefreshTime = requestedTime;
+        }
+
+        private static string BuildPlayerListSignature()
+        {
+            return string.Join("|", _rowePlayers
+                .Select(player => $"{player.Key}:{player.DisplayName}")
+                .OrderBy(value => value, StringComparer.Ordinal));
+        }
+
         private static void EnsureLocalPlayerCache(bool forceRefresh)
         {
             int currentObjectId = Memory.physicsDrivenCharacter != null ? Memory.physicsDrivenCharacter.GetInstanceID() : 0;
@@ -2082,7 +3116,7 @@ namespace rowemod.Challenges
 
             _nextLocalPlayerCacheRefreshTime = Time.unscaledTime + LocalPlayerCacheRefreshInterval;
 
-            NetworkPlayer[] players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
+            List<NetworkPlayer> players = GetKnownNetworkPlayers(true);
             foreach (NetworkPlayer player in players)
             {
                 if (player == null)

@@ -21,6 +21,9 @@ namespace rowemod.Mods
         public static EquipSlotVehicle[] pegsEquipSlots;
         public static GameObject FrontLeftPeg, FrontRightPeg, RearLeftPeg, RearRightPeg;
         private static float lastBarPitch, lastBarScale, lastSeatHeight, lastSeatPitch;
+        private static Transform capturedSeatPostAnchor;
+        private static Vector3 defaultSeatPostLocalPosition;
+        private static bool hasDefaultSeatPostLocalPosition;
         public enum PartTypeTab
         {
             Bars,
@@ -137,17 +140,26 @@ namespace rowemod.Mods
                 return;
             }
             
-            // Try finding the SeatPost_Anchor (any active one)  
+            // Prefer the player's hierarchy so visual clones and other scene bikes cannot win this lookup.
             Log.Msg("Searching for SeatPost_Anchor transforms...");
-            var allSeatPosts = UnityEngine.Object.FindObjectsOfType<Transform>()
-                .Where(t => t.name == "SeatPost_Anchor" && t.parent != null && t.parent.gameObject.activeInHierarchy)
-                .ToList();
-
-            Log.Msg($"Found {allSeatPosts.Count} SeatPost_Anchor(s).");
-            if (allSeatPosts.Count > 0)
+            seatPostAnchor = Memory.rMbCharacter.transform.FindDeepChild("SeatPost_Anchor");
+            if (seatPostAnchor == null)
             {
-                seatPostAnchor = allSeatPosts[0];
-                Log.Msg($"SeatPost_Anchor found: {seatPostAnchor.name} in {seatPostAnchor.parent.name}");
+                var allSeatPosts = UnityEngine.Object.FindObjectsOfType<Transform>()
+                    .Where(t => t.name == "SeatPost_Anchor" &&
+                                t.parent != null &&
+                                t.parent.gameObject.activeInHierarchy)
+                    .ToList();
+                Log.Msg($"Player hierarchy lookup missed; found {allSeatPosts.Count} active SeatPost_Anchor(s).");
+                seatPostAnchor = allSeatPosts.FirstOrDefault();
+            }
+
+            if (seatPostAnchor != null)
+            {
+                CaptureDefaultSeatPostPosition();
+                Log.Msg(
+                    $"SeatPost_Anchor found: {seatPostAnchor.name} in {seatPostAnchor.parent.name}. " +
+                    $"Default local position={defaultSeatPostLocalPosition}.");
             }
             else
             {
@@ -309,6 +321,44 @@ namespace rowemod.Mods
             ApplyPegEnabledFromConfig();
         }
 
+        private static void CaptureDefaultSeatPostPosition()
+        {
+            if (seatPostAnchor == null)
+                return;
+
+            if (hasDefaultSeatPostLocalPosition && capturedSeatPostAnchor == seatPostAnchor)
+                return;
+
+            capturedSeatPostAnchor = seatPostAnchor;
+            defaultSeatPostLocalPosition = seatPostAnchor.localPosition;
+            hasDefaultSeatPostLocalPosition = true;
+
+            if (!Config.bike.seatHeightUsesDefaultOffset)
+            {
+                float legacyAbsoluteHeight = Config.bike.seatHeight;
+                bool legacyValueWasNeutral =
+                    Mathf.Abs(legacyAbsoluteHeight) <= 0.0001f ||
+                    Mathf.Abs(legacyAbsoluteHeight - 0.05f) <= 0.0001f;
+
+                Config.bike.seatHeight = legacyValueWasNeutral
+                    ? 0f
+                    : legacyAbsoluteHeight - defaultSeatPostLocalPosition.y;
+                Config.bike.seatHeightUsesDefaultOffset = true;
+                Config.Save();
+
+                Log.Msg(
+                    $"[PartTweaker] Migrated legacy seat height {legacyAbsoluteHeight:F4} " +
+                    $"using default Y {defaultSeatPostLocalPosition.y:F4}; " +
+                    $"new offset={Config.bike.seatHeight:F4}.");
+            }
+            else
+            {
+                Log.Msg(
+                    $"[PartTweaker] Captured seat-post default local position " +
+                    $"{defaultSeatPostLocalPosition}; configured offset={Config.bike.seatHeight:F4}.");
+            }
+        }
+
 
         public static void DrawPartTweaker()
         {
@@ -318,7 +368,7 @@ namespace rowemod.Mods
             {
                 GUILayout.Label("Seat Height", Menu.coloredBoxStyle);
                 float oldSeatHeight = Config.bike.seatHeight;
-                Menu.ModernSlider("Height", ref Config.bike.seatHeight, -0.15f, 0.15f);
+                Menu.ModernSlider("Height Offset", ref Config.bike.seatHeight, -0.15f, 0.15f);
                 if (oldSeatHeight != Config.bike.seatHeight) changed = true;
 
                 GUILayout.Space(10);
@@ -507,20 +557,20 @@ namespace rowemod.Mods
             }
 
             // Seat
-            if (seatPostAnchor != null)
+            if (seatPostAnchor != null && hasDefaultSeatPostLocalPosition)
             {
-                seatPostAnchor.localPosition = new Vector3(
-                    seatPostAnchor.localPosition.x,
-                    Config.bike.seatHeight,
-                    seatPostAnchor.localPosition.z
-                );
+                seatPostAnchor.localPosition =
+                    defaultSeatPostLocalPosition + Vector3.up * Config.bike.seatHeight;
                 seatPostUpdated++;
-                Log.Msg($"[UpdatePartTransforms] SeatPost updated: '{seatPostAnchor.name}' pos={seatPostAnchor.localPosition}");
+                Log.Msg(
+                    $"[UpdatePartTransforms] SeatPost updated: '{seatPostAnchor.name}' " +
+                    $"default={defaultSeatPostLocalPosition}, offset={Config.bike.seatHeight:F4}, " +
+                    $"pos={seatPostAnchor.localPosition}");
             }
             else
             {
                 seatPostSkipped++;
-                Log.Warning("[UpdatePartTransforms] Seat post skipped: seatPostAnchor is null.");
+                Log.Warning("[UpdatePartTransforms] Seat post skipped: anchor or captured default is unavailable.");
             }
 
             if (seatAnchor != null)

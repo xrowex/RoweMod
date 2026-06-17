@@ -673,6 +673,8 @@ namespace rowemod.Utils
         public static List<AssetBundle> loadedBundles = new List<AssetBundle>();
         public static GameObject roweSpokes, roweBars;
         public static GameObject newSessionMarker;
+        private static GameObject defaultSessionMarkerSnapshot;
+        private static int defaultSessionMarkerSourceId;
         public static Dictionary<GameObject, string> prefabToBundleMap = new();
         private static bool assetBundlesLoaded = false;
 
@@ -902,13 +904,9 @@ namespace rowemod.Utils
                     if (sessionMarkerTransform != null)
                     {
                         Log.Msg("SessionMarker found.");
+                        CaptureDefaultSessionMarker(sessionMarkerTransform);
 
-                        // Destroy existing marker children
-                        foreach (Transform child in sessionMarkerTransform.GetComponentsInChildren<Transform>(true))
-                        {
-                            if (child != sessionMarkerTransform) // Prevent destroying the parent
-                                Object.Destroy(child.gameObject);
-                        }
+                        ClearSessionMarkerChildren(sessionMarkerTransform);
 
                         // Instantiate the new marker
                         GameObject instantiatedMarker = GameObject.Instantiate(selectedMarker);
@@ -932,6 +930,99 @@ namespace rowemod.Utils
                 {
                     Log.Warning("SessionMarker not found.");
                 }
+            }
+        }
+
+        public static void ResetSessionMarkerToDefault()
+        {
+            if (!TryGetSessionMarkerTransform(out Transform sessionMarkerTransform))
+                return;
+
+            CaptureDefaultSessionMarker(sessionMarkerTransform);
+            ClearSessionMarkerChildren(sessionMarkerTransform);
+
+            if (defaultSessionMarkerSnapshot != null)
+            {
+                for (int i = 0; i < defaultSessionMarkerSnapshot.transform.childCount; i++)
+                {
+                    Transform template = defaultSessionMarkerSnapshot.transform.GetChild(i);
+                    if (template == null)
+                        continue;
+
+                    GameObject restored = GameObject.Instantiate(template.gameObject);
+                    restored.transform.SetParent(sessionMarkerTransform, false);
+                    restored.transform.localPosition = template.localPosition;
+                    restored.transform.localRotation = template.localRotation;
+                    restored.transform.localScale = template.localScale;
+                    restored.SetActive(template.gameObject.activeSelf);
+                }
+            }
+
+            Config.misc.customSessionMarker = "None";
+            Log.Msg("Restored the default session marker visuals.");
+        }
+
+        private static bool TryGetSessionMarkerTransform(out Transform sessionMarkerTransform)
+        {
+            sessionMarkerTransform = null;
+            if (rMbCharacter == null)
+            {
+                Log.Warning("Player character is unavailable; cannot update SessionMarker.");
+                return false;
+            }
+
+            Il2CppSystem.Object sessionMarkerObj = rMbCharacter.transform.FindDeepChild("Session Marker");
+            sessionMarkerTransform = sessionMarkerObj?.TryCast<Transform>();
+            if (sessionMarkerTransform != null)
+                return true;
+
+            Log.Warning("SessionMarker transform was not found.");
+            return false;
+        }
+
+        private static void CaptureDefaultSessionMarker(Transform sessionMarkerTransform)
+        {
+            if (sessionMarkerTransform == null)
+                return;
+
+            int sourceId = sessionMarkerTransform.GetInstanceID();
+            if (defaultSessionMarkerSnapshot != null && defaultSessionMarkerSourceId == sourceId)
+                return;
+
+            if (defaultSessionMarkerSnapshot != null)
+                Object.Destroy(defaultSessionMarkerSnapshot);
+
+            defaultSessionMarkerSnapshot = new GameObject("RoweMod_DefaultSessionMarkerSnapshot");
+            defaultSessionMarkerSnapshot.hideFlags = HideFlags.HideAndDontSave;
+            Object.DontDestroyOnLoad(defaultSessionMarkerSnapshot);
+            defaultSessionMarkerSnapshot.SetActive(false);
+            defaultSessionMarkerSourceId = sourceId;
+
+            for (int i = 0; i < sessionMarkerTransform.childCount; i++)
+            {
+                Transform child = sessionMarkerTransform.GetChild(i);
+                if (child == null)
+                    continue;
+
+                GameObject clone = GameObject.Instantiate(child.gameObject);
+                clone.transform.SetParent(defaultSessionMarkerSnapshot.transform, false);
+                clone.transform.localPosition = child.localPosition;
+                clone.transform.localRotation = child.localRotation;
+                clone.transform.localScale = child.localScale;
+                clone.SetActive(child.gameObject.activeSelf);
+            }
+        }
+
+        private static void ClearSessionMarkerChildren(Transform sessionMarkerTransform)
+        {
+            for (int i = sessionMarkerTransform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = sessionMarkerTransform.GetChild(i);
+                if (child == null)
+                    continue;
+
+                child.gameObject.SetActive(false);
+                Object.Destroy(child.gameObject);
             }
         }
 

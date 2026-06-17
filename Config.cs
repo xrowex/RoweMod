@@ -71,6 +71,7 @@ namespace rowemod
         public float barPitch;
         public float barScale;
         public float seatHeight;
+        public bool seatHeightUsesDefaultOffset;
         public float seatPitch;
         public float forkScale;
         public float frontWheelRadius;
@@ -173,6 +174,8 @@ namespace rowemod
             tireFrictionThreshold = 2f,
             bmxForceFactor = 0.07f,
             bmxMaxSpeed = 7.5f,
+            grindAlignAssist = false,
+            grindAssistStrength = 0.5f,
             airAngularDrag = 2.75f,
             grindPoseLerpSpeed = 2f
         };
@@ -208,7 +211,8 @@ namespace rowemod
         {
             barPitch = 0f,
             barScale = 1f,
-            seatHeight = 0.05f,
+            seatHeight = 0f,
+            seatHeightUsesDefaultOffset = true,
             seatPitch = 330f,
             forkScale = 1f,
             frontWheelRadius = 1f,
@@ -451,6 +455,10 @@ namespace rowemod
 // Reset physics tab settings to defaults
         public static void ResetPhysicsTab()
         {
+            float grindPoseLerpSpeed = physics.grindPoseLerpSpeed > 0f
+                ? physics.grindPoseLerpSpeed
+                : 2f;
+
             physics = new Physics
             {
                 disableLevelInAir = false,
@@ -474,7 +482,7 @@ namespace rowemod
                 grindAlignAssist = false,
                 grindAssistStrength = 0.5f,
                 airAngularDrag = 2.75f,
-                grindPoseLerpSpeed = 2f
+                grindPoseLerpSpeed = grindPoseLerpSpeed
             };
 
             motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
@@ -530,6 +538,7 @@ namespace rowemod
             
             Memory.roweCharacterManager.InitCharacterData();
             Memory.roweCharacterManager.InitCharacterData();
+            Custom.ResetTabState();
         }
 
         // Reset bike tab settings to defaults
@@ -537,8 +546,9 @@ namespace rowemod
         {
             bike.barPitch = 0f;
             bike.barScale = 1f;
-            bike.seatHeight = 0.05f;
-            bike.seatPitch = 350f;
+            bike.seatHeight = 0f;
+            bike.seatHeightUsesDefaultOffset = true;
+            bike.seatPitch = 330f;
             bike.forkScale = 1f;
             bike.frontWheelRadius = 1f;
             bike.frontWheelWidth = 1f;
@@ -558,35 +568,36 @@ namespace rowemod
             Memory.lastEquippedBars = null;
             Memory.lastEquippedFrame = null;
             Memory.lastEquippedStem = null;
-            Memory.customizableEntity.EquipItems();
-            Memory.customizableEntity.EquipItems();
         }
 
         // Reset bike materials tab settings to defaults
         public static void ResetBikeMaterialsTab()
         {
+            bike.bikeMaterials ??= new Dictionary<string, string>();
             bike.bikeMaterials.Clear();
-            Memory.customizableEntity.EquipItems();
-            Memory.customizableEntity.EquipItems();
         }
 
         // Reset misc tab settings to defaults
         public static void ResetMiscTab()
         {
+            bool showPlayerUserNameTargets = misc.showPlayerUserNameTargets;
+            string customSessionMarker = misc.customSessionMarker;
+            autoSkipIntro = true;
+
             misc = new Misc
             {
                 neverBail = false,
                 droneMass = 10f,
                 droneBodyToggle = true,
                 droneEmitterToggle = true,
-                showPlayerUserNameTargets = true,
+                showPlayerUserNameTargets = showPlayerUserNameTargets,
                 menuAccentR = 0.3f,
                 menuAccentG = 0.3f,
                 menuAccentB = 0.3f,
                 disableEmoteOnBike = false,
                 disableFreeCamCollider = false,
                 disableDroneCollider = false,
-                customSessionMarker = "None"
+                customSessionMarker = customSessionMarker
             };
         }
 
@@ -595,6 +606,18 @@ namespace rowemod
             grindPoseData = new GrindPoseSettings
             {
                 poses = new Dictionary<string, GrindPoseConfigEntry>()
+            };
+            physics.grindPoseLerpSpeed = 2f;
+        }
+
+        public static void ResetChallengeSettings()
+        {
+            challengeSettings = new ChallengeSettings
+            {
+                challengeVisible = true,
+                challengeSizeX = 5f,
+                challengeSizeY = 5f,
+                challengeSizeZ = 5f
             };
         }
 

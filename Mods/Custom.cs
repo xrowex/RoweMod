@@ -70,6 +70,22 @@ namespace rowemod.Mods
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
 
+        public static void ResetTabState()
+        {
+            foreach (Slot slot in Enum.GetValues(typeof(Slot)))
+            {
+                _slotVisibility[slot] = true;
+                ToggleSlotVisibility(slot, true);
+            }
+
+            _selectedModelDirectories.Clear();
+            _slotObjects.Clear();
+            _lastSelectedSlot = null;
+            _newPresetName = string.Empty;
+            _selectedPresetIndex = 0;
+            inModelsTab = true;
+        }
+
 
         public static void DrawCharacterTab()
         {
@@ -80,6 +96,7 @@ namespace rowemod.Mods
             if (GUILayout.Button("Reset Character", Menu.redButtonStyle, GUILayout.Height(26)))
             {
                 Config.ResetCharacterTab();
+                Config.Save();
                 GUI.FocusControl(null);
             }
 

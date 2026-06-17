@@ -118,6 +118,7 @@ namespace rowemod
                 return;
 
             rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
+            GameEventListener.OnSceneInitialized(sceneName);
             
             DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
@@ -172,6 +173,7 @@ namespace rowemod
 
                 PieMenu.Update();
                 rowemod.Challenges.MultiplayerChallengeManager.Update();
+                BikePoseEditor.Update();
 
                 if (!PieMenu.IsOpen && !PieMenu.ConsumedInputThisFrame)
                     ObjectDropper.Update();
@@ -227,14 +229,16 @@ namespace rowemod
                 if (RemoteKillSwitched.isModEnabled)
                 {
                     Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
-                    rowemod.Challenges.MultiplayerChallengeManager.DrawWindow();
                     TrickMods.DrawTrickPickerPopup();
                     ObjectDropper.DrawNotPlaceableWarning();
                 }
             }
 
             if (RemoteKillSwitched.isModEnabled)
+            {
+                rowemod.Challenges.MultiplayerChallengeManager.DrawWindow();
                 PieMenu.Draw();
+            }
         }
 
         public override void OnDeinitializeMelon()

@@ -299,7 +299,7 @@ namespace rowemod
                             ModernToggle("Spin Assist", ref physics.spinAssist);
                             ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
                             if (physics.grindAlignAssist)
-                                Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 5f, 0f, 10f);
+                                Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 0.5f, 0f, 10f);
                             ModernToggle("Drifting", ref physics.driftAbility);
                             Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
                             Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
@@ -309,7 +309,7 @@ namespace rowemod
                         if (BeginSectionCard("Speed", ref speedExpanded))
                         {
                             Slider("Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
-                            Slider("Max Speed", ref physics.bmxMaxSpeed, 7f, 2f, 15f);
+                            Slider("Max Speed", ref physics.bmxMaxSpeed, 7.5f, 2f, 15f);
                         }
                         EndSectionCard();
 
@@ -327,7 +327,7 @@ namespace rowemod
 
                         if (BeginSectionCard("Pump/Spin", ref pumpSpinExpanded))
                         {
-                            Slider("Pump Force", ref physics.pumpForce, 1.0f, 1f, 5f);
+                            Slider("Pump Force", ref physics.pumpForce, 1.5f, 1f, 5f);
                             Slider("Spin Speed Multiplier", ref physics.spinMultiplier, 1.0f, 0f, 10f);
                             Slider("Steer Damping", ref physics.steerDamp, 5f, 0f, 5f);
                         }
@@ -421,12 +421,13 @@ namespace rowemod
                             ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
                             ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
                             ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
-                            Slider("Drone Mass", ref misc.droneMass, 5f, 2f, 1000f);
+                            Slider("Drone Mass", ref misc.droneMass, 10f, 2f, 1000f);
                         }
                         EndSectionCard();
 
                         if (BeginSectionCard("Other", ref otherExpanded))
                         {
+                            ModernToggle("Skip Main Intro", ref Config.autoSkipIntro);
                             ModernToggle("No Bail", ref misc.neverBail);
                             ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
                             if (GUILayout.Button("Remove Skidmarks", redButtonStyle))
@@ -799,18 +800,24 @@ namespace rowemod
             {
                 case Tab.Physics:
                     ResetPhysicsTab();
+                    RestoreMotorTuningDefaults();
                     _motorTuningNeedsRefresh = true;
+                    Mods.Physics.Update();
                     break;
                 case Tab.Tricks:
                     TrickMods.ResetCustomTricks();
                     break;
                 case Tab.Bike:
                     Config.ResetBikeTab();
-                    PartTweaker.FindParts();
                     ReloadAssetsFromCachedBundles();
-                    customizableEntity.EquipItems();
-                    customizableEntity.EquipItems();
+                    if (customizableEntity != null)
+                    {
+                        customizableEntity.EquipItems();
+                        customizableEntity.EquipItems();
+                    }
                     Memory.FindObjects(Memory.rMbCharacter);
+                    PartTweaker.FindParts();
+                    PartTweaker.UpdatePartTransforms();
                     Log.Msg("Bike Tab reset!");
                     break;
                 case Tab.BikePoser:
@@ -823,18 +830,29 @@ namespace rowemod
                     ResetCharacterTab();
                     break;
                 case Tab.BikeMaterials:
-                    CategorizeEquipSlots(equipSlotVehicles);
                     ResetBikeMaterialsTab();
+                    if (customizableEntity != null)
+                    {
+                        customizableEntity.EquipItems();
+                        customizableEntity.EquipItems();
+                    }
+                    Memory.FindObjects(Memory.rMbCharacter);
+                    BikeMaterialsLoader.Initialize();
+                    BikeMaterialsLoader.ResetTabState();
                     break;
                 case Tab.MX:
                     hasInitializedMxSettings = false;
                     break;
                 case Tab.Misc:
                     ResetMiscTab();
+                    stylesInitialized = false;
+                    Mods.Misc.Update();
+                    break;
+                case Tab.Graphics:
+                    ResetGraphicsTab();
                     break;
                 case Tab.Marker:
-                    ReloadAssetsFromCachedBundles();
-                    Config.misc.customSessionMarker = "None";
+                    Memory.ResetSessionMarkerToDefault();
                     break;
                 case Tab.Dropper:
                     ObjectDropper.ResetTab();
@@ -843,8 +861,73 @@ namespace rowemod
                 case Tab.Multiplayer:
                     misc.showPlayerUserNameTargets = true;
                     ApplyPlayerUserNameTargetsVisibility(true);
+                    ResetChallengeSettings(false);
+                    MultiplayerChallengeManager.ResetWindowState();
                     _mpKickStatus = "Host/master only. Join or host a multiplayer session to manage players.";
                     break;
+                case Tab.Challenge:
+                    ResetChallengeSettings(true);
+                    break;
+            }
+
+            Config.Save();
+        }
+
+        private static void RestoreMotorTuningDefaults()
+        {
+            MotorVehicleSettings[] settings = Resources.FindObjectsOfTypeAll<MotorVehicleSettings>();
+            if (settings == null)
+                return;
+
+            foreach (MotorVehicleSettings vehicleSettings in settings)
+            {
+                if (vehicleSettings == null || vehicleSettings.EngineSettings == null)
+                    continue;
+
+                string configKey = GetMotorTuningConfigKey(vehicleSettings);
+                if (!_motorTuningDefaults.TryGetValue(configKey, out MotorTuningConfigEntry defaults) ||
+                    defaults == null)
+                {
+                    continue;
+                }
+
+                vehicleSettings.EngineSettings._forceFactor = defaults.forceFactor;
+                vehicleSettings.EngineSettings._maxForce = defaults.maxForce;
+                vehicleSettings.EngineSettings._maxSpeed = defaults.maxSpeed;
+            }
+
+            _motorTuningEntries.Clear();
+        }
+
+        private static void ResetGraphicsTab()
+        {
+            Light[] lights = UnityEngine.Object.FindObjectsOfType<Light>();
+            if (lights != null)
+            {
+                foreach (Light light in lights)
+                {
+                    if (light == null)
+                        continue;
+
+                    if (_cachedLightIntensityById.TryGetValue(light.GetInstanceID(), out float intensity))
+                        light.intensity = intensity;
+                }
+            }
+
+            _cachedLightIntensityById.Clear();
+        }
+
+        private static void ResetChallengeSettings(bool applySizeToActiveArea)
+        {
+            Config.ResetChallengeSettings();
+            ChallengeAreaManager.SetVisible(Config.challengeSettings.challengeVisible);
+
+            if (applySizeToActiveArea || !MultiplayerChallengeManager.HasActiveChallenge)
+            {
+                ChallengeAreaManager.SetSize(new Vector3(
+                    Config.challengeSettings.challengeSizeX,
+                    Config.challengeSettings.challengeSizeY,
+                    Config.challengeSettings.challengeSizeZ));
             }
         }
 
