@@ -100,10 +100,12 @@ namespace rowemod.Mods
                 var parentName = parentGo != null ? parentGo.name : "";
                 var key = (slotName + " " + parentName);
 
-                bool isFL = key.Contains("FrontLeft")  || key.Contains("BMX_Peg_FrontLeft");
-                bool isFR = key.Contains("FrontRight") || key.Contains("BMX_Peg_FrontRight");
-                bool isRL = key.Contains("RearLeft")   || key.Contains("BMX_Peg_RearLeft");
-                bool isRR = key.Contains("RearRight")  || key.Contains("BMX_Peg_RearRight");
+                bool isFL = key.Contains("FrontLeft", StringComparison.OrdinalIgnoreCase)  || key.Contains("BMX_Peg_FrontLeft", StringComparison.OrdinalIgnoreCase);
+                bool isFR = key.Contains("FrontRight", StringComparison.OrdinalIgnoreCase) || key.Contains("BMX_Peg_FrontRight", StringComparison.OrdinalIgnoreCase);
+                bool isRL = key.Contains("RearLeft", StringComparison.OrdinalIgnoreCase)   || key.Contains("BMX_Peg_RearLeft", StringComparison.OrdinalIgnoreCase)
+                            || key.Contains("BackLeft", StringComparison.OrdinalIgnoreCase);
+                bool isRR = key.Contains("RearRight", StringComparison.OrdinalIgnoreCase)  || key.Contains("BMX_Peg_RearRight", StringComparison.OrdinalIgnoreCase)
+                            || key.Contains("BackRight", StringComparison.OrdinalIgnoreCase);
 
                 var data = new PegData
                 {
@@ -126,7 +128,7 @@ namespace rowemod.Mods
                 else if (isRL) RearLeftPeg = parentGo;
                 else if (isRR) RearRightPeg = parentGo;
 
-                Log.Msg($"PegData: {slotName} (parent: {parentName}) FL:{isFL} FR:{isFR} RL:{isRL} RR:{isRR} Enabled:{data.IsEnabled}");
+                Log.Msg($"PegData Found: SlotName='{slotName}', ParentName='{parentName}', Key='{key}' | Matches -> FL:{isFL} FR:{isFR} RL:{isRL} RR:{isRR} | Enabled:{data.IsEnabled}");
             }
         }
 
