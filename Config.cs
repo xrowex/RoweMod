@@ -133,13 +133,6 @@ namespace rowemod
         public bool trickHooksEnabled { get; set; } = false;
     }
 
-    public class PerformanceSettings
-    {
-        public bool enabled { get; set; } = true;
-        public float logIntervalSeconds { get; set; } = 10f;
-        public float spikeThresholdMs { get; set; } = 4f;
-    }
-
     public class TrickEntry
     {
         public string Name { get; set; }
@@ -290,7 +283,6 @@ namespace rowemod
         public static Dictionary<string, MotorTuningConfigEntry> motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
         public static UpdaterSettings updaterSettings = new UpdaterSettings();
         public static ChallengeRuntimeSettings challengeRuntimeSettings = new ChallengeRuntimeSettings();
-        public static PerformanceSettings performanceSettings = new PerformanceSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
 
@@ -308,7 +300,6 @@ namespace rowemod
             public Dictionary<string, MotorTuningConfigEntry> motorTuningData { get; set; }
             public UpdaterSettings updaterSettingsData { get; set; }
             public ChallengeRuntimeSettings challengeRuntimeSettingsData { get; set; }
-            public PerformanceSettings performanceSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
         }
@@ -362,7 +353,6 @@ namespace rowemod
                     motorTuningData = motorTuning,
                     updaterSettingsData = updaterSettings,
                     challengeRuntimeSettingsData = challengeRuntimeSettings,
-                    performanceSettingsData = performanceSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
                 }, Formatting.Indented);
@@ -394,8 +384,6 @@ namespace rowemod
                 jsonContent.IndexOf("\"autoSkipIntro\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasChallengeRuntimeSettings =
                 jsonContent.IndexOf("\"challengeRuntimeSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
-            bool hasPerformanceSettings =
-                jsonContent.IndexOf("\"performanceSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
             disclaimerAccepted = jsonData.disclaimerAccepted;
             autoSkipIntro = !hasAutoSkipIntro || jsonData.autoSkipIntro;
@@ -443,7 +431,6 @@ namespace rowemod
             motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
             updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
-            performanceSettings = jsonData.performanceSettingsData ?? new PerformanceSettings();
             if (updaterSettings.checkIntervalHours < 0)
             {
                 updaterSettings.checkIntervalHours = 0;
@@ -451,14 +438,6 @@ namespace rowemod
             if (string.IsNullOrWhiteSpace(updaterSettings.manifestUrl))
             {
                 updaterSettings.manifestUrl = new UpdaterSettings().manifestUrl;
-            }
-            if (performanceSettings.logIntervalSeconds <= 0f)
-            {
-                performanceSettings.logIntervalSeconds = 10f;
-            }
-            if (performanceSettings.spikeThresholdMs < 0f)
-            {
-                performanceSettings.spikeThresholdMs = 0f;
             }
 
             if (grindPoseData.poses == null)
@@ -472,7 +451,7 @@ namespace rowemod
             if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
             if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
 
-            if (!hasChallengeRuntimeSettings || !hasPerformanceSettings)
+            if (!hasChallengeRuntimeSettings)
             {
                 Save();
             }
