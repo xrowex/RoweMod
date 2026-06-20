@@ -1,7 +1,7 @@
 {
-  "version": "3.0.0",
-  "downloadUrl": "https://github.com/xrowex/RoweMod/releases/latest/download/rowemod.dll",
-  "sha256": "",
+  "version": "3.0.1",
+  "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
+  "sha256": "9cd7a2ae7d923d0a93abbf35f972f964af29cee6dbc98fee1cdfa9278c394e52",
   "notesUrl": "https://github.com/xrowex/RoweMod/releases",
   "requiredGameVersion": ""
 }

@@ -270,6 +270,9 @@ namespace rowemod.Challenges
 
         public static void ToggleWindow()
         {
+            if (!IsRuntimeEnabled())
+                return;
+
             _isOpen = !_isOpen;
             if (_isOpen)
             {
@@ -279,7 +282,36 @@ namespace rowemod.Challenges
 
         private static void OpenWindow()
         {
+            if (!IsRuntimeEnabled())
+                return;
+
             _isOpen = true;
+        }
+
+        private static bool IsRuntimeEnabled()
+        {
+            return Config.challengeRuntimeSettings == null || Config.challengeRuntimeSettings.enabled;
+        }
+
+        private static bool IsNetworkingEnabled()
+        {
+            return IsRuntimeEnabled() &&
+                   Config.challengeRuntimeSettings != null &&
+                   Config.challengeRuntimeSettings.networkingEnabled;
+        }
+
+        private static bool IsAutoOpenEnabled()
+        {
+            return IsNetworkingEnabled() &&
+                   Config.challengeRuntimeSettings != null &&
+                   Config.challengeRuntimeSettings.autoOpenEnabled;
+        }
+
+        private static bool AreTrickHooksEnabled()
+        {
+            return IsRuntimeEnabled() &&
+                   Config.challengeRuntimeSettings != null &&
+                   Config.challengeRuntimeSettings.trickHooksEnabled;
         }
 
         public static void ResetWindowState()
@@ -302,18 +334,35 @@ namespace rowemod.Challenges
 
         public static void OnLocalPlayerSpawned(GameObject playerObject)
         {
-            InstallNetworkPlayerLifecycleHooks();
-            TryEnsureLocalModMarker(playerObject);
-            InstallTrickCapturePatch();
-            ResolveLocalTrickDetection(playerObject);
-            BindPlayerTrickGameplayEvents(playerObject);
-            RestartNetworkBridge();
-            SafeRefreshPlayers();
-            BroadcastPresence();
+            if (!IsRuntimeEnabled())
+                return;
+
+            if (IsNetworkingEnabled())
+            {
+                InstallNetworkPlayerLifecycleHooks();
+                TryEnsureLocalModMarker(playerObject);
+                RestartNetworkBridge();
+                SafeRefreshPlayers();
+                BroadcastPresence();
+            }
+            else
+            {
+                _networkStatus = "Challenge networking disabled by config.";
+            }
+
+            if (AreTrickHooksEnabled())
+            {
+                InstallTrickCapturePatch();
+                ResolveLocalTrickDetection(playerObject);
+                BindPlayerTrickGameplayEvents(playerObject);
+            }
         }
 
         public static void InstallTrickCapturePatch()
         {
+            if (!AreTrickHooksEnabled())
+                return;
+
             if (_trickCapturePatchInstalled)
                 return;
 
@@ -343,6 +392,9 @@ namespace rowemod.Challenges
 
         private static void InstallNetworkPlayerLifecycleHooks()
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             if (_networkPlayerLifecycleHooksInstalled)
                 return;
 
@@ -421,6 +473,9 @@ namespace rowemod.Challenges
 
         private static void HandleNetworkPlayerLifecycleChanged(NetworkPlayer player, string source)
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             try
             {
                 if (player != null && IsLocalNetworkPlayer(player))
@@ -460,6 +515,9 @@ namespace rowemod.Challenges
 
         public static void Update()
         {
+            if (!IsRuntimeEnabled())
+                return;
+
             try
             {
                 UpdateInternal();
@@ -481,27 +539,37 @@ namespace rowemod.Challenges
             if (ShouldThrottleIdleUpdate())
                 return;
 
-            EnsureNetworkBridge();
-            RetryPendingNetworkOperations();
-
-            if (Time.unscaledTime >= _nextPresenceBroadcastTime)
+            if (IsNetworkingEnabled())
             {
-                BroadcastPresence();
-            }
+                EnsureNetworkBridge();
+                RetryPendingNetworkOperations();
 
-            if (Time.unscaledTime >= _nextPresenceExpiryCheckTime)
-            {
-                _nextPresenceExpiryCheckTime = Time.unscaledTime + PresenceExpiryCheckInterval;
-                if (ExpirePresenceRecords())
+                if (Time.unscaledTime >= _nextPresenceBroadcastTime)
+                {
+                    BroadcastPresence();
+                }
+
+                if (Time.unscaledTime >= _nextPresenceExpiryCheckTime)
+                {
+                    _nextPresenceExpiryCheckTime = Time.unscaledTime + PresenceExpiryCheckInterval;
+                    if (ExpirePresenceRecords())
+                        RequestPlayerListRefresh();
+                }
+
+                if (!_playerListRefreshRequested && Time.unscaledTime >= _nextPlayerListFallbackRefreshTime)
                     RequestPlayerListRefresh();
+
+                if (_playerListRefreshRequested && Time.unscaledTime >= _nextPlayerListRefreshTime)
+                {
+                    SafeRefreshPlayers();
+                }
             }
-
-            if (!_playerListRefreshRequested && Time.unscaledTime >= _nextPlayerListFallbackRefreshTime)
-                RequestPlayerListRefresh();
-
-            if (_playerListRefreshRequested && Time.unscaledTime >= _nextPlayerListRefreshTime)
+            else
             {
-                SafeRefreshPlayers();
+                _networkStatus = "Challenge networking disabled by config.";
+                _playerListRefreshRequested = false;
+                _statePublishPending = false;
+                _clearStatePending = false;
             }
 
             if (!string.IsNullOrEmpty(_pendingLocalCompletionChallengeId) &&
@@ -534,7 +602,7 @@ namespace rowemod.Challenges
 
             _wasLocalPlayerInsideArea = inside;
 
-            if (inside)
+            if (inside && AreTrickHooksEnabled())
                 BindPlayerTrickGameplayEvents(null);
         }
 
@@ -602,6 +670,9 @@ namespace rowemod.Challenges
 
         public static void DrawWindow()
         {
+            if (!IsRuntimeEnabled())
+                return;
+
             if (!_isOpen)
                 return;
 
@@ -1213,7 +1284,7 @@ namespace rowemod.Challenges
 
         private static void AddBikeTurnOrderKey(List<string> turnOrder, string playerKey)
         {
-            if (!IsStableNetworkPlayerKey(playerKey))
+            if (!IsUsableBikePlayerKey(playerKey))
                 return;
 
             if (turnOrder.Any(key => string.Equals(key, playerKey, StringComparison.OrdinalIgnoreCase)))
@@ -1241,7 +1312,7 @@ namespace rowemod.Challenges
 
         private static void EnsureBikePlayerState(string playerKey, string playerName, bool addToTurnOrder)
         {
-            if (_activeChallenge == null || !IsStableNetworkPlayerKey(playerKey))
+            if (_activeChallenge == null || !IsUsableBikePlayerKey(playerKey))
                 return;
 
             EnsureBikeStateCollections();
@@ -1364,7 +1435,7 @@ namespace rowemod.Challenges
             if (_activeChallenge?.TurnOrder == null)
                 return 0;
 
-            return _activeChallenge.TurnOrder.Count(key => IsStableNetworkPlayerKey(key) && !IsBikePlayerOut(key));
+            return _activeChallenge.TurnOrder.Count(key => IsUsableBikePlayerKey(key) && !IsBikePlayerOut(key));
         }
 
         private static string GetCurrentBikeMatcherName()
@@ -1402,9 +1473,9 @@ namespace rowemod.Challenges
             RefreshNow();
             EnsureLocalPlayerCache(true);
             string creatorKey = GetLocalPlayerKey();
-            if (!IsStableNetworkPlayerKey(creatorKey))
+            if (!IsUsableBikePlayerKey(creatorKey))
             {
-                Log.Warning("[MPChallenge] Cannot create a network challenge until the local NetworkPlayer is ready.");
+                Log.Warning("[MPChallenge] Cannot create a challenge until the local player is ready.");
                 return;
             }
 
@@ -1527,11 +1598,20 @@ namespace rowemod.Challenges
 
         private static void RefreshNow()
         {
-            InstallNetworkPlayerLifecycleHooks();
-            TryEnsureLocalModMarker();
-            EnsureNetworkBridge();
-            SafeRefreshPlayers();
-            BroadcastPresence();
+            if (IsNetworkingEnabled())
+            {
+                InstallNetworkPlayerLifecycleHooks();
+                TryEnsureLocalModMarker();
+                EnsureNetworkBridge();
+                SafeRefreshPlayers();
+                BroadcastPresence();
+            }
+            else
+            {
+                _networkStatus = "Challenge networking disabled by config.";
+                _playerListRefreshRequested = false;
+            }
+
             EnsureTrickNames();
         }
 
@@ -1549,6 +1629,13 @@ namespace rowemod.Challenges
 
         private static void SafeRefreshPlayers()
         {
+            if (!IsNetworkingEnabled())
+            {
+                _playerListRefreshRequested = false;
+                _networkStatus = "Challenge networking disabled by config.";
+                return;
+            }
+
             if (_playerScanDisabled && Time.unscaledTime < _nextPlayerScanRetryTime)
             {
                 _nextPlayerListRefreshTime = _nextPlayerScanRetryTime;
@@ -1589,6 +1676,9 @@ namespace rowemod.Challenges
 
         private static void TryAutoOpenForRemoteRowePlayer()
         {
+            if (!IsAutoOpenEnabled())
+                return;
+
             if (_autoOpenTriggeredForSession)
                 return;
 
@@ -2703,6 +2793,9 @@ namespace rowemod.Challenges
 
         private static void BindPlayerTrickGameplayEvents(GameObject playerObject)
         {
+            if (!AreTrickHooksEnabled())
+                return;
+
             PlayerTrickGameplay gameplay = ResolvePlayerTrickGameplay(playerObject);
             if (gameplay == null)
                 return;
@@ -2897,6 +2990,9 @@ namespace rowemod.Challenges
             bool confirmsLanding,
             bool checkCompletion)
         {
+            if (!AreTrickHooksEnabled())
+                return;
+
             try
             {
                 if (_activeChallenge == null)
@@ -3294,6 +3390,12 @@ namespace rowemod.Challenges
 
         private static void EnsureNetworkBridge()
         {
+            if (!IsNetworkingEnabled())
+            {
+                _networkStatus = "Challenge networking disabled by config.";
+                return;
+            }
+
             if (_networkBridgeRoot != null)
                 return;
             if (Time.unscaledTime < _nextNetworkRetryTime)
@@ -3397,6 +3499,9 @@ namespace rowemod.Challenges
 
         private static void RestartNetworkBridge()
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             ShutdownNetworkBridge();
             EnsureNetworkBridge();
         }
@@ -3450,6 +3555,9 @@ namespace rowemod.Challenges
 
         private static void HandleNetworkStateJson(string json)
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(json) || json.Length > MaxStateJsonLength)
@@ -3477,6 +3585,9 @@ namespace rowemod.Challenges
 
         private static void HandleNetworkStateCleared()
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             Log.Msg("[MPChallenge][Net] Stored challenge state was cleared.");
             ResetActiveChallenge();
             RecordNetworkSuccess("No active network challenge.");
@@ -3484,6 +3595,9 @@ namespace rowemod.Challenges
 
         private static void HandleNetworkCommandJson(string json)
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             try
             {
                 if (string.IsNullOrWhiteSpace(json) || json.Length > MaxCommandJsonLength)
@@ -3622,6 +3736,13 @@ namespace rowemod.Challenges
             if (_activeChallenge == null || !IsLocalCreator())
                 return;
 
+            if (!IsNetworkingEnabled())
+            {
+                _statePublishPending = false;
+                _networkStatus = "Challenge networking disabled by config.";
+                return;
+            }
+
             EnsureBikeStateCollections();
             NetworkChallengeState state = new NetworkChallengeState
             {
@@ -3666,6 +3787,9 @@ namespace rowemod.Challenges
 
         private static bool TryPublishNetworkState(string json)
         {
+            if (!IsNetworkingEnabled())
+                return false;
+
             if (_stateEvent == null || !CanUseNetwork())
                 return false;
 
@@ -3708,6 +3832,12 @@ namespace rowemod.Challenges
         private static void BroadcastPresence()
         {
             _nextPresenceBroadcastTime = Time.unscaledTime + PresenceBroadcastInterval;
+            if (!IsNetworkingEnabled())
+            {
+                _networkStatus = "Challenge networking disabled by config.";
+                return;
+            }
+
             if (_commandEvent == null || !CanUseNetwork())
                 return;
 
@@ -3732,6 +3862,9 @@ namespace rowemod.Challenges
 
         private static bool TryRaiseCommand(NetworkChallengeCommand command)
         {
+            if (!IsNetworkingEnabled())
+                return false;
+
             if (_commandEvent == null || !CanUseNetwork())
                 return false;
 
@@ -3754,6 +3887,12 @@ namespace rowemod.Challenges
 
         private static bool CanUseNetwork()
         {
+            if (!IsNetworkingEnabled())
+            {
+                _networkStatus = "Challenge networking disabled by config.";
+                return false;
+            }
+
             if (Time.unscaledTime < _nextNetworkRetryTime)
                 return false;
 
@@ -3777,6 +3916,9 @@ namespace rowemod.Challenges
 
         private static void RetryPendingNetworkOperations()
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             if (Time.unscaledTime < _nextNetworkRetryTime)
                 return;
 
@@ -3792,6 +3934,9 @@ namespace rowemod.Challenges
 
         private static bool TryClearNetworkState()
         {
+            if (!IsNetworkingEnabled())
+                return false;
+
             if (_stateEvent == null || !CanUseNetwork())
                 return false;
 
@@ -3811,6 +3956,9 @@ namespace rowemod.Challenges
 
         private static void ClearOwnedNetworkStateBestEffort()
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             if (_activeChallenge == null || !IsLocalCreator())
                 return;
 
@@ -4022,6 +4170,12 @@ namespace rowemod.Challenges
                     value.StartsWith("token:", StringComparison.Ordinal));
         }
 
+        private static bool IsUsableBikePlayerKey(string value)
+        {
+            return IsStableNetworkPlayerKey(value) ||
+                   (!string.IsNullOrEmpty(value) && value.StartsWith("local:", StringComparison.Ordinal));
+        }
+
         private static bool IsValidVector(float[] values, int requiredLength, float minimum, float maximum)
         {
             if (values == null || values.Length != requiredLength)
@@ -4059,6 +4213,9 @@ namespace rowemod.Challenges
 
         private static void RegisterPresence(string playerKey, string playerName)
         {
+            if (!IsNetworkingEnabled())
+                return;
+
             if (!IsBoundedText(playerKey) || !IsBoundedText(playerName))
                 return;
 
@@ -4082,6 +4239,9 @@ namespace rowemod.Challenges
 
         private static void TryAutoOpenForRemotePresence(string playerKey, string playerName)
         {
+            if (!IsAutoOpenEnabled())
+                return;
+
             if (_autoOpenTriggeredForSession || !IsStableNetworkPlayerKey(playerKey))
                 return;
 
@@ -4170,6 +4330,9 @@ namespace rowemod.Challenges
         {
             public static void Postfix(TrickDetection __instance, string __0)
             {
+                if (!AreTrickHooksEnabled())
+                    return;
+
                 try
                 {
                     CaptureLocalTrick(__instance, __0);
@@ -4361,6 +4524,12 @@ namespace rowemod.Challenges
 
         private static void RequestPlayerListRefresh(float delaySeconds = 0f)
         {
+            if (!IsNetworkingEnabled())
+            {
+                _playerListRefreshRequested = false;
+                return;
+            }
+
             bool wasRequested = _playerListRefreshRequested;
             float requestedTime = Time.unscaledTime + Mathf.Max(0f, delaySeconds);
             _playerListRefreshRequested = true;
@@ -4392,6 +4561,20 @@ namespace rowemod.Challenges
             }
 
             _nextLocalPlayerCacheRefreshTime = Time.unscaledTime + LocalPlayerCacheRefreshInterval;
+
+            if (!IsNetworkingEnabled())
+            {
+                if (Memory.physicsDrivenCharacter != null)
+                {
+                    CacheLocalPlayer($"local:{Memory.physicsDrivenCharacter.GetInstanceID()}", "Local Player");
+                    return;
+                }
+
+                _cachedLocalPlayerKey = null;
+                _cachedLocalPlayerName = null;
+                _cachedLocalPlayerObjectId = 0;
+                return;
+            }
 
             List<NetworkPlayer> players = GetKnownNetworkPlayers(true);
             foreach (NetworkPlayer player in players)

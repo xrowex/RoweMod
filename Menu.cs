@@ -48,7 +48,7 @@ namespace rowemod
             Marker,
             Dropper,
             Multiplayer,
-            Challenge // Added Challenge tab for future use
+            Challenge
         }
 
         // Menu Variables

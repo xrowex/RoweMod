@@ -33,3 +33,4 @@ Thumbs.db
 
 # --- Rider solution-level files (optional but usually ignored) ---
 *.v17/
+/tools/

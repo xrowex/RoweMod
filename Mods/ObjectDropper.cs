@@ -167,10 +167,19 @@ namespace rowemod.Mods
         {
             var mouse = Mouse.current;
             var gamepad = Gamepad.current;
+            bool isMenuOpen = Menu.isOpen;
+            bool dropperMenuActive = IsDropperTabActive;
+            bool previewActive = previewObject != null && previewObject.activeSelf;
+            bool hasSelection = selectedObjects.Count > 0;
+
+            if (!dropperMenuActive && !previewActive && !hasSelection)
+            {
+                wasMenuOpen = isMenuOpen;
+                return;
+            }
 
             RefreshRuntimeReferences();
 
-            bool dropperMenuActive = IsDropperTabActive;
             bool placementActive = dropperMenuActive && cachedDroneModeActive;
             LogDropperState(dropperMenuActive, placementActive, activeCamera != null, gamepad != null);
 
@@ -205,8 +214,6 @@ namespace rowemod.Mods
                     TrySpawnSelectedPrefab(activeCamera.ScreenPointToRay(mouse.position.ReadValue()), "mouse");
                 }
             }
-
-            bool isMenuOpen = Menu.isOpen;
 
             if (isMenuOpen != wasMenuOpen)
             {

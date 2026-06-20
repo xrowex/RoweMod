@@ -120,8 +120,24 @@ namespace rowemod
     {
         public bool enabled { get; set; } = true;
         public long lastCheckUnixUtc { get; set; }
+        public int checkIntervalHours { get; set; } = 12;
         public string skippedVersion { get; set; }
-        public string manifestUrl { get; set; } = "https://raw.githubusercontent.com/xrowex/RoweMod/main/version.json";
+        public string manifestUrl { get; set; } = "https://raw.githubusercontent.com/xrowex/RoweMod/master/version.json";
+    }
+
+    public class ChallengeRuntimeSettings
+    {
+        public bool enabled { get; set; } = true;
+        public bool networkingEnabled { get; set; } = false;
+        public bool autoOpenEnabled { get; set; } = false;
+        public bool trickHooksEnabled { get; set; } = false;
+    }
+
+    public class PerformanceSettings
+    {
+        public bool enabled { get; set; } = true;
+        public float logIntervalSeconds { get; set; } = 10f;
+        public float spikeThresholdMs { get; set; } = 4f;
     }
 
     public class TrickEntry
@@ -273,6 +289,8 @@ namespace rowemod
         public static GrindPoseSettings grindPoseData = new GrindPoseSettings();
         public static Dictionary<string, MotorTuningConfigEntry> motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
         public static UpdaterSettings updaterSettings = new UpdaterSettings();
+        public static ChallengeRuntimeSettings challengeRuntimeSettings = new ChallengeRuntimeSettings();
+        public static PerformanceSettings performanceSettings = new PerformanceSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
 
@@ -289,6 +307,8 @@ namespace rowemod
             public GrindPoseSettings grindPoseData { get; set; }
             public Dictionary<string, MotorTuningConfigEntry> motorTuningData { get; set; }
             public UpdaterSettings updaterSettingsData { get; set; }
+            public ChallengeRuntimeSettings challengeRuntimeSettingsData { get; set; }
+            public PerformanceSettings performanceSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
         }
@@ -341,6 +361,8 @@ namespace rowemod
                     grindPoseData = grindPoseData,
                     motorTuningData = motorTuning,
                     updaterSettingsData = updaterSettings,
+                    challengeRuntimeSettingsData = challengeRuntimeSettings,
+                    performanceSettingsData = performanceSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
                 }, Formatting.Indented);
@@ -370,6 +392,10 @@ namespace rowemod
                 jsonContent.IndexOf("\"showPlayerUserNameTargets\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasAutoSkipIntro =
                 jsonContent.IndexOf("\"autoSkipIntro\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasChallengeRuntimeSettings =
+                jsonContent.IndexOf("\"challengeRuntimeSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasPerformanceSettings =
+                jsonContent.IndexOf("\"performanceSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
             disclaimerAccepted = jsonData.disclaimerAccepted;
             autoSkipIntro = !hasAutoSkipIntro || jsonData.autoSkipIntro;
@@ -416,9 +442,23 @@ namespace rowemod
             grindPoseData = jsonData.grindPoseData ?? new GrindPoseSettings();
             motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
             updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
+            challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
+            performanceSettings = jsonData.performanceSettingsData ?? new PerformanceSettings();
+            if (updaterSettings.checkIntervalHours < 0)
+            {
+                updaterSettings.checkIntervalHours = 0;
+            }
             if (string.IsNullOrWhiteSpace(updaterSettings.manifestUrl))
             {
                 updaterSettings.manifestUrl = new UpdaterSettings().manifestUrl;
+            }
+            if (performanceSettings.logIntervalSeconds <= 0f)
+            {
+                performanceSettings.logIntervalSeconds = 10f;
+            }
+            if (performanceSettings.spikeThresholdMs < 0f)
+            {
+                performanceSettings.spikeThresholdMs = 0f;
             }
 
             if (grindPoseData.poses == null)
@@ -431,6 +471,11 @@ namespace rowemod
             if (physics.bmxMaxSpeed <= 0f) physics.bmxMaxSpeed = 7.5f;
             if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
             if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
+
+            if (!hasChallengeRuntimeSettings || !hasPerformanceSettings)
+            {
+                Save();
+            }
             
             Log.Msg($"Config loaded successfully.");
         }
