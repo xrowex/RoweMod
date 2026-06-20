@@ -66,14 +66,6 @@ namespace rowemod.Mods
             if (checkInProgress)
                 return;
 
-            if (!ShouldCheckNow())
-            {
-                Log.Msg(
-                    $"[AutoUpdater] Skipping update check; checked recently. " +
-                    $"intervalHours={GetCheckIntervalHours()}, lastCheckUnixUtc={Config.updaterSettings.lastCheckUnixUtc}");
-                return;
-            }
-
             StartCoroutine(CheckForUpdates());
         }
 
@@ -297,9 +289,6 @@ namespace rowemod.Mods
 
             try
             {
-                Config.updaterSettings.lastCheckUnixUtc = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                Config.Save();
-
                 if (request.result != UnityWebRequest.Result.Success)
                 {
                     Log.Warning($"[AutoUpdater] Update check failed for {manifestUrl}: {request.error}");
@@ -532,20 +521,6 @@ namespace rowemod.Mods
                 "echo RoweMod update installed successfully. >> \"%LOG%\"",
                 "exit /b 0",
                 string.Empty);
-        }
-
-        private static bool ShouldCheckNow()
-        {
-            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            long lastCheck = Config.updaterSettings.lastCheckUnixUtc;
-            int intervalHours = GetCheckIntervalHours();
-
-            return lastCheck <= 0 || intervalHours <= 0 || now - lastCheck >= intervalHours * 60L * 60L;
-        }
-
-        private static int GetCheckIntervalHours()
-        {
-            return Math.Max(0, Config.updaterSettings.checkIntervalHours);
         }
 
         private static bool IsValidManifest(UpdateManifest manifest, out string reason)

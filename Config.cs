@@ -119,8 +119,6 @@ namespace rowemod
     public class UpdaterSettings
     {
         public bool enabled { get; set; } = true;
-        public long lastCheckUnixUtc { get; set; }
-        public int checkIntervalHours { get; set; } = 12;
         public string skippedVersion { get; set; }
         public string manifestUrl { get; set; } = "https://raw.githubusercontent.com/xrowex/RoweMod/master/version.json";
     }
@@ -431,10 +429,6 @@ namespace rowemod
             motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
             updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
-            if (updaterSettings.checkIntervalHours < 0)
-            {
-                updaterSettings.checkIntervalHours = 0;
-            }
             if (string.IsNullOrWhiteSpace(updaterSettings.manifestUrl))
             {
                 updaterSettings.manifestUrl = new UpdaterSettings().manifestUrl;
