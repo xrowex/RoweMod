@@ -480,6 +480,7 @@
 		<Compile Include="Menu.cs" />
 		<Compile Include="Main.cs" />
 		<Compile Include="Mods\AudioPatchie.cs" />
+		<Compile Include="Mods\AutoUpdater.cs" />
 		<Compile Include="Mods\BikeMaterialPreset.cs" />
 		<Compile Include="Mods\BikeMaterialsLoader.cs" />
 		<Compile Include="Mods\BikePoseEditor.cs" />

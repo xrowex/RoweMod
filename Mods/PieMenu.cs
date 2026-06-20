@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using rowemod.Utils;
-using System.Collections.Generic;
 using GameReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
 
 namespace rowemod.Mods
@@ -21,21 +20,6 @@ namespace rowemod.Mods
                 Label = label;
                 ActionId = actionId;
                 Direction = direction.normalized;
-            }
-        }
-
-        private sealed class ReplayActionOriginalState
-        {
-            public readonly bool WasEnabled;
-            public readonly string[] OverridePaths;
-
-            public ReplayActionOriginalState(InputAction action)
-            {
-                WasEnabled = action.enabled;
-                OverridePaths = new string[action.bindings.Count];
-
-                for (int i = 0; i < action.bindings.Count; i++)
-                    OverridePaths[i] = action.bindings[i].overridePath;
             }
         }
 
@@ -63,30 +47,11 @@ namespace rowemod.Mods
         private const float HintWidth = 420f;
         private const float HintHeight = 28f;
         private const float HintOffsetBelowButtons = 54f;
-        private const float NativeReplaySuppressWindow = 0.75f;
-        private static readonly string[] NativeReplayBindingKeywords =
-        {
-            "replay",
-            "clip",
-            "instant"
-        };
-        private static readonly string[] NativeReplayOpenActionNames =
-        {
-            "openinstantreplay",
-            "openclipedit",
-            "openclipplayback",
-            "instantreplay",
-            "clipedit",
-            "clipplayback"
-        };
 
         private static bool isOpen;
         private static bool consumedInputThisFrame;
         private static int selectedIndex = -1;
         private static float nextToggleTime;
-        private static int totalReplayDpadRightBindingsRemoved;
-        private static float suppressNativeReplayUntilTime;
-        private static int nativeReplaySuppressCallCount;
         private static Color selectedAccentColor;
         private static Texture2D darkTexture;
         private static Texture2D buttonTexture;
@@ -96,10 +61,10 @@ namespace rowemod.Mods
         private static GUIStyle selectedButtonStyle;
         private static GUIStyle centerStyle;
         private static GUIStyle hintStyle;
-        private static readonly Dictionary<InputAction, ReplayActionOriginalState> replayActionOriginalStates = new Dictionary<InputAction, ReplayActionOriginalState>();
 
         public static bool IsOpen => isOpen;
         public static bool ConsumedInputThisFrame => consumedInputThisFrame;
+
         public static void Cleanup()
         {
             isOpen = false;
@@ -118,6 +83,7 @@ namespace rowemod.Mods
         public static void Update()
         {
             consumedInputThisFrame = false;
+
             Gamepad gamepad = Gamepad.current;
             Keyboard keyboard = Keyboard.current;
 
@@ -293,233 +259,6 @@ namespace rowemod.Mods
             {
                 Log.Error($"[PieMenu] Extra 3 failed to open replay: {ex.Message}");
             }
-        }
-
-        private static void StartNativeReplaySuppression()
-        {
-            suppressNativeReplayUntilTime = Time.unscaledTime + NativeReplaySuppressWindow;
-            nativeReplaySuppressCallCount = 0;
-        }
-
-        private static void SuppressNativeReplayEditorIfNeeded()
-        {
-            if (Time.unscaledTime > suppressNativeReplayUntilTime)
-                return;
-
-            nativeReplaySuppressCallCount++;
-
-            try
-            {
-                MonoBehaviour[] behaviours = Resources.FindObjectsOfTypeAll<MonoBehaviour>();
-                int backCalls = 0;
-
-                foreach (MonoBehaviour behaviour in behaviours)
-                {
-                    if (behaviour == null)
-                        continue;
-
-                    System.Type type = behaviour.GetType();
-                    if (type == null || type.FullName == null || !type.FullName.Contains("ReplayEditor"))
-                        continue;
-
-                    System.Reflection.MethodInfo backMethod = type.GetMethod(
-                        "Back",
-                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
-
-                    if (backMethod == null)
-                        continue;
-
-                    backMethod.Invoke(behaviour, null);
-                    backCalls++;
-                }
-
-                if (backCalls > 0 && nativeReplaySuppressCallCount <= 3)
-                    Log.Msg($"[PieMenu] Forced native ReplayEditor back during right-D-pad suppression. calls={backCalls}.");
-            }
-            catch (System.Exception ex)
-            {
-                if (nativeReplaySuppressCallCount <= 3)
-                    Log.Warning($"[PieMenu] Failed native ReplayEditor suppression: {ex.Message}");
-            }
-        }
-
-        // Public because Main calls this during init/scene load, before the pie menu is opened.
-        public static void EnforceReplayDpadRightUnbound()
-        {
-            try
-            {
-                InputActionAsset[] inputAssets = Resources.FindObjectsOfTypeAll<InputActionAsset>();
-                int removedCount = 0;
-                int matchedActionCount = 0;
-
-                foreach (InputActionAsset asset in inputAssets)
-                {
-                    if (asset == null)
-                        continue;
-
-                    foreach (InputActionMap actionMap in asset.actionMaps)
-                    {
-                        if (actionMap == null)
-                            continue;
-
-                        foreach (InputAction action in actionMap.actions)
-                        {
-                            if (action == null || !IsReplayRelatedAction(asset, actionMap, action))
-                                continue;
-
-                            matchedActionCount++;
-                            LogReplayActionBindings(asset, actionMap, action);
-
-                            if (IsNativeReplayOpenAction(action))
-                                removedCount += SuppressReplayAction(action, true);
-                            else
-                                removedCount += SuppressReplayAction(action, false);
-                        }
-                    }
-                }
-
-                if (removedCount > 0)
-                {
-                    totalReplayDpadRightBindingsRemoved += removedCount;
-                    Log.Msg($"[PieMenu] Removed {removedCount} D-pad-right replay binding(s). Total removed: {totalReplayDpadRightBindingsRemoved}.");
-                }
-                Log.Msg($"[PieMenuDiag] Replay input scan: assets={inputAssets.Length}, matchedActions={matchedActionCount}, removedOrDisabledBindings={removedCount}.");
-            }
-            catch (System.Exception ex)
-            {
-                Log.Error($"[PieMenu] Failed to unbind native replay D-pad-right input: {ex.Message}");
-            }
-        }
-
-        private static bool IsReplayRelatedAction(InputActionAsset asset, InputActionMap actionMap, InputAction action)
-        {
-            if (IsNativeReplayOpenAction(action))
-                return true;
-
-            string identity = $"{asset.name} {actionMap.name} {action.name}".ToLowerInvariant();
-
-            foreach (string keyword in NativeReplayBindingKeywords)
-            {
-                if (identity.Contains(keyword))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsNativeReplayOpenAction(InputAction action)
-        {
-            string actionName = (action.name ?? string.Empty).ToLowerInvariant();
-            foreach (string replayOpenActionName in NativeReplayOpenActionNames)
-            {
-                if (actionName == replayOpenActionName || actionName.Contains(replayOpenActionName))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static void LogReplayActionBindings(InputActionAsset asset, InputActionMap actionMap, InputAction action)
-        {
-            Log.Msg($"[PieMenuDiag] Replay action found: asset='{asset.name}', map='{actionMap.name}', action='{action.name}', enabled={action.enabled}, bindings={action.bindings.Count}.");
-
-            for (int i = 0; i < action.bindings.Count; i++)
-            {
-                InputBinding binding = action.bindings[i];
-                string path = binding.path ?? string.Empty;
-                string effectivePath = binding.effectivePath ?? string.Empty;
-                string overridePath = binding.overridePath ?? string.Empty;
-                string groups = binding.groups ?? string.Empty;
-                Log.Msg($"[PieMenuDiag]   binding[{i}] path='{path}' effective='{effectivePath}' override='{overridePath}' groups='{groups}' isDpadRight={IsDpadRightBinding(path) || IsDpadRightBinding(effectivePath)}.");
-            }
-        }
-
-        public static int SuppressGeneratedReplayAction(InputAction action)
-        {
-            return SuppressReplayAction(action, true);
-        }
-
-        private static int SuppressReplayAction(InputAction action, bool suppressEntireAction)
-        {
-            if (action == null)
-                return 0;
-
-            CaptureReplayActionOriginalState(action);
-
-            List<int> indicesToSuppress = new List<int>();
-
-            for (int i = 0; i < action.bindings.Count; i++)
-            {
-                if (suppressEntireAction)
-                {
-                    indicesToSuppress.Add(i);
-                    continue;
-                }
-
-                InputBinding binding = action.bindings[i];
-                string path = binding.effectivePath ?? binding.path ?? string.Empty;
-                string rawPath = binding.path ?? string.Empty;
-
-                if (IsDpadRightBinding(path) || IsDpadRightBinding(rawPath))
-                    indicesToSuppress.Add(i);
-            }
-
-            foreach (int i in indicesToSuppress)
-            {
-                // Same idea as TrickMods nulling a trick slot: keep the action object,
-                // but blank the active reference Unity uses for this binding.
-                action.ApplyBindingOverride(i, new InputBinding { overridePath = string.Empty });
-            }
-
-            if (suppressEntireAction && action.enabled)
-                action.Disable();
-
-            Log.Msg($"[PieMenuDiag] Suppressed replay action '{action.name}'. wholeAction={suppressEntireAction}, bindings={indicesToSuppress.Count}, enabledNow={action.enabled}.");
-            return indicesToSuppress.Count;
-        }
-
-        private static void CaptureReplayActionOriginalState(InputAction action)
-        {
-            if (!replayActionOriginalStates.ContainsKey(action))
-                replayActionOriginalStates[action] = new ReplayActionOriginalState(action);
-        }
-
-        private static void RestoreSuppressedReplayActions()
-        {
-            foreach (KeyValuePair<InputAction, ReplayActionOriginalState> pair in replayActionOriginalStates)
-            {
-                InputAction action = pair.Key;
-                ReplayActionOriginalState original = pair.Value;
-
-                if (action == null)
-                    continue;
-
-                int count = Mathf.Min(action.bindings.Count, original.OverridePaths.Length);
-                for (int i = 0; i < count; i++)
-                    action.ApplyBindingOverride(i, new InputBinding { overridePath = original.OverridePaths[i] });
-
-                if (original.WasEnabled && !action.enabled)
-                    action.Enable();
-                else if (!original.WasEnabled && action.enabled)
-                    action.Disable();
-            }
-
-            if (replayActionOriginalStates.Count > 0)
-                Log.Msg($"[PieMenu] Restored {replayActionOriginalStates.Count} suppressed replay action(s).");
-
-            replayActionOriginalStates.Clear();
-        }
-
-        private static bool IsDpadRightBinding(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return false;
-
-            string normalized = path.ToLowerInvariant();
-            return normalized.Contains("dpad/right")
-                   || normalized.Contains("dpadright")
-                   || normalized.Contains("d-pad/right")
-                   || normalized.Contains("d-padright");
         }
 
         private static void EnsureStyles()

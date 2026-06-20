@@ -22,9 +22,26 @@ namespace rowemod.Challenges
         public const string RoweModMarkerName = "I_HAVE_ROWE_MOD";
 
         private const int WindowId = 0x524f5745;
-        private const int ProtocolVersion = 2;
-        private const string ChallengeStateEventKey = "rowemod.mp.challenge.state.v2";
-        private const string ChallengeCommandEventKey = "rowemod.mp.challenge.command.v2";
+        private const int ProtocolVersion = 5;
+        private const string ChallengeStateEventKey = "rowemod.mp.challenge.state.v5";
+        private const string ChallengeCommandEventKey = "rowemod.mp.challenge.command.v5";
+        private const string GameModeBike = "bike";
+        private const string BikePhaseChoosing = "choosing";
+        private const string BikePhaseSetting = "setting";
+        private const string BikePhaseMatching = "matching";
+        private const string BikePhaseGameOver = "gameover";
+        private const string BikeAttemptPending = "pending";
+        private const string BikeAttemptLanded = "landed";
+        private const string BikeAttemptMissed = "missed";
+        private const string BikeAttemptOut = "out";
+        private const string BikeAttemptSet = "set";
+        private const string BikeCommandLanded = "landed";
+        private const string BikeCommandMiss = "miss";
+        private const string BikeCommandStartSet = "start_set";
+        private const string BikeCommandSetLine = "set_line";
+        private const string BikeCommandSetterFailed = "setter_failed";
+        private const string BikeLetters = "BIKE";
+        private const int MaxBikeLetters = 4;
         private const float CompletionPollInterval = 0.25f;
         private const float LocalPlayerCacheRefreshInterval = 30f;
         private const float PlayerListRefreshInterval = 120f;
@@ -38,18 +55,23 @@ namespace rowemod.Challenges
         private const float TrickCatalogRefreshInterval = 2f;
         private const float TrickGameplayBindRetryInterval = 5f;
         private const int MaxStateJsonLength = 16384;
-        private const int MaxCommandJsonLength = 2048;
+        private const int MaxCommandJsonLength = 4096;
         private const int MaxPlayers = 64;
         private const int MaxTricks = 16;
         private const int MaxTextLength = 64;
         private const int MaxCapturedAttemptTricks = 64;
+        private const int MaxRecordedSetPositionSamples = 128;
         private const float StaleRepeatCaptureWindow = 0.45f;
+        private const float RecordedSetBoundsPadding = 2.5f;
+        private const float RecordedSetMinWidth = 5f;
+        private const float RecordedSetMinHeight = 5f;
+        private const float RecordedSetMinDepth = 5f;
         private const float WindowLogoMaxWidth = 96f;
         private const float WindowLogoMaxHeight = 18f;
         private const float DefaultWindowWidth = 560f;
         private const float DefaultWindowHeight = 420f;
         private const float DropdownWindowHeight = 540f;
-        private const float ActiveWindowHeight = 320f;
+        private const float ActiveWindowHeight = 420f;
         private const float DetailsWindowHeight = 680f;
         private const string TrickCaptureHarmonyId = "rowemod.mpchallenge.trickcapture";
         private static readonly JsonSerializerSettings NetworkJsonSettings = new JsonSerializerSettings
@@ -90,6 +112,7 @@ namespace rowemod.Challenges
         private static readonly List<string> _entryHistorySnapshot = new List<string>();
         private static readonly List<string> _capturedAttemptTricks = new List<string>();
         private static readonly List<float> _capturedAttemptTrickTimes = new List<float>();
+        private static readonly List<Vector3> _recordedSetWorldPositions = new List<Vector3>();
         private static string _lastCheckedAttemptSignature;
         private static float _nextCompletionPollTime;
         private static bool _wasLocalPlayerInsideArea;
@@ -176,10 +199,25 @@ namespace rowemod.Challenges
             public int Version;
             public string ChallengeId;
             public int Revision;
+            public string GameMode = GameModeBike;
+            public string Phase = BikePhaseChoosing;
             public string CreatorKey;
             public string CreatorName;
             public List<string> Tricks = new List<string>();
             public Dictionary<string, bool> PlayerCompleted = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, int> PlayerLetters = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, string> PlayerAttemptStatus = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, int> PlayerAttemptsRemaining = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            public List<string> TurnOrder = new List<string>();
+            public int SetterIndex;
+            public string CurrentSetterKey;
+            public string CurrentSetterName;
+            public int CurrentMatcherIndex = -1;
+            public string CurrentMatcherKey;
+            public string CurrentMatcherName;
+            public bool LastLetterGetsTwoTries = true;
+            public string WinnerKey;
+            public string WinnerName;
             public float[] Position;
             public float[] Rotation;
             public float[] Size;
@@ -190,10 +228,25 @@ namespace rowemod.Challenges
             public int Version { get; set; }
             public string ChallengeId { get; set; }
             public int Revision { get; set; }
+            public string GameMode { get; set; }
+            public string Phase { get; set; }
             public string CreatorKey { get; set; }
             public string CreatorName { get; set; }
             public List<string> Tricks { get; set; }
             public Dictionary<string, bool> PlayerCompleted { get; set; }
+            public Dictionary<string, int> PlayerLetters { get; set; }
+            public Dictionary<string, string> PlayerAttemptStatus { get; set; }
+            public Dictionary<string, int> PlayerAttemptsRemaining { get; set; }
+            public List<string> TurnOrder { get; set; }
+            public int SetterIndex { get; set; }
+            public string CurrentSetterKey { get; set; }
+            public string CurrentSetterName { get; set; }
+            public int CurrentMatcherIndex { get; set; }
+            public string CurrentMatcherKey { get; set; }
+            public string CurrentMatcherName { get; set; }
+            public bool LastLetterGetsTwoTries { get; set; }
+            public string WinnerKey { get; set; }
+            public string WinnerName { get; set; }
             public float[] Position { get; set; }
             public float[] Rotation { get; set; }
             public float[] Size { get; set; }
@@ -206,6 +259,10 @@ namespace rowemod.Challenges
             public string ChallengeId { get; set; }
             public string PlayerKey { get; set; }
             public string PlayerName { get; set; }
+            public List<string> Tricks { get; set; }
+            public float[] Position { get; set; }
+            public float[] Rotation { get; set; }
+            public float[] Size { get; set; }
         }
 
         public static bool IsOpen => _isOpen;
@@ -573,7 +630,7 @@ namespace rowemod.Challenges
                 GUILayout.BeginVertical();
 
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Challenge Line", _challengeTitleStyle);
+                GUILayout.Label("Challenge", _challengeTitleStyle);
                 GUILayout.FlexibleSpace();
                 string detailsLabel = _showChallengeDetails ? "Hide Details" : "Details";
                 if (GUILayout.Button(detailsLabel, _challengeSmallButtonStyle, GUILayout.Width(92f), GUILayout.Height(24f)))
@@ -631,7 +688,9 @@ namespace rowemod.Challenges
             float targetHeight = _showChallengeDetails
                 ? DetailsWindowHeight
                 : _activeChallenge != null
-                    ? ActiveWindowHeight
+                    ? string.Equals(_activeChallenge.Phase, BikePhaseChoosing, StringComparison.Ordinal) && IsLocalBikeSetter()
+                        ? (_dropdownOpen.Any(open => open) ? DropdownWindowHeight : DefaultWindowHeight)
+                        : ActiveWindowHeight
                     : _dropdownOpen.Any(open => open)
                         ? DropdownWindowHeight
                         : DefaultWindowHeight;
@@ -779,6 +838,12 @@ namespace rowemod.Challenges
 
         private static void DrawPlayerList()
         {
+            if (_activeChallenge != null)
+            {
+                DrawBikeScoreboard();
+                return;
+            }
+
             GUILayout.Label("Players with RoweMod", Menu.labelStyle);
 
             _playerScroll = GUILayout.BeginScrollView(_playerScroll, GUILayout.Height(145f));
@@ -790,12 +855,8 @@ namespace rowemod.Challenges
             {
                 foreach (RowePlayer player in _rowePlayers)
                 {
-                    bool complete = _activeChallenge != null &&
-                                    _activeChallenge.PlayerCompleted.TryGetValue(player.Key, out bool value) &&
-                                    value;
-
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label(complete ? "\u2713" : "X", Menu.labelStyle, GUILayout.Width(22f));
+                    GUILayout.Label("-", Menu.labelStyle, GUILayout.Width(22f));
                     GUILayout.Label(GetSafePlayerDisplayName(player), Menu.labelStyle);
                     GUILayout.EndHorizontal();
                 }
@@ -803,13 +864,93 @@ namespace rowemod.Challenges
             GUILayout.EndScrollView();
         }
 
+        private static void DrawBikeScoreboard()
+        {
+            EnsureBikeStateCollections();
+            int playerCount = _activeChallenge.TurnOrder.Count;
+            string riderLabel = playerCount == 1 ? "1 rider" : $"{playerCount} riders";
+
+            GUILayout.Space(6f);
+            GUILayout.BeginVertical(_challengeDetailsBoxStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Scoreboard", _challengeTitleStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(riderLabel, Menu.subtleLabelStyle);
+            GUILayout.EndHorizontal();
+
+            _playerScroll = GUILayout.BeginScrollView(_playerScroll, GUILayout.Height(GetBikeScoreboardHeight(playerCount)));
+            if (playerCount == 0)
+            {
+                GUILayout.Label("No players in this game yet.", Menu.subtleLabelStyle);
+            }
+            else
+            {
+                foreach (string playerKey in _activeChallenge.TurnOrder)
+                    DrawBikeScoreboardRow(playerKey);
+            }
+            GUILayout.EndScrollView();
+            GUILayout.EndVertical();
+        }
+
+        private static void DrawBikeScoreboardRow(string playerKey)
+        {
+            string playerName = GetBikePlayerName(playerKey);
+            if (string.Equals(playerKey, GetLocalPlayerKey(), StringComparison.OrdinalIgnoreCase))
+                playerName = $"{playerName} (You)";
+
+            string status = GetBikeScoreboardStatus(playerKey);
+            if (string.IsNullOrEmpty(status))
+                status = "-";
+
+            GUILayout.BeginHorizontal(GUILayout.Height(26f));
+            GUILayout.Label(FormatBikeLetters(playerKey), _challengeNumberStyle, GUILayout.Width(64f), GUILayout.Height(24f));
+            GUILayout.Label(playerName, Menu.labelStyle, GUILayout.MinWidth(120f));
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(status, Menu.subtleLabelStyle, GUILayout.Width(90f));
+            GUILayout.EndHorizontal();
+        }
+
+        private static float GetBikeScoreboardHeight(int playerCount)
+        {
+            return Mathf.Clamp(28f + Math.Max(1, playerCount) * 28f, 64f, 148f);
+        }
+
+        private static string GetBikeScoreboardStatus(string playerKey)
+        {
+            if (_activeChallenge == null)
+                return string.Empty;
+
+            if (string.Equals(playerKey, _activeChallenge.WinnerKey, StringComparison.OrdinalIgnoreCase))
+                return "Winner";
+            if (IsBikePlayerOut(playerKey))
+                return "Out";
+            if (string.Equals(playerKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+                return string.Equals(_activeChallenge.Phase, BikePhaseChoosing, StringComparison.Ordinal) ? "Ready" : "Recording";
+            if (string.Equals(playerKey, _activeChallenge.CurrentMatcherKey, StringComparison.OrdinalIgnoreCase))
+                return "Matching";
+
+            string status = GetBikeAttemptStatus(playerKey);
+            if (string.Equals(status, BikeAttemptLanded, StringComparison.Ordinal))
+                return "Landed";
+            if (string.Equals(status, BikeAttemptSet, StringComparison.Ordinal))
+                return "Set";
+            if (string.Equals(status, BikeAttemptMissed, StringComparison.Ordinal))
+                return "Missed";
+            if (string.Equals(status, BikeAttemptPending, StringComparison.Ordinal))
+                return "Pending";
+
+            return string.Empty;
+        }
+
         private static void DrawChallengeBuilder()
         {
             if (_activeChallenge != null)
             {
                 DrawActiveChallengeSummary();
+                DrawPlayerList();
+                DrawBikeTurnControls();
 
-                if (IsLocalCreator() && GUILayout.Button("Clear Active Challenge", Menu.redButtonStyle))
+                if (IsLocalCreator() && GUILayout.Button("Clear Game", Menu.redButtonStyle))
                 {
                     ClearActiveChallenge();
                     return;
@@ -821,16 +962,19 @@ namespace rowemod.Challenges
                 return;
             }
 
-            GUILayout.Label("Pick the tricks for this line.", _challengeHintStyle);
-            EnsureTrickNames();
+            GUILayout.Label("Start a game, then the setter records a landed line in the challenge box.", _challengeHintStyle);
 
-            if (_trickNames.Length == 0)
+            if (GUILayout.Button("Start Game", _challengeTrickButtonStyle, GUILayout.Height(34f)))
             {
-                GUILayout.Label("No tricks or grinds loaded yet. Respawn to load trick data.", Menu.subtleLabelStyle);
-                return;
+                AcceptChallenge();
             }
 
-            float lineHeight = _dropdownOpen.Any(open => open) ? 292f : 220f;
+            if (_showChallengeDetails)
+                DrawChallengeDetails();
+        }
+
+        private static void DrawLinePicker(float lineHeight)
+        {
             _lineScroll = GUILayout.BeginScrollView(_lineScroll, GUILayout.Height(lineHeight));
             for (int i = 0; i < _lineTrickIndexes.Count; i++)
             {
@@ -861,29 +1005,9 @@ namespace rowemod.Challenges
                 GUILayout.EndHorizontal();
 
                 if (_dropdownOpen[i])
-                {
                     DrawTrickDropdown(i);
-                }
             }
             GUILayout.EndScrollView();
-
-            GUILayout.BeginHorizontal();
-            if (_lineTrickIndexes.Count < MaxTricks &&
-                GUILayout.Button("Add Trick", _challengeSmallButtonStyle, GUILayout.Width(104f), GUILayout.Height(30f)))
-            {
-                _lineTrickIndexes.Add(0);
-                _dropdownOpen.Add(false);
-                _dropdownScroll.Add(Vector2.zero);
-            }
-
-            if (GUILayout.Button("Start Challenge", _challengeTrickButtonStyle, GUILayout.Height(30f)))
-            {
-                AcceptChallenge();
-            }
-            GUILayout.EndHorizontal();
-
-            if (_showChallengeDetails)
-                DrawChallengeDetails();
         }
 
         private static void DrawTrickDropdown(int lineIndex)
@@ -923,17 +1047,94 @@ namespace rowemod.Challenges
 
         private static void DrawActiveChallengeSummary()
         {
-            bool complete = IsLocalPlayerComplete();
-            bool inside = ChallengeAreaManager.IsLocalPlayerInsideActiveArea();
-            string status = complete
-                ? "Complete"
-                : inside
-                    ? "In the area. Land the line."
-                    : "Enter the box and do the line.";
+            string line = _activeChallenge.Tricks != null && _activeChallenge.Tricks.Count > 0
+                ? string.Join("  +  ", _activeChallenge.Tricks)
+                : "No set recorded yet";
+            bool localComplete = IsLocalPlayerComplete();
 
-            GUILayout.Label(string.Join("  +  ", _activeChallenge.Tricks), _challengeLineStyle);
-            GUILayout.Label(status, complete ? _challengeCompleteStatusStyle : _challengeStatusStyle);
-            GUILayout.Label($"Progress: {GetCompletedPlayerCount()} / {GetChallengePlayerCount()} players", _challengeHintStyle);
+            GUILayout.Label("Current Set", _challengeTitleStyle);
+            GUILayout.Label(line, _challengeLineStyle);
+            GUILayout.Label(GetBikePhaseStatusText(), localComplete ? _challengeCompleteStatusStyle : _challengeStatusStyle);
+        }
+
+        private static string GetBikePhaseStatusText()
+        {
+            if (_activeChallenge == null)
+                return string.Empty;
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseChoosing, StringComparison.Ordinal))
+                return $"{GetCurrentBikeSetterName()} is ready to record the next set.";
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal))
+                return $"{GetCurrentBikeSetterName()} is recording. Land to lock in the set.";
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseMatching, StringComparison.Ordinal))
+            {
+                int attempts = GetBikeAttemptsRemaining(_activeChallenge.CurrentMatcherKey);
+                string tries = attempts > 1 ? $" ({attempts} tries left)" : string.Empty;
+                return $"{GetCurrentBikeMatcherName()} must match the set{tries}.";
+            }
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseGameOver, StringComparison.Ordinal))
+                return $"{GetBikePlayerName(_activeChallenge.WinnerKey, _activeChallenge.WinnerName)} wins.";
+
+            return "Game active.";
+        }
+
+        private static void DrawBikeTurnControls()
+        {
+            if (_activeChallenge == null ||
+                string.Equals(_activeChallenge.Phase, BikePhaseGameOver, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            GUILayout.Space(6f);
+            GUILayout.BeginVertical(_challengeDetailsBoxStyle);
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseChoosing, StringComparison.Ordinal))
+            {
+                if (IsLocalBikeSetter())
+                {
+                    GUILayout.Label("Enter the box and click SET TRICK before starting your line.", _challengeHintStyle);
+                    if (GUILayout.Button("SET TRICK", _challengeTrickButtonStyle, GUILayout.Height(32f)))
+                        SubmitBikeStartSet();
+                }
+                else
+                {
+                    GUILayout.Label($"Waiting for {GetCurrentBikeSetterName()} to start recording.", _challengeHintStyle);
+                }
+            }
+            else if (string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal))
+            {
+                if (IsLocalBikeSetter())
+                {
+                    GUILayout.Label("Recording now. Land the line to set it.", _challengeHintStyle);
+                    if (GUILayout.Button("Pass Turn", _challengeSmallDangerButtonStyle, GUILayout.Height(28f)))
+                        SubmitBikeSetterFailed();
+                }
+                else
+                {
+                    GUILayout.Label($"Waiting for {GetCurrentBikeSetterName()} to record and land a set.", _challengeHintStyle);
+                }
+            }
+            else if (string.Equals(_activeChallenge.Phase, BikePhaseMatching, StringComparison.Ordinal))
+            {
+                if (IsLocalBikeMatcher())
+                {
+                    int attempts = GetBikeAttemptsRemaining(GetLocalPlayerKey());
+                    string missLabel = attempts > 1 ? "Miss Attempt" : "Take Letter";
+                    GUILayout.Label("Your turn to match the set. Landing it is detected automatically.", _challengeHintStyle);
+                    if (GUILayout.Button(missLabel, _challengeSmallDangerButtonStyle, GUILayout.Height(28f)))
+                        SubmitBikeMiss();
+                }
+                else
+                {
+                    GUILayout.Label($"Waiting for {GetCurrentBikeMatcherName()} to match.", _challengeHintStyle);
+                }
+            }
+
+            GUILayout.EndVertical();
         }
 
         private static void DrawChallengeDetails()
@@ -943,12 +1144,13 @@ namespace rowemod.Challenges
             if (_activeChallenge != null)
             {
                 GUILayout.Label(
-                    $"Created by: {GetDisplayNameForKey(_activeChallenge.CreatorKey, _activeChallenge.CreatorName)}",
+                    $"Host: {GetDisplayNameForKey(_activeChallenge.CreatorKey, _activeChallenge.CreatorName)}",
                     Menu.subtleLabelStyle);
             }
 
             DrawStatusMessages();
-            DrawPlayerList();
+            if (_activeChallenge == null)
+                DrawPlayerList();
 
             if (_activeChallenge != null)
             {
@@ -993,6 +1195,208 @@ namespace rowemod.Challenges
             return Math.Max(1, Math.Max(_activeChallenge.PlayerCompleted.Count, _rowePlayers.Count));
         }
 
+        private static List<string> BuildBikeTurnOrder(string creatorKey)
+        {
+            List<string> turnOrder = new List<string>();
+            AddBikeTurnOrderKey(turnOrder, creatorKey);
+
+            foreach (RowePlayer player in _rowePlayers)
+            {
+                if (player == null)
+                    continue;
+
+                AddBikeTurnOrderKey(turnOrder, player.Key);
+            }
+
+            return turnOrder;
+        }
+
+        private static void AddBikeTurnOrderKey(List<string> turnOrder, string playerKey)
+        {
+            if (!IsStableNetworkPlayerKey(playerKey))
+                return;
+
+            if (turnOrder.Any(key => string.Equals(key, playerKey, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            turnOrder.Add(playerKey);
+        }
+
+        private static void EnsureBikeStateCollections()
+        {
+            if (_activeChallenge == null)
+                return;
+
+            _activeChallenge.GameMode = GameModeBike;
+            _activeChallenge.Phase = string.IsNullOrWhiteSpace(_activeChallenge.Phase)
+                ? BikePhaseChoosing
+                : _activeChallenge.Phase;
+            _activeChallenge.Tricks ??= new List<string>();
+            _activeChallenge.PlayerCompleted ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            _activeChallenge.PlayerLetters ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _activeChallenge.PlayerAttemptStatus ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _activeChallenge.PlayerAttemptsRemaining ??= new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _activeChallenge.TurnOrder ??= new List<string>();
+        }
+
+        private static void EnsureBikePlayerState(string playerKey, string playerName, bool addToTurnOrder)
+        {
+            if (_activeChallenge == null || !IsStableNetworkPlayerKey(playerKey))
+                return;
+
+            EnsureBikeStateCollections();
+
+            if (!_activeChallenge.PlayerLetters.ContainsKey(playerKey))
+                _activeChallenge.PlayerLetters[playerKey] = 0;
+            else
+                _activeChallenge.PlayerLetters[playerKey] = Mathf.Clamp(_activeChallenge.PlayerLetters[playerKey], 0, MaxBikeLetters);
+
+            if (!_activeChallenge.PlayerCompleted.ContainsKey(playerKey))
+                _activeChallenge.PlayerCompleted[playerKey] = false;
+
+            if (!_activeChallenge.PlayerAttemptStatus.ContainsKey(playerKey))
+            {
+                _activeChallenge.PlayerAttemptStatus[playerKey] = IsBikePlayerOut(playerKey)
+                    ? BikeAttemptOut
+                    : string.Empty;
+            }
+
+            if (!_activeChallenge.PlayerAttemptsRemaining.ContainsKey(playerKey))
+                _activeChallenge.PlayerAttemptsRemaining[playerKey] = 0;
+
+            if (addToTurnOrder &&
+                !_activeChallenge.TurnOrder.Any(key => string.Equals(key, playerKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                _activeChallenge.TurnOrder.Add(playerKey);
+            }
+        }
+
+        private static bool IsBikePlayerOut(string playerKey)
+        {
+            return GetBikeLetterCount(playerKey) >= MaxBikeLetters;
+        }
+
+        private static int GetBikeLetterCount(string playerKey)
+        {
+            if (_activeChallenge?.PlayerLetters == null || string.IsNullOrEmpty(playerKey))
+                return 0;
+
+            return _activeChallenge.PlayerLetters.TryGetValue(playerKey, out int letters)
+                ? Mathf.Clamp(letters, 0, MaxBikeLetters)
+                : 0;
+        }
+
+        private static int GetBikeAttemptsAllowed(string playerKey)
+        {
+            return _activeChallenge != null &&
+                   _activeChallenge.LastLetterGetsTwoTries &&
+                   GetBikeLetterCount(playerKey) == MaxBikeLetters - 1
+                ? 2
+                : 1;
+        }
+
+        private static int GetBikeAttemptsRemaining(string playerKey)
+        {
+            if (_activeChallenge?.PlayerAttemptsRemaining == null || string.IsNullOrEmpty(playerKey))
+                return 0;
+
+            return _activeChallenge.PlayerAttemptsRemaining.TryGetValue(playerKey, out int attempts)
+                ? Mathf.Max(0, attempts)
+                : 0;
+        }
+
+        private static string GetBikeAttemptStatus(string playerKey)
+        {
+            if (_activeChallenge?.PlayerAttemptStatus == null || string.IsNullOrEmpty(playerKey))
+                return string.Empty;
+
+            return _activeChallenge.PlayerAttemptStatus.TryGetValue(playerKey, out string status)
+                ? status ?? string.Empty
+                : string.Empty;
+        }
+
+        private static string FormatBikeLetters(string playerKey)
+        {
+            int count = GetBikeLetterCount(playerKey);
+            char[] letters = new char[MaxBikeLetters];
+            for (int i = 0; i < MaxBikeLetters; i++)
+                letters[i] = i < count ? BikeLetters[i] : '_';
+
+            return new string(letters);
+        }
+
+        private static string GetBikePlayerName(string playerKey, string fallback = null)
+        {
+            return GetDisplayNameForKey(playerKey, fallback);
+        }
+
+        private static bool IsLocalBikeSetter()
+        {
+            return _activeChallenge != null &&
+                   string.Equals(_activeChallenge.CurrentSetterKey, GetLocalPlayerKey(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsLocalBikeMatcher()
+        {
+            return _activeChallenge != null &&
+                   string.Equals(_activeChallenge.CurrentMatcherKey, GetLocalPlayerKey(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsLocalBikeAttemptAllowed(string localKey)
+        {
+            if (_activeChallenge == null || string.IsNullOrEmpty(localKey))
+                return false;
+
+            if (IsBikePlayerOut(localKey))
+                return false;
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal))
+                return string.Equals(localKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase);
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseMatching, StringComparison.Ordinal))
+                return string.Equals(localKey, _activeChallenge.CurrentMatcherKey, StringComparison.OrdinalIgnoreCase);
+
+            return false;
+        }
+
+        private static int GetActiveBikePlayerCount()
+        {
+            if (_activeChallenge?.TurnOrder == null)
+                return 0;
+
+            return _activeChallenge.TurnOrder.Count(key => IsStableNetworkPlayerKey(key) && !IsBikePlayerOut(key));
+        }
+
+        private static string GetCurrentBikeMatcherName()
+        {
+            if (_activeChallenge == null)
+                return "Unknown Player";
+
+            return GetBikePlayerName(_activeChallenge.CurrentMatcherKey, _activeChallenge.CurrentMatcherName);
+        }
+
+        private static string GetCurrentBikeSetterName()
+        {
+            if (_activeChallenge == null)
+                return "Unknown Player";
+
+            return GetBikePlayerName(_activeChallenge.CurrentSetterKey, _activeChallenge.CurrentSetterName);
+        }
+
+        private static List<string> GetSelectedLineTricks()
+        {
+            EnsureTrickNames();
+            if (_trickNames.Length == 0)
+                return new List<string>();
+
+            return _lineTrickIndexes
+                .Select(index => _trickNames[Mathf.Clamp(index, 0, _trickNames.Length - 1)])
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(GetChallengeDisplayName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToList();
+        }
+
         private static void AcceptChallenge()
         {
             RefreshNow();
@@ -1004,29 +1408,31 @@ namespace rowemod.Challenges
                 return;
             }
 
-            List<string> tricks = _lineTrickIndexes
-                .Select(index => _trickNames[Mathf.Clamp(index, 0, _trickNames.Length - 1)])
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .ToList();
-
-            if (tricks.Count == 0)
-                return;
-
+            List<string> turnOrder = BuildBikeTurnOrder(creatorKey);
             _activeChallenge = new ActiveChallenge
             {
                 Version = ProtocolVersion,
                 ChallengeId = Guid.NewGuid().ToString("N"),
                 Revision = 1,
+                GameMode = GameModeBike,
+                Phase = BikePhaseChoosing,
                 CreatorKey = creatorKey,
                 CreatorName = GetLocalPlayerName(),
-                Tricks = tricks
+                Tricks = new List<string>(),
+                TurnOrder = turnOrder,
+                SetterIndex = Math.Max(0, turnOrder.FindIndex(key => string.Equals(key, creatorKey, StringComparison.OrdinalIgnoreCase))),
+                CurrentSetterKey = creatorKey,
+                CurrentSetterName = GetLocalPlayerName(),
+                CurrentMatcherIndex = -1,
+                CurrentMatcherKey = null,
+                CurrentMatcherName = null,
+                LastLetterGetsTwoTries = true
             };
             OpenWindow();
 
+            EnsureBikePlayerState(creatorKey, GetLocalPlayerName(), true);
             foreach (RowePlayer player in _rowePlayers)
-            {
-                _activeChallenge.PlayerCompleted[player.Key] = false;
-            }
+                EnsureBikePlayerState(player.Key, player.DisplayName, true);
 
             ChallengeArea area = SpawnLocalChallengeArea();
             if (area != null)
@@ -1043,8 +1449,9 @@ namespace rowemod.Challenges
             }
 
             ResetCompletionDiagnostics();
+            _lastCompletionDiagnostic = $"{GetLocalPlayerName()} is ready to record the first set.";
             PublishActiveChallengeState();
-            Log.Msg($"[MPChallenge] Accepted local line: {DescribeActiveChallenge(_activeChallenge)}");
+            Log.Msg($"[MPChallenge][BIKE] Started game: {DescribeActiveChallenge(_activeChallenge)}");
         }
 
         private static ChallengeArea SpawnLocalChallengeArea()
@@ -1283,6 +1690,13 @@ namespace rowemod.Challenges
                 bool changed = false;
                 foreach (RowePlayer player in _rowePlayers)
                 {
+                    int previousTurnCount = _activeChallenge.TurnOrder?.Count ?? 0;
+                    bool hadLetters = _activeChallenge.PlayerLetters != null &&
+                                      _activeChallenge.PlayerLetters.ContainsKey(player.Key);
+                    EnsureBikePlayerState(player.Key, player.DisplayName, true);
+                    if (!hadLetters || (_activeChallenge.TurnOrder?.Count ?? 0) != previousTurnCount)
+                        changed = true;
+
                     if (_activeChallenge.PlayerCompleted.ContainsKey(player.Key))
                         continue;
 
@@ -1407,12 +1821,18 @@ namespace rowemod.Challenges
 
         private static void CheckLocalLineCompletion()
         {
-            if (_activeChallenge == null || _activeChallenge.Tricks == null || _activeChallenge.Tricks.Count == 0)
+            if (_activeChallenge == null)
                 return;
 
             string localKey = GetLocalPlayerKey();
             if (string.IsNullOrEmpty(localKey))
                 return;
+
+            if (!IsLocalBikeAttemptAllowed(localKey))
+            {
+                _lastCompletionDiagnostic = "Waiting for your turn.";
+                return;
+            }
 
             if (_activeChallenge.PlayerCompleted.TryGetValue(localKey, out bool alreadyComplete) && alreadyComplete)
                 return;
@@ -1428,6 +1848,7 @@ namespace rowemod.Challenges
             List<string> attemptHistory = _capturedAttemptTricks.Count > 0
                 ? new List<string>(_capturedAttemptTricks)
                 : GetHistorySinceEntry(history);
+            attemptHistory = SanitizeAttemptTrickSequence(attemptHistory);
 
             if (attemptHistory.Count == 0)
             {
@@ -1443,6 +1864,28 @@ namespace rowemod.Challenges
             }
 
             _lastCheckedAttemptSignature = attemptSignature;
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal))
+            {
+                CaptureRecordedSetPosition("landing");
+                List<string> recordedSet = BuildRecordedSetTricks(attemptHistory);
+                if (recordedSet.Count == 0)
+                {
+                    _lastCompletionDiagnostic = "No recordable tricks in this set.";
+                    return;
+                }
+
+                SubmitBikeRecordedSet(recordedSet);
+                Log.Msg($"[MPChallenge][BIKE] Local recorded set: {string.Join(" + ", recordedSet)}");
+                return;
+            }
+
+            if (_activeChallenge.Tricks == null || _activeChallenge.Tricks.Count == 0)
+            {
+                _lastCompletionDiagnostic = "No active set to match.";
+                return;
+            }
+
             if (!ContainsLineInOrder(attemptHistory, _activeChallenge.Tricks))
             {
                 _lastCompletionDiagnostic = $"No match for {string.Join(" + ", _activeChallenge.Tricks)}.";
@@ -1450,14 +1893,141 @@ namespace rowemod.Challenges
             }
 
             CompleteLocalChallenge(localKey);
-            _lastCompletionDiagnostic = "Complete.";
-            Log.Msg($"[MPChallenge] Local line completed: {string.Join(" + ", _activeChallenge.Tricks)}");
+            Log.Msg($"[MPChallenge][BIKE] Local landed line: {string.Join(" + ", _activeChallenge.Tricks)}");
+        }
+
+        private static List<string> BuildRecordedSetTricks(List<string> attemptHistory)
+        {
+            if (attemptHistory == null || attemptHistory.Count == 0)
+                return new List<string>();
+
+            return SanitizeAttemptTrickSequence(attemptHistory)
+                .Take(MaxTricks)
+                .ToList();
+        }
+
+        private static List<string> SanitizeAttemptTrickSequence(IEnumerable<string> attemptHistory)
+        {
+            List<string> sanitized = new List<string>();
+            if (attemptHistory == null)
+                return sanitized;
+
+            foreach (string rawTrick in attemptHistory)
+            {
+                string displayName = GetChallengeDisplayName(rawTrick);
+                if (string.IsNullOrWhiteSpace(displayName))
+                    continue;
+
+                if (!TryGetSpinCaptureInfo(displayName, out int degrees, out bool standaloneSpin))
+                {
+                    sanitized.Add(displayName);
+                    continue;
+                }
+
+                while (sanitized.Count > 0 &&
+                       TryGetSpinCaptureInfo(sanitized[sanitized.Count - 1], out int previousDegrees, out bool previousStandaloneSpin) &&
+                       previousStandaloneSpin &&
+                       degrees >= previousDegrees)
+                {
+                    sanitized.RemoveAt(sanitized.Count - 1);
+                }
+
+                if (standaloneSpin &&
+                    sanitized.Count > 0 &&
+                    TryGetSpinCaptureInfo(sanitized[sanitized.Count - 1], out int lastDegrees, out _) &&
+                    lastDegrees >= degrees)
+                {
+                    continue;
+                }
+
+                sanitized.Add(displayName);
+            }
+
+            return sanitized;
+        }
+
+        private static void BeginLocalSetRecording()
+        {
+            BeginLocalAttempt();
+            _wasLocalPlayerInsideArea = true;
+            CaptureRecordedSetPosition("recording start");
+            _lastCompletionDiagnostic = "Recording set. Land to lock it in.";
+        }
+
+        private static void CaptureRecordedSetPosition(string source)
+        {
+            if (!IsLocalSetterRecording())
+                return;
+
+            if (!ChallengeAreaManager.TryGetLocalPlayerPose(
+                    out Vector3 position,
+                    out _,
+                    out string poseSource))
+            {
+                return;
+            }
+
+            if (_recordedSetWorldPositions.Count >= MaxRecordedSetPositionSamples)
+                _recordedSetWorldPositions.RemoveAt(0);
+
+            _recordedSetWorldPositions.Add(position);
+            Log.Msg($"[MPChallenge][Area] Captured set position from {source}: pos={FormatVector3(position)}, pose={poseSource}.");
+        }
+
+        private static bool IsLocalSetterRecording()
+        {
+            return _activeChallenge != null &&
+                   string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal) &&
+                   IsLocalBikeSetter();
+        }
+
+        private static bool TryBuildRecordedSetArea(
+            out Vector3 position,
+            out Quaternion rotation,
+            out Vector3 size)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            size = Vector3.zero;
+
+            CaptureRecordedSetPosition("recording finish");
+            if (_recordedSetWorldPositions.Count == 0)
+                return false;
+
+            ChallengeArea active = ChallengeAreaManager.Active;
+            Vector3 origin = active != null ? active.transform.position : _recordedSetWorldPositions[0];
+            rotation = active != null ? active.transform.rotation : Quaternion.identity;
+            if (!IsFinite(rotation))
+                rotation = Quaternion.identity;
+
+            Quaternion inverseRotation = Quaternion.Inverse(rotation);
+            Vector3 firstLocal = inverseRotation * (_recordedSetWorldPositions[0] - origin);
+            Vector3 min = firstLocal;
+            Vector3 max = firstLocal;
+
+            for (int i = 1; i < _recordedSetWorldPositions.Count; i++)
+            {
+                Vector3 local = inverseRotation * (_recordedSetWorldPositions[i] - origin);
+                min = Vector3.Min(min, local);
+                max = Vector3.Max(max, local);
+            }
+
+            Vector3 localCenter = (min + max) * 0.5f;
+            Vector3 span = max - min;
+            size = new Vector3(
+                Mathf.Clamp(Mathf.Max(RecordedSetMinWidth, span.x + RecordedSetBoundsPadding * 2f), 0.1f, 1000f),
+                Mathf.Clamp(Mathf.Max(RecordedSetMinHeight, span.y + RecordedSetBoundsPadding * 2f), 0.1f, 1000f),
+                Mathf.Clamp(Mathf.Max(RecordedSetMinDepth, span.z + RecordedSetBoundsPadding * 2f), 0.1f, 1000f));
+            position = origin + rotation * localCenter;
+
+            return IsFinite(position) && IsFinite(rotation) && IsFinite(size);
         }
 
         private static void BeginLocalAttempt()
         {
             _capturedAttemptTricks.Clear();
             _capturedAttemptTrickTimes.Clear();
+            _recordedSetWorldPositions.Clear();
             _entryHistorySnapshot.Clear();
             _entryHistorySnapshot.AddRange(GetCurrentTrickHistory());
             _lastCheckedAttemptSignature = null;
@@ -1516,9 +2086,11 @@ namespace rowemod.Challenges
 
             _capturedAttemptTricks.Add(captured);
             _capturedAttemptTrickTimes.Add(now);
-            _lastSeenHistoryCount = _capturedAttemptTricks.Count;
+            CaptureRecordedSetPosition(source);
+            List<string> sanitizedAttempt = SanitizeAttemptTrickSequence(_capturedAttemptTricks);
+            _lastSeenHistoryCount = sanitizedAttempt.Count;
             _lastSeenHistorySource = source;
-            _lastSeenTrickText = string.Join(" | ", _capturedAttemptTricks.TakeLast(3));
+            _lastSeenTrickText = string.Join(" | ", sanitizedAttempt.TakeLast(3));
             _lastCheckedAttemptSignature = null;
             Log.Msg($"[MPChallenge][Tricks] Captured local trick from {source}: '{captured}'.");
             if (checkCompletion)
@@ -1577,6 +2149,314 @@ namespace rowemod.Challenges
             return false;
         }
 
+        private static bool ApplyBikeStartSet(string playerKey, string playerName)
+        {
+            if (_activeChallenge == null ||
+                !string.Equals(_activeChallenge.Phase, BikePhaseChoosing, StringComparison.Ordinal) ||
+                !string.Equals(playerKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            EnsureBikePlayerState(playerKey, playerName, true);
+            _activeChallenge.Tricks.Clear();
+            _activeChallenge.Phase = BikePhaseSetting;
+            _activeChallenge.CurrentSetterName = GetBikePlayerName(playerKey, playerName);
+            _activeChallenge.CurrentMatcherIndex = -1;
+            _activeChallenge.CurrentMatcherKey = null;
+            _activeChallenge.CurrentMatcherName = null;
+            ResetBikeRoundAttemptState();
+            _activeChallenge.PlayerAttemptStatus[playerKey] = BikeAttemptPending;
+            _activeChallenge.PlayerAttemptsRemaining[playerKey] = 1;
+            ResetCompletionDiagnostics();
+            _lastCompletionDiagnostic = $"{_activeChallenge.CurrentSetterName} is recording a set.";
+            return true;
+        }
+
+        private static bool ApplyBikeSetLine(
+            string playerKey,
+            string playerName,
+            List<string> tricks,
+            float[] position = null,
+            float[] rotation = null,
+            float[] size = null)
+        {
+            if (_activeChallenge == null ||
+                !string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal) ||
+                !string.Equals(playerKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            List<string> normalizedTricks = (tricks ?? new List<string>())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(GetChallengeDisplayName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Take(MaxTricks)
+                .ToList();
+            if (normalizedTricks.Count == 0)
+                return false;
+
+            EnsureBikePlayerState(playerKey, playerName, true);
+            _activeChallenge.Tricks = normalizedTricks;
+            _activeChallenge.CurrentSetterName = GetBikePlayerName(playerKey, playerName);
+            ApplyRecordedSetArea(position, rotation, size);
+            BeginBikeMatcherPhase();
+            return true;
+        }
+
+        private static bool ApplyRecordedSetArea(float[] position, float[] rotation, float[] size)
+        {
+            if (_activeChallenge == null ||
+                position == null ||
+                rotation == null ||
+                size == null ||
+                !IsValidVector(position, 3, -100000f, 100000f) ||
+                !IsValidQuaternion(rotation) ||
+                !IsValidVector(size, 3, 0.1f, 1000f))
+            {
+                return false;
+            }
+
+            Vector3 resolvedPosition = ArrayToVector3(position, Vector3.zero);
+            Quaternion resolvedRotation = ArrayToQuaternion(rotation, Quaternion.identity);
+            Vector3 resolvedSize = ArrayToVector3(size, Vector3.one);
+
+            _activeChallenge.Position = Vector3ToArray(resolvedPosition);
+            _activeChallenge.Rotation = QuaternionToArray(resolvedRotation);
+            _activeChallenge.Size = Vector3ToArray(resolvedSize);
+            _activeAreaStateSignature = BuildAreaStateSignature(_activeChallenge);
+
+            if (ChallengeAreaManager.Active != null)
+            {
+                ChallengeAreaManager.SetPosition(resolvedPosition);
+                ChallengeAreaManager.SetRotation(resolvedRotation);
+                ChallengeAreaManager.SetSize(resolvedSize);
+                ChallengeAreaManager.SetCompleted(false);
+            }
+
+            Log.Msg(
+                $"[MPChallenge][Area] Applied recorded set boundary: pos={FormatVector3(resolvedPosition)}, rot={FormatQuaternion(resolvedRotation)}, size={FormatVector3(resolvedSize)}.");
+            return true;
+        }
+
+        private static bool ApplyBikeLanded(string playerKey, string playerName)
+        {
+            if (_activeChallenge == null || string.IsNullOrEmpty(playerKey))
+                return false;
+
+            EnsureBikePlayerState(playerKey, playerName, true);
+            if (IsBikePlayerOut(playerKey))
+                return false;
+
+            if (string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal))
+            {
+                if (!string.Equals(playerKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                if (_activeChallenge.Tricks == null || _activeChallenge.Tricks.Count == 0)
+                    return false;
+
+                _activeChallenge.CurrentSetterName = GetBikePlayerName(playerKey, playerName);
+                BeginBikeMatcherPhase();
+                return true;
+            }
+
+            if (!string.Equals(_activeChallenge.Phase, BikePhaseMatching, StringComparison.Ordinal) ||
+                !string.Equals(playerKey, _activeChallenge.CurrentMatcherKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            _activeChallenge.PlayerAttemptStatus[playerKey] = BikeAttemptLanded;
+            _activeChallenge.PlayerCompleted[playerKey] = true;
+            _activeChallenge.PlayerAttemptsRemaining[playerKey] = 0;
+            _lastCompletionDiagnostic = $"{GetBikePlayerName(playerKey, playerName)} matched the set.";
+            AdvanceToNextBikeMatcher();
+            return true;
+        }
+
+        private static bool ApplyBikeMiss(string playerKey, string playerName)
+        {
+            if (_activeChallenge == null ||
+                !string.Equals(_activeChallenge.Phase, BikePhaseMatching, StringComparison.Ordinal) ||
+                !string.Equals(playerKey, _activeChallenge.CurrentMatcherKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            EnsureBikePlayerState(playerKey, playerName, true);
+            int attemptsRemaining = GetBikeAttemptsRemaining(playerKey);
+            if (attemptsRemaining > 1)
+            {
+                _activeChallenge.PlayerAttemptsRemaining[playerKey] = attemptsRemaining - 1;
+                _lastCompletionDiagnostic =
+                    $"{GetBikePlayerName(playerKey, playerName)} used a last-letter rebate. One try remains.";
+                return true;
+            }
+
+            int letters = Mathf.Clamp(GetBikeLetterCount(playerKey) + 1, 0, MaxBikeLetters);
+            _activeChallenge.PlayerLetters[playerKey] = letters;
+            _activeChallenge.PlayerCompleted[playerKey] = false;
+            _activeChallenge.PlayerAttemptsRemaining[playerKey] = 0;
+            _activeChallenge.PlayerAttemptStatus[playerKey] =
+                letters >= MaxBikeLetters ? BikeAttemptOut : BikeAttemptMissed;
+            _lastCompletionDiagnostic =
+                $"{GetBikePlayerName(playerKey, playerName)} takes {FormatBikeLetters(playerKey)}.";
+
+            AdvanceToNextBikeMatcher();
+            return true;
+        }
+
+        private static bool ApplyBikeSetterFailed(string playerKey, string playerName)
+        {
+            if (_activeChallenge == null ||
+                !string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal) ||
+                !string.Equals(playerKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            EnsureBikePlayerState(playerKey, playerName, true);
+            _activeChallenge.PlayerAttemptStatus[playerKey] = BikeAttemptMissed;
+            _activeChallenge.PlayerCompleted[playerKey] = false;
+            _activeChallenge.PlayerAttemptsRemaining[playerKey] = 0;
+            _lastCompletionDiagnostic =
+                $"{GetBikePlayerName(playerKey, playerName)} did not set the line. No letters awarded.";
+            AdvanceToNextBikeSetter();
+            return true;
+        }
+
+        private static void ResetBikeRoundAttemptState()
+        {
+            EnsureBikeStateCollections();
+            foreach (string key in _activeChallenge.TurnOrder.ToArray())
+            {
+                _activeChallenge.PlayerCompleted[key] = false;
+                _activeChallenge.PlayerAttemptsRemaining[key] = 0;
+                _activeChallenge.PlayerAttemptStatus[key] = IsBikePlayerOut(key)
+                    ? BikeAttemptOut
+                    : string.Empty;
+            }
+        }
+
+        private static void BeginBikeMatcherPhase()
+        {
+            EnsureBikeStateCollections();
+            ResetBikeRoundAttemptState();
+
+            string setterKey = _activeChallenge.CurrentSetterKey;
+            _activeChallenge.PlayerAttemptStatus[setterKey] = BikeAttemptSet;
+            _activeChallenge.PlayerCompleted[setterKey] = true;
+            _activeChallenge.PlayerAttemptsRemaining[setterKey] = 0;
+
+            foreach (string key in _activeChallenge.TurnOrder)
+            {
+                if (!IsStableNetworkPlayerKey(key) ||
+                    IsBikePlayerOut(key) ||
+                    string.Equals(key, setterKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                _activeChallenge.PlayerAttemptStatus[key] = BikeAttemptPending;
+                _activeChallenge.PlayerCompleted[key] = false;
+                _activeChallenge.PlayerAttemptsRemaining[key] = GetBikeAttemptsAllowed(key);
+            }
+
+            _activeChallenge.Phase = BikePhaseMatching;
+            _activeChallenge.CurrentMatcherIndex = _activeChallenge.SetterIndex;
+            _lastCompletionDiagnostic = $"{GetCurrentBikeSetterName()} set the line.";
+            AdvanceToNextBikeMatcher();
+        }
+
+        private static void AdvanceToNextBikeMatcher()
+        {
+            EnsureBikeStateCollections();
+            if (_activeChallenge.TurnOrder.Count == 0)
+            {
+                EndBikeGame();
+                return;
+            }
+
+            int startIndex = Mathf.Clamp(_activeChallenge.CurrentMatcherIndex, -1, Math.Max(0, _activeChallenge.TurnOrder.Count - 1));
+            for (int offset = 1; offset <= _activeChallenge.TurnOrder.Count; offset++)
+            {
+                int index = (startIndex + offset) % _activeChallenge.TurnOrder.Count;
+                string key = _activeChallenge.TurnOrder[index];
+                if (!string.Equals(GetBikeAttemptStatus(key), BikeAttemptPending, StringComparison.Ordinal))
+                    continue;
+
+                _activeChallenge.CurrentMatcherIndex = index;
+                _activeChallenge.CurrentMatcherKey = key;
+                _activeChallenge.CurrentMatcherName = GetBikePlayerName(key);
+                return;
+            }
+
+            AdvanceToNextBikeSetter();
+        }
+
+        private static void AdvanceToNextBikeSetter()
+        {
+            EnsureBikeStateCollections();
+
+            if (GetActiveBikePlayerCount() <= 1)
+            {
+                EndBikeGame();
+                return;
+            }
+
+            int startIndex = _activeChallenge.SetterIndex;
+            if (startIndex < 0 || startIndex >= _activeChallenge.TurnOrder.Count)
+            {
+                startIndex = _activeChallenge.TurnOrder.FindIndex(key =>
+                    string.Equals(key, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (startIndex < 0)
+                startIndex = 0;
+
+            for (int offset = 1; offset <= _activeChallenge.TurnOrder.Count; offset++)
+            {
+                int index = (startIndex + offset) % _activeChallenge.TurnOrder.Count;
+                string key = _activeChallenge.TurnOrder[index];
+                if (!IsStableNetworkPlayerKey(key) || IsBikePlayerOut(key))
+                    continue;
+
+                _activeChallenge.SetterIndex = index;
+                _activeChallenge.CurrentSetterKey = key;
+                _activeChallenge.CurrentSetterName = GetBikePlayerName(key);
+                _activeChallenge.CurrentMatcherIndex = -1;
+                _activeChallenge.CurrentMatcherKey = null;
+                _activeChallenge.CurrentMatcherName = null;
+                _activeChallenge.Phase = BikePhaseChoosing;
+                _activeChallenge.Tricks.Clear();
+                ResetBikeRoundAttemptState();
+                ResetCompletionDiagnostics();
+                _lastCompletionDiagnostic = $"{_activeChallenge.CurrentSetterName} is choosing the next set.";
+                return;
+            }
+
+            EndBikeGame();
+        }
+
+        private static void EndBikeGame()
+        {
+            EnsureBikeStateCollections();
+            string winnerKey = _activeChallenge.TurnOrder
+                .FirstOrDefault(key => IsStableNetworkPlayerKey(key) && !IsBikePlayerOut(key));
+
+            _activeChallenge.Phase = BikePhaseGameOver;
+            _activeChallenge.WinnerKey = winnerKey;
+            _activeChallenge.WinnerName = !string.IsNullOrEmpty(winnerKey) ? GetBikePlayerName(winnerKey) : "No winner";
+            _activeChallenge.CurrentMatcherIndex = -1;
+            _activeChallenge.CurrentMatcherKey = null;
+            _activeChallenge.CurrentMatcherName = null;
+            _lastCompletionDiagnostic = !string.IsNullOrEmpty(winnerKey)
+                ? $"{_activeChallenge.WinnerName} wins."
+                : "Game ended.";
+        }
+
         private static List<string> GetHistorySinceEntry(List<string> history)
         {
             if (history == null || history.Count == 0)
@@ -1604,18 +2484,174 @@ namespace rowemod.Challenges
             if (_activeChallenge == null || string.IsNullOrEmpty(localKey))
                 return;
 
-            _activeChallenge.PlayerCompleted[localKey] = true;
-            ChallengeAreaManager.SetCompleted(true);
-
             if (IsLocalCreator())
             {
-                _activeChallenge.Revision++;
-                PublishActiveChallengeState();
+                if (ApplyBikeLanded(localKey, GetLocalPlayerName()))
+                {
+                    _activeChallenge.Revision++;
+                    PublishActiveChallengeState();
+                    ChallengeAreaManager.SetCompleted(IsLocalPlayerComplete());
+                }
                 return;
             }
 
             _pendingLocalCompletionChallengeId = _activeChallenge.ChallengeId;
+            _activeChallenge.PlayerCompleted[localKey] = true;
+            _activeChallenge.PlayerAttemptStatus[localKey] = BikeAttemptLanded;
+            ChallengeAreaManager.SetCompleted(true);
             SendLocalCompletionCommand();
+        }
+
+        private static void SubmitBikeStartSet()
+        {
+            if (_activeChallenge == null)
+                return;
+
+            string localKey = GetLocalPlayerKey();
+            if (!string.Equals(localKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (!ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
+            {
+                _lastCompletionDiagnostic = "Enter the challenge box before recording.";
+                return;
+            }
+
+            if (IsLocalCreator())
+            {
+                if (!ApplyBikeStartSet(localKey, GetLocalPlayerName()))
+                    return;
+
+                BeginLocalSetRecording();
+                _activeChallenge.Revision++;
+                PublishActiveChallengeState();
+                ChallengeAreaManager.SetCompleted(false);
+                return;
+            }
+
+            NetworkChallengeCommand command = new NetworkChallengeCommand
+            {
+                Version = ProtocolVersion,
+                Type = BikeCommandStartSet,
+                ChallengeId = _activeChallenge.ChallengeId,
+                PlayerKey = localKey,
+                PlayerName = GetLocalPlayerName()
+            };
+
+            if (!TryRaiseCommand(command))
+            {
+                _lastCompletionDiagnostic = "Could not notify the host to start recording.";
+                return;
+            }
+
+            if (!ApplyBikeStartSet(localKey, GetLocalPlayerName()))
+                return;
+
+            BeginLocalSetRecording();
+        }
+
+        private static void SubmitBikeRecordedSet(List<string> tricks)
+        {
+            if (_activeChallenge == null || tricks == null || tricks.Count == 0)
+                return;
+
+            string localKey = GetLocalPlayerKey();
+            if (!string.Equals(localKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            float[] recordedPosition = null;
+            float[] recordedRotation = null;
+            float[] recordedSize = null;
+            if (TryBuildRecordedSetArea(out Vector3 areaPosition, out Quaternion areaRotation, out Vector3 areaSize))
+            {
+                recordedPosition = Vector3ToArray(areaPosition);
+                recordedRotation = QuaternionToArray(areaRotation);
+                recordedSize = Vector3ToArray(areaSize);
+            }
+
+            if (IsLocalCreator())
+            {
+                if (ApplyBikeSetLine(localKey, GetLocalPlayerName(), tricks, recordedPosition, recordedRotation, recordedSize))
+                {
+                    _activeChallenge.Revision++;
+                    PublishActiveChallengeState();
+                    ChallengeAreaManager.SetCompleted(IsLocalPlayerComplete());
+                }
+                return;
+            }
+
+            TryRaiseCommand(new NetworkChallengeCommand
+            {
+                Version = ProtocolVersion,
+                Type = BikeCommandSetLine,
+                ChallengeId = _activeChallenge.ChallengeId,
+                PlayerKey = localKey,
+                PlayerName = GetLocalPlayerName(),
+                Tricks = tricks,
+                Position = recordedPosition,
+                Rotation = recordedRotation,
+                Size = recordedSize
+            });
+        }
+
+        private static void SubmitBikeMiss()
+        {
+            if (_activeChallenge == null)
+                return;
+
+            string localKey = GetLocalPlayerKey();
+            if (!string.Equals(localKey, _activeChallenge.CurrentMatcherKey, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (IsLocalCreator())
+            {
+                if (ApplyBikeMiss(localKey, GetLocalPlayerName()))
+                {
+                    _activeChallenge.Revision++;
+                    PublishActiveChallengeState();
+                    ChallengeAreaManager.SetCompleted(IsLocalPlayerComplete());
+                }
+                return;
+            }
+
+            TryRaiseCommand(new NetworkChallengeCommand
+            {
+                Version = ProtocolVersion,
+                Type = BikeCommandMiss,
+                ChallengeId = _activeChallenge.ChallengeId,
+                PlayerKey = localKey,
+                PlayerName = GetLocalPlayerName()
+            });
+        }
+
+        private static void SubmitBikeSetterFailed()
+        {
+            if (_activeChallenge == null)
+                return;
+
+            string localKey = GetLocalPlayerKey();
+            if (!string.Equals(localKey, _activeChallenge.CurrentSetterKey, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (IsLocalCreator())
+            {
+                if (ApplyBikeSetterFailed(localKey, GetLocalPlayerName()))
+                {
+                    _activeChallenge.Revision++;
+                    PublishActiveChallengeState();
+                    ChallengeAreaManager.SetCompleted(IsLocalPlayerComplete());
+                }
+                return;
+            }
+
+            TryRaiseCommand(new NetworkChallengeCommand
+            {
+                Version = ProtocolVersion,
+                Type = BikeCommandSetterFailed,
+                ChallengeId = _activeChallenge.ChallengeId,
+                PlayerKey = localKey,
+                PlayerName = GetLocalPlayerName()
+            });
         }
 
         private static List<string> GetCurrentTrickHistory()
@@ -1839,6 +2875,14 @@ namespace rowemod.Challenges
                 if (_activeChallenge == null || !ChallengeAreaManager.IsLocalPlayerInsideActiveArea())
                     return;
 
+                if (string.Equals(_activeChallenge.Phase, BikePhaseSetting, StringComparison.Ordinal) &&
+                    IsLocalBikeSetter())
+                {
+                    SubmitBikeSetterFailed();
+                    _lastCompletionDiagnostic = "Set failed; passing turn.";
+                    return;
+                }
+
                 BeginLocalAttempt();
                 _lastCompletionDiagnostic = "Combo failed; restarted local attempt.";
             }
@@ -2023,9 +3067,10 @@ namespace rowemod.Challenges
 
         private static void UpdateCompletionDiagnostics(List<string> history)
         {
-            _lastSeenHistoryCount = history.Count;
-            _lastSeenTrickText = history.Count > 0 ? string.Join(" | ", history.TakeLast(3)) : "none";
-            if (history.Count == 0)
+            List<string> sanitizedHistory = SanitizeAttemptTrickSequence(history);
+            _lastSeenHistoryCount = sanitizedHistory.Count;
+            _lastSeenTrickText = sanitizedHistory.Count > 0 ? string.Join(" | ", sanitizedHistory.TakeLast(3)) : "none";
+            if (sanitizedHistory.Count == 0)
                 _lastSeenHistorySource = "none";
         }
 
@@ -2033,6 +3078,7 @@ namespace rowemod.Challenges
         {
             _capturedAttemptTricks.Clear();
             _capturedAttemptTrickTimes.Clear();
+            _recordedSetWorldPositions.Clear();
             _entryHistorySnapshot.Clear();
             _lastCheckedAttemptSignature = null;
             _currentAttemptHasConfirmedLanding = false;
@@ -2128,6 +3174,75 @@ namespace rowemod.Challenges
             return string.Join(" ", displayTokens);
         }
 
+        private static bool TryGetSpinCaptureInfo(string trickName, out int degrees, out bool standaloneSpin)
+        {
+            degrees = 0;
+            standaloneSpin = false;
+            string displayName = GetChallengeDisplayName(trickName);
+            if (string.IsNullOrWhiteSpace(displayName))
+                return false;
+
+            string[] tokens = displayName.Split(
+                new[] { ' ' },
+                StringSplitOptions.RemoveEmptyEntries);
+            int semanticTokenCount = 0;
+            foreach (string token in tokens)
+            {
+                string cleanedToken = CleanTrickToken(token);
+                if (string.IsNullOrWhiteSpace(cleanedToken))
+                    continue;
+
+                if (int.TryParse(cleanedToken, out int parsedDegrees) &&
+                    IsKnownSpinDegree(parsedDegrees))
+                {
+                    degrees = Mathf.Max(degrees, parsedDegrees);
+                    continue;
+                }
+
+                if (IsRotationDescriptorToken(cleanedToken))
+                    continue;
+
+                semanticTokenCount++;
+            }
+
+            bool hasSpin = degrees > 0;
+            standaloneSpin = hasSpin && semanticTokenCount == 0;
+            return hasSpin;
+        }
+
+        private static string CleanTrickToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return string.Empty;
+
+            char[] chars = token
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToLowerInvariant)
+                .ToArray();
+            return new string(chars);
+        }
+
+        private static bool IsRotationDescriptorToken(string token)
+        {
+            return string.Equals(token, "degree", StringComparison.Ordinal) ||
+                   string.Equals(token, "degrees", StringComparison.Ordinal) ||
+                   string.Equals(token, "rotation", StringComparison.Ordinal) ||
+                   string.Equals(token, "rot", StringComparison.Ordinal) ||
+                   string.Equals(token, "spin", StringComparison.Ordinal);
+        }
+
+        private static bool IsKnownSpinDegree(int degrees)
+        {
+            string degreeText = degrees.ToString();
+            for (int i = 0; i < ChallengeExtraTrickNames.Length; i++)
+            {
+                if (ChallengeExtraTrickNames[i] == degreeText)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static string InsertWordBoundaries(string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -2156,14 +3271,7 @@ namespace rowemod.Challenges
             if (!int.TryParse(normalizedRequired, out degrees))
                 return false;
 
-            string degreeText = degrees.ToString();
-            for (int i = 0; i < ChallengeExtraTrickNames.Length; i++)
-            {
-                if (ChallengeExtraTrickNames[i] == degreeText)
-                    return true;
-            }
-
-            return false;
+            return IsKnownSpinDegree(degrees);
         }
 
         private static bool ContainsDegreeToken(string text, int degrees)
@@ -2392,8 +3500,7 @@ namespace rowemod.Challenges
                     return;
                 }
 
-                if (!string.Equals(command.Type, "complete", StringComparison.Ordinal) ||
-                    _activeChallenge == null ||
+                if (_activeChallenge == null ||
                     !IsLocalCreator() ||
                     !string.Equals(command.ChallengeId, _activeChallenge.ChallengeId, StringComparison.Ordinal))
                 {
@@ -2401,13 +3508,41 @@ namespace rowemod.Challenges
                 }
 
                 RegisterPresence(command.PlayerKey, command.PlayerName);
-                if (_activeChallenge.PlayerCompleted.TryGetValue(command.PlayerKey, out bool completed) && completed)
+                bool changed = false;
+                if (string.Equals(command.Type, BikeCommandLanded, StringComparison.Ordinal) ||
+                    string.Equals(command.Type, "complete", StringComparison.Ordinal))
+                {
+                    changed = ApplyBikeLanded(command.PlayerKey, command.PlayerName);
+                }
+                else if (string.Equals(command.Type, BikeCommandMiss, StringComparison.Ordinal))
+                {
+                    changed = ApplyBikeMiss(command.PlayerKey, command.PlayerName);
+                }
+                else if (string.Equals(command.Type, BikeCommandStartSet, StringComparison.Ordinal))
+                {
+                    changed = ApplyBikeStartSet(command.PlayerKey, command.PlayerName);
+                }
+                else if (string.Equals(command.Type, BikeCommandSetLine, StringComparison.Ordinal))
+                {
+                    changed = ApplyBikeSetLine(
+                        command.PlayerKey,
+                        command.PlayerName,
+                        command.Tricks,
+                        command.Position,
+                        command.Rotation,
+                        command.Size);
+                }
+                else if (string.Equals(command.Type, BikeCommandSetterFailed, StringComparison.Ordinal))
+                {
+                    changed = ApplyBikeSetterFailed(command.PlayerKey, command.PlayerName);
+                }
+
+                if (!changed)
                     return;
 
-                _activeChallenge.PlayerCompleted[command.PlayerKey] = true;
                 _activeChallenge.Revision++;
                 PublishActiveChallengeState();
-                Log.Msg($"[MPChallenge][Net] Accepted completion from {command.PlayerName} ({command.PlayerKey}).");
+                Log.Msg($"[MPChallenge][BIKE] Accepted '{command.Type}' from {command.PlayerName} ({command.PlayerKey}).");
             }
             catch (Exception ex)
             {
@@ -2433,24 +3568,46 @@ namespace rowemod.Challenges
                 Version = state.Version,
                 ChallengeId = state.ChallengeId,
                 Revision = state.Revision,
+                GameMode = string.IsNullOrWhiteSpace(state.GameMode) ? GameModeBike : state.GameMode,
+                Phase = string.IsNullOrWhiteSpace(state.Phase) ? BikePhaseChoosing : state.Phase,
                 CreatorKey = state.CreatorKey,
                 CreatorName = GetDisplayNameForKey(state.CreatorKey, state.CreatorName),
                 Tricks = state.Tricks.ToList(),
                 PlayerCompleted = state.PlayerCompleted != null
                     ? new Dictionary<string, bool>(state.PlayerCompleted, StringComparer.OrdinalIgnoreCase)
                     : new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase),
+                PlayerLetters = state.PlayerLetters != null
+                    ? new Dictionary<string, int>(state.PlayerLetters, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+                PlayerAttemptStatus = state.PlayerAttemptStatus != null
+                    ? new Dictionary<string, string>(state.PlayerAttemptStatus, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                PlayerAttemptsRemaining = state.PlayerAttemptsRemaining != null
+                    ? new Dictionary<string, int>(state.PlayerAttemptsRemaining, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+                TurnOrder = state.TurnOrder != null ? state.TurnOrder.ToList() : new List<string>(),
+                SetterIndex = state.SetterIndex,
+                CurrentSetterKey = state.CurrentSetterKey,
+                CurrentSetterName = state.CurrentSetterName,
+                CurrentMatcherIndex = state.CurrentMatcherIndex,
+                CurrentMatcherKey = state.CurrentMatcherKey,
+                CurrentMatcherName = state.CurrentMatcherName,
+                LastLetterGetsTwoTries = state.LastLetterGetsTwoTries,
+                WinnerKey = state.WinnerKey,
+                WinnerName = state.WinnerName,
                 Position = state.Position,
                 Rotation = state.Rotation,
                 Size = state.Size
             };
+            EnsureBikeStateCollections();
 
             if (isNewChallenge)
                 OpenWindow();
 
             string localKey = GetLocalPlayerKey();
             if (!string.IsNullOrEmpty(localKey) &&
-                _activeChallenge.PlayerCompleted.TryGetValue(localKey, out bool localCompleted) &&
-                localCompleted)
+                (string.Equals(GetBikeAttemptStatus(localKey), BikeAttemptLanded, StringComparison.Ordinal) ||
+                 string.Equals(GetBikeAttemptStatus(localKey), BikeAttemptSet, StringComparison.Ordinal)))
             {
                 _pendingLocalCompletionChallengeId = null;
             }
@@ -2465,15 +3622,31 @@ namespace rowemod.Challenges
             if (_activeChallenge == null || !IsLocalCreator())
                 return;
 
+            EnsureBikeStateCollections();
             NetworkChallengeState state = new NetworkChallengeState
             {
                 Version = ProtocolVersion,
                 ChallengeId = _activeChallenge.ChallengeId,
                 Revision = _activeChallenge.Revision,
+                GameMode = _activeChallenge.GameMode,
+                Phase = _activeChallenge.Phase,
                 CreatorKey = _activeChallenge.CreatorKey,
                 CreatorName = _activeChallenge.CreatorName,
                 Tricks = _activeChallenge.Tricks.ToList(),
                 PlayerCompleted = new Dictionary<string, bool>(_activeChallenge.PlayerCompleted, StringComparer.OrdinalIgnoreCase),
+                PlayerLetters = new Dictionary<string, int>(_activeChallenge.PlayerLetters, StringComparer.OrdinalIgnoreCase),
+                PlayerAttemptStatus = new Dictionary<string, string>(_activeChallenge.PlayerAttemptStatus, StringComparer.OrdinalIgnoreCase),
+                PlayerAttemptsRemaining = new Dictionary<string, int>(_activeChallenge.PlayerAttemptsRemaining, StringComparer.OrdinalIgnoreCase),
+                TurnOrder = _activeChallenge.TurnOrder.ToList(),
+                SetterIndex = _activeChallenge.SetterIndex,
+                CurrentSetterKey = _activeChallenge.CurrentSetterKey,
+                CurrentSetterName = _activeChallenge.CurrentSetterName,
+                CurrentMatcherIndex = _activeChallenge.CurrentMatcherIndex,
+                CurrentMatcherKey = _activeChallenge.CurrentMatcherKey,
+                CurrentMatcherName = _activeChallenge.CurrentMatcherName,
+                LastLetterGetsTwoTries = _activeChallenge.LastLetterGetsTwoTries,
+                WinnerKey = _activeChallenge.WinnerKey,
+                WinnerName = _activeChallenge.WinnerName,
                 Position = _activeChallenge.Position,
                 Rotation = _activeChallenge.Rotation,
                 Size = _activeChallenge.Size
@@ -2522,7 +3695,7 @@ namespace rowemod.Challenges
             NetworkChallengeCommand command = new NetworkChallengeCommand
             {
                 Version = ProtocolVersion,
-                Type = "complete",
+                Type = BikeCommandLanded,
                 ChallengeId = _activeChallenge.ChallengeId,
                 PlayerKey = GetLocalPlayerKey(),
                 PlayerName = GetLocalPlayerName()
@@ -2704,16 +3877,43 @@ namespace rowemod.Challenges
                 return FailValidation("invalid challenge id", out reason);
             if (state.Revision < 1)
                 return FailValidation("invalid revision", out reason);
+            if (!string.Equals(state.GameMode, GameModeBike, StringComparison.Ordinal))
+                return FailValidation("invalid game mode", out reason);
+            if (!IsValidBikePhase(state.Phase))
+                return FailValidation("invalid game phase", out reason);
             if (!IsBoundedText(state.CreatorKey) || !IsBoundedText(state.CreatorName))
                 return FailValidation("invalid creator identity", out reason);
-            if (state.Tricks == null || state.Tricks.Count == 0 || state.Tricks.Count > MaxTricks)
+            if (state.Tricks == null || state.Tricks.Count > MaxTricks)
                 return FailValidation("invalid trick count", out reason);
+            if (string.Equals(state.Phase, BikePhaseMatching, StringComparison.Ordinal) &&
+                state.Tricks.Count == 0)
+                return FailValidation("missing active line", out reason);
             if (state.Tricks.Any(trick => !IsBoundedText(trick)))
                 return FailValidation("invalid trick name", out reason);
             if (state.PlayerCompleted == null || state.PlayerCompleted.Count > MaxPlayers)
                 return FailValidation("invalid player completion map", out reason);
             if (state.PlayerCompleted.Keys.Any(key => !IsBoundedText(key)))
                 return FailValidation("invalid player key", out reason);
+            if (!IsValidBikeLettersMap(state.PlayerLetters))
+                return FailValidation("invalid letter map", out reason);
+            if (!IsValidBikeAttemptStatusMap(state.PlayerAttemptStatus))
+                return FailValidation("invalid attempt status map", out reason);
+            if (!IsValidBikeAttemptsMap(state.PlayerAttemptsRemaining))
+                return FailValidation("invalid attempt count map", out reason);
+            if (state.TurnOrder == null || state.TurnOrder.Count == 0 || state.TurnOrder.Count > MaxPlayers)
+                return FailValidation("invalid turn order", out reason);
+            if (state.TurnOrder.Any(key => !IsBoundedText(key)))
+                return FailValidation("invalid turn order key", out reason);
+            if (state.SetterIndex < 0 || state.SetterIndex >= state.TurnOrder.Count)
+                return FailValidation("invalid setter index", out reason);
+            if (!IsBoundedText(state.CurrentSetterKey) || !IsBoundedText(state.CurrentSetterName))
+                return FailValidation("invalid setter identity", out reason);
+            if (string.Equals(state.Phase, BikePhaseMatching, StringComparison.Ordinal) &&
+                (!IsBoundedText(state.CurrentMatcherKey) || !IsBoundedText(state.CurrentMatcherName)))
+                return FailValidation("invalid matcher identity", out reason);
+            if (string.Equals(state.Phase, BikePhaseGameOver, StringComparison.Ordinal) &&
+                (!string.IsNullOrEmpty(state.WinnerKey) && !IsBoundedText(state.WinnerKey)))
+                return FailValidation("invalid winner key", out reason);
             if (!IsValidVector(state.Position, 3, -100000f, 100000f))
                 return FailValidation("invalid position", out reason);
             if (!IsValidQuaternion(state.Rotation))
@@ -2737,8 +3937,71 @@ namespace rowemod.Challenges
             if (string.Equals(command.Type, "presence", StringComparison.Ordinal))
                 return string.IsNullOrEmpty(command.ChallengeId);
 
-            return string.Equals(command.Type, "complete", StringComparison.Ordinal) &&
-                   Guid.TryParseExact(command.ChallengeId, "N", out _);
+            if (!Guid.TryParseExact(command.ChallengeId, "N", out _))
+                return false;
+
+            if (string.Equals(command.Type, BikeCommandLanded, StringComparison.Ordinal) ||
+                string.Equals(command.Type, "complete", StringComparison.Ordinal) ||
+                string.Equals(command.Type, BikeCommandMiss, StringComparison.Ordinal) ||
+                string.Equals(command.Type, BikeCommandStartSet, StringComparison.Ordinal) ||
+                string.Equals(command.Type, BikeCommandSetterFailed, StringComparison.Ordinal))
+            {
+                return command.Tricks == null || command.Tricks.Count == 0;
+            }
+
+            if (!string.Equals(command.Type, BikeCommandSetLine, StringComparison.Ordinal) ||
+                command.Tricks == null ||
+                command.Tricks.Count == 0 ||
+                command.Tricks.Count > MaxTricks ||
+                !command.Tricks.All(IsBoundedText))
+            {
+                return false;
+            }
+
+            bool includesArea =
+                command.Position != null ||
+                command.Rotation != null ||
+                command.Size != null;
+            return !includesArea ||
+                   (IsValidVector(command.Position, 3, -100000f, 100000f) &&
+                    IsValidQuaternion(command.Rotation) &&
+                    IsValidVector(command.Size, 3, 0.1f, 1000f));
+        }
+
+        private static bool IsValidBikePhase(string phase)
+        {
+            return string.Equals(phase, BikePhaseChoosing, StringComparison.Ordinal) ||
+                   string.Equals(phase, BikePhaseSetting, StringComparison.Ordinal) ||
+                   string.Equals(phase, BikePhaseMatching, StringComparison.Ordinal) ||
+                   string.Equals(phase, BikePhaseGameOver, StringComparison.Ordinal);
+        }
+
+        private static bool IsValidBikeLettersMap(Dictionary<string, int> values)
+        {
+            return values != null &&
+                   values.Count <= MaxPlayers &&
+                   values.All(entry => IsBoundedText(entry.Key) && entry.Value >= 0 && entry.Value <= MaxBikeLetters);
+        }
+
+        private static bool IsValidBikeAttemptsMap(Dictionary<string, int> values)
+        {
+            return values != null &&
+                   values.Count <= MaxPlayers &&
+                   values.All(entry => IsBoundedText(entry.Key) && entry.Value >= 0 && entry.Value <= 2);
+        }
+
+        private static bool IsValidBikeAttemptStatusMap(Dictionary<string, string> values)
+        {
+            return values != null &&
+                   values.Count <= MaxPlayers &&
+                   values.All(entry =>
+                       IsBoundedText(entry.Key) &&
+                       (string.IsNullOrEmpty(entry.Value) ||
+                        string.Equals(entry.Value, BikeAttemptPending, StringComparison.Ordinal) ||
+                        string.Equals(entry.Value, BikeAttemptLanded, StringComparison.Ordinal) ||
+                        string.Equals(entry.Value, BikeAttemptMissed, StringComparison.Ordinal) ||
+                        string.Equals(entry.Value, BikeAttemptOut, StringComparison.Ordinal) ||
+                        string.Equals(entry.Value, BikeAttemptSet, StringComparison.Ordinal)));
         }
 
         private static bool FailValidation(string message, out string reason)
@@ -2779,6 +4042,19 @@ namespace rowemod.Challenges
         private static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+        }
+
+        private static bool IsFinite(Quaternion value)
+        {
+            return IsFinite(value.x) &&
+                   IsFinite(value.y) &&
+                   IsFinite(value.z) &&
+                   IsFinite(value.w);
         }
 
         private static void RegisterPresence(string playerKey, string playerName)
@@ -2928,9 +4204,6 @@ namespace rowemod.Challenges
 
             return string.Join("|",
                 challenge.ChallengeId ?? string.Empty,
-                challenge.CreatorKey ?? string.Empty,
-                challenge.CreatorName ?? string.Empty,
-                challenge.Tricks != null ? string.Join(",", challenge.Tricks) : string.Empty,
                 FloatArraySignature(challenge.Position),
                 FloatArraySignature(challenge.Rotation),
                 FloatArraySignature(challenge.Size));
@@ -2950,8 +4223,8 @@ namespace rowemod.Challenges
                 return "null challenge";
 
             string tricks = challenge.Tricks != null ? string.Join(" + ", challenge.Tricks) : "none";
-            int completionCount = challenge.PlayerCompleted != null ? challenge.PlayerCompleted.Count : 0;
-            return $"id='{challenge.ChallengeId ?? "null"}', revision={challenge.Revision}, creatorKey='{challenge.CreatorKey ?? "null"}', creatorName='{challenge.CreatorName ?? "null"}', tricks='{tricks}', players={completionCount}, pos={FormatArray3(challenge.Position)}, rot={FormatArray4(challenge.Rotation)}, size={FormatArray3(challenge.Size)}";
+            int playerCount = challenge.TurnOrder != null ? challenge.TurnOrder.Count : 0;
+            return $"id='{challenge.ChallengeId ?? "null"}', revision={challenge.Revision}, phase='{challenge.Phase ?? "null"}', setter='{challenge.CurrentSetterKey ?? "null"}', matcher='{challenge.CurrentMatcherKey ?? "null"}', tricks='{tricks}', players={playerCount}, pos={FormatArray3(challenge.Position)}, rot={FormatArray4(challenge.Rotation)}, size={FormatArray3(challenge.Size)}";
         }
 
         private static string DescribeArea(ChallengeArea area)
@@ -2998,13 +4271,17 @@ namespace rowemod.Challenges
 
         private static bool IsLocalPlayerComplete()
         {
-            if (_activeChallenge == null || _activeChallenge.PlayerCompleted == null)
+            if (_activeChallenge == null)
                 return false;
 
             string localKey = GetLocalPlayerKey();
-            return !string.IsNullOrEmpty(localKey) &&
-                   _activeChallenge.PlayerCompleted.TryGetValue(localKey, out bool completed) &&
-                   completed;
+            if (string.IsNullOrEmpty(localKey))
+                return false;
+
+            string status = GetBikeAttemptStatus(localKey);
+            return string.Equals(status, BikeAttemptLanded, StringComparison.Ordinal) ||
+                   string.Equals(status, BikeAttemptSet, StringComparison.Ordinal) ||
+                   string.Equals(localKey, _activeChallenge.WinnerKey, StringComparison.OrdinalIgnoreCase);
         }
 
         private static float[] Vector3ToArray(Vector3 value)

@@ -10,6 +10,7 @@ namespace rowemod.Challenges
         private const float GroundProbeStartOffset = 2.5f;
         private const float GroundProbeDistance = 200f;
         private const float GroundClearance = 0.02f;
+        private const float GroundPlacementSink = 0.75f;
         private const float MinimumGroundNormalY = 0.1f;
 
         private static ChallengeArea _active;
@@ -238,7 +239,8 @@ namespace rowemod.Challenges
 
                 Vector3 groundNormal = hit.normal.normalized;
                 float halfHeight = Mathf.Max(Mathf.Abs(areaSize.y), 0.01f) * 0.5f;
-                position = hit.point + groundNormal * (halfHeight + GroundClearance);
+                float sink = Mathf.Min(GroundPlacementSink, halfHeight * 0.5f);
+                position = hit.point + groundNormal * (halfHeight + GroundClearance - sink);
                 rotation = BuildGroundAlignedRotation(referenceForward, groundNormal);
                 groundSource =
                     $"{hit.collider.name ?? "unnamed collider"} normal={FormatVector3(groundNormal)}";

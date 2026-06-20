@@ -14,20 +14,20 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.1", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.0";
+        public const string ModVersion = "3.1";
+        private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
         private static bool _showDisabledMessage = false;
         private static float _disabledMessageEndTime = 0f;
-        private bool _replayInputPatchApplied;
         
 
         public override void OnEarlyInitializeMelon()
@@ -87,6 +87,8 @@ namespace rowemod
                     Log.Msg($"Failed to save configuration: {ex.Message}");
                 }
             }
+
+            AutoUpdater.Initialize();
 
             // Set up event listener
             Log.Msg("Starting game event listener...");
@@ -165,17 +167,13 @@ namespace rowemod
 
             if (playableSceneLoaded && rMbCharacter)
             {
-                if (!_replayInputPatchApplied)
-                {
-                    DisableDroneDpadShortcutPatch.EnsureApplied(HarmonyInstance);
-                    _replayInputPatchApplied = true;
-                }
+                if (EnablePieMenu)
+                    PieMenu.Update();
 
-                PieMenu.Update();
                 rowemod.Challenges.MultiplayerChallengeManager.Update();
                 BikePoseEditor.Update();
 
-                if (!PieMenu.IsOpen && !PieMenu.ConsumedInputThisFrame)
+                if (!EnablePieMenu || (!PieMenu.IsOpen && !PieMenu.ConsumedInputThisFrame))
                     ObjectDropper.Update();
 
                 if (!misc.showPlayerUserNameTargets)
@@ -237,7 +235,10 @@ namespace rowemod
             if (RemoteKillSwitched.isModEnabled)
             {
                 rowemod.Challenges.MultiplayerChallengeManager.DrawWindow();
-                PieMenu.Draw();
+                if (EnablePieMenu)
+                    PieMenu.Draw();
+
+                AutoUpdater.DrawUpdatePrompt(isOpen);
             }
         }
 

@@ -115,6 +115,15 @@ namespace rowemod
         public bool disableDroneCollider;
         public string customSessionMarker;
     }
+
+    public class UpdaterSettings
+    {
+        public bool enabled { get; set; } = true;
+        public long lastCheckUnixUtc { get; set; }
+        public string skippedVersion { get; set; }
+        public string manifestUrl { get; set; } = "https://raw.githubusercontent.com/xrowex/RoweMod/main/version.json";
+    }
+
     public class TrickEntry
     {
         public string Name { get; set; }
@@ -238,7 +247,7 @@ namespace rowemod
             challengeVisible = true,
             challengeSizeX = 5f,
             challengeSizeY = 5f,
-            challengeSizeZ = 5f
+            challengeSizeZ = 20f
         };
 
         public static Misc misc = new Misc
@@ -263,6 +272,7 @@ namespace rowemod
 
         public static GrindPoseSettings grindPoseData = new GrindPoseSettings();
         public static Dictionary<string, MotorTuningConfigEntry> motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
+        public static UpdaterSettings updaterSettings = new UpdaterSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
 
@@ -278,6 +288,7 @@ namespace rowemod
             public CustomTricks customTricksData { get; set; }
             public GrindPoseSettings grindPoseData { get; set; }
             public Dictionary<string, MotorTuningConfigEntry> motorTuningData { get; set; }
+            public UpdaterSettings updaterSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
         }
@@ -329,6 +340,7 @@ namespace rowemod
                     customTricksData = tricks,
                     grindPoseData = grindPoseData,
                     motorTuningData = motorTuning,
+                    updaterSettingsData = updaterSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
                 }, Formatting.Indented);
@@ -403,6 +415,12 @@ namespace rowemod
             }
             grindPoseData = jsonData.grindPoseData ?? new GrindPoseSettings();
             motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
+            updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
+            if (string.IsNullOrWhiteSpace(updaterSettings.manifestUrl))
+            {
+                updaterSettings.manifestUrl = new UpdaterSettings().manifestUrl;
+            }
+
             if (grindPoseData.poses == null)
             {
                 grindPoseData.poses = new Dictionary<string, GrindPoseConfigEntry>();
@@ -617,7 +635,7 @@ namespace rowemod
                 challengeVisible = true,
                 challengeSizeX = 5f,
                 challengeSizeY = 5f,
-                challengeSizeZ = 5f
+                challengeSizeZ = 20f
             };
         }
 
