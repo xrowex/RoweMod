@@ -18,13 +18,13 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.6", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.7", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.0.6";
+        public const string ModVersion = "3.0.7";
         private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
@@ -34,6 +34,8 @@ namespace rowemod
         private static bool _startupAccessGranted = false;
         private static bool _startupAccessCheckStarted = false;
         private static bool _showStartupBlockedWarning = false;
+        private static bool _showStartupRetryWarning = false;
+        private static string _startupRetryMessage = string.Empty;
         private static bool _showPrivacyDisclaimer = false;
         private static bool _showPrivacyDisclaimerConfirmation = false;
 
@@ -79,19 +81,20 @@ namespace rowemod
 
             if (!SteamAPI.IsSteamRunning())
             {
-                Log.Msg("Steam is not running. Cannot retrieve Steam ID.");
+                ShowStartupRetryWarning("Steam is not running. Start Steam, then retry.");
                 return;
             }
 
             /*SteamAPI.Shutdown(); // Ensure SteamAPI resets*/
             if (!SteamAPI.Init())
             {
-                Log.Msg("Failed to initialize Steamworks!");
+                ShowStartupRetryWarning("Failed to initialize Steamworks. Make sure Steam is running, then retry.");
                 return;
             }
 
             Log.Msg("Steamworks initialized successfully.");
             _startupAccessCheckStarted = true;
+            _showStartupRetryWarning = false;
             MelonCoroutines.Start(InitializeAfterUserCheck());
         }
 
@@ -113,18 +116,36 @@ namespace rowemod
 
             if (!accessGranted)
             {
-                _showStartupBlockedWarning = true;
+                _startupAccessCheckStarted = false;
                 isOpen = false;
                 Log.Error("Mod initialization stopped because the startup access check did not pass.");
                 if (SteamUserManager.LastAccessDeniedByBan)
-                    Application.Quit();
+                {
+                    _showStartupBlockedWarning = true;
+                    _showStartupRetryWarning = false;
+                }
+                else
+                {
+                    ShowStartupRetryWarning(SteamUserManager.LastAccessFailureReason);
+                }
 
                 yield break;
             }
 
             _startupAccessGranted = true;
             _showStartupBlockedWarning = false;
+            _showStartupRetryWarning = false;
             InitializeModFeatures();
+        }
+
+        private static void ShowStartupRetryWarning(string message)
+        {
+            _startupAccessCheckStarted = false;
+            _showStartupRetryWarning = true;
+            _startupRetryMessage = string.IsNullOrWhiteSpace(message)
+                ? "Could not verify RoweMod access. Check your connection, then retry."
+                : message;
+            Log.Msg($"Startup access check can be retried: {_startupRetryMessage}");
         }
 
         private static void InitializeModFeatures()

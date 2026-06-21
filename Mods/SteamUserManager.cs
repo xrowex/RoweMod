@@ -30,6 +30,7 @@ public class SteamUserManager
     public static bool LoggingEndpointReady { get; private set; }
     public static bool LastAccessDeniedByBan { get; private set; }
     public static string LastLoggingEndpointFailure { get; private set; } = "Not checked.";
+    public static string LastAccessFailureReason { get; private set; } = string.Empty;
 
     private static HttpClient CreateHttpClient()
     {
@@ -70,7 +71,7 @@ public class SteamUserManager
         }
     }
 
-    public static async Task<bool> IsUserBanned(ulong steamId)
+    public static async Task<bool?> IsUserBanned(ulong steamId)
     {
         using (HttpClient client = CreateHttpClient())
         {
@@ -82,8 +83,9 @@ public class SteamUserManager
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    LastAccessFailureReason = $"Ban check returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}.";
                     Log.Msg($"[IsUserBanned] HTTP Error {response.StatusCode}: {response.ReasonPhrase}");
-                    return false;
+                    return null;
                 }
 
                 string responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -93,8 +95,9 @@ public class SteamUserManager
             }
             catch (Exception e)
             {
+                LastAccessFailureReason = $"Ban check failed: {e.Message}";
                 Log.Msg($"[IsUserBanned] Failed to send request: {e.Message}");
-                return false;
+                return null;
             }
         }
     }
@@ -218,39 +221,52 @@ public class SteamUserManager
     public static async Task<bool> LogAndCheckUser()
     {
         LastAccessDeniedByBan = false;
+        LastAccessFailureReason = string.Empty;
         ulong steamId = GetSteamID();
         if (steamId == 0)
         {
+            LastAccessFailureReason = "Failed to retrieve Steam ID.";
             Log.Msg("Failed to retrieve Steam ID.");
             return false;
         }
 
         if (!await EnsureLoggingEndpointReady().ConfigureAwait(false))
         {
+            LastAccessFailureReason = LastLoggingEndpointFailure;
             Log.Error($"Required logging endpoint is unavailable: {LastLoggingEndpointFailure}");
             Log.Error("Stopping mod initialization because Steam ID logging cannot be verified.");
             return false;
         }
 
         string username = await GetSteamUsername(steamId).ConfigureAwait(false);
-        bool banned = await IsUserBanned(steamId).ConfigureAwait(false);
-
-        Log.Msg($"User: {username} (Steam ID: {steamId}) is using the mod.");
-
-        bool logged = await LogUser(steamId, username).ConfigureAwait(false);
-        if (!logged)
+        bool? banned = await IsUserBanned(steamId).ConfigureAwait(false);
+        if (!banned.HasValue)
         {
-            Log.Error("Stopping mod initialization because Steam ID logging failed.");
+            if (string.IsNullOrWhiteSpace(LastAccessFailureReason))
+                LastAccessFailureReason = "Could not verify ban status.";
+
+            Log.Error($"Stopping mod initialization because ban status could not be verified: {LastAccessFailureReason}");
             return false;
         }
 
-        if (banned)
+        Log.Msg($"User: {username} (Steam ID: {steamId}) is using the mod.");
+
+        if (banned.Value)
         {
             LastAccessDeniedByBan = true;
+            LastAccessFailureReason = "User is banned.";
             for (int i = 0; i < 7; i++)
                 Log.Error($"ACCESS DENIED: {username} is banned!");
 
             Log.Msg($"ACCESS DENIED: {username} is banned! Closing game...");
+            return false;
+        }
+
+        bool logged = await LogUser(steamId, username).ConfigureAwait(false);
+        if (!logged)
+        {
+            LastAccessFailureReason = "Steam ID logging failed.";
+            Log.Error("Stopping mod initialization because Steam ID logging failed.");
             return false;
         }
 

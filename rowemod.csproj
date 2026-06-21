@@ -515,7 +515,11 @@
 	</ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="IF NOT EXIST &quot;$(ProjectDir)DLL&quot; mkdir &quot;$(ProjectDir)DLL&quot;&#xD;&#xA;COPY &quot;$(TargetPath)&quot; &quot;$(ProjectDir)DLL\&quot;&#xD;&#xA;COPY &quot;$(TargetPath)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\&quot;&#xD;&#xA;COPY &quot;$(TargetDir)$(TargetName).pdb&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\&quot;&#xD;&#xA;" />
+		<MakeDir Directories="$(ProjectDir)DLL" />
+		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)DLL\" />
+		<Copy SourceFiles="$(TargetPath)" DestinationFolder="C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\" />
+		<Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFolder="C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+		<Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)Scripts\UpdateVersionHash.ps1&quot; -VersionJson &quot;$(ProjectDir)version.json&quot; -DllPath &quot;$(ProjectDir)DLL\$(TargetFileName)&quot;" />
 	</Target>
 	<Import Condition=" '$(EAZFUSCATOR_NET_HOME)' != '' and Exists('$(EAZFUSCATOR_NET_HOME)/Integration/MSBuild/Eazfuscator.NET.targets') " Project="$(EAZFUSCATOR_NET_HOME)/Integration/MSBuild/Eazfuscator.NET.targets" />
 </Project>
