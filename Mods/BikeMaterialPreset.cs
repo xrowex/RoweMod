@@ -1,4 +1,5 @@
-﻿using MelonLoader.Utils;
+﻿using System.Collections.Generic;
+using MelonLoader.Utils;
 using Newtonsoft.Json;
 using rowemod.Utils;
 

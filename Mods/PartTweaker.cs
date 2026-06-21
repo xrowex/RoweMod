@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Il2CppMashBox.Core.Runtime.Common.Extension_Methods;
 using rowemod.Utils;
 using UnityEngine;

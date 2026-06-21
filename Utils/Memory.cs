@@ -1,4 +1,5 @@
-﻿using Il2CppCinemachine;
+﻿using System;
+using Il2CppCinemachine;
 using Il2CppFusion;
 using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.ContentManagment;
@@ -32,8 +33,10 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Il2CppMashBox.Addons.SessionMarker;
+using static Il2CppMashBox.Addons.GameLoop.MainMenu.VehicleTuningMenuBuilder;
 using static rowemod.Config;
 using ActiveRagdollBehaviour = Il2CppMashBox.Addons.PhysicsDrivenAnimation.ActiveRagdollBehaviour;
 using Camera = UnityEngine.Camera;

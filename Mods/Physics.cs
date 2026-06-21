@@ -1,4 +1,5 @@
-﻿using rowemod.Utils;
+﻿using System;
+using rowemod.Utils;
 using UnityEngine;
 using static rowemod.Config;
 using static rowemod.Utils.Memory;

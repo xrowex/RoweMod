@@ -1,6 +1,8 @@
+using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using MelonLoader;
@@ -26,6 +28,7 @@ namespace rowemod.Mods
         private static bool downloadInProgress;
         private static bool promptVisible;
         private static bool installScheduled;
+        private static bool autoInstallStarted;
         private static bool windowPositionInitialized;
         private static bool stylesInitialized;
         private static string statusText = string.Empty;
@@ -328,6 +331,7 @@ namespace rowemod.Mods
                 windowPositionInitialized = false;
                 statusText = "A new RoweMod version is available.";
                 Log.Msg($"[AutoUpdater] Update available: local={Main.ModVersion}, remote={manifest.version}.");
+                StartAutoDownloadAndSchedule();
             }
             catch (Exception ex)
             {
@@ -338,6 +342,35 @@ namespace rowemod.Mods
                 checkInProgress = false;
                 request.Dispose();
             }
+        }
+
+        private static void StartAutoDownloadAndSchedule()
+        {
+            if (autoInstallStarted || installScheduled)
+                return;
+
+            autoInstallStarted = true;
+            StartCoroutine(AutoDownloadAndScheduleInstall());
+        }
+
+        private static IEnumerator AutoDownloadAndScheduleInstall()
+        {
+            Log.Msg($"[AutoUpdater] Auto-download started for {availableManifest?.version ?? "unknown version"}.");
+
+            IEnumerator download = DownloadUpdate();
+            while (download.MoveNext())
+                yield return download.Current;
+
+            if (installScheduled)
+                yield break;
+
+            if (!string.IsNullOrWhiteSpace(stagedUpdatePath) && File.Exists(stagedUpdatePath))
+            {
+                ScheduleInstallOnExit();
+                yield break;
+            }
+
+            Log.Warning("[AutoUpdater] Auto-install was not scheduled because the update was not downloaded.");
         }
 
         private static IEnumerator DownloadUpdate()
@@ -465,8 +498,9 @@ namespace rowemod.Mods
                 Process.Start(startInfo);
 
                 installScheduled = true;
+                promptVisible = false;
                 statusText = "Install scheduled. Close BMX Streets to finish updating.";
-                Log.Msg($"[AutoUpdater] Scheduled update install using helper script: {scriptPath}");
+                Log.Msg($"[AutoUpdater] Scheduled update install using helper script: {scriptPath}. Hiding update prompt.");
             }
             catch (Exception ex)
             {

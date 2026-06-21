@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using Il2CppInterop.Runtime;
 using Il2CppMashBox.Character.Scripts;
 using rowemod;

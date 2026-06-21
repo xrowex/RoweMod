@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Il2CppFusion;
 using UnityEngine;
 using rowemod.Utils;
@@ -7,28 +10,32 @@ using Il2CppMashBox.Addons.ReplaySystem;
 using rowemod;
 using UnityEngine.Animations;
 using UnityEngine.InputSystem;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Log = rowemod.Utils.Log;
 using Object = UnityEngine.Object;
+
 
 namespace rowemod.Mods
 {
     public static class ObjectDropper
     {
+        // List to track spawned objects for deletion, capped at 20
         private static readonly List<GameObject> spawnedObjects = new List<GameObject>();
 
+        // Cache for drone and character transforms
         private static Transform droneTransform;
         private static Transform characterTransform;
 
+        // Selected prefab name for spawning, initially null for "none"
         private static string selectedPrefabName = null;
 
+        // List to track multiple selected objects for deletion or transformation
         private static readonly List<GameObject> selectedObjects = new List<GameObject>();
         private static readonly Dictionary<GameObject, List<Material>> originalMaterialsMap = new Dictionary<GameObject, List<Material>>();
 
+        // Maximum number of spawned objects allowed
         private static readonly int MaxSpawnedObjects = 20;
 
+        // Cached GUI styles and textures for toggles
         private static GUIStyle toggleOnStyle;
         private static GUIStyle toggleOffStyle;
         private static Texture2D toggleOnNormalTexture;
@@ -37,100 +44,64 @@ namespace rowemod.Mods
         private static Texture2D toggleOffHoverTexture;
         private static Color lastMenuAccentColor;
 
+        // Transform adjustment offsets for selected objects
         private static Vector3 positionOffset = Vector3.zero;
         private static Vector3 rotationOffset = Vector3.zero;
 
+        // Track menu state for deselection on toggle
         private static bool wasMenuOpen = false;
 
         private static readonly int placementLayerMask = ~((1 << 2) | (1 << 31));
         private static readonly float MinGroundNormalY = 0.0872f;
 
+        // Preview
         private static GameObject previewObject;
         private static Material previewMaterial;
         private static float previewBottomOffset;
         private static float previewYRotation = 0f;
         private static UnityEngine.Camera activeCamera;
-        private static bool cachedDroneModeActive;
-        private static float nextRuntimeReferenceRefreshTime;
-        private static readonly float RuntimeReferenceRefreshInterval = 0.5f;
-        private static float nextPreviewUpdateTime;
-        private static readonly float PreviewUpdateInterval = 1f / 30f;
-
-        private static bool dropperExpanded = true;
-        private static bool transformControlsExpanded = true;
-
-        private static float leftShoulderHoldTime = 0f;
-        private static float rightShoulderHoldTime = 0f;
-        private static readonly float HoldThreshold = 0.25f;
-        private static readonly float FreeRotateSpeed = 90f;
-        private static readonly float PreciseClickStep = 5f;
-
-        private static float previewDistanceOffset = 0f;
-        private static readonly float DistanceMoveSpeed = 8f;
-        private static readonly float MinDistanceOffset = -10f;
-        private static readonly float MaxDistanceOffset = 25f;
-
         private static bool canPlacePreview = false;
         private static GUIStyle notPlaceableWarningStyle;
 
-        private static readonly bool DebugLoggingEnabled = false;
-        private static bool lastLoggedDropperActive;
-        private static bool lastLoggedPlacementActive;
-        private static bool lastLoggedHasCamera;
-        private static bool lastLoggedHasGamepad;
-        private static bool lastLoggedHasSelection;
-        private static bool lastLoggedCanPlacePreview;
-        private static bool hasLoggedDropperState;
-        private static float nextPlacementFailureLogTime;
-        private static float nextNoPrefabsLogTime;
-        private static string lastPlacementFailureReason;
+        // Foldout states for Dropper tab
+        private static bool dropperExpanded = true;
+        private static bool transformControlsExpanded = true;
 
+        // Initialize the dropper by finding references
         public static void Initialize()
         {
+            // Logging initialization start
+            Log.Msg("Initializing ObjectDropper...");
+
+            // Initialize cached GUI styles and textures
+            
             InitializeToggleStyles();
+
             RefreshReferences();
-            LogDropper("Initialized.");
         }
 
-        public static void ResetTab()
-        {
-            ClearSelection();
-
-            if (previewObject != null)
-            {
-                Object.Destroy(previewObject);
-                previewObject = null;
-            }
-
-            if (previewMaterial != null)
-            {
-                Object.Destroy(previewMaterial);
-                previewMaterial = null;
-            }
-
-            selectedPrefabName = null;
-            previewYRotation = 0f;
-            previewDistanceOffset = 0f;
-            previewBottomOffset = 0f;
-            canPlacePreview = false;
-            LogDropper("Reset tab and cleared preview/selection.");
-        }
-
+        // Initialize or update cached GUI styles and textures for toggles
         private static void InitializeToggleStyles()
         {
+            // Create or update textures if menu accent color has changed
             Color currentMenuAccentColor = new Color(Config.misc.menuAccentR, Config.misc.menuAccentG, Config.misc.menuAccentB);
-
             if (toggleOnNormalTexture == null || lastMenuAccentColor != currentMenuAccentColor)
             {
+                // ON state textures (red)
                 toggleOnNormalTexture = Menu.MakeRoundedTex(128, 20, Color.red, 10, 1, Color.black);
-                toggleOnHoverTexture = Menu.MakeRoundedTex(128, 20, new Color(1f, 0.1f, 0.1f), 10, 1, Color.black);
+                toggleOnHoverTexture = Menu.MakeRoundedTex(128, 20, new Color(
+                    Mathf.Min(1f, 1f), // Red hover: slightly brighter
+                    Mathf.Min(0.1f, 1f),
+                    Mathf.Min(0.1f, 1f)), 10, 1, Color.black);
 
+                // OFF state textures (menu accent color)
                 toggleOffNormalTexture = Menu.MakeRoundedTex(128, 20, currentMenuAccentColor, 10, 1, Color.black);
                 toggleOffHoverTexture = Menu.MakeRoundedTex(128, 20, new Color(
                     Mathf.Min(currentMenuAccentColor.r + 0.1f, 1f),
                     Mathf.Min(currentMenuAccentColor.g + 0.1f, 1f),
                     Mathf.Min(currentMenuAccentColor.b + 0.1f, 1f)), 10, 1, Color.black);
 
+                // Create GUI styles with exact highQualityButtonStyle properties
                 toggleOnStyle = new GUIStyle(Menu.highQualityButtonStyle)
                 {
                     normal = { background = toggleOnNormalTexture, textColor = Color.white },
@@ -140,7 +111,9 @@ namespace rowemod.Mods
                     fontStyle = FontStyle.Bold,
                     alignment = TextAnchor.MiddleCenter,
                     border = new RectOffset(10, 10, 10, 10),
-                    contentOffset = new Vector2(0, 0),
+                    padding = Menu.highQualityButtonStyle.padding,
+                    margin = Menu.highQualityButtonStyle.margin,
+                    contentOffset = new Vector2(0, 0), // Center text vertically
                     stretchWidth = false,
                     stretchHeight = false
                 };
@@ -154,359 +127,276 @@ namespace rowemod.Mods
                     fontStyle = FontStyle.Bold,
                     alignment = TextAnchor.MiddleCenter,
                     border = new RectOffset(10, 10, 10, 10),
-                    contentOffset = new Vector2(0, 0),
+                    padding = Menu.highQualityButtonStyle.padding,
+                    margin = Menu.highQualityButtonStyle.margin,
+                    overflow = Menu.highQualityButtonStyle.overflow,
+                    contentOffset = new Vector2(0, 0), // Center text vertically
                     stretchWidth = false,
                     stretchHeight = false
                 };
 
                 lastMenuAccentColor = currentMenuAccentColor;
+                Log.Msg("Initialized toggle styles and textures.");
             }
         }
-
+        
+        // Update method to handle object spawning and menu toggle deselection
         public static void Update()
         {
             var mouse = Mouse.current;
-            var gamepad = Gamepad.current;
-            bool isMenuOpen = Menu.isOpen;
-            bool dropperMenuActive = IsDropperTabActive;
-            bool previewActive = previewObject != null && previewObject.activeSelf;
-            bool hasSelection = selectedObjects.Count > 0;
+            if (mouse == null) return;
+            RefreshActiveCamera();
 
-            if (!dropperMenuActive && !previewActive && !hasSelection)
+            // Handle object spawning
+            if (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper && mouse.leftButton.wasPressedThisFrame)
             {
-                wasMenuOpen = isMenuOpen;
-                return;
-            }
+                Config.misc.disableDroneCollider = true;
+                if (IsMouseOverUI()) return;
 
-            RefreshRuntimeReferences();
-
-            bool placementActive = dropperMenuActive && cachedDroneModeActive;
-            LogDropperState(dropperMenuActive, placementActive, activeCamera != null, gamepad != null);
-
-            if (placementActive && gamepad != null && gamepad.buttonSouth.wasPressedThisFrame)
-            {
-                if (activeCamera != null)
+                if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)
                 {
-                    Config.misc.disableDroneCollider = true;
-                    LogDropper("Place input detected from drone buttonSouth.");
-                    TrySpawnSelectedPrefab(GetCameraCenterRay(), "drone");
+                    Log.Warning("No prefabs available to spawn in ObjectDropper.");
+                    return;
                 }
-                else
-                {
-                    LogDropper("buttonSouth was pressed, but activeCamera is null.");
-                }
-            }
 
-            if (placementActive && mouse != null && mouse.leftButton.wasPressedThisFrame)
-            {
+                if (string.IsNullOrEmpty(selectedPrefabName))
+                {
+                    Log.Warning("No prefab selected. Please select a prefab in the Object Dropper menu.");
+                    return;
+                }
+
+                if (!Memory.dropperPrefabNames.Contains(selectedPrefabName))
+                {
+                    Log.Warning($"Selected prefab '{selectedPrefabName}' is no longer valid. Clearing selection.");
+                    selectedPrefabName = null;
+                    return;
+                }
+
+                int prefabIndex = Memory.dropperPrefabNames.IndexOf(selectedPrefabName);
+                if (prefabIndex < 0 || prefabIndex >= Memory.dropperPrefabs.Count)
+                {
+                    Log.Error($"Selected prefab '{selectedPrefabName}' not found or invalid.");
+                    return;
+                }
+
+                GameObject prefabToSpawn = Memory.dropperPrefabs[prefabIndex];
+
                 if (activeCamera == null)
                 {
-                    LogDropper("Mouse placement click ignored because activeCamera is null.");
+                    Log.Warning("Cannot spawn object because active camera is null.");
+                    return;
                 }
-                else if (IsMouseOverUI())
+
+                if (previewObject != null && previewObject.activeSelf && !canPlacePreview)
                 {
-                    LogDropper("Mouse placement click ignored because cursor is over the menu UI.");
+                    Log.Warning("Cannot spawn object because the preview is not placeable.");
+                    return;
+                }
+
+                // Check if spawned objects exceed the limit
+                if (spawnedObjects.Count >= MaxSpawnedObjects)
+                {
+                    // Remove the oldest object
+                    GameObject oldestObject = spawnedObjects[0];
+                    if (oldestObject != null)
+                    {
+                        UnityEngine.Object.Destroy(oldestObject);
+                        Log.Msg($"Destroyed oldest spawned object: {oldestObject.name} to stay within {MaxSpawnedObjects} limit.");
+                    }
+                    spawnedObjects.RemoveAt(0);
+                }
+
+                if (previewObject != null && previewObject.activeSelf && canPlacePreview)
+                {
+                    GameObject previewSpawned = Object.Instantiate(prefabToSpawn, previewObject.transform.position, previewObject.transform.rotation);
+                    ConfigureSpawnedObject(previewSpawned);
+                    spawnedObjects.Add(previewSpawned);
+                    Log.Msg($"Spawned object from preview at {previewObject.transform.position}, rotation: {previewObject.transform.rotation.eulerAngles}");
+                    return;
+                }
+
+                // Use mouse raycast for placement
+                Ray ray = activeCamera.ScreenPointToRay(mouse.position.ReadValue());
+                if (TryRaycastIgnoringSpawned(ray, out RaycastHit hit))
+                {
+                    Vector3 groundNormal = hit.normal.normalized;
+                    Quaternion rotation;
+
+                    // Check if slope is within 85 degrees (cos(85°) ≈ 0.0872)
+                    if (groundNormal.y > MinGroundNormalY)
+                    {
+                        // Align with normal, using previewYRotation for forward direction
+                        Vector3 forward = Quaternion.Euler(0f, previewYRotation, 0f) * Vector3.forward;
+                        forward = Vector3.ProjectOnPlane(forward, groundNormal).normalized;
+                        rotation = Quaternion.LookRotation(forward, groundNormal);
+                        Log.Msg($"Mouse raycast hit ground with normal: {groundNormal}, rotation: {rotation.eulerAngles}");
+                    }
+                    else
+                    {
+                        // Fallback to flat rotation with previewYRotation
+                        rotation = Quaternion.Euler(0f, previewYRotation, 0f);
+                        Log.Warning($"Mouse raycast normal too steep: {groundNormal} (y={groundNormal.y}). Using flat rotation.");
+                    }
+
+                    Vector3 position = hit.point;
+
+                    float bottomOffset = 0f;
+                    GameObject temp = Object.Instantiate(prefabToSpawn, Vector3.zero, rotation);
+                    var renderers = temp.GetComponentsInChildren<Renderer>();
+                    if (renderers.Length > 0)
+                    {
+                        Bounds bounds = renderers[0].bounds;
+                        foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+                        bottomOffset = -bounds.min.y;
+                    }
+                    Object.Destroy(temp);
+                    position.y += bottomOffset;
+                    
+                    
+                    
+                    GameObject spawned = Object.Instantiate(prefabToSpawn, position, rotation);
+                    
+
+                    if (spawned != null && spawned.GetComponent<Rigidbody>() != null)
+                    {
+                        spawned.AddComponent<RecordableBody>();
+                        Log.Msg($"Added RecordableBody to {spawned.name} as it has a Rigidbody component");
+                    }
+
+                    if (spawned.GetComponentInChildren<AimConstraint>() != null)
+                    {
+                        Log.Msg("Object has an AimConstraint component");
+
+                        var aimConstraints = spawned.GetComponentsInChildren<AimConstraint>();
+
+                        // Clear existing sources just in case
+                        foreach (var aimConstraint in aimConstraints)
+                        {
+                            aimConstraint.SetSources(new Il2CppSystem.Collections.Generic.List<ConstraintSource>());
+                            
+                            ConstraintSource source = new ConstraintSource
+                            {
+                                sourceTransform = Memory.chassisRb.transform,
+                                weight = 1.0f
+                            };
+
+                            Log.Msg("AimConstraint sourceTransform set to " + Memory.chassisRb.transform.name);
+
+                            aimConstraint.AddSource(source);
+
+                            aimConstraint.constraintActive = true;
+                            aimConstraint.locked = true;
+                            
+                            // Optional: Force update (may help in some cases)
+                            aimConstraint.enabled = false;
+                            aimConstraint.enabled = true;
+                        }
+                    }
+                    spawnedObjects.Add(spawned);
+                    Log.Msg($"Spawned object under mouse at {position}, rotation: {rotation.eulerAngles}");
                 }
                 else
                 {
-                    Config.misc.disableDroneCollider = true;
-                    LogDropper("Place input detected from mouse left click.");
-                    TrySpawnSelectedPrefab(activeCamera.ScreenPointToRay(mouse.position.ReadValue()), "mouse");
+                    Log.Warning("Raycast under mouse did not hit ground.");
                 }
             }
 
+            // Deselect objects on menu toggle
+            bool isMenuOpen = Menu.isOpen;
             if (isMenuOpen != wasMenuOpen)
             {
                 if (selectedObjects.Count > 0)
                 {
                     ClearSelection();
-
-                    if (previewObject != null)
-                    {
-                        Object.Destroy(previewObject);
-                        previewObject = null;
-                        LogDropper("Menu open state changed; destroyed preview while clearing selection.");
-                    }
+                    UnityEngine.Object.Destroy(previewObject);
+                    previewObject = null;
+                    Log.Msg("Deselected all objects due to menu toggle.");
                 }
-
                 wasMenuOpen = isMenuOpen;
             }
+            
+            // Scroll to rotate preview
+            float scrollDelta = 0f;
 
-            spawnedObjects.RemoveAll(o => o == null);
-            selectedObjects.RemoveAll(o => o == null);
+            if (Mouse.current != null)
+            {
+                // Normalize OS delta (e.g., 120 on Windows) into “notches” (~1 per step)
+                scrollDelta = Mouse.current.scroll.ReadValue().y / 120f;
+            }
 
-            UpdatePreviewRotation(mouse, gamepad, placementActive);
+            if (scrollDelta != 0f)
+            {
+                previewYRotation += scrollDelta * 5f; // same multiplier you had
+                previewYRotation %= 360f;
+            }
 
-            bool shouldShowPreview = previewObject != null && placementActive;
+            // Refresh camera
+            if (activeCamera == null)
+            {
+                var brain = GameObject.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
+                if (brain != null && brain.gameObject.TryGetComponent(out UnityEngine.Camera cam))
+                {
+                    activeCamera = cam;
+                    Log.Msg($"Active camera assigned: {cam.name}");
+                }
+            }
 
-            if (!shouldShowPreview)
+            // Update preview position/rotation
+            // Disable preview object if not on Dropper tab
+            if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper)
             {
                 if (previewObject != null && previewObject.activeSelf)
-                {
                     previewObject.SetActive(false);
-                    LogDropper($"Preview hidden. dropperActive={dropperMenuActive}, placementActive={placementActive}.");
-                }
             }
             else
             {
-                if (!previewObject.activeSelf)
-                {
+                if (previewObject != null && !previewObject.activeSelf)
                     previewObject.SetActive(true);
-                    LogDropper("Preview shown.");
-                }
 
-                if (activeCamera != null)
+                if (activeCamera != null && previewObject != null)
                 {
-                    bool forcePreviewUpdate = (gamepad != null && gamepad.buttonSouth.wasPressedThisFrame)
-                                              || (mouse != null && mouse.leftButton.wasPressedThisFrame);
-
-                    if (forcePreviewUpdate || Time.unscaledTime >= nextPreviewUpdateTime)
-                    {
-                        nextPreviewUpdateTime = Time.unscaledTime + PreviewUpdateInterval;
-                        Ray previewRay = GetCameraCenterRay();
-                        UpdatePreviewTransform(previewRay);
-                    }
+                    Ray ray = activeCamera.ScreenPointToRay(mouse.position.ReadValue());
+                    UpdatePreviewTransform(ray);
                 }
             }
-        }
-
-        public static bool IsDropperTabActive => Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper;
-
-        public static bool ShouldBlockDroneShot()
-        {
-            return IsDropperTabActive
-                   && !string.IsNullOrEmpty(selectedPrefabName);
-        }
-
-        private static void RefreshRuntimeReferences(bool force = false)
-        {
-            if (!force && Time.unscaledTime < nextRuntimeReferenceRefreshTime)
-                return;
-
-            nextRuntimeReferenceRefreshTime = Time.unscaledTime + RuntimeReferenceRefreshInterval;
-            RefreshActiveCamera();
-            cachedDroneModeActive = IsDroneModeActive();
-        }
-
-        private static bool IsDroneModeActive()
-        {
-            var droneManager = GameObject.FindObjectOfType<DroneManager>(true);
-
-            if (droneManager != null && droneManager.IsDeployed)
-                return true;
-
-            var droneController = GameObject.FindObjectOfType<DroneController>(true);
-
-            if (droneController == null)
-                return false;
-
-            return droneController.enabled && droneController.gameObject.activeInHierarchy;
         }
 
         private static void RefreshActiveCamera()
         {
-            var brain = GameObject.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
+            if (activeCamera != null)
+                return;
 
+            var brain = GameObject.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
             if (brain != null && brain.gameObject.TryGetComponent(out UnityEngine.Camera cam))
             {
-                if (activeCamera != cam)
-                {
-                    activeCamera = cam;
-                }
-            }
-            else
-            {
-                activeCamera = null;
+                activeCamera = cam;
+                Log.Msg($"Active camera assigned: {cam.name}");
             }
         }
 
-        private static Ray GetCameraCenterRay()
+        private static void UpdatePreviewTransform(Ray ray)
         {
-            return activeCamera.ScreenPointToRay(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
-        }
-
-        private static void UpdatePreviewRotation(Mouse mouse, Gamepad gamepad, bool placementActive)
-        {
-            if (!placementActive || string.IsNullOrEmpty(selectedPrefabName))
-                return;
-
-            float rotationDelta = 0f;
-
-            if (gamepad != null)
+            if (!TryRaycastIgnoringSpawned(ray, out RaycastHit hit))
             {
-                if (gamepad.leftStickButton.wasPressedThisFrame)
-                {
-                    previewYRotation = 0f;
-                    rotationDelta = 0f;
-                }
-
-                Vector2 rightStick = gamepad.rightStick.ReadValue();
-
-                if (Mathf.Abs(rightStick.y) > 0.15f)
-                {
-                    previewDistanceOffset += rightStick.y * DistanceMoveSpeed * Time.deltaTime;
-                    previewDistanceOffset = Mathf.Clamp(previewDistanceOffset, MinDistanceOffset, MaxDistanceOffset);
-                }
-
-                if (gamepad.leftShoulder.isPressed)
-                {
-                    leftShoulderHoldTime += Time.deltaTime;
-
-                    if (leftShoulderHoldTime > HoldThreshold)
-                    {
-                        rotationDelta -= FreeRotateSpeed * Time.deltaTime;
-                    }
-                }
-                else
-                {
-                    if (gamepad.leftShoulder.wasReleasedThisFrame && leftShoulderHoldTime <= HoldThreshold)
-                    {
-                        rotationDelta -= PreciseClickStep;
-                    }
-
-                    leftShoulderHoldTime = 0f;
-                }
-
-                if (gamepad.rightShoulder.isPressed)
-                {
-                    rightShoulderHoldTime += Time.deltaTime;
-
-                    if (rightShoulderHoldTime > HoldThreshold)
-                    {
-                        rotationDelta += FreeRotateSpeed * Time.deltaTime;
-                    }
-                }
-                else
-                {
-                    if (gamepad.rightShoulder.wasReleasedThisFrame && rightShoulderHoldTime <= HoldThreshold)
-                    {
-                        rotationDelta += PreciseClickStep;
-                    }
-
-                    rightShoulderHoldTime = 0f;
-                }
-            }
-
-            if (rotationDelta == 0f)
-                return;
-
-            previewYRotation = Mathf.Repeat(previewYRotation + rotationDelta, 360f);
-        }
-
-        private static bool TryGetSelectedPrefab(out GameObject prefabToSpawn)
-        {
-            prefabToSpawn = null;
-
-            if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)
-            {
-                Log.Warning("No prefabs available to spawn in ObjectDropper.");
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(selectedPrefabName))
-            {
-                Log.Warning("No prefab selected. Please select a prefab in the Object Dropper menu.");
-                return false;
-            }
-
-            if (!Memory.dropperPrefabNames.Contains(selectedPrefabName))
-            {
-                Log.Warning($"Selected prefab '{selectedPrefabName}' is no longer valid. Clearing selection.");
-                LogDropper($"Known prefab names: {string.Join(", ", Memory.dropperPrefabNames)}");
-                selectedPrefabName = null;
-                return false;
-            }
-
-            int prefabIndex = Memory.dropperPrefabNames.IndexOf(selectedPrefabName);
-
-            if (prefabIndex < 0 || prefabIndex >= Memory.dropperPrefabs.Count)
-            {
-                Log.Error($"Selected prefab '{selectedPrefabName}' not found or invalid.");
-                return false;
-            }
-
-            prefabToSpawn = Memory.dropperPrefabs[prefabIndex];
-
-            if (prefabToSpawn == null)
-            {
-                LogDropper($"Selected prefab '{selectedPrefabName}' resolved to null at index {prefabIndex}.");
-                return false;
-            }
-
-            return prefabToSpawn != null;
-        }
-
-        private static void TrySpawnSelectedPrefab(Ray ray, string source)
-        {
-            LogDropper($"Spawn attempt. source={source}, selected='{selectedPrefabName ?? "None"}', previewActive={(previewObject != null && previewObject.activeSelf)}, canPlace={canPlacePreview}.");
-
-            if (!TryGetSelectedPrefab(out GameObject prefabToSpawn))
-                return;
-
-            if (previewObject != null && previewObject.activeSelf && !canPlacePreview)
-            {
-                Log.Warning("Cannot place object here.");
-                LogDropper($"Blocked spawn because preview is not placeable. lastFailure='{lastPlacementFailureReason ?? "unknown"}'.");
+                canPlacePreview = false;
+                SetPreviewColor(false);
                 return;
             }
 
-            if (spawnedObjects.Count >= MaxSpawnedObjects)
-            {
-                GameObject oldestObject = spawnedObjects[0];
+            canPlacePreview = true;
+            SetPreviewColor(true);
 
-                if (oldestObject != null)
-                {
-                    LogDropper($"Max spawned objects reached ({MaxSpawnedObjects}); destroying oldest '{oldestObject.name}'.");
-                    Object.Destroy(oldestObject);
-                }
+            previewObject.transform.rotation = GetPlacementRotation(hit.normal.normalized);
 
-                spawnedObjects.RemoveAt(0);
-            }
-
-            Vector3 spawnPosition;
-            Quaternion spawnRotation;
-
-            if (previewObject != null && previewObject.activeSelf)
-            {
-                spawnPosition = previewObject.transform.position;
-                spawnRotation = previewObject.transform.rotation;
-                LogDropper($"Using preview transform. position={FormatVector(spawnPosition)}, rotationY={spawnRotation.eulerAngles.y:F1}.");
-            }
-            else
-            {
-                if (!TryRaycastIgnoringSpawned(ray, out RaycastHit hit, out string reason))
-                {
-                    Log.Warning($"Raycast from {source} did not hit ground and no preview was active. Reason: {reason}");
-                    return;
-                }
-
-                spawnRotation = GetPlacementRotation(hit.normal.normalized);
-                spawnPosition = hit.point;
-
-                GameObject temp = Object.Instantiate(prefabToSpawn, Vector3.zero, spawnRotation);
-                spawnPosition.y += GetBottomOffset(temp);
-                Object.Destroy(temp);
-                LogDropper($"Using raycast hit '{hit.collider?.name ?? "unknown"}'. position={FormatVector(spawnPosition)}, normal={FormatVector(hit.normal)}.");
-            }
-
-            GameObject spawned = Object.Instantiate(prefabToSpawn, spawnPosition, spawnRotation);
-
-            if (spawned != null && spawned.GetComponent<Rigidbody>() != null)
-            {
-                spawned.AddComponent<RecordableBody>();
-            }
-
-            ApplyAimConstraints(spawned);
-            spawnedObjects.Add(spawned);
-            LogDropper($"Spawned '{spawned?.name ?? "null"}'. totalSpawned={spawnedObjects.Count}.");
+            Vector3 adjustedPosition = hit.point;
+            adjustedPosition.y += previewBottomOffset;
+            previewObject.transform.position = adjustedPosition;
         }
 
         private static Quaternion GetPlacementRotation(Vector3 groundNormal)
         {
-            if (groundNormal.y <= 0.0872f)
-            {
+            if (groundNormal.y <= MinGroundNormalY)
                 return Quaternion.Euler(0f, previewYRotation, 0f);
-            }
 
             Vector3 forward = Quaternion.Euler(0f, previewYRotation, 0f) * Vector3.forward;
             forward = Vector3.ProjectOnPlane(forward, groundNormal).normalized;
@@ -520,107 +410,15 @@ namespace rowemod.Mods
                 return 0f;
 
             var renderers = obj.GetComponentsInChildren<Renderer>();
-
             if (renderers.Length == 0)
                 return 0f;
 
             Bounds bounds = renderers[0].bounds;
 
-            foreach (var r in renderers)
-                bounds.Encapsulate(r.bounds);
+            foreach (var renderer in renderers)
+                bounds.Encapsulate(renderer.bounds);
 
             return obj.transform.position.y - bounds.min.y;
-        }
-
-        private static void ApplyAimConstraints(GameObject spawned)
-        {
-            if (spawned == null || spawned.GetComponentInChildren<AimConstraint>() == null)
-                return;
-
-            if (Memory.chassisRb == null)
-            {
-                Log.Warning("chassisRb is null; skipping AimConstraint setup.");
-                return;
-            }
-
-            var aimConstraints = spawned.GetComponentsInChildren<AimConstraint>();
-
-            foreach (var aimConstraint in aimConstraints)
-            {
-                aimConstraint.SetSources(new Il2CppSystem.Collections.Generic.List<ConstraintSource>());
-
-                ConstraintSource source = new ConstraintSource
-                {
-                    sourceTransform = Memory.chassisRb.transform,
-                    weight = 1.0f
-                };
-
-                aimConstraint.AddSource(source);
-                aimConstraint.constraintActive = true;
-                aimConstraint.locked = true;
-
-                aimConstraint.enabled = false;
-                aimConstraint.enabled = true;
-            }
-        }
-
-        private static void UpdatePreviewTransform(Ray ray)
-        {
-            if (!TryGetPlacementHit(ray, out RaycastHit hit, out string reason))
-            {
-                canPlacePreview = false;
-                SetPreviewColor(false);
-                LogPlacementFailure(reason);
-                return;
-            }
-
-            canPlacePreview = true;
-            LogPlacementRecovered();
-            SetPreviewColor(true);
-
-            Quaternion rotation = GetPlacementRotation(hit.normal.normalized);
-            previewObject.transform.rotation = rotation;
-
-            Vector3 adjustedPosition = hit.point;
-            adjustedPosition.y += previewBottomOffset;
-            previewObject.transform.position = adjustedPosition;
-        }
-
-        private static bool TryGetPlacementHit(Ray cameraRay, out RaycastHit hit, out string reason)
-        {
-            hit = default;
-            reason = string.Empty;
-
-            if (!TryRaycastIgnoringSpawned(cameraRay, out RaycastHit baseHit, out reason))
-                return false;
-
-            if (Mathf.Approximately(previewDistanceOffset, 0f))
-            {
-                hit = baseHit;
-                return true;
-            }
-
-            Vector3 groundForward = Vector3.ProjectOnPlane(cameraRay.direction, Vector3.up);
-
-            if (groundForward.sqrMagnitude < 0.001f)
-            {
-                hit = baseHit;
-                return true;
-            }
-
-            groundForward.Normalize();
-
-            Vector3 targetPoint = baseHit.point + groundForward * previewDistanceOffset;
-            Ray groundProbeRay = new Ray(targetPoint + Vector3.up * 30f, Vector3.down);
-
-            if (!TryRaycastIgnoringSpawned(groundProbeRay, out RaycastHit offsetHit, out reason))
-            {
-                reason = $"Offset ground probe failed after base hit. offset={previewDistanceOffset:F2}. {reason}";
-                return false;
-            }
-
-            hit = offsetHit;
-            return true;
         }
 
         private static void SetPreviewColor(bool canPlace)
@@ -653,40 +451,22 @@ namespace rowemod.Mods
 
         private static bool TryRaycastIgnoringSpawned(Ray ray, out RaycastHit validHit)
         {
-            return TryRaycastIgnoringSpawned(ray, out validHit, out _);
-        }
-
-        private static bool TryRaycastIgnoringSpawned(Ray ray, out RaycastHit validHit, out string reason)
-        {
             validHit = default;
-            reason = string.Empty;
 
             RaycastHit[] hits = UnityEngine.Physics.RaycastAll(ray, 100f, placementLayerMask);
-
             if (hits.Length == 0)
-            {
-                reason = $"Raycast found 0 hits. origin={FormatVector(ray.origin)}, direction={FormatVector(ray.direction)}, mask={placementLayerMask}.";
                 return false;
-            }
 
             System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-            int skippedPreview = 0;
-            int skippedSpawned = 0;
-            int skippedNormal = 0;
 
             foreach (var hit in hits)
             {
                 GameObject root = hit.collider.transform.root.gameObject;
 
                 if (previewObject != null && root == previewObject)
-                {
-                    skippedPreview++;
                     continue;
-                }
 
                 bool isSpawned = false;
-
                 foreach (var spawned in spawnedObjects)
                 {
                     if (spawned != null && root == spawned)
@@ -696,66 +476,102 @@ namespace rowemod.Mods
                     }
                 }
 
-                if (isSpawned)
-                {
-                    skippedSpawned++;
+                if (isSpawned || hit.normal.y < MinGroundNormalY)
                     continue;
-                }
-
-                if (hit.normal.y < MinGroundNormalY)
-                {
-                    skippedNormal++;
-                    continue;
-                }
 
                 validHit = hit;
                 return true;
             }
 
-            reason = $"Raycast had {hits.Length} hits but no valid placement hit. skippedPreview={skippedPreview}, skippedSpawned={skippedSpawned}, skippedSteepNormal={skippedNormal}, minNormalY={MinGroundNormalY:F4}.";
             return false;
+        }
+
+        private static void ConfigureSpawnedObject(GameObject spawned)
+        {
+            if (spawned == null)
+                return;
+
+            if (spawned.GetComponent<Rigidbody>() != null)
+            {
+                spawned.AddComponent<RecordableBody>();
+                Log.Msg($"Added RecordableBody to {spawned.name} as it has a Rigidbody component");
+            }
+
+            if (spawned.GetComponentInChildren<AimConstraint>() == null || Memory.chassisRb == null)
+                return;
+
+            Log.Msg("Object has an AimConstraint component");
+            var aimConstraints = spawned.GetComponentsInChildren<AimConstraint>();
+
+            foreach (var aimConstraint in aimConstraints)
+            {
+                aimConstraint.SetSources(new Il2CppSystem.Collections.Generic.List<ConstraintSource>());
+
+                ConstraintSource source = new ConstraintSource
+                {
+                    sourceTransform = Memory.chassisRb.transform,
+                    weight = 1.0f
+                };
+
+                Log.Msg("AimConstraint sourceTransform set to " + Memory.chassisRb.transform.name);
+
+                aimConstraint.AddSource(source);
+                aimConstraint.constraintActive = true;
+                aimConstraint.locked = true;
+                aimConstraint.enabled = false;
+                aimConstraint.enabled = true;
+            }
         }
 
         private static bool IsMouseOverUI()
         {
-            Rect screenRect = new Rect(Menu.windowRect.x, Menu.windowRect.y, Menu.windowRect.width, Menu.windowRect.height);
+            // Convert GUI space to screen space for your windowRect
+            Rect screenRect = new Rect(
+                Menu.windowRect.x,
+                Menu.windowRect.y,
+                Menu.windowRect.width,
+                Menu.windowRect.height
+            );
+            
             var mouse = Mouse.current;
-
-            if (mouse == null)
-                return false;
-
+            if (mouse == null) return false;
+            
+            // Flip Y since GUI and Screen have different origins
             float flippedY = Screen.height - mouse.position.y.ReadValue();
             Vector2 mousePos = new Vector2(mouse.position.x.ReadValue(), flippedY);
 
             return screenRect.Contains(mousePos);
         }
 
+        // Refresh references to drone and character
         private static void RefreshReferences()
         {
+            // Finding drone reference
             var droneController = GameObject.FindObjectOfType<DroneController>(true);
-
             if (droneController != null && droneController.gameObject.activeInHierarchy)
             {
                 droneTransform = droneController.transform;
+                Log.Msg($"Found active drone at: {droneTransform.gameObject.name}");
             }
             else
             {
                 droneTransform = null;
-                LogDropper("No active drone found while refreshing references.");
+                Log.Warning("No active drone found.");
             }
 
+            // Finding character reference
             if (Memory.rMbCharacter != null)
             {
                 var characterController = Memory.rMbCharacter.GetComponentInChildren<MGCharacterController>();
-
                 if (characterController != null)
                 {
                     characterTransform = characterController.transform;
+                    Log.Msg($"Found character at: {characterTransform.gameObject.name}");
                 }
                 else
                 {
                     characterTransform = Memory.rMbCharacter.transform;
-                    LogDropper("Character controller not found in rMbCharacter; using rMbCharacter transform.");
+                    Log.Warning("Character controller not found in rMbCharacter.");
                 }
             }
             else
@@ -765,93 +581,94 @@ namespace rowemod.Mods
             }
         }
 
+        // Toggle selection of a spawned object via UI and apply/remove highlighting
         private static void ToggleObjectSelection(GameObject obj)
         {
-            if (obj == null || !spawnedObjects.Contains(obj))
+            if (obj != null && spawnedObjects.Contains(obj))
             {
-                Log.Warning("Toggled object is null or not a spawned object.");
-                return;
-            }
-
-            if (selectedObjects.Contains(obj))
-            {
-                selectedObjects.Remove(obj);
-                RestoreObjectMaterials(obj);
-                LogDropper($"Deselected spawned object '{obj.name}'. selectedCount={selectedObjects.Count}.");
+                if (selectedObjects.Contains(obj))
+                {
+                    // Deselect the object
+                    selectedObjects.Remove(obj);
+                    // Restore original materials
+                    if (originalMaterialsMap.TryGetValue(obj, out var originalMaterials))
+                    {
+                        Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+                        int materialIndex = 0;
+                        foreach (Renderer renderer in renderers)
+                        {
+                            Material[] materials = renderer.materials;
+                            for (int i = 0; i < materials.Length && materialIndex < originalMaterials.Count; i++)
+                            {
+                                materials[i].CopyPropertiesFromMaterial(originalMaterials[materialIndex]);
+                                materialIndex++;
+                            }
+                            renderer.materials = materials;
+                        }
+                        originalMaterialsMap.Remove(obj);
+                        Log.Msg($"Deselected object: {obj.name}");
+                    }
+                }
+                else
+                {
+                    // Select the object
+                    selectedObjects.Add(obj);
+                    // Store original materials and apply highlight
+                    Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+                    List<Material> originalMaterials = new List<Material>();
+                    foreach (Renderer renderer in renderers)
+                    {
+                        originalMaterials.AddRange(renderer.materials);
+                        Material[] materials = renderer.materials;
+                        for (int i = 0; i < materials.Length; i++)
+                        {
+                            Material highlightMat = new Material(materials[i]);
+                            highlightMat.color = Color.green; // Highlight with green tint
+                            materials[i] = highlightMat;
+                        }
+                        renderer.materials = materials;
+                    }
+                    originalMaterialsMap[obj] = originalMaterials;
+                    Log.Msg($"Selected object: {obj.name}");
+                }
             }
             else
             {
-                selectedObjects.Add(obj);
-                HighlightObject(obj);
-                LogDropper($"Selected spawned object '{obj.name}'. selectedCount={selectedObjects.Count}.");
+                Log.Warning("Toggled object is null or not a spawned object.");
             }
         }
 
-        private static void HighlightObject(GameObject obj)
-        {
-            Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
-            List<Material> originalMaterials = new List<Material>();
-
-            foreach (Renderer renderer in renderers)
-            {
-                Material[] mats = renderer.materials;
-                originalMaterials.AddRange(mats);
-
-                Material[] highlightMats = new Material[mats.Length];
-
-                for (int i = 0; i < mats.Length; i++)
-                {
-                    Material highlightMat = new Material(mats[i]);
-                    highlightMat.color = Color.green;
-                    highlightMats[i] = highlightMat;
-                }
-
-                renderer.materials = highlightMats;
-            }
-
-            originalMaterialsMap[obj] = originalMaterials;
-        }
-
-        private static void RestoreObjectMaterials(GameObject obj)
-        {
-            if (!originalMaterialsMap.TryGetValue(obj, out var originalMaterials))
-                return;
-
-            Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
-            int materialIndex = 0;
-
-            foreach (Renderer renderer in renderers)
-            {
-                int matCount = renderer.sharedMaterials.Length;
-                Material[] mats = new Material[matCount];
-
-                for (int i = 0; i < matCount && materialIndex < originalMaterials.Count; i++, materialIndex++)
-                {
-                    mats[i] = originalMaterials[materialIndex];
-                }
-
-                renderer.sharedMaterials = mats;
-            }
-
-            originalMaterialsMap.Remove(obj);
-        }
-
+        // Clear all selected objects and restore their materials
         private static void ClearSelection()
         {
             foreach (var obj in selectedObjects.ToList())
             {
-                if (obj != null)
-                    RestoreObjectMaterials(obj);
+                if (obj != null && originalMaterialsMap.TryGetValue(obj, out var originalMaterials))
+                {
+                    Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+                    int materialIndex = 0;
+                    foreach (Renderer renderer in renderers)
+                    {
+                        Material[] materials = renderer.materials;
+                        for (int i = 0; i < materials.Length && materialIndex < originalMaterials.Count; i++)
+                        {
+                            materials[i].CopyPropertiesFromMaterial(originalMaterials[materialIndex]);
+                            materialIndex++;
+                        }
+                        renderer.materials = materials;
+                    }
+                    Log.Msg($"Cleared selection for object: {obj.name}");
+                }
             }
-
             selectedObjects.Clear();
             originalMaterialsMap.Clear();
 
+            // Reset transform offsets when clearing selection
             positionOffset = Vector3.zero;
             rotationOffset = Vector3.zero;
-            LogDropper("Selection cleared.");
         }
 
+        // Delete all selected objects
         private static void DeleteSelectedObjects()
         {
             if (selectedObjects.Count == 0)
@@ -860,129 +677,309 @@ namespace rowemod.Mods
                 return;
             }
 
+            int deletedCount = 0;
             foreach (var obj in selectedObjects.ToList())
             {
                 if (obj != null && spawnedObjects.Contains(obj))
                 {
-                    Object.Destroy(obj);
+                    UnityEngine.Object.Destroy(obj);
                     spawnedObjects.Remove(obj);
                     originalMaterialsMap.Remove(obj);
+                    deletedCount++;
+                    Log.Msg($"Deleted object: {obj.name}");
+                }
+            }
+            selectedObjects.Clear();
+            Log.Msg($"Deleted {deletedCount} selected objects.");
+
+            // Reset transform offsets after deletion
+            positionOffset = Vector3.zero;
+            rotationOffset = Vector3.zero;
+        }
+
+
+        // Draw the UI for the Dropper tab
+        public static void DrawDropperTab()
+        {
+            // Update toggle styles if menu accent color has changed
+            InitializeToggleStyles();
+
+            // Displaying header for Object Dropper tab
+            dropperExpanded = Menu.ModernFoldout("Object Dropper", dropperExpanded);
+            if (!dropperExpanded) return;
+
+            if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames.Count == 0)
+            {
+                GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
+                return;
+            }
+
+            // Adding prefab buttons
+            GUILayout.Label("Available Prefabs:", Menu.labelStyle);
+            foreach (string prefabName in Memory.dropperPrefabNames)
+            {
+                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
+                {
+                    selectedPrefabName = prefabName;
+                    Log.Msg($"Selected prefab: {selectedPrefabName}");
+
+                    int index = Memory.dropperPrefabNames.IndexOf(prefabName);
+                    if (index >= 0 && index < Memory.dropperPrefabs.Count)
+                    {
+                        var prefab = Memory.dropperPrefabs[index];
+                        CreatePreviewMaterial();
+                        BuildPreviewObject(prefab);
+                    }
                 }
             }
 
-            selectedObjects.Clear();
-            positionOffset = Vector3.zero;
-            rotationOffset = Vector3.zero;
-            LogDropper($"Deleted selected objects. remainingSpawned={spawnedObjects.Count}.");
+            // Moved Delete buttons to be vertically placed right of Spawned Objects list
+            GUILayout.Space(10);
+            GUILayout.BeginHorizontal();
+
+            // Left column: Spawned Objects list
+            GUILayout.BeginVertical(GUILayout.Width(500f));
+            GUILayout.Label("Spawned Objects:", Menu.labelStyle);
+            if (spawnedObjects.Count == 0)
+            {
+                GUILayout.Label("No objects spawned.", Menu.labelStyle);
+            }
+            else
+            {
+                // Clean up any nulls in both lists just in case
+                spawnedObjects.RemoveAll(o => o == null);
+                selectedObjects.RemoveAll(o => o == null);
+
+                for (int i = 0; i < spawnedObjects.Count; i++)
+                {
+                    GameObject obj = spawnedObjects[i];
+                    if (obj == null) continue;
+
+                    string displayName = "(Unknown)";
+
+                    if (Memory.dropperPrefabNames != null)
+                    {
+                        displayName = Memory.dropperPrefabNames
+                            .FirstOrDefault(name => obj.name.Contains(name));
+                    }
+
+                    if (string.IsNullOrEmpty(displayName))
+                        displayName = obj.name;
+
+                    string label = $"Object {i + 1}: {displayName}";
+
+                    bool isSelected = selectedObjects.Contains(obj);
+
+                    // Fallback if styles haven't been built for some reason
+                    GUIStyle toggleStyle =
+                        (isSelected ? toggleOnStyle : toggleOffStyle) ?? Menu.highQualityButtonStyle;
+
+                    if (GUILayout.Button(label, toggleStyle,
+                            GUILayout.Width(500f), GUILayout.Height(20f)))
+                    {
+                        ToggleObjectSelection(obj);
+                    }
+                }
+            }
+            GUILayout.EndVertical();
+
+            // Right column: Delete buttons stacked vertically, right-aligned and spaced down
+            GUILayout.BeginVertical(GUILayout.Width(300f));
+            GUILayout.Space(30); // Space to align with first Spawned Objects toggle button
+            GUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace(); // Right-align buttons
+            GUILayout.BeginVertical();
+            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
+            {
+                DeleteAllSpawnedObjects();
+            }
+            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
+            {
+                DeleteSelectedObjects();
+            }
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+
+            GUILayout.EndHorizontal();
+
+            // Adding transform controls for selected objects
+            if (selectedObjects.Count > 0)
+            {
+                GUILayout.Space(10);
+                transformControlsExpanded = Menu.ModernFoldout("Transform Controls", transformControlsExpanded);
+
+                if (transformControlsExpanded)
+                {
+                    // Position sliders with live updates
+                    Vector3 prevPositionOffset = positionOffset;
+
+                    Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
+                    if (positionOffset.x != prevPositionOffset.x)
+                    {
+                        ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
+                        if (positionOffset.x == 0f) positionOffset.x = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Position X by {positionOffset.x - prevPositionOffset.x} for selected objects.");
+                    }
+
+                    prevPositionOffset = positionOffset;
+                    Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
+                    if (positionOffset.y != prevPositionOffset.y)
+                    {
+                        ApplyTransformOffsets(new Vector3(0, positionOffset.y - prevPositionOffset.y, 0), Vector3.zero);
+                        if (positionOffset.y == 0f) positionOffset.y = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Position Y by {positionOffset.y - prevPositionOffset.y} for selected objects.");
+                    }
+
+                    prevPositionOffset = positionOffset;
+                    Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
+                    if (positionOffset.z != prevPositionOffset.z)
+                    {
+                        ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);
+                        if (positionOffset.z == 0f) positionOffset.z = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Position Z by {positionOffset.z - prevPositionOffset.z} for selected objects.");
+                    }
+                    GUILayout.Space(5);
+
+                    // Rotation sliders with live updates
+                    Vector3 prevRotationOffset = rotationOffset;
+                    Menu.ModernSlider("Rotation X", ref rotationOffset.x, -180f, 180f);
+                    if (rotationOffset.x != prevRotationOffset.x)
+                    {
+                        ApplyTransformOffsets(Vector3.zero, new Vector3(rotationOffset.x - prevRotationOffset.x, 0, 0));
+                        if (rotationOffset.x == 0f) rotationOffset.x = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Rotation X by {rotationOffset.x - prevRotationOffset.x} for selected objects.");
+                    }
+
+                    prevRotationOffset = rotationOffset;
+                    Menu.ModernSlider("Rotation Y", ref rotationOffset.y, -180f, 180f);
+                    if (rotationOffset.y != prevRotationOffset.y)
+                    {
+                        ApplyTransformOffsets(Vector3.zero, new Vector3(0, rotationOffset.y - prevRotationOffset.y, 0));
+                        if (rotationOffset.y == 0f) rotationOffset.y = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Rotation Y by {rotationOffset.y - prevRotationOffset.y} for selected objects.");
+                    }
+
+                    prevRotationOffset = rotationOffset;
+                    Menu.ModernSlider("Rotation Z", ref rotationOffset.z, -180f, 180f);
+                    if (rotationOffset.z != prevRotationOffset.z)
+                    {
+                        ApplyTransformOffsets(Vector3.zero, new Vector3(0, 0, rotationOffset.z - prevRotationOffset.z));
+                        if (rotationOffset.z == 0f) rotationOffset.z = 0f; // Reset to zero if slider is at zero
+                        Log.Msg($"Live-updated Rotation Z by {rotationOffset.z - prevRotationOffset.z} for selected objects.");
+                    }
+                    GUILayout.Space(5);
+                }
+            }
+
+            // Displaying currently selected prefab and number of selected objects
+            GUILayout.Label($"Current Selected Prefab: {(selectedPrefabName ?? "None")}", Menu.labelStyle);
+            GUILayout.Label($"Selected Objects: {selectedObjects.Count}", Menu.labelStyle);
         }
 
+        // Reset the Dropper tab to default state
+        public static void ResetTab()
+        {
+            // Resetting selected prefab and clear selections
+            selectedPrefabName = null;
+            ClearSelection();
+            Config.misc.disableDroneCollider = false;
+            Log.Msg("Object Dropper tab reset: Selected prefab and objects cleared.");
+        }
+
+        // Delete all spawned objects
         private static void DeleteAllSpawnedObjects()
         {
-            int deletedCount = spawnedObjects.Count;
+            // Clear current selection to avoid referencing destroyed objects
             ClearSelection();
 
+            // Destroying all tracked spawned objects
+            int count = spawnedObjects.Count;
             foreach (var obj in spawnedObjects)
             {
                 if (obj != null)
-                    Object.Destroy(obj);
+                {
+                    UnityEngine.Object.Destroy(obj);
+                }
             }
-
             spawnedObjects.Clear();
-            LogDropper($"Deleted all spawned objects. deletedCount={deletedCount}.");
+            Log.Msg($"Deleted {count} spawned objects.");
         }
 
-        private static void ApplyTransformOffsets(Vector3 posDelta, Vector3 rotDelta)
+        // Apply transform offsets to all selected objects
+        private static void ApplyTransformOffsets(Vector3 posOffset, Vector3 rotOffset)
         {
+            if (selectedObjects.Count == 0)
+            {
+                return;
+            }
+
             foreach (var obj in selectedObjects)
             {
-                if (obj == null)
-                    continue;
+                if (obj != null)
+                {
+                    // Apply position offset
+                    obj.transform.position += posOffset;
 
-                obj.transform.position += posDelta;
-                obj.transform.Rotate(rotDelta, Space.World);
+                    // Apply rotation offset (in Euler angles)
+                    Vector3 currentEuler = obj.transform.eulerAngles;
+                    currentEuler += rotOffset;
+                    obj.transform.eulerAngles = currentEuler;
+                }
             }
         }
 
         private static void CreatePreviewMaterial()
         {
-            if (previewMaterial != null)
-                return;
+            if (previewMaterial != null) return;
 
             Shader shader = Shader.Find("HDRP/Lit") ?? Shader.Find("Standard");
             if (shader == null)
             {
-                Log.Warning("[Dropper] Could not find HDRP/Lit or Standard shader for preview.");
+                Log.Error("Could not find HDRP/Lit or Standard shader. Cannot create preview material.");
                 return;
             }
 
             previewMaterial = new Material(shader);
-            ConfigurePreviewMaterial(previewMaterial);
+
+            if (previewMaterial.HasProperty("_SurfaceType"))
+                previewMaterial.SetFloat("_SurfaceType", 1f);
+
+            if (previewMaterial.HasProperty("_BlendMode"))
+                previewMaterial.SetFloat("_BlendMode", 0f);
+
+            if (previewMaterial.HasProperty("_ZWrite"))
+                previewMaterial.SetFloat("_ZWrite", 0f);
+
+            if (previewMaterial.HasProperty("_AlphaCutoffEnable"))
+                previewMaterial.SetFloat("_AlphaCutoffEnable", 0f);
+
+            if (previewMaterial.HasProperty("_CullMode"))
+                previewMaterial.SetFloat("_CullMode", 2f);
+
+            if (previewMaterial.HasProperty("_SrcBlend"))
+                previewMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+
+            if (previewMaterial.HasProperty("_DstBlend"))
+                previewMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+
+            previewMaterial.DisableKeyword("_ALPHATEST_ON");
+            previewMaterial.EnableKeyword("_ALPHABLEND_ON");
+            previewMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             SetPreviewColor(true);
-            LogDropper($"Created preview material. shader={(previewMaterial.shader != null ? previewMaterial.shader.name : "null")}.");
-        }
-
-        private static void ConfigurePreviewMaterial(Material material)
-        {
-            if (material == null)
-                return;
-
-            try
-            {
-                if (material.HasProperty("_SurfaceType"))
-                    material.SetFloat("_SurfaceType", 1f);
-
-                if (material.HasProperty("_BlendMode"))
-                    material.SetFloat("_BlendMode", 0f);
-
-                if (material.HasProperty("_ZWrite"))
-                    material.SetFloat("_ZWrite", 0f);
-
-                if (material.HasProperty("_AlphaCutoffEnable"))
-                    material.SetFloat("_AlphaCutoffEnable", 0f);
-
-                if (material.HasProperty("_CullMode"))
-                    material.SetFloat("_CullMode", 2f);
-
-                if (material.HasProperty("_EmissiveExposureWeight"))
-                    material.SetFloat("_EmissiveExposureWeight", 0f);
-
-                if (material.HasProperty("_SrcBlend"))
-                    material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-
-                if (material.HasProperty("_DstBlend"))
-                    material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-
-                material.DisableKeyword("_ALPHATEST_ON");
-                material.EnableKeyword("_ALPHABLEND_ON");
-                material.EnableKeyword("_EMISSION");
-                material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            }
-            catch (Exception ex)
-            {
-                Log.Warning($"[Dropper] Failed to configure preview material: {ex.Message}");
-            }
         }
 
         private static void BuildPreviewObject(GameObject prefab)
         {
             if (previewObject != null)
-                Object.Destroy(previewObject);
+                UnityEngine.Object.Destroy(previewObject);
 
-            previewObject = Object.Instantiate(prefab);
-            previewObject.name = "Placement_Preview";
+            previewObject = UnityEngine.Object.Instantiate(prefab);
+            previewObject.name = "[Preview] " + prefab.name;
             previewBottomOffset = GetBottomOffset(previewObject);
             canPlacePreview = false;
 
-            if (previewObject.TryGetComponent<Rigidbody>(out var rb))
-                Object.Destroy(rb);
-
-            var colliders = previewObject.GetComponentsInChildren<Collider>();
-            foreach (var col in colliders)
-                Object.Destroy(col);
-
-            var renderers = previewObject.GetComponentsInChildren<Renderer>();
-            foreach (var renderer in renderers)
+            foreach (var renderer in previewObject.GetComponentsInChildren<Renderer>())
             {
                 var mats = renderer.materials;
 
@@ -992,23 +989,31 @@ namespace rowemod.Mods
                 renderer.materials = mats;
             }
 
-            LogDropper($"Built preview for '{prefab?.name ?? "null"}'. renderers={renderers.Length}, removedColliders={colliders.Length}.");
-        }
-
-        private static void SetLayerRecursively(GameObject obj, int layer)
-        {
-            obj.layer = layer;
-
-            for (int i = 0; i < obj.transform.childCount; i++)
+            // Disable physics so preview doesn't move or collide
+            foreach (var rb in previewObject.GetComponentsInChildren<Rigidbody>())
             {
-                Transform child = obj.transform.GetChild(i);
-                SetLayerRecursively(child.gameObject, layer);
+                UnityEngine.Object.Destroy(rb);
             }
+
+            // Disable all colliders to prevent raycast interference
+            foreach (var collider in previewObject.GetComponentsInChildren<Collider>())
+            {
+                UnityEngine.Object.Destroy(collider);
+            }
+
+            int previewLayer = 0;
+            previewObject.layer = previewLayer;
+            foreach (Transform child in previewObject.GetComponentsInChildren<Transform>(true))
+            {
+                child.gameObject.layer = previewLayer;
+            }
+
+            SetPreviewColor(true);
         }
 
         public static void DrawNotPlaceableWarning()
         {
-            if (!IsDropperTabActive || previewObject == null || !previewObject.activeSelf || canPlacePreview)
+            if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper || previewObject == null || !previewObject.activeSelf || canPlacePreview)
                 return;
 
             if (notPlaceableWarningStyle == null)
@@ -1030,238 +1035,11 @@ namespace rowemod.Mods
             );
         }
 
-        public static void DrawDropperTab()
+        public static bool ShouldBlockDroneShot()
         {
-            InitializeToggleStyles();
-
-            dropperExpanded = Menu.ModernFoldout("Object Dropper", dropperExpanded);
-
-            if (!dropperExpanded)
-                return;
-
-            if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames == null || Memory.dropperPrefabNames.Count == 0)
-            {
-                GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
-                LogNoPrefabsAvailable();
-                return;
-            }
-
-            GUILayout.Label("Available Prefabs:", Menu.labelStyle);
-
-            foreach (string prefabName in Memory.dropperPrefabNames)
-            {
-                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
-                {
-                    selectedPrefabName = prefabName;
-                    previewYRotation = 0f;
-                    previewDistanceOffset = 0f;
-                    canPlacePreview = false;
-
-                    int index = Memory.dropperPrefabNames.IndexOf(prefabName);
-                    LogDropper($"Selected prefab button '{prefabName}'. index={index}, prefabs={Memory.dropperPrefabs?.Count ?? 0}, names={Memory.dropperPrefabNames?.Count ?? 0}.");
-
-                    if (index >= 0 && index < Memory.dropperPrefabs.Count)
-                    {
-                        var prefab = Memory.dropperPrefabs[index];
-                        CreatePreviewMaterial();
-
-                        if (previewMaterial != null)
-                        {
-                            BuildPreviewObject(prefab);
-                            RefreshRuntimeReferences(true);
-                            nextPreviewUpdateTime = 0f;
-                        }
-                    }
-                    else
-                    {
-                        Log.Warning($"[Dropper] Selected prefab index was invalid. name='{prefabName}', index={index}.");
-                    }
-                }
-            }
-
-            GUILayout.Space(10);
-            GUILayout.BeginHorizontal();
-
-            GUILayout.BeginVertical(GUILayout.Width(500f));
-            GUILayout.Label("Spawned Objects:", Menu.labelStyle);
-
-            if (spawnedObjects.Count == 0)
-            {
-                GUILayout.Label("No objects spawned.", Menu.labelStyle);
-            }
-            else
-            {
-                for (int i = 0; i < spawnedObjects.Count; i++)
-                {
-                    GameObject obj = spawnedObjects[i];
-
-                    if (obj == null)
-                        continue;
-
-                    string displayName = Memory.dropperPrefabNames?.FirstOrDefault(name => obj.name.Contains(name));
-
-                    if (string.IsNullOrEmpty(displayName))
-                        displayName = obj.name;
-
-                    string label = $"Object {i + 1}: {displayName}";
-                    bool isSelected = selectedObjects.Contains(obj);
-                    GUIStyle toggleStyle = (isSelected ? toggleOnStyle : toggleOffStyle) ?? Menu.highQualityButtonStyle;
-
-                    if (GUILayout.Button(label, toggleStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
-                    {
-                        ToggleObjectSelection(obj);
-                    }
-                }
-            }
-
-            GUILayout.EndVertical();
-
-            GUILayout.BeginVertical(GUILayout.Width(300f));
-            GUILayout.Space(30);
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            GUILayout.BeginVertical();
-
-            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
-            {
-                DeleteAllSpawnedObjects();
-            }
-
-            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
-            {
-                DeleteSelectedObjects();
-            }
-
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-
-            GUILayout.EndHorizontal();
-
-            if (selectedObjects.Count > 0)
-            {
-                GUILayout.Space(10);
-                transformControlsExpanded = Menu.ModernFoldout("Transform Controls", transformControlsExpanded);
-
-                if (transformControlsExpanded)
-                {
-                    Vector3 prev = positionOffset;
-
-                    Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
-
-                    if (positionOffset.x != prev.x)
-                        ApplyTransformOffsets(new Vector3(positionOffset.x - prev.x, 0, 0), Vector3.zero);
-
-                    prev = positionOffset;
-
-                    Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
-
-                    if (positionOffset.y != prev.y)
-                        ApplyTransformOffsets(new Vector3(0, positionOffset.y - prev.y, 0), Vector3.zero);
-
-                    prev = positionOffset;
-
-                    Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
-
-                    if (positionOffset.z != prev.z)
-                        ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prev.z), Vector3.zero);
-
-                    GUILayout.Space(5);
-
-                    Vector3 prevRot = rotationOffset;
-
-                    Menu.ModernSlider("Rotation X", ref rotationOffset.x, -180f, 180f);
-
-                    if (rotationOffset.x != prevRot.x)
-                        ApplyTransformOffsets(Vector3.zero, new Vector3(rotationOffset.x - prevRot.x, 0, 0));
-
-                    prevRot = rotationOffset;
-
-                    Menu.ModernSlider("Rotation Y", ref rotationOffset.y, -180f, 180f);
-
-                    if (rotationOffset.y != prevRot.y)
-                        ApplyTransformOffsets(Vector3.zero, new Vector3(0, rotationOffset.y - prevRot.y, 0));
-
-                    prevRot = rotationOffset;
-
-                    Menu.ModernSlider("Rotation Z", ref rotationOffset.z, -180f, 180f);
-
-                    if (rotationOffset.z != prevRot.z)
-                        ApplyTransformOffsets(Vector3.zero, new Vector3(0, 0, rotationOffset.z - prevRot.z));
-                }
-            }
-        }
-
-        private static void LogDropper(string message)
-        {
-            if (!DebugLoggingEnabled)
-                return;
-
-            Log.Msg($"[Dropper] {message}");
-        }
-
-        private static void LogDropperState(bool dropperActive, bool placementActive, bool hasCamera, bool hasGamepad)
-        {
-            bool hasSelection = !string.IsNullOrEmpty(selectedPrefabName);
-
-            if (hasLoggedDropperState
-                && lastLoggedDropperActive == dropperActive
-                && lastLoggedPlacementActive == placementActive
-                && lastLoggedHasCamera == hasCamera
-                && lastLoggedHasGamepad == hasGamepad
-                && lastLoggedHasSelection == hasSelection
-                && lastLoggedCanPlacePreview == canPlacePreview)
-            {
-                return;
-            }
-
-            hasLoggedDropperState = true;
-            lastLoggedDropperActive = dropperActive;
-            lastLoggedPlacementActive = placementActive;
-            lastLoggedHasCamera = hasCamera;
-            lastLoggedHasGamepad = hasGamepad;
-            lastLoggedHasSelection = hasSelection;
-            lastLoggedCanPlacePreview = canPlacePreview;
-
-            LogDropper($"State changed: tabActive={dropperActive}, placementActive={placementActive}, camera={hasCamera}, gamepad={hasGamepad}, selected='{selectedPrefabName ?? "None"}', preview={(previewObject != null)}, canPlace={canPlacePreview}, spawned={spawnedObjects.Count}.");
-        }
-
-        private static void LogPlacementFailure(string reason)
-        {
-            string previousReason = lastPlacementFailureReason;
-            lastPlacementFailureReason = reason;
-
-            if (!DebugLoggingEnabled)
-                return;
-
-            if (Time.unscaledTime < nextPlacementFailureLogTime && reason == previousReason)
-                return;
-
-            nextPlacementFailureLogTime = Time.unscaledTime + 1f;
-            LogDropper($"Preview not placeable: {reason}");
-        }
-
-        private static void LogPlacementRecovered()
-        {
-            if (string.IsNullOrEmpty(lastPlacementFailureReason))
-                return;
-
-            LogDropper("Preview placement recovered.");
-            lastPlacementFailureReason = null;
-        }
-
-        private static void LogNoPrefabsAvailable()
-        {
-            if (Time.unscaledTime < nextNoPrefabsLogTime)
-                return;
-
-            nextNoPrefabsLogTime = Time.unscaledTime + 5f;
-            LogDropper($"No dropper prefabs available. prefabs={Memory.dropperPrefabs?.Count ?? 0}, names={Memory.dropperPrefabNames?.Count ?? 0}, loadedBundles={Memory.loadedBundles?.Count ?? 0}.");
-        }
-
-        private static string FormatVector(Vector3 value)
-        {
-            return $"({value.x:F2}, {value.y:F2}, {value.z:F2})";
+            return Menu.isOpen
+                   && Menu.currentTab == Menu.Tab.Dropper
+                   && !string.IsNullOrEmpty(selectedPrefabName);
         }
     }
 }

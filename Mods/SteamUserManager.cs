@@ -1,3 +1,4 @@
+using System;
 using Il2CppSteamworks;
 using Newtonsoft.Json.Linq;
 using rowemod.Utils;
