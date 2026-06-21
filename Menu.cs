@@ -754,7 +754,9 @@ namespace rowemod
             float navHeight = Mathf.Max(120f, windowRect.height - navTop - UiOuterPadding);
             Rect navRect = new Rect(UiOuterPadding, navTop, navWidth, navHeight);
             float totalTabsHeight = (_visibleTabs.Length * UiNavButtonHeight) + ((_visibleTabs.Length - 1) * UiTabSpacing);
-            Rect viewRect = new Rect(0f, 0f, navWidth, Mathf.Max(totalTabsHeight, navRect.height));
+            bool tabsOverflow = totalTabsHeight > navRect.height;
+            float tabWidth = tabsOverflow ? navWidth - 14f : navWidth;
+            Rect viewRect = new Rect(0f, 0f, tabWidth, Mathf.Max(totalTabsHeight, navRect.height));
 
             if (Event.current.type == EventType.ScrollWheel && navRect.Contains(Event.current.mousePosition))
             {
@@ -762,14 +764,14 @@ namespace rowemod
                 Event.current.Use();
             }
 
-            _tabScrollPosition = GUI.BeginScrollView(navRect, _tabScrollPosition, viewRect, false, false);
+            _tabScrollPosition = GUI.BeginScrollView(navRect, _tabScrollPosition, viewRect, false, tabsOverflow);
             _tabScrollPosition.y = Mathf.Clamp(_tabScrollPosition.y, 0f, Mathf.Max(0f, viewRect.height - navRect.height));
 
             float tabY = 0f;
             for (int i = 0; i < _visibleTabs.Length; i++)
             {
                 var (label, tab) = _visibleTabs[i];
-                Rect tabRect = new Rect(0f, tabY, navWidth, UiNavButtonHeight);
+                Rect tabRect = new Rect(0f, tabY, tabWidth, UiNavButtonHeight);
                 bool isSelected = currentTab == tab;
 
                 if (GUI.Button(tabRect, label, isSelected ? activeTabButtonStyle : tabButtonStyle))

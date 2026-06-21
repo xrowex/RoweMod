@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using MelonLoader;
 using static rowemod.Menu;
 using static rowemod.Config;
@@ -7,6 +8,8 @@ using rowemod.Utils;
 using rowemod.Mods;
 using Log = rowemod.Utils.Log;
 using System.Collections;
+using System.IO;
+using System.Linq;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppMashBox.Core.Runtime.Events;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
@@ -14,13 +17,13 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.4", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.5", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.0.4";
+        public const string ModVersion = "3.0.5";
         private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
