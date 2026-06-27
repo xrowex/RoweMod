@@ -25,10 +25,11 @@ namespace rowemod
     public class Main : MelonMod
     {
         public const string ModVersion = "3.0.7";
-        private static readonly bool EnablePieMenu = false;
+        private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
+        private bool _replayInputPatchApplied;
         private static bool _showDisabledMessage = false;
         private static float _disabledMessageEndTime = 0f;
         private static bool _startupAccessGranted = false;
@@ -236,6 +237,8 @@ namespace rowemod
                 //load rowe logo if not loaded
                 if(!isLogoLoaded)
                     MelonCoroutines.Start(LoadRoweLogo());
+
+                PieMenu.PreloadAssets();
             
                 // Reload assets from cached bundles
                 if (Memory.loadedBundles.Count > 0)
@@ -264,10 +267,20 @@ namespace rowemod
 
             if (playableSceneLoaded && rMbCharacter)
             {
+                if (!_replayInputPatchApplied)
+                {
+                    ReplayInputPatch.ApplyLatePatch(HarmonyInstance);
+                    _replayInputPatchApplied = true;
+                }
+
                 if (EnablePieMenu)
                 {
                     PieMenu.Update();
                 }
+
+                ReplayInputPatch.Update();
+
+                ControllerMenuInput.Update();
 
                 if (Config.challengeRuntimeSettings.enabled)
                 {
@@ -554,7 +567,8 @@ namespace rowemod
         public override void OnDeinitializeMelon()
         {
             rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
-            PieMenu.Cleanup();
+            if (EnablePieMenu)
+                PieMenu.Cleanup();
         }
 
         private static void LogRuntimeDiagnosticsSettings()
@@ -599,33 +613,58 @@ namespace rowemod
 
                     
                 _nextToggleTime = Time.unscaledTime + 1f; // 1 second cooldown
-
-                isOpen = !isOpen;
-
-                try
-                {
-                    if (isOpen)
-                    {
-                        Log.Msg("Menu toggled on.");
-                        Mods.Physics.Update();
-                        Mods.Misc.Update();
-                        Cursor.visible = true;
-                        Cursor.lockState = CursorLockMode.None;
-                    }
-                    else
-                    {
-                        GrindPoseEditor.OnGrindsTabExited();
-                        Cursor.visible = false;
-                        Cursor.lockState = CursorLockMode.Confined;
-                        Config.Save();
-                    }
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
+                ToggleRoweModMenu();
             }
         }
+
+        public static void OpenRoweModMenu()
+        {
+            SetRoweModMenuOpen(true);
+        }
+
+        public static void CloseRoweModMenu()
+        {
+            SetRoweModMenuOpen(false);
+        }
+
+        public static void ToggleRoweModMenu()
+        {
+            SetRoweModMenuOpen(!isOpen);
+        }
+
+        private static void SetRoweModMenuOpen(bool open)
+        {
+            if (isOpen == open)
+                return;
+
+            isOpen = open;
+
+            try
+            {
+                if (isOpen)
+                {
+                    Log.Msg("Menu toggled on.");
+                    Mods.Physics.Update();
+                    Mods.Misc.Update();
+                    Cursor.visible = true;
+                    Cursor.lockState = CursorLockMode.None;
+                    ControllerMenuInput.SetGameplayInputBlocked(true);
+                }
+                else
+                {
+                    ControllerMenuInput.SetGameplayInputBlocked(false);
+                    GrindPoseEditor.OnGrindsTabExited();
+                    Cursor.visible = false;
+                    Cursor.lockState = CursorLockMode.Confined;
+                    Config.Save();
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e);
+            }
+        }
+
         void CreateModDirectories()
         {
             // Main mod folder
