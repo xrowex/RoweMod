@@ -631,6 +631,73 @@ namespace rowemod
             return currentTab.ToString();
         }
 
+        public static void SelectNextVisibleTab()
+        {
+            SelectVisibleTab(1);
+        }
+
+        public static void SelectPreviousVisibleTab()
+        {
+            SelectVisibleTab(-1);
+        }
+
+        public static void AdjustControllerScroll(float delta)
+        {
+            scrollOffset += delta;
+            scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
+        }
+
+        private static void SelectVisibleTab(int direction)
+        {
+            if (_visibleTabs.Length == 0)
+                return;
+
+            int currentIndex = GetVisibleTabIndex(currentTab);
+            if (currentIndex < 0)
+                currentIndex = 0;
+
+            int nextIndex = (currentIndex + direction + _visibleTabs.Length) % _visibleTabs.Length;
+            SetCurrentTab(_visibleTabs[nextIndex].tab);
+            Log.Msg($"[ControllerMenu] Tab {currentIndex}->{nextIndex}: {_visibleTabs[nextIndex].label}.");
+        }
+
+        private static int GetVisibleTabIndex(Tab tab)
+        {
+            for (int i = 0; i < _visibleTabs.Length; i++)
+            {
+                if (_visibleTabs[i].tab == tab)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static void EnsureCurrentTabVisible()
+        {
+            int currentIndex = GetVisibleTabIndex(currentTab);
+            if (currentIndex < 0)
+                return;
+
+            float navTop = UiTitleBarHeight + UiLogoAreaHeight + UiOuterPadding;
+            float navHeight = Mathf.Max(120f, windowRect.height - navTop - UiOuterPadding);
+            float totalTabsHeight = (_visibleTabs.Length * UiNavButtonHeight) + ((_visibleTabs.Length - 1) * UiTabSpacing);
+            float maxScroll = Mathf.Max(0f, totalTabsHeight - navHeight);
+
+            float tabTop = currentIndex * (UiNavButtonHeight + UiTabSpacing);
+            float tabBottom = tabTop + UiNavButtonHeight;
+
+            if (tabTop < _tabScrollPosition.y)
+            {
+                _tabScrollPosition.y = tabTop;
+            }
+            else if (tabBottom > _tabScrollPosition.y + navHeight)
+            {
+                _tabScrollPosition.y = tabBottom - navHeight;
+            }
+
+            _tabScrollPosition.y = Mathf.Clamp(_tabScrollPosition.y, 0f, maxScroll);
+        }
+
         private static void DrawSidebar()
         {
             Rect sidebarRect = new Rect(0f, 0f, UiSidebarWidth, windowRect.height);
@@ -1362,6 +1429,7 @@ namespace rowemod
                 scrollOffset = 0;
                 scrollViewHeight = 10000f;
                 currentTab = newTab;
+                EnsureCurrentTabVisible();
             }
         }
 
