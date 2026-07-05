@@ -139,14 +139,12 @@ namespace rowemod.Mods
 
         public static void DrawTab()
         {
-            GUILayout.Label("Visual-only bike posing", Menu.sectionHeaderStyle);
-            GUILayout.Label(
-                "Creates a clean copy containing only transforms, meshes, renderers, and the bike's current materials.",
-                Menu.subtleLabelStyle);
-            GUILayout.Space(10f);
+            Menu.BeginPane(
+                "Bike Snapshot",
+                "Creates a clean visual copy with transforms, meshes, renderers, and current bike materials.");
 
-            GUILayout.BeginHorizontal();
-            if (Menu.ModernButton(isPlacing ? "Cancel Placement" : "Place Current Bike", 180f))
+            Menu.BeginToolbar();
+            if (Menu.PrimaryButton(isPlacing ? "Cancel Placement" : "Place Current Bike", GUILayout.Width(180f), GUILayout.Height(26f)))
             {
                 if (isPlacing)
                     CancelPlacement();
@@ -154,40 +152,41 @@ namespace rowemod.Mods
                     BeginPlacement();
             }
 
-            if (posedBike != null && Menu.ModernButton("Refresh Visuals", 150f))
+            if (posedBike != null && Menu.SecondaryButton("Refresh Visuals", GUILayout.Width(150f), GUILayout.Height(26f)))
                 RefreshVisualClone();
 
-            if (posedBike != null && Menu.ModernButton("Delete Bike", 120f))
+            if (posedBike != null && Menu.DangerButton("Delete Bike", GUILayout.Width(120f), GUILayout.Height(26f)))
                 DeleteBike();
-            GUILayout.EndHorizontal();
+            Menu.EndToolbar();
 
             GUILayout.Space(8f);
-            GUILayout.Label(statusText, Menu.subtleLabelStyle);
+            GUILayout.Label(statusText, Menu.UiMutedWrappedStyle);
+            Menu.EndPane();
 
             if (posedBike == null)
                 return;
 
-            GUILayout.Space(14f);
-            GUILayout.Label("Gizmo", Menu.sectionHeaderStyle);
-            GUILayout.BeginHorizontal();
-            if (Menu.ModernButton(gizmoMode == GizmoMode.Move ? "Move (Active)" : "Move", 140f))
+            Menu.BeginPane("Gizmo", "Choose how the placed visual bike should be manipulated.");
+            Menu.BeginToolbar();
+            if (Menu.PillButton(gizmoMode == GizmoMode.Move ? "Move (Active)" : "Move", gizmoMode == GizmoMode.Move, GUILayout.Width(140f), GUILayout.Height(26f)))
             {
                 gizmoMode = GizmoMode.Move;
                 EndDrag();
             }
 
-            if (Menu.ModernButton(gizmoMode == GizmoMode.Rotate ? "Rotate (Active)" : "Rotate", 140f))
+            if (Menu.PillButton(gizmoMode == GizmoMode.Rotate ? "Rotate (Active)" : "Rotate", gizmoMode == GizmoMode.Rotate, GUILayout.Width(140f), GUILayout.Height(26f)))
             {
                 gizmoMode = GizmoMode.Rotate;
                 EndDrag();
             }
-            GUILayout.EndHorizontal();
+            Menu.EndToolbar();
 
             Menu.ModernToggle("Local Axes", ref useLocalAxes, "BikePoseLocalAxes");
             Menu.ModernSlider("Gizmo Size", ref gizmoScale, 0.5f, 2f, "BikePoseGizmoScale");
+            Menu.EndPane();
 
-            GUILayout.Space(12f);
-            GUILayout.Label("Position", Menu.sectionHeaderStyle);
+            Menu.BeginPane("Transform", "Fine tune the placed bike's world position and rotation.");
+            Menu.DrawSectionTitle("Position");
             Vector3 position = posedBike.transform.position;
             float positionX = position.x;
             float positionY = position.y;
@@ -200,7 +199,7 @@ namespace rowemod.Mods
                 posedBike.transform.position = editedPosition;
 
             GUILayout.Space(8f);
-            GUILayout.Label("Rotation", Menu.sectionHeaderStyle);
+            Menu.DrawSectionTitle("Rotation");
             Vector3 rotation = NormalizeEuler(posedBike.transform.eulerAngles);
             float rotationX = rotation.x;
             float rotationY = rotation.y;
@@ -212,8 +211,15 @@ namespace rowemod.Mods
             if ((editedRotation - rotation).sqrMagnitude > 0.000001f)
                 posedBike.transform.rotation = Quaternion.Euler(editedRotation);
 
-            GUILayout.Space(12f);
-            GUILayout.Label("Part Posing", Menu.sectionHeaderStyle);
+            Menu.BeginToolbar();
+            if (Menu.SecondaryButton("Snap To Ground", GUILayout.Width(150f), GUILayout.Height(26f)))
+                SnapToGround();
+            if (Menu.SecondaryButton("Reset Transform", GUILayout.Width(150f), GUILayout.Height(26f)))
+                ResetTransform();
+            Menu.EndToolbar();
+            Menu.EndPane();
+
+            Menu.BeginPane("Part Posing", "Adjust simple bike rig pivots on the visual copy.");
             BikeVisualRig rig = GetVisualRig(posedBike);
             if (rig != null && rig.FrontEndPivots.Count > 0)
             {
@@ -228,11 +234,11 @@ namespace rowemod.Mods
                     ApplyPartPose(rig);
                 GUILayout.Label(
                     $"Pivots: {string.Join(", ", rig.FrontEndPivots.Select(pivot => pivot.Path))}",
-                    Menu.subtleLabelStyle);
+                    Menu.UiMutedWrappedStyle);
             }
             else
             {
-                GUILayout.Label("Front-end pivot was not found in this bike hierarchy.", Menu.subtleLabelStyle);
+                GUILayout.Label("Front-end pivot was not found in this bike hierarchy.", Menu.UiMutedWrappedStyle);
             }
 
             if (rig?.BottomBracketPivot != null)
@@ -246,27 +252,20 @@ namespace rowemod.Mods
                     "BikePoseBottomBracketRotation");
                 if (!Mathf.Approximately(previousBottomBracketRotation, bottomBracketRotation))
                     ApplyPartPose(rig);
-                GUILayout.Label($"Pivot: {rig.BottomBracketPath}", Menu.subtleLabelStyle);
+                GUILayout.Label($"Pivot: {rig.BottomBracketPath}", Menu.UiMutedWrappedStyle);
             }
             else
             {
-                GUILayout.Label("Bottom-bracket or crank pivot was not found in this bike hierarchy.", Menu.subtleLabelStyle);
+                GUILayout.Label("Bottom-bracket or crank pivot was not found in this bike hierarchy.", Menu.UiMutedWrappedStyle);
             }
 
-            if (Menu.ModernButton("Reset Part Pose", 150f))
+            if (Menu.SecondaryButton("Reset Part Pose", GUILayout.Width(150f), GUILayout.Height(26f)))
             {
                 frontEndTurn = 0f;
                 bottomBracketRotation = 0f;
                 ApplyPartPose(rig);
             }
-
-            GUILayout.Space(10f);
-            GUILayout.BeginHorizontal();
-            if (Menu.ModernButton("Snap To Ground", 150f))
-                SnapToGround();
-            if (Menu.ModernButton("Reset Transform", 150f))
-                ResetTransform();
-            GUILayout.EndHorizontal();
+            Menu.EndPane();
         }
 
         public static void OnTabEntered()

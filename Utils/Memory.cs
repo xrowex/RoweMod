@@ -688,6 +688,13 @@ namespace rowemod.Utils
 
             Log.Msg($"Looking for AssetBundles in: {bundlesFolderPath}");
 
+            if (!Directory.Exists(bundlesFolderPath))
+            {
+                Log.Warning($"AssetBundles folder does not exist: {bundlesFolderPath}");
+                assetBundlesLoaded = true;
+                return;
+            }
+
             string[] bundleFiles = Directory.GetFiles(bundlesFolderPath, "*", SearchOption.AllDirectories);
 
             if (bundleFiles.Length == 0)

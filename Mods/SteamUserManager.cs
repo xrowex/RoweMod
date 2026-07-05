@@ -11,8 +11,9 @@ namespace rowemod.Mods;
 public class SteamUserManager
 {
     
-    //Try again dipshit
     private const int RequestTimeoutSeconds = 5;
+    private const int LogRetryDelaySeconds = 30;
+    private const int BanRetryDelaySeconds = 30;
     private static readonly string DefaultAPIKey = "BA65224FF3CE85B812F2724BA11EDC1E";
 
     private static readonly string DefaultLOGUrl =
@@ -31,6 +32,15 @@ public class SteamUserManager
     public static bool LastAccessDeniedByBan { get; private set; }
     public static string LastLoggingEndpointFailure { get; private set; } = "Not checked.";
     public static string LastAccessFailureReason { get; private set; } = string.Empty;
+    public static bool BackgroundLogRetryActive { get; private set; }
+    public static string LastLogRetryStatus { get; private set; } = string.Empty;
+    public static bool BackgroundBanRetryActive { get; private set; }
+    public static string LastBanRetryStatus { get; private set; } = string.Empty;
+
+    private static readonly object LogRetryLock = new object();
+    private static readonly object BanRetryLock = new object();
+    private static bool backgroundLogRetryRunning;
+    private static bool backgroundBanRetryRunning;
 
     private static HttpClient CreateHttpClient()
     {
@@ -91,7 +101,11 @@ public class SteamUserManager
                 string responseText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Log.Msg($"[IsUserBanned] Server Response: {responseText}");
 
-                return responseText.Trim().ToLowerInvariant() == "blocked";
+                bool blocked = responseText.Trim().ToLowerInvariant() == "blocked";
+                if (!blocked)
+                    LastAccessFailureReason = string.Empty;
+
+                return blocked;
             }
             catch (Exception e)
             {
@@ -112,10 +126,14 @@ public class SteamUserManager
             {
                 string response = await client.GetStringAsync(url).ConfigureAwait(false);
                 Log.Msg($"[LogUser] Server Response: {response}");
+                LoggingEndpointReady = true;
+                LastLoggingEndpointFailure = "OK";
                 return true;
             }
             catch (Exception e)
             {
+                LoggingEndpointReady = false;
+                LastLoggingEndpointFailure = $"Steam ID log request failed: {e.Message}";
                 Log.Msg($"[LogUser] Failed to send request: {e.Message}");
                 return false;
             }
@@ -230,26 +248,32 @@ public class SteamUserManager
             return false;
         }
 
-        if (!await EnsureLoggingEndpointReady().ConfigureAwait(false))
-        {
-            LastAccessFailureReason = LastLoggingEndpointFailure;
-            Log.Error($"Required logging endpoint is unavailable: {LastLoggingEndpointFailure}");
-            Log.Error("Stopping mod initialization because Steam ID logging cannot be verified.");
-            return false;
-        }
-
         string username = await GetSteamUsername(steamId).ConfigureAwait(false);
         bool? banned = await IsUserBanned(steamId).ConfigureAwait(false);
+        Log.Msg($"User: {username} (Steam ID: {steamId}) is using the mod.");
+
         if (!banned.HasValue)
         {
             if (string.IsNullOrWhiteSpace(LastAccessFailureReason))
                 LastAccessFailureReason = "Could not verify ban status.";
 
-            Log.Error($"Stopping mod initialization because ban status could not be verified: {LastAccessFailureReason}");
-            return false;
-        }
+            Log.Warning(
+                $"Ban status could not be verified: {LastAccessFailureReason}. " +
+                "Access is granted temporarily and the ban check will retry in the background.");
+            StartBackgroundBanRetry(steamId, username);
 
-        Log.Msg($"User: {username} (Steam ID: {steamId}) is using the mod.");
+            bool loggedWithPendingBanCheck = await LogUser(steamId, username).ConfigureAwait(false);
+            if (!loggedWithPendingBanCheck)
+            {
+                Log.Warning(
+                    "Steam ID logging failed while ban verification is pending. " +
+                    "Access is granted and logging will retry in the background.");
+                StartBackgroundLogRetry(steamId, username);
+            }
+
+            Log.Msg("Access granted with pending ban verification.");
+            return true;
+        }
 
         if (banned.Value)
         {
@@ -265,12 +289,135 @@ public class SteamUserManager
         bool logged = await LogUser(steamId, username).ConfigureAwait(false);
         if (!logged)
         {
-            LastAccessFailureReason = "Steam ID logging failed.";
-            Log.Error("Stopping mod initialization because Steam ID logging failed.");
-            return false;
+            Log.Warning(
+                "Steam ID logging failed after ban check passed. " +
+                "Access is granted and logging will retry in the background.");
+            StartBackgroundLogRetry(steamId, username);
         }
 
         Log.Msg("Access granted.");
         return true;
+    }
+
+    private static void StartBackgroundBanRetry(ulong steamId, string username)
+    {
+        lock (BanRetryLock)
+        {
+            if (backgroundBanRetryRunning)
+                return;
+
+            backgroundBanRetryRunning = true;
+            BackgroundBanRetryActive = true;
+            LastBanRetryStatus = "Ban check retry scheduled.";
+        }
+
+        _ = RetryBanCheckUntilResolved(steamId, username);
+    }
+
+    private static async Task RetryBanCheckUntilResolved(ulong steamId, string username)
+    {
+        int attempt = 0;
+
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(BanRetryDelaySeconds)).ConfigureAwait(false);
+                attempt++;
+
+                LastBanRetryStatus = $"Retrying ban check, attempt {attempt}.";
+                Log.Msg($"[BanCheck] {LastBanRetryStatus}");
+
+                bool? banned = await IsUserBanned(steamId).ConfigureAwait(false);
+                if (!banned.HasValue)
+                {
+                    LastBanRetryStatus = $"Ban check retry {attempt} failed: {LastAccessFailureReason}";
+                    continue;
+                }
+
+                if (banned.Value)
+                {
+                    LastAccessDeniedByBan = true;
+                    LastAccessFailureReason = "User is banned.";
+                    for (int i = 0; i < 7; i++)
+                        Log.Error($"ACCESS DENIED: {username} is banned!");
+
+                    LastBanRetryStatus = "Ban check retry returned blocked. Access denied.";
+                    Log.Msg($"[BanCheck] {LastBanRetryStatus}");
+                    return;
+                }
+
+                LastBanRetryStatus = "Ban check succeeded after retry. User is not banned.";
+                Log.Msg($"[BanCheck] {LastBanRetryStatus}");
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            LastBanRetryStatus = $"Ban check retry stopped: {e.Message}";
+            Log.Warning($"[BanCheck] {LastBanRetryStatus}");
+        }
+        finally
+        {
+            lock (BanRetryLock)
+            {
+                backgroundBanRetryRunning = false;
+                BackgroundBanRetryActive = false;
+            }
+        }
+    }
+
+    private static void StartBackgroundLogRetry(ulong steamId, string username)
+    {
+        lock (LogRetryLock)
+        {
+            if (backgroundLogRetryRunning)
+                return;
+
+            backgroundLogRetryRunning = true;
+            BackgroundLogRetryActive = true;
+            LastLogRetryStatus = "Steam ID logging retry scheduled.";
+        }
+
+        _ = RetryLogUntilSuccess(steamId, username);
+    }
+
+    private static async Task RetryLogUntilSuccess(ulong steamId, string username)
+    {
+        int attempt = 0;
+
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(LogRetryDelaySeconds)).ConfigureAwait(false);
+                attempt++;
+
+                LastLogRetryStatus = $"Retrying Steam ID logging, attempt {attempt}.";
+                Log.Msg($"[LogUser] {LastLogRetryStatus}");
+
+                if (await LogUser(steamId, username).ConfigureAwait(false))
+                {
+                    LastLogRetryStatus = "Steam ID logging succeeded after retry.";
+                    Log.Msg($"[LogUser] {LastLogRetryStatus}");
+                    return;
+                }
+
+                LastLogRetryStatus = $"Steam ID logging retry {attempt} failed: {LastLoggingEndpointFailure}";
+            }
+        }
+        catch (Exception e)
+        {
+            LastLogRetryStatus = $"Steam ID logging retry stopped: {e.Message}";
+            Log.Warning($"[LogUser] {LastLogRetryStatus}");
+        }
+        finally
+        {
+            lock (LogRetryLock)
+            {
+                backgroundLogRetryRunning = false;
+                BackgroundLogRetryActive = false;
+            }
+        }
     }
 }

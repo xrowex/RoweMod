@@ -71,6 +71,9 @@ namespace rowemod.Mods
 
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
+        private static Vector2 _slotScroll;
+        private static Vector2 _contentScroll;
+        private static Vector2 _presetScroll;
 
         public static void ResetTabState()
         {
@@ -91,26 +94,14 @@ namespace rowemod.Mods
 
         public static void DrawCharacterTab()
         {
-            // --- TOP BAR ------------------------------------------------------------
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("<b>Character</b>", Menu.labelStyle);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Reset Character", Menu.redButtonStyle, GUILayout.Height(26)))
-            {
-                Config.ResetCharacterTab();
-                Config.Save();
-                GUI.FocusControl(null);
-            }
+            float paneHeight = GetContentPaneHeight(160f);
+            BeginTwoPane(paneHeight);
 
-            GUILayout.EndHorizontal();
-            // -----------------------------------------------------------------------
-
-            GUILayout.BeginHorizontal();
-
-            GUILayout.BeginVertical(GUILayout.Width(125));
+            BeginPane("Slots", "Toggle visibility or choose the slot to edit.", GUILayout.Width(205f), GUILayout.Height(paneHeight));
+            _slotScroll = GUILayout.BeginScrollView(_slotScroll, false, true, GUILayout.ExpandHeight(true));
             foreach (Slot slot in Enum.GetValues(typeof(Slot)))
             {
-                GUILayout.BeginHorizontal();
+                GUILayout.BeginHorizontal(GUILayout.Height(28f));
 
                 // Initialize toggle state if not set
                 if (!_slotVisibility.ContainsKey(slot))
@@ -127,7 +118,8 @@ namespace rowemod.Mods
                 }
 
                 // Slot button
-                if (GUILayout.Button($"<b>{slot.ToString()}</b>", Menu.highQualityButtonStyle))
+                bool isSelected = Menu.currentSlot == slot;
+                if (GUILayout.Button(slot.ToString(), isSelected ? UiRowButtonSelectedStyle : UiRowButtonStyle))
                 {
                     Menu.currentSlot = slot;
                     Menu.inModelsTab = true;
@@ -135,18 +127,26 @@ namespace rowemod.Mods
 
                 GUILayout.EndHorizontal(); // End row
             }
+            GUILayout.EndScrollView();
 
-            GUILayout.EndVertical();
+            EndPane();
 
+            GUILayout.Space(8f);
+
+            BeginPane(currentSlot.ToString(), inModelsTab ? "Models" : "Materials", GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
+            _contentScroll = GUILayout.BeginScrollView(_contentScroll, false, true, GUILayout.ExpandHeight(true));
             ListCharacterBundles(currentSlot);
-            GUILayout.EndHorizontal();
-            GUILayout.Label("Presets", Menu.labelStyle);
+            GUILayout.EndScrollView();
+            EndPane();
 
-            // Text field to enter new preset name
-            _newPresetName = GUILayout.TextField(_newPresetName, 25);
+            EndTwoPane();
+
+            GUILayout.Space(8f);
+            BeginPane("Presets", "Save or load character model/material combinations.");
+            _newPresetName = GUILayout.TextField(_newPresetName, 25, UiSearchFieldStyle);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle))
+            if (PrimaryButton("Save Preset", GUILayout.Width(120f), GUILayout.Height(26f)))
             {
                 if (!string.IsNullOrWhiteSpace(_newPresetName))
                 {
@@ -185,21 +185,28 @@ namespace rowemod.Mods
                     _selectedPresetIndex = 0;
                     MelonCoroutines.Start(LoadPreset(availablePresets[0]));
                 }
+                
+                if (!availablePresets.Contains(defaultPreset.Name))
+                {
+                    availablePresets.Add(defaultPreset.Name);
+                }
+
 
                 if (availablePresets.Count > 0)
                 {
-                    GUILayout.BeginVertical();
+                    _presetScroll = GUILayout.BeginScrollView(_presetScroll, false, true, GUILayout.MinWidth(180f), GUILayout.MaxHeight(150f));
                     for (int i = 0; i < availablePresets.Count; i++)
                     {
                         GUILayout.BeginHorizontal();
-                        if (GUILayout.Button(availablePresets[i], Menu.highQualityButtonStyle))
+                        GUIStyle presetStyle = i == _selectedPresetIndex ? UiRowButtonSelectedStyle : UiRowButtonStyle;
+                        if (GUILayout.Button(availablePresets[i], presetStyle))
                         {
                             _selectedPresetIndex = i;
                             MelonCoroutines.Start(LoadPreset(availablePresets[_selectedPresetIndex]));
                         }
 
                         if (availablePresets[i] != "DefaultPreset" &&
-                            GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30)))
+                            GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30f), GUILayout.Height(24f)))
                         {
                             ClothingPreset.Delete(availablePresets[i]);
                             if (i == _selectedPresetIndex) _selectedPresetIndex = 0;
@@ -210,11 +217,12 @@ namespace rowemod.Mods
 
                     }
 
-                    GUILayout.EndVertical();
+                    GUILayout.EndScrollView();
                 }
             }
 
             GUILayout.EndHorizontal();
+            EndPane();
 
         }
 
@@ -294,10 +302,18 @@ namespace rowemod.Mods
             string slotPath = Path.Combine(characterRootPath, slot.ToString());
 
             GUILayout.BeginVertical();
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Models", highQualityButtonStyle)) inModelsTab = true;
-            if (GUILayout.Button("Materials", highQualityButtonStyle)) inModelsTab = false;
-            GUILayout.EndHorizontal();
+            BeginToolbar();
+            if (PillButton("Models", inModelsTab)) inModelsTab = true;
+            if (PillButton("Materials", !inModelsTab)) inModelsTab = false;
+            EndToolbar();
+            GUILayout.Space(6f);
+
+            if (!Directory.Exists(slotPath))
+            {
+                DrawEmptyState("No files found", $"Create this folder to add content: {slotPath}");
+                GUILayout.EndVertical();
+                return;
+            }
 
             if (inModelsTab)
             {
@@ -305,7 +321,7 @@ namespace rowemod.Mods
                 foreach (string file in Directory.GetFiles(slotPath, "*.model", SearchOption.AllDirectories))
                 {
                     string buttonText = Path.GetFileNameWithoutExtension(file);
-                    if (GUILayout.Button(buttonText, highQualityButtonStyle))
+                    if (GUILayout.Button(buttonText, UiRowButtonStyle))
                     {
                         ReplaceModel(slot, file);;
                     }
@@ -328,7 +344,7 @@ namespace rowemod.Mods
                         foreach (string file in materialFiles)
                         {
                             string buttonText = Path.GetFileNameWithoutExtension(file);
-                            if (GUILayout.Button(buttonText, highQualityButtonStyle))
+                            if (GUILayout.Button(buttonText, UiRowButtonStyle))
                             {
                                 ReplaceMaterial(slot, file);
                             }

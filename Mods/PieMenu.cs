@@ -132,6 +132,12 @@ namespace rowemod.Mods
             if (gamepad == null && keyboard == null)
                 return;
 
+            if (!rowemod.Main.IsGameplayInputActive)
+            {
+                CloseForBlockedGameState();
+                return;
+            }
+
             bool rightDpadPressed = gamepad?.dpad.right.isPressed == true;
             if (!rightDpadPressed)
             {
@@ -196,6 +202,9 @@ namespace rowemod.Mods
 
         public static void Draw()
         {
+            if (!rowemod.Main.IsGameplayInputActive)
+                return;
+
             if (!isOpen && !isClosingAnimation)
                 return;
 
@@ -552,6 +561,22 @@ namespace rowemod.Mods
             isClosingAnimation = true;
             closeAnimationStartedAt = Time.unscaledTime;
             Log.Msg("[PieMenu] Closed.");
+        }
+
+        private static void CloseForBlockedGameState()
+        {
+            rightDpadHeldSince = 0f;
+            waitForRightDpadRelease = false;
+            selectedIndex = -1;
+            lastDiagnosticSelectedIndex = -2;
+
+            if (!isOpen && !isClosingAnimation)
+                return;
+
+            isOpen = false;
+            isClosingAnimation = false;
+            ReplayInputPatch.CancelReplayOpenAuthorization();
+            Log.Msg("[PieMenu] Closed because gameplay input is not active.");
         }
 
         private static float GetAnimationScale()

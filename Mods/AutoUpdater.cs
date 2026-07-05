@@ -298,7 +298,8 @@ namespace rowemod.Mods
                     yield break;
                 }
 
-                UpdateManifest manifest = JsonConvert.DeserializeObject<UpdateManifest>(request.downloadHandler.text);
+                string manifestJson = NormalizeManifestJson(request.downloadHandler.text);
+                UpdateManifest manifest = JsonConvert.DeserializeObject<UpdateManifest>(manifestJson);
                 if (!IsValidManifest(manifest, out string validationError))
                 {
                     Log.Warning($"[AutoUpdater] Ignoring invalid update manifest: {validationError}");
@@ -342,6 +343,25 @@ namespace rowemod.Mods
                 checkInProgress = false;
                 request.Dispose();
             }
+        }
+
+        private static string NormalizeManifestJson(string json)
+        {
+            if (string.IsNullOrEmpty(json))
+                return json;
+
+            string normalized = json.TrimStart();
+            normalized = normalized.TrimStart('\uFEFF');
+
+            if (normalized.Length >= 3 &&
+                normalized[0] == '\u00EF' &&
+                normalized[1] == '\u00BB' &&
+                normalized[2] == '\u00BF')
+            {
+                normalized = normalized.Substring(3).TrimStart();
+            }
+
+            return normalized.TrimStart('\uFEFF');
         }
 
         private static void StartAutoDownloadAndSchedule()

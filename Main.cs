@@ -18,18 +18,19 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.7", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.8", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.0.7";
-        private static readonly bool EnablePieMenu = true;
+        public const string ModVersion = "3.0.8";
+        private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
+        public static bool IsGameMainMenuActive = true;
+        public static bool IsGameplayInputActive = false;
         private Coroutine _currentVehicleCheckCoroutine;
         private bool _isProcessingVehicleChange;
-        private bool _replayInputPatchApplied;
         private static bool _showDisabledMessage = false;
         private static float _disabledMessageEndTime = 0f;
         private static bool _startupAccessGranted = false;
@@ -45,6 +46,7 @@ namespace rowemod
         {
             CreateModDirectories();
             HarmonyInstance.PatchAll();
+            TrickAnimationDiagnostics.Install(HarmonyInstance);
         }
         
         
@@ -216,9 +218,18 @@ namespace rowemod
             if (Config.challengeRuntimeSettings.enabled)
                 rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
             GameEventListener.OnSceneInitialized(sceneName);
+
+            if (string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase))
+            {
+                IsGameMainMenuActive = true;
+                IsGameplayInputActive = false;
+                playableSceneLoaded = false;
+            }
             
             DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
+            RoweGutFaceFmodDiagnostics.OnSceneInitialized(sceneName);
 
             cachedHDRCameras = UnityEngine.Camera.allCameras
                 .Select(cam => cam.GetComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>())
@@ -238,7 +249,8 @@ namespace rowemod
                 if(!isLogoLoaded)
                     MelonCoroutines.Start(LoadRoweLogo());
 
-                PieMenu.PreloadAssets();
+                if (EnablePieMenu)
+                    PieMenu.PreloadAssets();
             
                 // Reload assets from cached bundles
                 if (Memory.loadedBundles.Count > 0)
@@ -256,6 +268,15 @@ namespace rowemod
         
         public override void OnUpdate()
         {
+            if (SteamUserManager.LastAccessDeniedByBan)
+            {
+                _startupAccessGranted = false;
+                _showStartupBlockedWarning = true;
+                _showStartupRetryWarning = false;
+                isOpen = false;
+                return;
+            }
+
             if (!_startupAccessGranted)
                 return;
 
@@ -265,22 +286,18 @@ namespace rowemod
             if (!RemoteKillSwitched.isModEnabled)
                 return;
 
+            DebugTools.Update();
+
             if (playableSceneLoaded && rMbCharacter)
             {
-                if (!_replayInputPatchApplied)
-                {
-                    ReplayInputPatch.ApplyLatePatch(HarmonyInstance);
-                    _replayInputPatchApplied = true;
-                }
-
                 if (EnablePieMenu)
                 {
                     PieMenu.Update();
                 }
 
-                ReplayInputPatch.Update();
-
-                ControllerMenuInput.Update();
+                TrickAnimationDiagnostics.Update();
+                TrickAnimationEditor.Update();
+                TrickMods.Update();
 
                 if (Config.challengeRuntimeSettings.enabled)
                 {
@@ -306,6 +323,18 @@ namespace rowemod
                 }
             }
         }
+
+        public override void OnLateUpdate()
+        {
+            if (!_startupAccessGranted)
+                return;
+
+            if (!RemoteKillSwitched.isModEnabled)
+                return;
+
+            if (playableSceneLoaded && rMbCharacter)
+                TrickAnimationEditor.LateUpdate();
+        }
         
         public override void OnGUI()
         {
@@ -320,6 +349,13 @@ namespace rowemod
             {
                 DrawPrivacyDisclaimer();
                 return;
+            }
+
+            if (_showStartupRetryWarning)
+            {
+                DrawStartupRetryWarning();
+                if (!_startupAccessGranted)
+                    return;
             }
 
             if (!_startupAccessGranted)
@@ -355,11 +391,14 @@ namespace rowemod
                 InitializeStyles();
                 stylesInitialized = true;
             }
+
+            DrawMainMenuLauncher();
             
             if (isOpen)
             {
                 if (RemoteKillSwitched.isModEnabled)
                 {
+                    Menu.HandleWindowDrag();
                     Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
                     TrickMods.DrawTrickPickerPopup();
                     ObjectDropper.DrawNotPlaceableWarning();
@@ -375,6 +414,44 @@ namespace rowemod
 
                 AutoUpdater.DrawUpdatePrompt(isOpen);
             }
+        }
+
+        private static void DrawMainMenuLauncher()
+        {
+            if (!RemoteKillSwitched.isModEnabled || isOpen)
+                return;
+
+            if (!IsGameMainMenuActive || IsGameplayInputActive || playableSceneLoaded)
+                return;
+
+            const float buttonWidth = 170f;
+            const float buttonHeight = 36f;
+            const float marginRight = 36f;
+            const float marginTop = 122f;
+
+            Rect buttonRect = new Rect(
+                Mathf.Max(16f, Screen.width - buttonWidth - marginRight),
+                marginTop,
+                buttonWidth,
+                buttonHeight);
+
+            GUIStyle buttonStyle = Menu.UiPillActiveStyle ?? Menu.UiButtonStyle ?? GUI.skin.button;
+            if (GUI.Button(buttonRect, "Open RoweMod", buttonStyle) || IsMainMenuLauncherPressed(buttonRect))
+            {
+                Log.Msg("Main menu RoweMod launcher clicked.");
+                OpenRoweModMenu();
+            }
+        }
+
+        private static bool IsMainMenuLauncherPressed(Rect buttonRect)
+        {
+            Mouse mouse = Mouse.current;
+            if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+                return false;
+
+            Vector2 mousePosition = mouse.position.ReadValue();
+            Vector2 guiPosition = new Vector2(mousePosition.x, Screen.height - mousePosition.y);
+            return buttonRect.Contains(guiPosition);
         }
 
         private static void DrawPrivacyDisclaimer()
@@ -564,8 +641,70 @@ namespace rowemod
             GUI.Box(rect, "ACCESS DENIED", style);
         }
 
+        private static void DrawStartupRetryWarning()
+        {
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+
+            float width = Mathf.Min(560f, Screen.width - 40f);
+            float height = 190f;
+            Rect rect = new Rect(
+                (Screen.width - width) / 2f,
+                (Screen.height - height) / 2f,
+                width,
+                height);
+
+            GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
+            {
+                padding = new RectOffset(22, 22, 18, 18)
+            };
+            GUI.Box(rect, GUIContent.none, boxStyle);
+
+            GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 24,
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleCenter
+            };
+            titleStyle.normal.textColor = Color.white;
+
+            GUIStyle messageStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 14,
+                alignment = TextAnchor.UpperCenter,
+                wordWrap = true
+            };
+            messageStyle.normal.textColor = new Color(0.9f, 0.9f, 0.9f, 1f);
+
+            GUI.Label(new Rect(rect.x + 20f, rect.y + 18f, rect.width - 40f, 32f), "RoweMod Connection Check", titleStyle);
+            GUI.Label(
+                new Rect(rect.x + 28f, rect.y + 60f, rect.width - 56f, 58f),
+                _startupRetryMessage,
+                messageStyle);
+
+            GUIStyle buttonStyle = CreateDisclaimerButtonStyle();
+            float buttonWidth = 150f;
+            float buttonHeight = 38f;
+            Rect retryRect = new Rect(
+                rect.x + (rect.width - buttonWidth) / 2f,
+                rect.y + rect.height - buttonHeight - 22f,
+                buttonWidth,
+                buttonHeight);
+
+            Color previousBackgroundColor = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.1f, 0.5f, 0.82f, 1f);
+            if (GUI.Button(retryRect, "RETRY", buttonStyle))
+            {
+                _showStartupRetryWarning = false;
+                StartStartupAccessCheck();
+            }
+
+            GUI.backgroundColor = previousBackgroundColor;
+        }
+
         public override void OnDeinitializeMelon()
         {
+            DebugTools.Cleanup();
             rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
             if (EnablePieMenu)
                 PieMenu.Cleanup();
@@ -648,14 +787,15 @@ namespace rowemod
                     Mods.Misc.Update();
                     Cursor.visible = true;
                     Cursor.lockState = CursorLockMode.None;
-                    ControllerMenuInput.SetGameplayInputBlocked(true);
+                    if (Menu.currentTab == Menu.Tab.Tricks)
+                        TrickMods.OnTricksTabEntered();
                 }
                 else
                 {
-                    ControllerMenuInput.SetGameplayInputBlocked(false);
                     GrindPoseEditor.OnGrindsTabExited();
-                    Cursor.visible = false;
-                    Cursor.lockState = CursorLockMode.Confined;
+                    TrickMods.OnTricksTabExited();
+                    Cursor.visible = IsGameMainMenuActive || !IsGameplayInputActive;
+                    Cursor.lockState = Cursor.visible ? CursorLockMode.None : CursorLockMode.Confined;
                     Config.Save();
                 }
             }

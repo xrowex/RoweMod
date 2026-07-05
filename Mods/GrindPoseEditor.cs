@@ -77,13 +77,15 @@ namespace rowemod.Mods
             OnGrindsTabEntered();
             RefreshPoseCache();
 
-            GUILayout.Label("Grind Poses", Menu.coloredBoxStyle);
-            GUILayout.Space(4f);
+            Menu.BeginPane("Grind Poses", "Select a saved grind pose, then tune rider and bike offsets.");
 
-            if (GUILayout.Button("<b>RESET ALL TO DEFAULT</b>", Menu.redButtonStyle, GUILayout.Width(345f), GUILayout.Height(28f)))
+            Menu.BeginToolbar();
+            if (Menu.DangerButton("Reset All To Default", GUILayout.Width(170f), GUILayout.Height(26f)))
             {
                 ResetAllPosesToDefault();
             }
+            GUILayout.FlexibleSpace();
+            Menu.EndToolbar();
             GUILayout.Space(6f); 
 
             float grindPoseLerpSpeed = Config.physics.grindPoseLerpSpeed;
@@ -99,7 +101,8 @@ namespace rowemod.Mods
 
             if (PoseCache.Count == 0)
             {
-                GUILayout.Label("No BikeGrindPoseData instances found yet.", Menu.labelStyle);
+                Menu.DrawEmptyState("No grind poses found", "Enter gameplay or refresh the map context, then reopen this tab.");
+                Menu.EndPane();
                 return;
             }
 
@@ -118,14 +121,16 @@ namespace rowemod.Mods
             {
                 Config.Save();
             }
+
+            Menu.EndPane();
         }
 
         private static void DrawPresetControls()
         {
-            GUILayout.Label("Grind Pose Presets", Menu.labelStyle);
-            _newPresetName = GUILayout.TextField(_newPresetName, 32);
+            Menu.BeginAltPane("Grind Pose Presets", "Save the current pose tuning or apply a saved preset.");
+            _newPresetName = GUILayout.TextField(_newPresetName, 32, Menu.UiSearchFieldStyle);
 
-            if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle, GUILayout.Width(170f), GUILayout.Height(24f)))
+            if (Menu.PrimaryButton("Save Preset", GUILayout.Width(130f), GUILayout.Height(24f)))
             {
                 string presetName = (_newPresetName ?? string.Empty).Trim();
                 if (!string.IsNullOrWhiteSpace(presetName))
@@ -139,7 +144,8 @@ namespace rowemod.Mods
             List<string> availablePresets = GrindPosePreset.GetAvailablePresets();
             if (availablePresets.Count == 0)
             {
-                GUILayout.Label("No grind pose presets saved yet.", Menu.labelStyle);
+                GUILayout.Label("No grind pose presets saved yet.", Menu.UiMutedWrappedStyle);
+                Menu.EndPane();
                 return;
             }
 
@@ -149,7 +155,7 @@ namespace rowemod.Mods
             for (int i = 0; i < availablePresets.Count; i++)
             {
                 string presetName = availablePresets[i];
-                GUIStyle style = i == _selectedPresetIndex ? Menu.activeTabButtonStyle : Menu.highQualityButtonStyle;
+                GUIStyle style = i == _selectedPresetIndex ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle;
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button(presetName, style, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
                 {
@@ -174,6 +180,7 @@ namespace rowemod.Mods
             }
 
             GUILayout.EndScrollView();
+            Menu.EndPane();
         }
 
         private static void SaveCurrentPreset(string presetName)
@@ -644,19 +651,18 @@ namespace rowemod.Mods
         private static void DrawSectionHeader(string title)
         {
             GUILayout.Space(6f);
-            GUILayout.Label(title, Menu.coloredBoxStyle);
+            Menu.DrawSectionTitle(title);
             GUILayout.Space(2f);
         }
 
         private static void BeginSectionBox(string title)
         {
-            DrawSectionHeader(title);
-            GUILayout.BeginVertical(GUI.skin.box);
+            Menu.BeginAltPane(title);
         }
 
         private static void EndSectionBox()
         {
-            GUILayout.EndVertical();
+            Menu.EndPane();
         }
 
         private static bool DrawBoolField(string label, string poseKey, string fieldName, bool currentValue, Action<bool> apply)
@@ -731,7 +737,7 @@ namespace rowemod.Mods
                 GUILayout.BeginHorizontal();
                 for (int col = 0; col < columns && index < PoseCache.Count; col++)
                 {
-                    GUIStyle style = index == _selectedPoseIndex ? Menu.activeTabButtonStyle : Menu.highQualityButtonStyle;
+                    GUIStyle style = index == _selectedPoseIndex ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle;
                     string label = PoseKeys[index];
                     if (label.Length > 22)
                     {

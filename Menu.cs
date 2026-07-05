@@ -48,7 +48,8 @@ namespace rowemod
             Marker,
             Dropper,
             Multiplayer,
-            Challenge
+            Challenge,
+            Debug
         }
 
         // Menu Variables
@@ -90,6 +91,7 @@ namespace rowemod
             ("Character", Tab.Character),
             ("Misc", Tab.Misc),
             ("Graphics", Tab.Graphics),
+            ("Debug", Tab.Debug),
             ("Marker", Tab.Marker),
             ("Dropper", Tab.Dropper),
             ("MP", Tab.Multiplayer)
@@ -101,6 +103,14 @@ namespace rowemod
         private static Vector2 resizeStartMouse;
         private static Vector2 resizeStartSize;
         private static readonly float resizeHandleSize = 20f;
+        private static readonly float resizeHandleHitboxSize = 36f;
+        private static int resizeControlId = 0;
+        private static readonly int resizeControlHint = "RoweMod.MainWindowResize".GetHashCode();
+        private static bool isDraggingWindow = false;
+        private static Vector2 dragStartMouse;
+        private static Vector2 dragStartWindowPosition;
+        private static int dragControlId = 0;
+        private static readonly int dragControlHint = "RoweMod.MainWindowDrag".GetHashCode();
 
         // Style variables
         public static GUIStyle windowStyle;
@@ -117,6 +127,19 @@ namespace rowemod
         public static GUIStyle tabButtonStyle;
         public static GUIStyle tabBarStyle;
         public static GUIStyle subtleLabelStyle;
+        public static GUIStyle pageTitleStyle;
+        public static GUIStyle panelStyle;
+        public static GUIStyle panelAltStyle;
+        public static GUIStyle toolbarStyle;
+        public static GUIStyle rowLabelStyle;
+        public static GUIStyle rowMutedLabelStyle;
+        public static GUIStyle rowButtonStyle;
+        public static GUIStyle rowButtonSelectedStyle;
+        public static GUIStyle pillButtonStyle;
+        public static GUIStyle pillActiveButtonStyle;
+        public static GUIStyle miniButtonStyle;
+        public static GUIStyle badgeStyle;
+        public static GUIStyle mutedWrappedLabelStyle;
         // Texture caches for styles
         private static Texture2D backgroundTexture;
         private static Texture2D roundedButtonNormal;
@@ -143,7 +166,26 @@ namespace rowemod
         private static Color uiDangerActiveColor;
         
         public static GUIStyle textFieldStyle;
+        public static GUIStyle searchFieldStyle;
         public static bool stylesInitialized = false;
+        public static int styleRevision = 0;
+
+        public static GUIStyle UiPanelStyle => panelStyle ?? sectionCardStyle ?? GUI.skin.box;
+        public static GUIStyle UiPanelAltStyle => panelAltStyle ?? UiPanelStyle;
+        public static GUIStyle UiHeaderStyle => sectionHeaderStyle ?? labelStyle ?? GUI.skin.label;
+        public static GUIStyle UiMutedStyle => subtleLabelStyle ?? labelStyle ?? GUI.skin.label;
+        public static GUIStyle UiMutedWrappedStyle => mutedWrappedLabelStyle ?? UiMutedStyle;
+        public static GUIStyle UiButtonStyle => highQualityButtonStyle ?? GUI.skin.button;
+        public static GUIStyle UiDangerButtonStyle => redButtonStyle ?? UiButtonStyle;
+        public static GUIStyle UiPillStyle => pillButtonStyle ?? UiButtonStyle;
+        public static GUIStyle UiPillActiveStyle => pillActiveButtonStyle ?? UiPillStyle;
+        public static GUIStyle UiMiniButtonStyle => miniButtonStyle ?? UiButtonStyle;
+        public static GUIStyle UiBadgeStyle => badgeStyle ?? GUI.skin.box;
+        public static GUIStyle UiSearchFieldStyle => searchFieldStyle ?? textFieldStyle ?? GUI.skin.textField;
+        public static GUIStyle UiRowButtonStyle => rowButtonStyle ?? UiButtonStyle;
+        public static GUIStyle UiRowButtonSelectedStyle => rowButtonSelectedStyle ?? UiRowButtonStyle;
+        public static GUIStyle UiRowLabelStyle => rowLabelStyle ?? labelStyle ?? GUI.skin.label;
+        public static GUIStyle UiRowMutedLabelStyle => rowMutedLabelStyle ?? subtleLabelStyle ?? labelStyle ?? GUI.skin.label;
 
         // Dictionaries and caches
         public static Dictionary<Slot, GameObject> slotGameObjects = new Dictionary<Slot, GameObject>();
@@ -179,19 +221,8 @@ namespace rowemod
         public static bool isLogoLoading = false;
         
         // Foldout states for Physics tab
-        private static bool physicsExpanded = true;
-        private static bool speedExpanded = true;
-        private static bool motorTuningExpanded = false;
-        private static bool pumpSpinExpanded = true;
-        private static bool manualsExpanded = true;
         private static bool mxExpanded = true;
-        private static bool droneExpanded = true;
-        private static bool otherExpanded = true;
-        private static bool sessionMarkersExpanded = true;
-        private static bool playerLabelsExpanded = true;
-        private static bool mpPlayersExpanded = true;
         private static bool challengeSettingsExpanded = true;
-        private static bool lightSettingsExpanded = true;
         private static string _mpKickStatus = "Host/master only. Join or host a multiplayer session to manage players.";
         private static bool _motorTuningNeedsRefresh = true;
         private static string _motorTuningStatusText = "Open Motor Tuning to load values.";
@@ -216,42 +247,127 @@ namespace rowemod
         {
             try
             {
-                DrawSidebar();
-                GUI.DragWindow(new Rect(0, 0, windowRect.width, UiTitleBarHeight));
-                DrawTabs();
-                DrawContentHeader();
-                DrawScrollableContent();
-
-                Rect resizeRect = new Rect(windowRect.width - resizeHandleSize, windowRect.height - resizeHandleSize,
-                    resizeHandleSize, resizeHandleSize);
-                DrawSolidColorRect(resizeRect, new Color(1f, 1f, 1f, 0.16f));
-
-
-                Event e = Event.current;
-                if (e.type == EventType.MouseDown && resizeRect.Contains(e.mousePosition))
+                using (new MenuSkinScope())
                 {
-                    isResizing = true;
-                    resizeStartMouse = e.mousePosition;
-                    resizeStartSize = new Vector2(windowRect.width, windowRect.height);
-                    e.Use();
-                }
-                else if (e.type == EventType.MouseUp && isResizing)
-                {
-                    isResizing = false;
-                    e.Use();
-                }
-                else if (e.type == EventType.MouseDrag && isResizing)
-                {
-                    Vector2 delta = e.mousePosition - resizeStartMouse;
-                    windowRect.width = Mathf.Max(600f, resizeStartSize.x + delta.x); // Clamp min size
-                    windowRect.height = Mathf.Max(420f, resizeStartSize.y + delta.y);
-                    e.Use();
+                    HandleWindowResize();
+                    DrawSidebar();
+                    DrawTabs();
+                    DrawContentHeader();
+                    DrawScrollableContent();
+
+                    DrawResizeHandle();
                 }
             }
             catch (Exception ex)
             {
                 Log.Error($"Error in DrawMenu: {ex.Message}");
             }
+        }
+
+        private static void DrawResizeHandle()
+        {
+            Rect resizeRect = new Rect(windowRect.width - resizeHandleSize, windowRect.height - resizeHandleSize,
+                resizeHandleSize, resizeHandleSize);
+            DrawSolidColorRect(resizeRect, new Color(1f, 1f, 1f, 0.16f));
+        }
+
+        private static void HandleWindowResize()
+        {
+            Event e = Event.current;
+            if (e == null)
+                return;
+
+            int controlId = GUIUtility.GetControlID(resizeControlHint, FocusType.Passive);
+            EventType eventType = e.GetTypeForControl(controlId);
+            Rect resizeHitbox = new Rect(windowRect.width - resizeHandleHitboxSize,
+                windowRect.height - resizeHandleHitboxSize, resizeHandleHitboxSize, resizeHandleHitboxSize);
+
+            if (eventType == EventType.MouseDown && e.button == 0 && resizeHitbox.Contains(e.mousePosition))
+            {
+                isResizing = true;
+                resizeControlId = controlId;
+                GUIUtility.hotControl = controlId;
+                resizeStartMouse = e.mousePosition;
+                resizeStartSize = new Vector2(windowRect.width, windowRect.height);
+                e.Use();
+                return;
+            }
+
+            if (!isResizing || resizeControlId != controlId)
+                return;
+
+            if (eventType == EventType.MouseDrag)
+            {
+                Vector2 delta = e.mousePosition - resizeStartMouse;
+                windowRect.width = Mathf.Max(600f, resizeStartSize.x + delta.x);
+                windowRect.height = Mathf.Max(420f, resizeStartSize.y + delta.y);
+                ClampWindowToScreen();
+                e.Use();
+                return;
+            }
+
+            if (eventType == EventType.MouseUp || e.rawType == EventType.MouseUp)
+            {
+                isResizing = false;
+                resizeControlId = 0;
+                if (GUIUtility.hotControl == controlId)
+                    GUIUtility.hotControl = 0;
+                e.Use();
+            }
+        }
+
+        public static void HandleWindowDrag()
+        {
+            Event e = Event.current;
+            if (e == null)
+                return;
+
+            int controlId = GUIUtility.GetControlID(dragControlHint, FocusType.Passive);
+            EventType eventType = e.GetTypeForControl(controlId);
+            Rect titleBarRect = new Rect(windowRect.x, windowRect.y, windowRect.width, UiTitleBarHeight);
+
+            if (eventType == EventType.MouseDown && e.button == 0 && titleBarRect.Contains(e.mousePosition))
+            {
+                isDraggingWindow = true;
+                dragControlId = controlId;
+                GUIUtility.hotControl = controlId;
+                dragStartMouse = e.mousePosition;
+                dragStartWindowPosition = windowRect.position;
+                e.Use();
+                return;
+            }
+
+            if (!isDraggingWindow || dragControlId != controlId)
+                return;
+
+            if (eventType == EventType.MouseDrag)
+            {
+                Vector2 delta = e.mousePosition - dragStartMouse;
+                windowRect.position = dragStartWindowPosition + delta;
+                ClampWindowToScreen();
+                e.Use();
+                return;
+            }
+
+            if (eventType == EventType.MouseUp || e.rawType == EventType.MouseUp)
+            {
+                isDraggingWindow = false;
+                dragControlId = 0;
+                if (GUIUtility.hotControl == controlId)
+                    GUIUtility.hotControl = 0;
+                e.Use();
+            }
+        }
+
+        private static void ClampWindowToScreen()
+        {
+            float minVisibleWidth = Mathf.Min(80f, windowRect.width);
+            float minX = Mathf.Min(0f, minVisibleWidth - windowRect.width);
+            float maxX = Mathf.Max(0f, Screen.width - minVisibleWidth);
+            float maxY = Mathf.Max(0f, Screen.height - UiTitleBarHeight);
+
+            windowRect.x = Mathf.Clamp(windowRect.x, minX, maxX);
+            windowRect.y = Mathf.Clamp(windowRect.y, 0f, maxY);
         }
 
         public static void DrawLogoRevealOverlay(float revealAmount, float alpha)
@@ -294,58 +410,51 @@ namespace rowemod
                     case Tab.Physics:
                         Mods.Physics.Update();
 
-                        if (BeginSectionCard("Physics", ref physicsExpanded))
-                        {
-                            ModernToggle("Spin Assist", ref physics.spinAssist);
-                            ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
-                            if (physics.grindAlignAssist)
-                                Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 0.5f, 0f, 10f);
-                            ModernToggle("Drifting", ref physics.driftAbility);
-                            Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
-                            Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
-                        }
-                        EndSectionCard();
+                        float physicsPaneHeight = GetContentPaneHeight(24f);
+                        BeginTwoPane(physicsPaneHeight);
 
-                        if (BeginSectionCard("Speed", ref speedExpanded))
-                        {
-                            Slider("Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
-                            Slider("Max Speed", ref physics.bmxMaxSpeed, 7.5f, 2f, 15f);
-                        }
-                        EndSectionCard();
+                        BeginPane("Physics", "Core riding helpers and bike force tuning.", GUILayout.Width(Mathf.Max(320f, windowRect.width * 0.42f)), GUILayout.Height(physicsPaneHeight));
+                        ModernToggle("Spin Assist", ref physics.spinAssist);
+                        ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
+                        if (physics.grindAlignAssist)
+                            Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 0.5f, 0f, 10f);
+                        ModernToggle("Drifting", ref physics.driftAbility);
+                        Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
+                        Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
 
-                        bool wasMotorTuningExpanded = motorTuningExpanded;
-                        if (BeginSectionCard("Motor Tuning", ref motorTuningExpanded))
-                        {
-                            if (_motorTuningNeedsRefresh || !wasMotorTuningExpanded)
-                            {
-                                RefreshMotorTuningData();
-                            }
+                        DrawSectionTitle("Speed");
+                        Slider("Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
+                        Slider("Max Speed", ref physics.bmxMaxSpeed, 7.5f, 2f, 15f);
+                        EndPane();
 
-                            DrawMotorTuningData();
-                        }
-                        EndSectionCard();
+                        GUILayout.Space(8f);
 
-                        if (BeginSectionCard("Pump/Spin", ref pumpSpinExpanded))
-                        {
-                            Slider("Pump Force", ref physics.pumpForce, 1.5f, 1f, 5f);
-                            Slider("Spin Speed Multiplier", ref physics.spinMultiplier, 1.0f, 0f, 10f);
-                            Slider("Steer Damping", ref physics.steerDamp, 5f, 0f, 5f);
-                        }
-                        EndSectionCard();
+                        BeginPane("Advanced", "Pump, spin, manuals, and runtime motor settings.", GUILayout.ExpandWidth(true), GUILayout.Height(physicsPaneHeight));
+                        DrawSectionTitle("Pump / Spin");
+                        Slider("Pump Force", ref physics.pumpForce, 1.5f, 1f, 5f);
+                        Slider("Spin Speed Multiplier", ref physics.spinMultiplier, 1.0f, 0f, 10f);
+                        Slider("Steer Damping", ref physics.steerDamp, 5f, 0f, 5f);
 
-                        if (BeginSectionCard("Manuals", ref manualsExpanded))
-                        {
-                            Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
-                            Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
-                        }
-                        EndSectionCard();
+                        DrawSectionTitle("Manuals");
+                        Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
+                        Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
+
+                        DrawSectionTitle("Motor Tuning");
+                        if (_motorTuningNeedsRefresh)
+                            RefreshMotorTuningData();
+                        DrawMotorTuningData();
+                        EndPane();
+
+                        EndTwoPane();
 
                         break;
                     case Tab.Bike:
-                        PartTweaker.DrawPartTweaker();
-
-
-                        PartTweaker.DrawPartSelectorUI();
+                        float bikePaneHeight = GetContentPaneHeight(24f);
+                        BeginTwoPane(bikePaneHeight);
+                        PartTweaker.DrawPartTweaker(GUILayout.Width(Mathf.Max(330f, windowRect.width * 0.46f)), GUILayout.Height(bikePaneHeight));
+                        GUILayout.Space(8f);
+                        PartTweaker.DrawPartSelectorUI(GUILayout.ExpandWidth(true), GUILayout.Height(bikePaneHeight));
+                        EndTwoPane();
                         break;
                     case Tab.BikePoser:
                         BikePoseEditor.DrawTab();
@@ -416,70 +525,76 @@ namespace rowemod
 
 
                     case Tab.Misc:
-                        if (BeginSectionCard("Drone", ref droneExpanded))
+                        BeginPane("Drone", "Toggle drone visuals and physics settings.");
+                        ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
+                        ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
+                        ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
+                        Slider("Drone Mass", ref misc.droneMass, 10f, 2f, 1000f);
+                        EndPane();
+
+                        BeginPane("General", "Gameplay helpers, cleanup actions, and menu accent color.");
+                        ModernToggle("Skip Main Intro", ref Config.autoSkipIntro);
+                        ModernToggle("No Bail", ref misc.neverBail);
+                        ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
+
+                        BeginToolbar();
+                        if (DangerButton("Remove Skidmarks", GUILayout.Width(150f), GUILayout.Height(26f)))
                         {
-                            ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
-                            ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
-                            ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
-                            Slider("Drone Mass", ref misc.droneMass, 10f, 2f, 1000f);
+                            Memory.RemoveSkidmarks();
                         }
-                        EndSectionCard();
-
-                        if (BeginSectionCard("Other", ref otherExpanded))
+                        if (SecondaryButton("Spawn Drift Car", GUILayout.Width(135f), GUILayout.Height(26f)))
                         {
-                            ModernToggle("Skip Main Intro", ref Config.autoSkipIntro);
-                            ModernToggle("No Bail", ref misc.neverBail);
-                            ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
-                            if (GUILayout.Button("Remove Skidmarks", redButtonStyle))
-                            {
-                                Memory.RemoveSkidmarks();
-                            }
-                            if (GUILayout.Button("Spawn Drift Car", highQualityButtonStyle))
-                            {
-                                SpawnDriftCarInFrontOfPlayer();
-                            }
-                            if (GUILayout.Button("Spawn Drift Trike", highQualityButtonStyle))
-                            {
-                                SpawnDriftTrikeInFrontOfPlayer();
-                            }
-
-                            ModernSlider("Menu Color R", ref misc.menuAccentR, 0f, 1f);
-                            ModernSlider("Menu Color G", ref misc.menuAccentG, 0f, 1f);
-                            ModernSlider("Menu Color B", ref misc.menuAccentB, 0f, 1f);
-
-                            if (GUILayout.Button("Apply Menu Color", highQualityButtonStyle))
-                            {
-                                stylesInitialized = false;
-                            }
+                            SpawnDriftCarInFrontOfPlayer();
                         }
-                        EndSectionCard();
-
-                        if (BeginSectionCard("Players", ref mpPlayersExpanded))
+                        if (SecondaryButton("Spawn Drift Trike", GUILayout.Width(145f), GUILayout.Height(26f)))
                         {
-                            DrawMultiplayerPlayerKickList();
+                            SpawnDriftTrikeInFrontOfPlayer();
                         }
-                        EndSectionCard();
+                        EndToolbar();
+
+                        DrawSectionTitle("Menu Accent");
+                        ModernSlider("Menu Color R", ref misc.menuAccentR, 0f, 1f);
+                        ModernSlider("Menu Color G", ref misc.menuAccentG, 0f, 1f);
+                        ModernSlider("Menu Color B", ref misc.menuAccentB, 0f, 1f);
+
+                        if (PrimaryButton("Apply Menu Color", GUILayout.Width(150f), GUILayout.Height(26f)))
+                        {
+                            stylesInitialized = false;
+                        }
+                        EndPane();
+
+                        BeginPane("Players", "Kick tools for detected network players.");
+                        DrawMultiplayerPlayerKickList();
+                        EndPane();
                         break;
 
                     case Tab.Graphics:
                         DrawGraphicsSettings();
                         break;
 
-                    case Tab.Marker:
-                        if (BeginSectionCard("Session Markers", ref sessionMarkersExpanded))
-                        {
-                            foreach (GameObject marker in sessionMarkers.Where(m => m != null))
-                            {
-                                if (GUILayout.Button(marker.name, highQualityButtonStyle))
-                                {
-                                    ReplaceSessionMarkerWithPrefab(marker);
-                                    Config.misc.customSessionMarker = marker.name;
-                                }
-                            }
+                    case Tab.Debug:
+                        DebugTools.DrawDebugTab();
+                        break;
 
-                            GUILayout.Label("Current Selected Marker: " + (Config.misc.customSessionMarker ?? "None"), subtleLabelStyle);
+                    case Tab.Marker:
+                        BeginPane("Session Markers", "Choose a marker prefab replacement for session markers.");
+                        int count = 0;
+                        foreach (GameObject marker in sessionMarkers.Where(m => m != null))
+                        {
+                            count++;
+                            if (GUILayout.Button(marker.name, UiRowButtonStyle, GUILayout.Height(26f)))
+                            {
+                                ReplaceSessionMarkerWithPrefab(marker);
+                                Config.misc.customSessionMarker = marker.name;
+                            }
                         }
-                        EndSectionCard();
+
+                        if (count == 0)
+                            DrawEmptyState("No session markers found", "Load into gameplay or refresh marker data, then reopen this tab.");
+
+                        GUILayout.Space(8f);
+                        GUILayout.Label("Current Selected Marker: " + (Config.misc.customSessionMarker ?? "None"), UiMutedWrappedStyle);
+                        EndPane();
                         break;
                     
                     // Adding case for the new Dropper tab
@@ -488,26 +603,26 @@ namespace rowemod
                         break;
                     
                     case Tab.Multiplayer:
-                        if (BeginSectionCard("Player Labels", ref playerLabelsExpanded))
+                        BeginPane("Player Labels", "Name tag visibility and multiplayer challenge controls.");
+                        bool previousShowPlayerUserNameTargets = misc.showPlayerUserNameTargets;
+                        ModernToggle("Show PlayerUserNameTarget", ref misc.showPlayerUserNameTargets, "mp_show_player_username_targets");
+                        if (previousShowPlayerUserNameTargets != misc.showPlayerUserNameTargets)
                         {
-                            bool previousShowPlayerUserNameTargets = misc.showPlayerUserNameTargets;
-                            ModernToggle("Show PlayerUserNameTarget", ref misc.showPlayerUserNameTargets, "mp_show_player_username_targets");
-                            if (previousShowPlayerUserNameTargets != misc.showPlayerUserNameTargets)
-                            {
-                                ApplyPlayerUserNameTargetsVisibility(true);
-                            }
-
-                            if (GUILayout.Button("Refresh Player Name Targets", highQualityButtonStyle))
-                            {
-                                ApplyPlayerUserNameTargetsVisibility(true);
-                            }
-
-                            if (GUILayout.Button(MultiplayerChallengeManager.IsOpen ? "Close Challenge UI" : "Open Challenge UI", highQualityButtonStyle))
-                            {
-                                MultiplayerChallengeManager.ToggleWindow();
-                            }
+                            ApplyPlayerUserNameTargetsVisibility(true);
                         }
-                        EndSectionCard();
+
+                        BeginToolbar();
+                        if (SecondaryButton("Refresh Player Name Targets", GUILayout.Width(205f), GUILayout.Height(26f)))
+                        {
+                            ApplyPlayerUserNameTargetsVisibility(true);
+                        }
+
+                        if (PrimaryButton(MultiplayerChallengeManager.IsOpen ? "Close Challenge UI" : "Open Challenge UI", GUILayout.Width(160f), GUILayout.Height(26f)))
+                        {
+                            MultiplayerChallengeManager.ToggleWindow();
+                        }
+                        EndToolbar();
+                        EndPane();
                         break;
                     
                     
@@ -741,11 +856,11 @@ namespace rowemod
             GUI.Box(headerRect, GUIContent.none, tabBarStyle);
 
             Rect titleRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y, headerRect.width - UiResetButtonWidth - (UiInnerPadding * 3f), headerRect.height);
-            GUI.Label(titleRect, GetCurrentTabLabel(), sectionHeaderStyle);
+            GUI.Label(titleRect, GetCurrentTabLabel(), pageTitleStyle ?? sectionHeaderStyle);
 
             Rect resetButtonRect = new Rect(headerRect.xMax - UiInnerPadding - UiResetButtonWidth, headerRect.y + 6f,
                 UiResetButtonWidth, headerRect.height - 12f);
-            if (GUI.Button(resetButtonRect, "Reset Tab", redButtonStyle))
+            if (GUI.Button(resetButtonRect, "Reset Tab", redButtonStyle ?? highQualityButtonStyle))
             {
                 ResetCurrentTab();
                 ResetSliderUI();
@@ -758,6 +873,9 @@ namespace rowemod
             {
                 Event currentEvent = Event.current;
                 if (currentEvent == null || currentEvent.type != EventType.ScrollWheel)
+                    return;
+
+                if (currentTab == Tab.Tricks)
                     return;
 
                 Rect contentRect = GetContentVisibleRect();
@@ -920,6 +1038,9 @@ namespace rowemod
                 case Tab.Graphics:
                     ResetGraphicsTab();
                     break;
+                case Tab.Debug:
+                    DebugTools.ResetTab();
+                    break;
                 case Tab.Marker:
                     Memory.ResetSessionMarkerToDefault();
                     break;
@@ -973,17 +1094,17 @@ namespace rowemod
             Light[] lights = UnityEngine.Object.FindObjectsOfType<Light>();
             if (lights != null)
             {
+                CacheLightDefaults(lights);
+
                 foreach (Light light in lights)
                 {
                     if (light == null)
                         continue;
 
-                    if (_cachedLightIntensityById.TryGetValue(light.GetInstanceID(), out float intensity))
-                        light.intensity = intensity;
+                    if (_cachedLightIntensityById.TryGetValue(light.GetInstanceID(), out float defaultIntensity))
+                        light.intensity = defaultIntensity;
                 }
             }
-
-            _cachedLightIntensityById.Clear();
         }
 
         private static void ResetChallengeSettings(bool applySizeToActiveArea)
@@ -1009,14 +1130,13 @@ namespace rowemod
             }
             catch (Exception ex)
             {
-                GUILayout.Label($"Could not read network players: {ex.Message}", subtleLabelStyle);
+                DrawEmptyState("Could not read network players", ex.Message);
                 return;
             }
 
             if (players == null || players.Length == 0)
             {
-                GUILayout.Label("No network players found.", subtleLabelStyle);
-                GUILayout.Label(_mpKickStatus, subtleLabelStyle);
+                DrawEmptyState("No network players found.", _mpKickStatus);
                 return;
             }
 
@@ -1035,7 +1155,7 @@ namespace rowemod
 
             GUILayout.Label(anyKickAuthority
                 ? "Kick sends a Fusion disconnect request for that player."
-                : "Kick controls require host/server or shared-mode master authority.", subtleLabelStyle);
+                : "Kick controls require host/server or shared-mode master authority.", UiMutedWrappedStyle);
 
             foreach (NetworkPlayer player in players)
             {
@@ -1048,7 +1168,7 @@ namespace rowemod
             if (!string.IsNullOrWhiteSpace(_mpKickStatus))
             {
                 GUILayout.Space(4f);
-                GUILayout.Label(_mpKickStatus, subtleLabelStyle);
+                GUILayout.Label(_mpKickStatus, UiMutedWrappedStyle);
             }
         }
 
@@ -1061,15 +1181,15 @@ namespace rowemod
             bool hasValidPlayerRef = TryGetNetworkPlayerRef(player, out Il2CppFusion.PlayerRef playerRef);
             bool canKick = !isLocalPlayer && hasKickAuthority && hasValidPlayerRef;
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(isLocalPlayer ? $"{displayName} (You)" : displayName, labelStyle, GUILayout.MinWidth(220f));
+            GUILayout.BeginHorizontal(UiPanelAltStyle);
+            GUILayout.Label(isLocalPlayer ? $"{displayName} (You)" : displayName, UiRowLabelStyle, GUILayout.MinWidth(220f));
 
             string status = GetNetworkPlayerKickStatus(isLocalPlayer, runner, hasKickAuthority, hasValidPlayerRef, playerRef);
-            GUILayout.Label(status, subtleLabelStyle, GUILayout.MinWidth(160f));
+            GUILayout.Label(status, UiRowMutedLabelStyle, GUILayout.MinWidth(160f));
 
             bool previousEnabled = GUI.enabled;
             GUI.enabled = previousEnabled && canKick;
-            if (GUILayout.Button("Kick", redButtonStyle, GUILayout.Width(86f)))
+            if (DangerButton("Kick", GUILayout.Width(86f), GUILayout.Height(24f)))
             {
                 TryKickNetworkPlayer(player);
             }
@@ -1411,6 +1531,11 @@ namespace rowemod
                     GrindPoseEditor.OnGrindsTabExited();
                 }
 
+                if (currentTab == Tab.Tricks)
+                {
+                    TrickMods.OnTricksTabExited();
+                }
+
                 if (currentTab == Tab.BikePoser)
                 {
                     BikePoseEditor.OnTabExited();
@@ -1419,6 +1544,11 @@ namespace rowemod
                 if (newTab == Tab.Grinds)
                 {
                     GrindPoseEditor.OnGrindsTabEntered();
+                }
+
+                if (newTab == Tab.Tricks)
+                {
+                    TrickMods.OnTricksTabEntered();
                 }
 
                 if (newTab == Tab.BikePoser)
@@ -1433,6 +1563,69 @@ namespace rowemod
             }
         }
 
+        private sealed class MenuSkinScope : IDisposable
+        {
+            private readonly GUIStyle previousButton;
+            private readonly GUIStyle previousBox;
+            private readonly GUIStyle previousLabel;
+            private readonly GUIStyle previousTextField;
+            private readonly GUIStyle previousToggle;
+            private readonly GUIStyle previousHorizontalSlider;
+            private readonly GUIStyle previousHorizontalSliderThumb;
+
+            public MenuSkinScope()
+            {
+                if (GUI.skin == null)
+                    return;
+
+                previousButton = GUI.skin.button;
+                previousBox = GUI.skin.box;
+                previousLabel = GUI.skin.label;
+                previousTextField = GUI.skin.textField;
+                previousToggle = GUI.skin.toggle;
+                previousHorizontalSlider = GUI.skin.horizontalSlider;
+                previousHorizontalSliderThumb = GUI.skin.horizontalSliderThumb;
+
+                if (highQualityButtonStyle != null)
+                    GUI.skin.button = highQualityButtonStyle;
+                if (panelStyle != null)
+                    GUI.skin.box = panelStyle;
+                else if (sectionCardStyle != null)
+                    GUI.skin.box = sectionCardStyle;
+                if (labelStyle != null)
+                    GUI.skin.label = labelStyle;
+                if (textFieldStyle != null)
+                    GUI.skin.textField = textFieldStyle;
+                if (toggleStyle != null)
+                    GUI.skin.toggle = toggleStyle;
+                if (horizontalSliderStyle != null)
+                    GUI.skin.horizontalSlider = horizontalSliderStyle;
+                if (horizontalSliderThumbStyle != null)
+                    GUI.skin.horizontalSliderThumb = horizontalSliderThumbStyle;
+            }
+
+            public void Dispose()
+            {
+                if (GUI.skin == null)
+                    return;
+
+                if (previousButton != null)
+                    GUI.skin.button = previousButton;
+                if (previousBox != null)
+                    GUI.skin.box = previousBox;
+                if (previousLabel != null)
+                    GUI.skin.label = previousLabel;
+                if (previousTextField != null)
+                    GUI.skin.textField = previousTextField;
+                if (previousToggle != null)
+                    GUI.skin.toggle = previousToggle;
+                if (previousHorizontalSlider != null)
+                    GUI.skin.horizontalSlider = previousHorizontalSlider;
+                if (previousHorizontalSliderThumb != null)
+                    GUI.skin.horizontalSliderThumb = previousHorizontalSliderThumb;
+            }
+        }
+
 
         //-------------------------------------------------------------------
         // STYLES
@@ -1443,6 +1636,7 @@ namespace rowemod
             try
             {
                 stylesInitialized = true;
+                styleRevision++;
 
                 Color rawAccentColor = new Color(
                     Mathf.Clamp01(misc.menuAccentR),
@@ -1452,25 +1646,25 @@ namespace rowemod
                 float accentLuma = (rawAccentColor.r * 0.299f) + (rawAccentColor.g * 0.587f) + (rawAccentColor.b * 0.114f);
                 uiAccentColor = rawAccentColor;
                 uiAccentHoverColor = Color.Lerp(uiAccentColor, Color.white, 0.18f);
-                uiAccentSoftColor = new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.24f);
+                uiAccentSoftColor = new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.36f);
                 uiAccentTextColor = accentLuma < 0.45f
-                    ? Color.Lerp(uiAccentColor, Color.white, 0.58f)
-                    : Color.Lerp(uiAccentColor, Color.white, 0.18f);
-                uiBackgroundColor = new Color(0.045f, 0.05f, 0.07f, 0.97f);
-                uiPanelColor = new Color(0.075f, 0.085f, 0.115f, 0.9f);
-                uiPanelHoverColor = new Color(0.12f, 0.135f, 0.17f, 0.94f);
-                uiPanelAltColor = new Color(0.105f, 0.115f, 0.145f, 0.94f);
-                uiBorderColor = new Color(1f, 1f, 1f, 0.12f);
-                uiTextPrimaryColor = new Color(0.94f, 0.94f, 0.94f, 1f);
-                uiTextMutedColor = new Color(0.72f, 0.72f, 0.72f, 1f);
-                uiDangerColor = new Color(0.46f, 0.2f, 0.22f, 0.95f);
-                uiDangerHoverColor = new Color(0.56f, 0.24f, 0.27f, 0.96f);
-                uiDangerActiveColor = new Color(0.36f, 0.16f, 0.19f, 0.97f);
+                    ? Color.Lerp(uiAccentColor, Color.white, 0.68f)
+                    : Color.white;
+                uiBackgroundColor = new Color(0.025f, 0.027f, 0.032f, 0.988f);
+                uiPanelColor = new Color(0.043f, 0.046f, 0.054f, 0.965f);
+                uiPanelHoverColor = new Color(0.074f, 0.077f, 0.088f, 0.98f);
+                uiPanelAltColor = new Color(0.057f, 0.06f, 0.07f, 0.97f);
+                uiBorderColor = new Color(1f, 1f, 1f, 0.085f);
+                uiTextPrimaryColor = new Color(0.95f, 0.95f, 0.95f, 1f);
+                uiTextMutedColor = new Color(0.66f, 0.66f, 0.67f, 1f);
+                uiDangerColor = new Color(0.48f, 0.21f, 0.24f, 0.96f);
+                uiDangerHoverColor = new Color(0.58f, 0.25f, 0.28f, 0.98f);
+                uiDangerActiveColor = new Color(0.38f, 0.15f, 0.18f, 0.98f);
 
                 backgroundTexture = MakeRoundedTex(64, 64, uiBackgroundColor, 11, 1, uiBorderColor);
-                roundedButtonNormal = MakeRoundedTex(40, 28, uiPanelAltColor, 7, 1, uiBorderColor);
-                roundedButtonHover = MakeRoundedTex(40, 28, uiPanelHoverColor, 7, 1, uiBorderColor);
-                activeTabBackground = MakeRoundedTex(40, 32, uiAccentSoftColor, 8, 1, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.82f));
+                roundedButtonNormal = MakeRoundedTex(40, 28, new Color(0.075f, 0.077f, 0.086f, 0.97f), 7, 1, uiBorderColor);
+                roundedButtonHover = MakeRoundedTex(40, 28, new Color(0.105f, 0.108f, 0.12f, 0.99f), 7, 1, new Color(1f, 1f, 1f, 0.13f));
+                activeTabBackground = MakeRoundedTex(40, 32, new Color(uiAccentColor.r * 0.62f, uiAccentColor.g * 0.43f, uiAccentColor.b * 0.31f, 0.88f), 8, 1, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.76f));
                 accentColorTexture = MakeTex(2, 2, uiAccentColor);
                 tabIndicatorTexture = MakeTex(2, 2, uiAccentColor);
                 toggleCapsuleMaskTexture = MakeCapsuleTex(96, 52, Color.white, 0, Color.clear);
@@ -1507,6 +1701,23 @@ namespace rowemod
                 sectionHeaderStyle.fontStyle = FontStyle.Bold;
                 sectionHeaderStyle.fontSize = 13;
 
+                pageTitleStyle = new GUIStyle(sectionHeaderStyle);
+                pageTitleStyle.fontSize = 14;
+                pageTitleStyle.alignment = TextAnchor.MiddleLeft;
+
+                rowLabelStyle = new GUIStyle(labelStyle);
+                rowLabelStyle.richText = true;
+                rowLabelStyle.alignment = TextAnchor.MiddleLeft;
+                rowLabelStyle.padding = new RectOffset(6, 6, 2, 2);
+
+                rowMutedLabelStyle = new GUIStyle(rowLabelStyle);
+                rowMutedLabelStyle.normal.textColor = uiTextMutedColor;
+                rowMutedLabelStyle.fontSize = 12;
+                rowMutedLabelStyle.wordWrap = true;
+
+                mutedWrappedLabelStyle = new GUIStyle(subtleLabelStyle);
+                mutedWrappedLabelStyle.wordWrap = true;
+
                 toggleStyle = new GUIStyle(GUI.skin.toggle);
                 toggleStyle.normal.textColor = uiTextPrimaryColor;
                 toggleStyle.fontSize = 12;
@@ -1530,7 +1741,7 @@ namespace rowemod
                 highQualityButtonStyle = new GUIStyle(GUI.skin.button);
                 highQualityButtonStyle.normal.background = roundedButtonNormal;
                 highQualityButtonStyle.hover.background = roundedButtonHover;
-                highQualityButtonStyle.active.background = MakeRoundedTex(40, 28, uiPanelColor, 7, 1, uiBorderColor);
+                highQualityButtonStyle.active.background = MakeRoundedTex(40, 28, new Color(0.05f, 0.055f, 0.066f, 0.98f), 7, 1, new Color(1f, 1f, 1f, 0.08f));
                 highQualityButtonStyle.normal.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.hover.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.active.textColor = uiTextPrimaryColor;
@@ -1541,10 +1752,44 @@ namespace rowemod
                 highQualityButtonStyle.padding = new RectOffset(12, 12, 6, 6);
                 highQualityButtonStyle.richText = true;
 
+                rowButtonStyle = new GUIStyle(highQualityButtonStyle);
+                rowButtonStyle.alignment = TextAnchor.MiddleLeft;
+                rowButtonStyle.padding = new RectOffset(10, 10, 4, 4);
+                rowButtonStyle.margin = new RectOffset(2, 2, 1, 1);
+
+                rowButtonSelectedStyle = new GUIStyle(rowButtonStyle);
+                rowButtonSelectedStyle.normal.background = activeTabBackground;
+                rowButtonSelectedStyle.hover.background = activeTabBackground;
+                rowButtonSelectedStyle.active.background = activeTabBackground;
+                rowButtonSelectedStyle.normal.textColor = uiAccentTextColor;
+                rowButtonSelectedStyle.hover.textColor = uiAccentTextColor;
+                rowButtonSelectedStyle.active.textColor = uiAccentTextColor;
+                rowButtonSelectedStyle.fontStyle = FontStyle.Bold;
+
+                pillButtonStyle = new GUIStyle(highQualityButtonStyle);
+                pillButtonStyle.fontSize = 11;
+                pillButtonStyle.padding = new RectOffset(10, 10, 3, 3);
+                pillButtonStyle.margin = new RectOffset(4, 0, 0, 0);
+                pillButtonStyle.border = new RectOffset(7, 7, 7, 7);
+
+                pillActiveButtonStyle = new GUIStyle(pillButtonStyle);
+                pillActiveButtonStyle.normal.background = activeTabBackground;
+                pillActiveButtonStyle.hover.background = MakeRoundedTex(40, 28, new Color(uiAccentColor.r * 0.68f, uiAccentColor.g * 0.5f, uiAccentColor.b * 0.38f, 0.9f), 7, 1, uiAccentColor);
+                pillActiveButtonStyle.active.background = MakeRoundedTex(40, 28, new Color(uiAccentColor.r * 0.52f, uiAccentColor.g * 0.38f, uiAccentColor.b * 0.28f, 0.94f), 7, 1, uiAccentHoverColor);
+                pillActiveButtonStyle.normal.textColor = Color.white;
+                pillActiveButtonStyle.hover.textColor = Color.white;
+                pillActiveButtonStyle.active.textColor = Color.white;
+                pillActiveButtonStyle.fontStyle = FontStyle.Bold;
+
+                miniButtonStyle = new GUIStyle(highQualityButtonStyle);
+                miniButtonStyle.fontSize = 11;
+                miniButtonStyle.padding = new RectOffset(7, 7, 3, 3);
+                miniButtonStyle.margin = new RectOffset(2, 2, 0, 0);
+
                 tabButtonStyle = new GUIStyle(highQualityButtonStyle);
                 tabButtonStyle.normal.background = MakeRoundedTex(40, 32, new Color(0f, 0f, 0f, 0f), 8, 1, new Color(0f, 0f, 0f, 0f));
-                tabButtonStyle.hover.background = MakeRoundedTex(40, 32, new Color(1f, 1f, 1f, 0.055f), 8, 1, new Color(1f, 1f, 1f, 0.1f));
-                tabButtonStyle.active.background = MakeRoundedTex(40, 32, new Color(1f, 1f, 1f, 0.075f), 8, 1, new Color(1f, 1f, 1f, 0.12f));
+                tabButtonStyle.hover.background = MakeRoundedTex(40, 32, new Color(1f, 1f, 1f, 0.04f), 8, 1, new Color(1f, 1f, 1f, 0.08f));
+                tabButtonStyle.active.background = MakeRoundedTex(40, 32, new Color(1f, 1f, 1f, 0.06f), 8, 1, new Color(1f, 1f, 1f, 0.1f));
                 tabButtonStyle.padding = new RectOffset(16, 10, 6, 6);
                 tabButtonStyle.fontSize = 12;
                 tabButtonStyle.alignment = TextAnchor.MiddleLeft;
@@ -1572,13 +1817,33 @@ namespace rowemod
                 sectionCardStyle.margin = new RectOffset(0, 0, 0, 0);
                 sectionCardStyle.border = new RectOffset(9, 9, 9, 9);
 
+                panelStyle = new GUIStyle(sectionCardStyle);
+                panelStyle.padding = new RectOffset(12, 12, 10, 12);
+                panelStyle.margin = new RectOffset(0, 0, 4, 8);
+
+                panelAltStyle = new GUIStyle(panelStyle);
+                panelAltStyle.normal.background = MakeRoundedTex(64, 64, uiPanelAltColor, 9, 1, uiBorderColor);
+
                 tabBarStyle = new GUIStyle(GUI.skin.box);
                 tabBarStyle.normal.background = MakeRoundedTex(64, 36, uiPanelColor, 9, 1, uiBorderColor);
                 tabBarStyle.border = new RectOffset(9, 9, 9, 9);
                 tabBarStyle.padding = new RectOffset((int)UiInnerPadding, (int)UiInnerPadding, 4, 4);
                 tabBarStyle.margin = new RectOffset(0, 0, 0, 0);
 
-                Texture2D textFieldBackground = MakeTex(2, 2, new Color(0.09f, 0.09f, 0.09f, 1f));
+                toolbarStyle = new GUIStyle(tabBarStyle);
+                toolbarStyle.padding = new RectOffset(10, 10, 7, 7);
+                toolbarStyle.margin = new RectOffset(0, 0, 0, 8);
+
+                badgeStyle = new GUIStyle(GUI.skin.box);
+                badgeStyle.normal.background = MakeRoundedTex(32, 22, uiPanelAltColor, 7, 1, uiBorderColor);
+                badgeStyle.normal.textColor = uiTextMutedColor;
+                badgeStyle.alignment = TextAnchor.MiddleCenter;
+                badgeStyle.fontSize = 11;
+                badgeStyle.fixedHeight = 21f;
+                badgeStyle.padding = new RectOffset(7, 7, 2, 2);
+                badgeStyle.border = new RectOffset(7, 7, 7, 7);
+
+                Texture2D textFieldBackground = MakeRoundedTex(64, 24, new Color(0.032f, 0.033f, 0.038f, 0.99f), 6, 1, new Color(1f, 1f, 1f, 0.115f));
                 textFieldStyle = new GUIStyle(GUI.skin.textField);
                 textFieldStyle.alignment = TextAnchor.MiddleCenter;
                 textFieldStyle.fontSize = 12;
@@ -1592,6 +1857,11 @@ namespace rowemod
                 textFieldStyle.hover.background = textFieldBackground;
                 textFieldStyle.active.background = textFieldBackground;
                 textFieldStyle.border = new RectOffset(4, 4, 4, 4);
+
+                searchFieldStyle = new GUIStyle(textFieldStyle);
+                searchFieldStyle.alignment = TextAnchor.MiddleLeft;
+                searchFieldStyle.padding = new RectOffset(10, 10, 4, 4);
+                searchFieldStyle.margin = new RectOffset(4, 4, 0, 0);
             }
             catch (Exception ex)
             {
@@ -1915,9 +2185,45 @@ namespace rowemod
             Light[] lights = UnityEngine.Object.FindObjectsOfType<Light>();
             if (lights == null || lights.Length == 0)
             {
+                BeginPane("Light Settings", "Scene lights will appear here when the current scene exposes them.");
+                DrawEmptyState("No editable lights found.");
+                EndPane();
                 return;
             }
 
+            CacheLightDefaults(lights);
+
+            BeginPane("Light Settings", "Adjust intensity for lights exposed by the current scene.");
+            foreach (var light in lights)
+            {
+                if (light == null)
+                    continue;
+
+                int lightId = light.GetInstanceID();
+                float defaultIntensity = _cachedLightIntensityById.TryGetValue(lightId, out float cachedDefault)
+                    ? cachedDefault
+                    : Mathf.Max(0f, light.intensity);
+                float maxIntensity = Mathf.Max(0.01f, defaultIntensity * 2f);
+                string lightName = string.IsNullOrEmpty(light.name) ? $"Light {light.GetInstanceID()}" : light.name;
+                DrawSectionTitle(lightName, $"Default: {defaultIntensity:0.###}  Max: {maxIntensity:0.###}");
+                float intensity = light.intensity;
+                ModernSlider(
+                    "Intensity",
+                    ref intensity,
+                    0f,
+                    maxIntensity,
+                    $"Light.{light.GetInstanceID()}.intensity");
+
+                if (!Mathf.Approximately(intensity, light.intensity))
+                {
+                    light.intensity = intensity;
+                }
+            }
+            EndPane();
+        }
+
+        private static void CacheLightDefaults(IEnumerable<Light> lights)
+        {
             HashSet<int> currentLightIds = new HashSet<int>();
             foreach (var light in lights)
             {
@@ -1930,42 +2236,12 @@ namespace rowemod
                     _cachedLightIntensityById[lightId] = Mathf.Max(0f, light.intensity);
             }
 
-            if (_cachedLightIntensityById.Count > 0)
-            {
-                var removedIds = _cachedLightIntensityById.Keys.Where(id => !currentLightIds.Contains(id)).ToArray();
-                foreach (var removedId in removedIds)
-                    _cachedLightIntensityById.Remove(removedId);
-            }
+            if (_cachedLightIntensityById.Count == 0)
+                return;
 
-            float maxCachedIntensity = 1f;
-            if (_cachedLightIntensityById.Count > 0)
-                maxCachedIntensity = Mathf.Max(0.01f, _cachedLightIntensityById.Values.Max());
-
-
-            if (BeginSectionCard("Light Settings", ref lightSettingsExpanded))
-            {
-                foreach (var light in lights)
-                {
-                    if (light == null)
-                        continue;
-
-                    string lightName = string.IsNullOrEmpty(light.name) ? $"Light {light.GetInstanceID()}" : light.name;
-                    GUILayout.Label(lightName, subtleLabelStyle);
-                    float intensity = light.intensity;
-                    ModernSlider(
-                        "Intensity",
-                        ref intensity,
-                        0f,
-                        maxCachedIntensity,
-                        $"Light.{light.GetInstanceID()}.intensity");
-
-                    if (!Mathf.Approximately(intensity, light.intensity))
-                    {
-                        light.intensity = intensity;
-                    }
-                }
-            }
-            EndSectionCard();
+            var removedIds = _cachedLightIntensityById.Keys.Where(id => !currentLightIds.Contains(id)).ToArray();
+            foreach (var removedId in removedIds)
+                _cachedLightIntensityById.Remove(removedId);
         }
 
         
@@ -1981,7 +2257,7 @@ namespace rowemod
         // SLIDER & GUI METHODS
         //-------------------------------------------------------------------
 
-        private static bool BeginSectionCard(string label, ref bool expanded)
+        public static bool BeginSectionCard(string label, ref bool expanded)
         {
             GUILayout.Space(UiSectionSpacing);
             GUILayout.BeginVertical(sectionCardStyle);
@@ -1993,9 +2269,139 @@ namespace rowemod
             return expanded;
         }
 
-        private static void EndSectionCard()
+        public static void EndSectionCard()
         {
             GUILayout.EndVertical();
+        }
+
+        public static void BeginPanel(params GUILayoutOption[] options)
+        {
+            GUILayout.BeginVertical(UiPanelStyle, options);
+        }
+
+        public static void BeginAltPanel(params GUILayoutOption[] options)
+        {
+            GUILayout.BeginVertical(UiPanelAltStyle, options);
+        }
+
+        public static void EndPanel()
+        {
+            GUILayout.EndVertical();
+        }
+
+        public static void BeginToolbar(params GUILayoutOption[] options)
+        {
+            GUILayout.BeginHorizontal(toolbarStyle ?? UiPanelStyle, options);
+        }
+
+        public static void EndToolbar()
+        {
+            GUILayout.EndHorizontal();
+        }
+
+        public static void DrawSectionTitle(string title, string detail = null)
+        {
+            GUILayout.Label(title, UiHeaderStyle);
+            if (!string.IsNullOrWhiteSpace(detail))
+                GUILayout.Label(detail, UiMutedWrappedStyle);
+        }
+
+        public static bool MiniButton(string label, params GUILayoutOption[] options)
+        {
+            return GUILayout.Button(label, UiMiniButtonStyle, options);
+        }
+
+        public static bool PillButton(string label, bool active, params GUILayoutOption[] options)
+        {
+            return GUILayout.Button(label, active ? UiPillActiveStyle : UiPillStyle, options);
+        }
+
+        public static void DrawStatusBadge(string text, params GUILayoutOption[] options)
+        {
+            GUILayout.Label(text, UiBadgeStyle, options);
+        }
+
+        public static float GetContentPaneHeight(float reservedHeight = 0f)
+        {
+            return Mathf.Max(280f, viewHeight - reservedHeight);
+        }
+
+        public static void BeginPane(string title, string detail = null, params GUILayoutOption[] options)
+        {
+            BeginPanel(options);
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                DrawSectionTitle(title, detail);
+                GUILayout.Space(6f);
+            }
+        }
+
+        public static void BeginAltPane(string title, string detail = null, params GUILayoutOption[] options)
+        {
+            BeginAltPanel(options);
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                DrawSectionTitle(title, detail);
+                GUILayout.Space(6f);
+            }
+        }
+
+        public static void EndPane()
+        {
+            EndPanel();
+        }
+
+        public static void BeginTwoPane(float height)
+        {
+            GUILayout.BeginHorizontal(GUILayout.Height(height));
+        }
+
+        public static void EndTwoPane()
+        {
+            GUILayout.EndHorizontal();
+        }
+
+        public static bool SearchRow(ref string value, float width = 240f, string label = "Search")
+        {
+            GUILayout.Label(label, UiMutedStyle, GUILayout.Width(54f));
+            GUI.SetNextControlName($"{label}_SearchField");
+            string nextValue = GUILayout.TextField(value ?? string.Empty, UiSearchFieldStyle, GUILayout.Width(width), GUILayout.Height(24f));
+            bool changed = !string.Equals(nextValue, value ?? string.Empty, StringComparison.Ordinal);
+            value = nextValue;
+
+            if (!string.IsNullOrEmpty(value) && MiniButton("x", GUILayout.Width(24f), GUILayout.Height(24f)))
+            {
+                value = string.Empty;
+                GUI.FocusControl(null);
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        public static bool PrimaryButton(string label, params GUILayoutOption[] options)
+        {
+            return GUILayout.Button(label, UiPillActiveStyle, options);
+        }
+
+        public static bool SecondaryButton(string label, params GUILayoutOption[] options)
+        {
+            return GUILayout.Button(label, UiButtonStyle, options);
+        }
+
+        public static bool DangerButton(string label, params GUILayoutOption[] options)
+        {
+            return GUILayout.Button(label, UiDangerButtonStyle, options);
+        }
+
+        public static void DrawEmptyState(string title, string detail = null)
+        {
+            GUILayout.FlexibleSpace();
+            GUIStyle titleStyle = UiHeaderStyle;
+            GUILayout.Label(title, titleStyle);
+            if (!string.IsNullOrWhiteSpace(detail))
+                GUILayout.Label(detail, UiMutedWrappedStyle);
+            GUILayout.FlexibleSpace();
         }
 
         public static bool ModernFoldout(string label, bool expanded)

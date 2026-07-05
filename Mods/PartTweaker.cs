@@ -363,19 +363,29 @@ namespace rowemod.Mods
         }
 
 
-        public static void DrawPartTweaker()
+        public static void DrawPartTweaker(params GUILayoutOption[] paneOptions)
         {
             bool changed = false;
+            bool hasAnyControls = seatPostAnchor != null || barsAnchor != null || wheelMeshes != null || (pegData != null && pegData.Count > 0);
+
+            Menu.BeginPane("Bike Adjustments", "Tune common fitted bike part offsets.", paneOptions);
+
+            if (!hasAnyControls)
+            {
+                Menu.DrawEmptyState("No bike adjustment targets found", "Enter gameplay or refresh bike parts, then reopen this tab.");
+                Menu.EndPane();
+                return;
+            }
 
             if (seatPostAnchor != null)
             {
-                GUILayout.Label("Seat Height", Menu.coloredBoxStyle);
+                Menu.DrawSectionTitle("Seat Height");
                 float oldSeatHeight = Config.bike.seatHeight;
                 Menu.ModernSlider("Height Offset", ref Config.bike.seatHeight, -0.15f, 0.15f);
                 if (oldSeatHeight != Config.bike.seatHeight) changed = true;
 
                 GUILayout.Space(10);
-                GUILayout.Label("Seat Tilt", Menu.coloredBoxStyle);
+                Menu.DrawSectionTitle("Seat Tilt");
                 float oldSeatPitch = Config.bike.seatPitch;
                 Menu.ModernSlider("Rotation X", ref Config.bike.seatPitch, 330f, 379f);
                 if (oldSeatPitch != Config.bike.seatPitch) changed = true;
@@ -384,7 +394,7 @@ namespace rowemod.Mods
             if (barsAnchor != null)
             {
                 GUILayout.Space(10);
-                GUILayout.Label("Bars Rotation", Menu.coloredBoxStyle);
+                Menu.DrawSectionTitle("Bars");
                 float oldBarPitch = Config.bike.barPitch;
                 Menu.ModernSlider("Rotation", ref Config.bike.barPitch, -45f, 45f);
                 if (oldBarPitch != Config.bike.barPitch) changed = true;
@@ -397,7 +407,7 @@ namespace rowemod.Mods
             if (wheelMeshes != null)
             {
                 GUILayout.Space(10);
-                GUILayout.Label("Wheel Scale", Menu.coloredBoxStyle);
+                Menu.DrawSectionTitle("Wheel Scale");
 
                 float oldW = Config.bike.frontWheelWidth;
                 float oldR = Config.bike.frontWheelRadius;
@@ -424,7 +434,7 @@ namespace rowemod.Mods
             if (pegData != null && pegData.Count > 0)
             {
                 GUILayout.Space(10);
-                GUILayout.Label("Pegs Enabled", Menu.coloredBoxStyle);
+                Menu.DrawSectionTitle("Pegs Enabled");
 
                 for (int i = 0; i < pegData.Count; i++)
                 {
@@ -435,7 +445,8 @@ namespace rowemod.Mods
                                    d.IsRearRight ? "Rear Right" :
                                    d.EquipSlot != null ? d.EquipSlot.name : "Peg";
 
-                    bool enabledNow = GUILayout.Toggle(d.IsEnabled, label);
+                    bool enabledNow = d.IsEnabled;
+                    Menu.ModernToggle(label, ref enabledNow, $"bike_peg_{i}_{label}");
                     if (enabledNow != d.IsEnabled)
                     {
                         SetConfigEnabled(d, enabledNow);
@@ -451,6 +462,8 @@ namespace rowemod.Mods
                 UpdatePartTransforms();
                 Config.Save();
             }
+
+            Menu.EndPane();
         }
         
         public static void UpdatePartTransforms()
@@ -713,18 +726,19 @@ namespace rowemod.Mods
         ///CUSTOM PART LOADING AND LAYOUT
         private static void DrawPartTab(string label, List<GameObject> prefabs, string[] names, ref int selectedIndex, ref Vector2 scrollPos, Action<GameObject> onSelect)
         {
-            GUILayout.Label(label, Menu.labelStyle);
+            Menu.DrawSectionTitle(label);
     
             if (names == null || names.Length == 0)
             {
-                GUILayout.Label("No prefabs found.", Menu.labelStyle);
+                Menu.DrawEmptyState("No prefabs found.");
                 return;
             }
 
             scrollPos = GUILayout.BeginScrollView(scrollPos, GUILayout.Height(200));
             for (int i = 0; i < names.Length; i++)
             {
-                if (GUILayout.Button($"<b>{names[i]}</b>", Menu.highQualityButtonStyle))
+                GUIStyle rowStyle = i == selectedIndex ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle;
+                if (GUILayout.Button(names[i], rowStyle, GUILayout.Height(26f)))
                 {
                     selectedIndex = i;
                     GameObject selected = prefabs[i];
@@ -757,16 +771,14 @@ namespace rowemod.Mods
             FindParts();
             UpdatePartTransforms();
         }
-        public static void DrawPartSelectorUI()
+        public static void DrawPartSelectorUI(params GUILayoutOption[] paneOptions)
         {
-            // nice bordered container for the whole part selector (the red box in your screenshot)
-            GUILayout.BeginVertical(GUI.skin.box); // Or use Menu.cardOuterStyle if you have it
+            Menu.BeginPane("Bike Parts", "Swap common bike parts from loaded RoweMod bundles.", paneOptions);
 
             // Header row + RESET PARTS button (right aligned)
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Bike Parts", Menu.coloredBoxStyle, GUILayout.Height(26));
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("<b>RESET PARTS</b>", Menu.redButtonStyle, GUILayout.Height(26), GUILayout.Width(140)))
+            if (Menu.DangerButton("Reset Parts", GUILayout.Height(26), GUILayout.Width(120)))
             {
                 ResetAllCustomParts();
             }
@@ -790,7 +802,7 @@ namespace rowemod.Mods
                     break;
             }
 
-            GUILayout.EndVertical();
+            Menu.EndPane();
         }
         private static void ApplyPegEnabledFromConfig()
         {
@@ -977,18 +989,17 @@ namespace rowemod.Mods
         
         private static void DrawPartTypeTabs()
         {
-            GUILayout.BeginHorizontal();
+            Menu.BeginToolbar();
 
             foreach (PartTypeTab tab in Enum.GetValues(typeof(PartTypeTab)))
             {
-                GUIStyle style = currentPartTab == tab ? Menu.activeTabButtonStyle : Menu.highQualityButtonStyle;
-                if (GUILayout.Button($"<b>{tab}</b>", style, GUILayout.Height(30), GUILayout.Width(100)))
+                if (Menu.PillButton(tab.ToString(), currentPartTab == tab, GUILayout.Height(24), GUILayout.Width(92)))
                 {
                     currentPartTab = tab;
                 }
             }
 
-            GUILayout.EndHorizontal();
+            Menu.EndToolbar();
         }
         
         public static void LoadSavedStem()

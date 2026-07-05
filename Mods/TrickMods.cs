@@ -2,6 +2,7 @@
 using System.Reflection;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System;
+using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2;
 using Il2CppMashBox.Core.Runtime.TrickSystem;
 //using Il2CppMG_Core.C_R_I_D.Animation_System.Animancer_Test;
 using rowemod.Utils;
@@ -446,51 +447,209 @@ namespace rowemod.Mods
 
 
         // Add these fields to TrickMods
-        private static Vector2 _uiScroll;
+        private static Vector2 _trickListScroll;
+        private static Vector2 _trickDetailScroll;
+        private static Vector2 _presetScroll;
         private static string _uiSearch = "";
+        private static string _presetName = "";
+        private static string _selectedPresetName = "";
+        private static string _presetStatus = "Save and restore trick toggles, replacements, and animation overrides.";
         private static readonly Dictionary<string, bool> _foldouts = new();
+        private static readonly Dictionary<string, bool> _animationEditorFoldouts = new();
         private static bool _stylesInited;
-        private static GUIStyle _card, _cardHeader, _pill, _pillOn, _rowLabelLeft, _rowLabelRight, _miniBtn, _badge, _searchField;
+        private static int _styleRevision = -1;
+        private static GUIStyle _card, _cardHeader, _pill, _pillOn, _rowLabelLeft, _rowLabelRight, _rowButton, _rowButtonSelected, _miniBtn, _badge, _searchField;
+        private static GUIStyle _toolbarLabel, _setBlock, _setHeaderButton, _rowStrip, _rowStripSelected, _directionBadge, _directionBadgeSelected, _emptyState;
 
         // tiny “dirty” flag so we only rebuild runtime when something changed
         private static bool _pendingRefresh;
         private static float _lastTrickDataRefreshAttempt = -10f;
+        private static TrickSetData _selectedTrickSet;
+        private static string _selectedTrickSetKey = string.Empty;
+        private static int _selectedTrickSlot = -1;
+        private static string _selectedTrickDirection = string.Empty;
+        private static string _selectedTrickName = string.Empty;
+        private static bool _tricksTabActive;
+        private static bool _needsAutoSelectTrick;
+        private static bool _previewEnabled;
+        private static bool _previewStateApplied;
+        private static bool _previewPlayerOffsetApplied;
+        private static bool _previewSpringBodyCaptured;
+        private static Transform _previewPlayerTransform;
+        private static Rigidbody _previewSpringBody;
+        private static bool _previewSpringBodyOriginalIsKinematic;
+        private static bool _previewJumpInvoked;
+        private static float _nextPreviewFireTime;
+        private static string _lastPreviewSelectionKey = string.Empty;
+        private static string _lastPreviewLogKey = string.Empty;
+        private static bool _tricksNoBailOverrideActive;
+        private static bool _tricksNoBailUserValue;
+        private static readonly Vector3 TrickPreviewPlayerOffset = new Vector3(0f, 1.25f, 0f);
+        private const float TrickPreviewFireInterval = 2f;
 
         public static void DrawTrickMenuPro()
         {
             InitStylesIfNeeded();
 
-            GUILayout.Space(6);
-            GUILayout.Label("Tricks", _cardHeader);
+            if (Config.trickAnimationDebugSettings == null)
+                Config.trickAnimationDebugSettings = new TrickAnimationDebugSettings();
 
-            // top toolbar
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Search:", GUILayout.Width(60));
+            Menu.BeginToolbar();
+            GUILayout.Label("Search", _toolbarLabel, GUILayout.Width(54));
             GUI.SetNextControlName("trickSearch");
-            var newSearch = GUILayout.TextField(_uiSearch, _searchField, GUILayout.Width(220));
+            var newSearch = GUILayout.TextField(_uiSearch, _searchField, GUILayout.Width(240), GUILayout.Height(24));
             if (newSearch != _uiSearch) _uiSearch = newSearch;
+
+            bool animationDebugLogs = Config.trickAnimationDebugSettings.enabled;
+            bool updatedAnimationDebugLogs = GUILayout.Toggle(
+                animationDebugLogs,
+                animationDebugLogs ? "Logs On" : "Logs Off",
+                animationDebugLogs ? _pillOn : _pill,
+                GUILayout.Width(84),
+                GUILayout.Height(24));
+            if (updatedAnimationDebugLogs != Config.trickAnimationDebugSettings.enabled)
+            {
+                Config.trickAnimationDebugSettings.enabled = updatedAnimationDebugLogs;
+                Config.Save();
+            }
 
             GUILayout.FlexibleSpace();
 
-            // global actions
-            if (GUILayout.Button("Expand All", _miniBtn)) SetAllFoldouts(true);
-            if (GUILayout.Button("Collapse All", _miniBtn)) SetAllFoldouts(false);
-            GUI.backgroundColor = Color.red;
-            if (GUILayout.Button("Reset Tricks", _miniBtn)) ResetCustomTricks();
-            GUI.backgroundColor = Color.white;
-            GUILayout.EndHorizontal();
+            if (GUILayout.Button("Expand All", _miniBtn, GUILayout.Width(82), GUILayout.Height(24))) SetAllFoldouts(true);
+            if (GUILayout.Button("Collapse All", _miniBtn, GUILayout.Width(92), GUILayout.Height(24))) SetAllFoldouts(false);
+            if (GUILayout.Button("Reset Tricks", Menu.UiDangerButtonStyle, GUILayout.Width(96), GUILayout.Height(24))) ResetCustomTricks();
+            Menu.EndToolbar();
 
-            GUILayout.Space(4);
             EnsureTrickDataReadyForMenu();
-
-            _uiScroll = GUILayout.BeginScrollView(_uiScroll);
+            EnsureTrickSelection();
 
             if (!HasUsableTrickSetData())
             {
-                GUILayout.Label("No trick sets are loaded yet. Enter gameplay or respawn, then reopen this tab.");
-                GUILayout.EndScrollView();
+                Menu.BeginPanel();
+                GUILayout.Label("No trick sets are loaded yet. Enter gameplay or respawn, then reopen this tab.", _emptyState);
+                Menu.EndPanel();
                 return;
             }
+
+            DrawTrickPresetManager();
+
+            float paneHeight = Mathf.Max(320f, Menu.viewHeight - 152f);
+            GUILayout.BeginHorizontal(GUILayout.Height(paneHeight));
+            DrawTrickListPane(paneHeight);
+            GUILayout.Space(8);
+            DrawSelectedTrickPane(paneHeight);
+            GUILayout.EndHorizontal();
+
+            // final refresh once if anything changed this frame
+            if (_pendingRefresh)
+            {
+                _pendingRefresh = false;
+                ForceRefreshTrickRuntime();
+            }
+
+            // keyboard shortcuts (A/D in the current hovered card)
+            HandleKeyboardShortcuts();
+
+        }
+
+        private static void DrawTrickPresetManager()
+        {
+            List<string> presets = TrickPreset.GetAvailablePresets();
+            if (string.IsNullOrEmpty(_selectedPresetName) && presets.Count > 0)
+                _selectedPresetName = presets[0];
+
+            Menu.BeginPane("Preset Manager", "Save the full Tricks tab state: enabled tricks, replacements, and animation speed/clip overrides.");
+
+            Menu.BeginToolbar();
+            GUILayout.Label("Name", _toolbarLabel, GUILayout.Width(42f));
+            _presetName = GUILayout.TextField(_presetName ?? string.Empty, Menu.UiSearchFieldStyle, GUILayout.Width(200f), GUILayout.Height(24f));
+
+            if (Menu.PrimaryButton("Save Current", GUILayout.Width(110f), GUILayout.Height(24f)))
+            {
+                string saveName = string.IsNullOrWhiteSpace(_presetName)
+                    ? $"Tricks {System.DateTime.Now:yyyy-MM-dd HH-mm}"
+                    : _presetName.Trim();
+
+                TrickPreset.SaveCurrent(saveName);
+                _selectedPresetName = saveName;
+                _presetName = string.Empty;
+                _presetStatus = $"Saved preset '{saveName}'.";
+                GUI.FocusControl(null);
+            }
+
+            GUI.enabled = !string.IsNullOrWhiteSpace(_selectedPresetName);
+            if (Menu.SecondaryButton("Load", GUILayout.Width(70f), GUILayout.Height(24f)))
+            {
+                if (TrickPreset.Apply(_selectedPresetName))
+                {
+                    _pendingRefresh = true;
+                    _presetStatus = $"Loaded preset '{_selectedPresetName}'.";
+                }
+                else
+                {
+                    _presetStatus = $"Could not load preset '{_selectedPresetName}'.";
+                }
+            }
+
+            if (Menu.DangerButton("Delete", GUILayout.Width(74f), GUILayout.Height(24f)))
+            {
+                string deleted = _selectedPresetName;
+                if (TrickPreset.Delete(deleted))
+                {
+                    List<string> remaining = TrickPreset.GetAvailablePresets();
+                    _selectedPresetName = remaining.Count > 0 ? remaining[0] : string.Empty;
+                    _presetStatus = $"Deleted preset '{deleted}'.";
+                }
+                else
+                {
+                    _presetStatus = $"Could not delete preset '{deleted}'.";
+                }
+            }
+            GUI.enabled = true;
+            Menu.EndToolbar();
+
+            GUILayout.Label(_presetStatus, Menu.UiMutedWrappedStyle);
+
+            if (presets.Count == 0)
+            {
+                GUILayout.Label("No trick presets saved yet.", Menu.UiMutedWrappedStyle);
+                Menu.EndPane();
+                return;
+            }
+
+            _presetScroll = GUILayout.BeginScrollView(_presetScroll, false, false, GUILayout.Height(34f));
+            GUILayout.BeginHorizontal();
+            foreach (string preset in presets)
+            {
+                bool selected = string.Equals(_selectedPresetName, preset, StringComparison.OrdinalIgnoreCase);
+                if (Menu.PillButton(preset, selected, GUILayout.Height(24f), GUILayout.MinWidth(90f)))
+                    _selectedPresetName = preset;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndScrollView();
+
+            Menu.EndPane();
+        }
+
+        private static void DrawTrickListPane(float paneHeight)
+        {
+            GUILayout.BeginVertical(_card, GUILayout.Width(Mathf.Min(500f, Mathf.Max(390f, Menu.windowRect.width * 0.38f))), GUILayout.Height(paneHeight));
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Trick Map", _cardHeader);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("BMX only", _badge, GUILayout.Width(66));
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Pick a direction row to edit, replace, or preview that trick.", _rowLabelRight);
+            GUILayout.Space(8);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Direction", _rowLabelLeft, GUILayout.Width(92));
+            GUILayout.Label("Trick", _rowLabelLeft);
+            GUILayout.Label("Action", _rowLabelLeft, GUILayout.Width(74));
+            GUILayout.EndHorizontal();
+
+            _trickListScroll = GUILayout.BeginScrollView(_trickListScroll, GUILayout.ExpandHeight(true));
 
             int visibleSetCount = 0;
             foreach (var set in rTrickSetData)
@@ -500,39 +659,29 @@ namespace rowemod.Mods
                 var setKey = set.name;
                 var setDisplay = CleanSetName(setKey);
 
-                // lazy init storage for this set
                 EnsureBackingArrays(set);
-
-                // filter: if search text is present and none of this set’s tricks match, skip
                 if (!SetMatchesSearch(setKey, set)) continue;
                 visibleSetCount++;
 
-                // card
-                GUILayout.BeginVertical(_card);
-
-                // header row
+                GUILayout.BeginVertical(_setBlock);
                 GUILayout.BeginHorizontal();
                 bool currentFold = _foldouts.TryGetValue(setKey, out var f) ? f : true;
-                bool newFold = FoldoutButton(currentFold, "", _cardHeader); // show caret only
-                DrawSetHeaderGlyphs(setDisplay);                            // LB + RT icons
+                bool newFold = FoldoutButton(currentFold, setDisplay, _setHeaderButton);
                 _foldouts[setKey] = newFold;
 
                 GUILayout.FlexibleSpace();
-
-                // tiny status pill: enabled count / total
                 GetEnabledCount(setKey, set, out int enabledCount, out int totalCount);
-                GUILayout.Label($"{enabledCount}/{totalCount}", _badge);
+                GUILayout.Label($"{enabledCount}/{totalCount}", _badge, GUILayout.Width(46));
+                GUILayout.Space(4);
 
-                GUILayout.Space(6);
-
-                if (GUILayout.Button("Enable All", _pillOn, GUILayout.Height(22)))
+                if (GUILayout.Button("Enable All", _pillOn, GUILayout.Width(78), GUILayout.Height(22)))
                 {
                     ApplyAll(set, true);
                     SaveTricksToConfig();
                     _pendingRefresh = true;
                 }
 
-                if (GUILayout.Button("Disable All", _pill, GUILayout.Height(22)))
+                if (GUILayout.Button("Disable All", _pill, GUILayout.Width(82), GUILayout.Height(22)))
                 {
                     ApplyAll(set, false);
                     SaveTricksToConfig();
@@ -543,70 +692,32 @@ namespace rowemod.Mods
 
                 if (newFold)
                 {
-                    GUILayout.Space(6);
-
-                    // header for columns
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label("<b>Direction</b>", _rowLabelLeft);
-                    GUILayout.Label("<b>Trick</b>", _rowLabelRight);
-                    GUILayout.EndHorizontal();
-
-                    // rows
                     var flags = _trickEnabled[setKey];
                     int itemCount = Mathf.Min(set._dataList.Count, flags.Length);
 
                     for (int i = 0; i < itemCount; i++)
                     {
                         var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                        if (!IsBmxTrickObject(obj)) continue;
+
                         string dir = (i < DefaultDirectionLabels.Length) ? DefaultDirectionLabels[i] : $"Index {i}";
                         string trickName = CleanTrickName(obj);
                         if (!RowMatchesSearch(dir, trickName)) continue;
 
-                        // row background zebra
-                        DrawRowBackground(i);
+                        bool isSelected = IsSelectedTrick(setKey, i);
+                        GUILayout.BeginHorizontal(isSelected ? _rowStripSelected : _rowStrip, GUILayout.Height(30));
+                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(20), GUILayout.Height(22));
+                        DrawDirectionCell(dir, isSelected);
 
-                        GUILayout.BeginHorizontal();
-
-                        // left side: toggle + direction
-                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(20));
-                        //GUILayout.Label(dir, _rowLabelLeft);
-                        DrawDirectionCell(dir);
-
-                        // right side: trick label (grays out when disabled)
                         using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
                         {
-                            GUILayout.Label(trickName, _rowLabelRight);
+                            string rowLabel = isSelected ? $"Selected: {trickName}" : trickName;
+                            if (GUILayout.Button(rowLabel, isSelected ? _rowButtonSelected : _rowButton, GUILayout.MinWidth(150), GUILayout.Height(24)))
+                                SelectTrick(set, i, dir, trickName);
                         }
 
-                        // NEW: Replace button
-                        if (GUILayout.Button("Replace", _miniBtn, GUILayout.Width(70)))
-                        {
-                            // Get button rect (local to layout group)
-                            var btnRect = GUILayoutUtility.GetLastRect();
-
-                            // Convert to *screen space*
-                            Vector2 screenPos = GUIUtility.GUIToScreenPoint(
-                                new Vector2(btnRect.x, btnRect.y + btnRect.height)
-                            );
-
-                            // Place popup to the RIGHT of your menu panel
-                            float popupX = Menu.previousWindowPosition.x + Menu.windowRect.width + 280f + 20f; // 20px padding
-                            float popupY = screenPos.y;
-
-                            _pickerRect = new Rect(popupX, popupY, 280f, 320f);
-
-                            _pickerOpen = true;
-                            _pickerSet = set;
-                            _pickerSlot = i;
-                            _pickerScroll = Vector2.zero;
-                            _pickerSearch = "";
-
-                            if (_catalogNames == null || _catalogNames.Length == 0)
-                                BuildCatalog();
-                        }
-
-
-
+                        if (GUILayout.Button("Replace", _miniBtn, GUILayout.Width(70), GUILayout.Height(24)))
+                            OpenTrickPicker(set, i);
 
                         GUILayout.EndHorizontal();
 
@@ -620,28 +731,368 @@ namespace rowemod.Mods
                     }
                 }
 
-                GUILayout.EndVertical(); // card
-                GUILayout.Space(8);
+                GUILayout.EndVertical();
+                GUILayout.Space(5);
             }
 
             if (visibleSetCount == 0)
-            {
-                GUILayout.Label($"No tricks match \"{_uiSearch.Trim()}\".", _rowLabelRight);
-            }
+                GUILayout.Label($"No BMX tricks match \"{_uiSearch.Trim()}\".", _emptyState);
 
             GUILayout.EndScrollView();
+            GUILayout.EndVertical();
+        }
 
-            // final refresh once if anything changed this frame
-            if (_pendingRefresh)
+        private static void DrawSelectedTrickPane(float paneHeight)
+        {
+            GUILayout.BeginVertical(_card, GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
+
+            SyncTrickAnimationData animationData = GetSelectedAnimationData();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Selected Trick", _cardHeader);
+            GUILayout.FlexibleSpace();
+            bool nextPreview = GUILayout.Toggle(
+                _previewEnabled,
+                _previewEnabled ? "Preview On" : "Preview Off",
+                _previewEnabled ? _pillOn : _pill,
+                GUILayout.Width(110));
+            if (nextPreview != _previewEnabled)
             {
-                _pendingRefresh = false;
-                ForceRefreshTrickRuntime();
+                _previewEnabled = nextPreview;
+                _nextPreviewFireTime = 0f;
+                if (!_previewEnabled)
+                    RestorePreviewState();
             }
 
-            // keyboard shortcuts (A/D in the current hovered card)
-            HandleKeyboardShortcuts();
+            if (GUILayout.Button("Stop", _miniBtn, GUILayout.Width(62)))
+            {
+                _previewEnabled = false;
+                RestorePreviewState();
+            }
+            GUILayout.EndHorizontal();
 
+            if (animationData == null)
+            {
+                GUILayout.FlexibleSpace();
+                GUILayout.Label("Select a trick", _emptyState);
+                GUILayout.Label("Pick a BMX trick on the left to edit animation speeds, copy clips, or preview it.", _rowLabelRight);
+                GUILayout.FlexibleSpace();
+                GUILayout.EndVertical();
+                return;
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(_selectedTrickDirection, _directionBadge, GUILayout.Width(82), GUILayout.Height(22));
+            GUILayout.Label(_selectedTrickName, _cardHeader);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Preview lifts and freezes the player, then fires the selected trick every 2 seconds.", _rowLabelRight);
+            GUILayout.Space(8);
+
+            _trickDetailScroll = GUILayout.BeginScrollView(_trickDetailScroll, GUILayout.ExpandHeight(true));
+            string contextKey = $"{_selectedTrickSetKey}:{_selectedTrickSlot}";
+            TrickAnimationEditor.DrawSelectedTrickPanel(
+                animationData,
+                contextKey,
+                string.Empty);
+            GUILayout.EndScrollView();
+
+            GUILayout.EndVertical();
         }
+
+        private static void SelectTrick(TrickSetData set, int slot, string direction, string trickName)
+        {
+            _selectedTrickSet = set;
+            _selectedTrickSetKey = set?.name ?? string.Empty;
+            _selectedTrickSlot = slot;
+            _selectedTrickDirection = direction;
+            _selectedTrickName = trickName;
+            _trickDetailScroll = Vector2.zero;
+            _needsAutoSelectTrick = false;
+            _previewEnabled = true;
+            _nextPreviewFireTime = 0f;
+
+            string selectionKey = $"{_selectedTrickSetKey}:{_selectedTrickSlot}";
+            if (!string.Equals(selectionKey, _lastPreviewSelectionKey, StringComparison.Ordinal))
+            {
+                _lastPreviewSelectionKey = selectionKey;
+                Log.Msg($"[TricksPreview] Selected {_selectedTrickName} ({_selectedTrickDirection}) set={FindSetIndex(set)}, slot={slot}.");
+            }
+        }
+
+        private static bool IsSelectedTrick(string setKey, int slot)
+            => string.Equals(_selectedTrickSetKey, setKey, StringComparison.Ordinal) && _selectedTrickSlot == slot;
+
+        private static SyncTrickAnimationData GetSelectedAnimationData()
+        {
+            if (_selectedTrickSet == null || _selectedTrickSet._dataList == null || _selectedTrickSlot < 0 || _selectedTrickSlot >= _selectedTrickSet._dataList.Count)
+                return null;
+
+            return _selectedTrickSet._dataList[(Index)_selectedTrickSlot] as SyncTrickAnimationData;
+        }
+
+        private static void EnsureTrickSelection()
+        {
+            if (!HasUsableTrickSetData())
+                return;
+
+            if (!_needsAutoSelectTrick && GetSelectedAnimationData() != null)
+                return;
+
+            SelectFirstAvailableTrick();
+        }
+
+        private static bool SelectFirstAvailableTrick()
+        {
+            if (rTrickSetData == null)
+                return false;
+
+            foreach (TrickSetData set in rTrickSetData)
+            {
+                if (set == null || set._dataList == null)
+                    continue;
+
+                EnsureBackingArrays(set);
+                string setKey = set.name;
+                if (!_trickEnabled.TryGetValue(setKey, out bool[] flags))
+                    continue;
+
+                int itemCount = Mathf.Min(set._dataList.Count, flags.Length);
+                for (int i = 0; i < itemCount; i++)
+                {
+                    if (!flags[i])
+                        continue;
+
+                    UnityEngine.Object obj = set._dataList[(Index)i] as UnityEngine.Object;
+                    if (!IsBmxTrickObject(obj))
+                        continue;
+
+                    string dir = i < DefaultDirectionLabels.Length ? DefaultDirectionLabels[i] : $"Index {i}";
+                    SelectTrick(set, i, dir, CleanTrickName(obj));
+                    _trickListScroll = Vector2.zero;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void OpenTrickPicker(TrickSetData set, int slot)
+        {
+            var btnRect = GUILayoutUtility.GetLastRect();
+            Vector2 screenPos = GUIUtility.GUIToScreenPoint(new Vector2(btnRect.x, btnRect.y + btnRect.height));
+            float popupX = Menu.previousWindowPosition.x + Menu.windowRect.width + 280f + 20f;
+            float popupY = screenPos.y;
+
+            _pickerRect = new Rect(popupX, popupY, 280f, 320f);
+            _pickerOpen = true;
+            _pickerSet = set;
+            _pickerSlot = slot;
+            _pickerScroll = Vector2.zero;
+            _pickerSearch = "";
+
+            if (_catalogNames == null || _catalogNames.Length == 0)
+                BuildCatalog();
+        }
+
+        public static void Update()
+        {
+            if (!_tricksTabActive || !Menu.isOpen || Menu.currentTab != Menu.Tab.Tricks)
+            {
+                RestorePreviewState();
+                return;
+            }
+
+            if (!_previewEnabled)
+            {
+                RestorePreviewState();
+                return;
+            }
+
+            SyncTrickAnimationData data = GetSelectedAnimationData();
+            if (data == null)
+            {
+                RestorePreviewState();
+                return;
+            }
+
+            EnsurePreviewState();
+
+            if (Time.unscaledTime >= _nextPreviewFireTime)
+            {
+                _nextPreviewFireTime = Time.unscaledTime + TrickPreviewFireInterval;
+                FirePreviewTrick(data);
+            }
+        }
+
+        public static void OnTricksTabEntered()
+        {
+            _tricksTabActive = true;
+            _needsAutoSelectTrick = GetSelectedAnimationData() == null;
+            EnableTricksNoBailOverride();
+        }
+
+        public static void OnTricksTabExited()
+        {
+            _tricksTabActive = false;
+            _previewEnabled = false;
+            RestorePreviewState();
+            RestoreTricksNoBailOverride();
+        }
+
+        private static void EnableTricksNoBailOverride()
+        {
+            if (_tricksNoBailOverrideActive)
+                return;
+
+            _tricksNoBailUserValue = Config.misc.neverBail;
+            _tricksNoBailOverrideActive = true;
+            Misc.SetTemporaryNeverBailOverride(true, true);
+            Log.Msg($"[TricksPreview] No Bail forced while Tricks tab is active. userNoBail={_tricksNoBailUserValue}.");
+        }
+
+        private static void RestoreTricksNoBailOverride()
+        {
+            if (!_tricksNoBailOverrideActive)
+                return;
+
+            _tricksNoBailOverrideActive = false;
+            Misc.SetTemporaryNeverBailOverride(false);
+            Log.Msg($"[TricksPreview] No Bail restored after Tricks tab exit. userNoBail={Config.misc.neverBail}.");
+        }
+
+        private static void EnsurePreviewState()
+        {
+            if (!_previewPlayerOffsetApplied && Memory.customizableEntity != null)
+            {
+                _previewPlayerTransform = Memory.customizableEntity.transform;
+                if (_previewPlayerTransform != null)
+                {
+                    _previewPlayerTransform.position += TrickPreviewPlayerOffset;
+                    _previewPlayerOffsetApplied = true;
+                }
+            }
+
+            if (!_previewSpringBodyCaptured && Memory.springBody != null)
+            {
+                _previewSpringBody = Memory.springBody;
+                _previewSpringBodyOriginalIsKinematic = _previewSpringBody.isKinematic;
+                _previewSpringBody.isKinematic = true;
+                _previewSpringBodyCaptured = true;
+            }
+
+            _previewStateApplied = _previewPlayerOffsetApplied || _previewSpringBodyCaptured;
+            InvokePreviewJump();
+        }
+
+        private static void RestorePreviewState()
+        {
+            if (!_previewStateApplied)
+                return;
+
+            if (_previewPlayerOffsetApplied && _previewPlayerTransform != null)
+                _previewPlayerTransform.position -= TrickPreviewPlayerOffset;
+
+            if (_previewSpringBodyCaptured && _previewSpringBody != null)
+                _previewSpringBody.isKinematic = _previewSpringBodyOriginalIsKinematic;
+
+            _previewStateApplied = false;
+            _previewPlayerOffsetApplied = false;
+            _previewSpringBodyCaptured = false;
+            _previewPlayerTransform = null;
+            _previewSpringBody = null;
+            _previewJumpInvoked = false;
+            _lastPreviewLogKey = string.Empty;
+        }
+
+        private static void InvokePreviewJump()
+        {
+            if (_previewJumpInvoked)
+                return;
+
+            try
+            {
+                var onJump = Memory.animatedVehicleEventResponder?.OnJump;
+                if (onJump != null)
+                {
+                    onJump.Invoke(1);
+                    _previewJumpInvoked = true;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Log.Warning($"[TricksPreview] Failed to invoke jump setup: {ex.Message}");
+                _previewJumpInvoked = true;
+            }
+        }
+
+        private static void FirePreviewTrick(SyncTrickAnimationData data)
+        {
+            TrickControllerV2 controller = FindPreviewController();
+            if (controller == null)
+            {
+                Log.Warning("[TricksPreview] Cannot preview trick because no TrickControllerV2 is loaded.");
+                return;
+            }
+
+            int setId = FindSetIndex(_selectedTrickSet);
+            int slotId = _selectedTrickSlot;
+            string logKey = $"{setId}:{slotId}:{GetUnityObjectName(data)}:{Time.frameCount / 120}";
+
+            try
+            {
+                InvokePreviewJump();
+                bool fired = controller.Fire(data, setId, slotId);
+                if (!fired)
+                    fired = controller.TryBlendTo(data, setId, slotId);
+
+                if (!string.Equals(logKey, _lastPreviewLogKey, StringComparison.Ordinal))
+                {
+                    _lastPreviewLogKey = logKey;
+                    Log.Msg($"[TricksPreview] Preview fired={fired} trick='{_selectedTrickName}' set={setId}, slot={slotId}.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Log.Warning($"[TricksPreview] Failed to fire {_selectedTrickName}: {ex.Message}");
+            }
+        }
+
+        private static TrickControllerV2 FindPreviewController()
+        {
+            try
+            {
+                TrickControllerV2[] controllers = UnityEngine.Object.FindObjectsOfType<TrickControllerV2>();
+                if (controllers == null || controllers.Length == 0)
+                    return null;
+
+                return controllers[0];
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static int FindSetIndex(TrickSetData set)
+        {
+            if (set == null || rTrickSetData == null)
+                return -1;
+
+            for (int i = 0; i < rTrickSetData.Length; i++)
+            {
+                TrickSetData candidate = rTrickSetData[i];
+                if (candidate == null)
+                    continue;
+
+                if (ReferenceEquals(candidate, set) || string.Equals(candidate.name, set.name, StringComparison.Ordinal))
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static string GetUnityObjectName(UnityEngine.Object obj)
+            => obj == null ? string.Empty : obj.name ?? string.Empty;
 
         public static void ReplaceTrick(TrickSetData set, int index, string trickName)
         {
@@ -672,6 +1123,12 @@ namespace rowemod.Mods
             if (_trickEnabled.TryGetValue(set.name, out var flags) && index < flags.Length)
                 flags[index] = newTrick != null;
 
+            if (IsSelectedTrick(set.name, index))
+            {
+                _selectedTrickName = CleanTrickName(newTrick);
+                _nextPreviewFireTime = 0f;
+            }
+
             ForceRefreshTrickRuntime();
             SaveTricksToConfig();
             Log.Msg($"Replaced {set.name}[{index}] with {trickName}");
@@ -693,6 +1150,7 @@ namespace rowemod.Mods
                     {
                         var obj = set._dataList[(Index)i] as UnityEngine.Object;
                         if (obj == null) continue;
+                        if (!IsBmxTrickObject(obj)) continue;
 
                         string cleanName = CleanTrickName(obj);
 
@@ -1006,33 +1464,7 @@ namespace rowemod.Mods
 // Draw the glyph sequence; fallback to the text title if nothing matched
         private static void DrawSetHeaderGlyphs(string setTitle)
         {
-            const float baseSize = 24f;
-            float size = baseSize * UIScale;
-
-            var ids = TitleToGlyphs(setTitle);
-            if (ids == null)
-            {
-                GUILayout.Label($"<b>{setTitle}</b>", _cardHeader);
-                return;
-            }
-
-            GUILayout.BeginHorizontal(GUILayout.Height(size));
-            for (int k = 0; k < ids.Count; k++)
-            {
-                var tex = GetGlyph(ids[k]);
-                if (tex != null)
-                    GUILayout.Box(tex, GUILayout.Width(size), GUILayout.Height(size));
-                else
-                {
-                    // If any glyph missing, fall back gracefully
-                    GUILayout.Label($"<b>{setTitle}</b>", _cardHeader);
-                    break;
-                }
-
-                if (k < ids.Count - 1) GUILayout.Space(4f * UIScale);
-            }
-
-            GUILayout.EndHorizontal();
+            GUILayout.Label(setTitle, _cardHeader);
         }
 
 
@@ -1067,95 +1499,164 @@ namespace rowemod.Mods
             return null; // fallback will draw text
         }
 
-        private static void DrawDirectionCell(string dir)
-    {
-        const float baseSize = 22f;
-        float size = baseSize * UIScale;
-
-        // 1) Cardials: draw direct glyphs.
-        if (DirectionGlyphMap.TryGetValue(dir, out var glyphName))
+        private static void DrawDirectionCell(string dir, bool selected = false)
         {
-            var tex = GetGlyph(glyphName);
-            if (tex != null)
+            GUILayout.Label(FormatDirectionLabel(dir), selected ? _directionBadgeSelected : _directionBadge, GUILayout.Width(82), GUILayout.Height(24));
+        }
+
+        private static string FormatDirectionLabel(string dir)
+        {
+            switch (dir)
             {
-                GUILayout.Box(tex, GUILayout.Width(size), GUILayout.Height(size));
-                return;
+                case "UpRight": return "Up Right";
+                case "DownRight": return "Down Right";
+                case "DownLeft": return "Down Left";
+                case "UpLeft": return "Up Left";
+                default: return dir;
             }
         }
-
-        // 2) Diagonals (or missing cardinals): rotate the Up icon to the needed angle.
-        var baseTex = GetGlyph("xbox_dpad_up");
-        if (baseTex != null)
-        {
-            float angle =
-                dir == "Up" ? 0f :
-                dir == "UpRight" ? 45f :
-                dir == "Right" ? 90f :
-                dir == "DownRight" ? 135f :
-                dir == "Down" ? 180f :
-                dir == "DownLeft" ? 225f :
-                dir == "Left" ? 270f :
-                dir == "UpLeft" ? 315f : 0f;
-
-            Rect r = GUILayoutUtility.GetRect(size, size, GUILayout.Width(size), GUILayout.Height(size));
-            Vector2 pivot = new Vector2(r.x + r.width * 0.5f, r.y + r.height * 0.5f);
-
-            GUIUtility.RotateAroundPivot(angle, pivot);
-            GUI.DrawTexture(r, baseTex, ScaleMode.ScaleToFit, true);
-            GUIUtility.RotateAroundPivot(-angle, pivot);
-            return;
-        }
-
-        // 3) Fallback: text
-        GUILayout.Label(dir);
-    }
 
 
 
         private static void InitStylesIfNeeded()
         {
-            if (_stylesInited) return;
+            if (_stylesInited && _styleRevision == Menu.styleRevision) return;
             _stylesInited = true;
+            _styleRevision = Menu.styleRevision;
 
-            _card = new GUIStyle("box")
+            _card = new GUIStyle(Menu.UiPanelStyle)
             {
-                padding = new RectOffset(10,10,8,10),
-                margin  = new RectOffset(0,0,4,0)
+                padding = new RectOffset(14, 14, 12, 14),
+                margin = new RectOffset(0, 0, 4, 0)
             };
 
-            _cardHeader = new GUIStyle(GUI.skin.label)
+            _cardHeader = new GUIStyle(Menu.UiHeaderStyle)
             {
                 richText = true,
                 fontStyle = FontStyle.Bold,
                 fontSize = 14
             };
 
-            _pill = new GUIStyle(GUI.skin.button)
+            _pill = new GUIStyle(Menu.UiPillStyle)
             {
-                padding = new RectOffset(10,10,2,2),
-                margin  = new RectOffset(4,0,0,0)
+                padding = new RectOffset(10, 10, 3, 3),
+                margin = new RectOffset(4, 0, 0, 0)
             };
-            _pillOn = new GUIStyle(_pill);
+            _pillOn = new GUIStyle(Menu.UiPillActiveStyle);
 
-            _rowLabelLeft  = new GUIStyle(GUI.skin.label){ richText=true, alignment = TextAnchor.MiddleLeft,  padding = new RectOffset(0,6,2,2) };
-            _rowLabelRight = new GUIStyle(GUI.skin.label){ richText=true, alignment = TextAnchor.MiddleLeft,  padding = new RectOffset(6,0,2,2) };
+            _rowLabelLeft = new GUIStyle(Menu.UiRowLabelStyle)
+            {
+                richText = true,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(0, 6, 2, 2)
+            };
+            _rowLabelRight = new GUIStyle(Menu.UiRowMutedLabelStyle)
+            {
+                richText = true,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(6, 0, 2, 2)
+            };
+            _rowButton = new GUIStyle(Menu.UiRowButtonStyle)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(8, 8, 2, 2),
+                margin = new RectOffset(2, 2, 0, 0)
+            };
+            _rowButtonSelected = new GUIStyle(_rowButton)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            Texture2D selectedButtonBg = Menu.MakeRoundedTex(64, 24, new Color(0.10f, 0.34f, 0.18f, 0.96f), 6, 1, new Color(0.24f, 0.86f, 0.44f, 0.68f));
+            Texture2D selectedButtonHoverBg = Menu.MakeRoundedTex(64, 24, new Color(0.13f, 0.42f, 0.22f, 0.98f), 6, 1, new Color(0.34f, 1f, 0.56f, 0.78f));
+            _rowButtonSelected.normal.background = selectedButtonBg;
+            _rowButtonSelected.hover.background = selectedButtonHoverBg;
+            _rowButtonSelected.active.background = selectedButtonBg;
+            _rowButtonSelected.normal.textColor = new Color(0.88f, 1f, 0.91f, 1f);
+            _rowButtonSelected.hover.textColor = Color.white;
+            _rowButtonSelected.active.textColor = Color.white;
 
-            _miniBtn = new GUIStyle(GUI.skin.button)
+            _miniBtn = new GUIStyle(Menu.UiMiniButtonStyle)
             {
                 fontSize = 11,
-                padding = new RectOffset(6,6,2,2),
-                margin  = new RectOffset(2,2,0,0)
+                padding = new RectOffset(7, 7, 3, 3),
+                margin = new RectOffset(2, 2, 0, 0)
             };
 
-            _badge = new GUIStyle(GUI.skin.box)
+            _badge = new GUIStyle(Menu.UiBadgeStyle)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = 11,
                 fixedHeight = 20,
-                padding = new RectOffset(6,6,2,2)
+                padding = new RectOffset(6, 6, 2, 2)
             };
 
-            _searchField = new GUIStyle(GUI.skin.textField){ fontSize = 12 };
+            _searchField = new GUIStyle(Menu.UiSearchFieldStyle)
+            {
+                fontSize = 12,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(9, 9, 3, 3),
+                margin = new RectOffset(0, 8, 0, 0)
+            };
+            Texture2D searchBg = Menu.MakeRoundedTex(64, 24, new Color(0.06f, 0.065f, 0.075f, 0.96f), 6, 1, new Color(1f, 1f, 1f, 0.14f));
+            _searchField.normal.background = searchBg;
+            _searchField.hover.background = searchBg;
+            _searchField.focused.background = searchBg;
+            _searchField.active.background = searchBg;
+
+            _toolbarLabel = new GUIStyle(Menu.UiMutedStyle)
+            {
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = 12,
+                padding = new RectOffset(0, 4, 2, 2)
+            };
+
+            _setBlock = new GUIStyle(GUIStyle.none)
+            {
+                padding = new RectOffset(8, 8, 8, 9),
+                margin = new RectOffset(0, 0, 0, 8)
+            };
+            _setBlock.normal.background = Menu.MakeRoundedTex(64, 32, new Color(1f, 1f, 1f, 0.018f), 7, 1, new Color(1f, 1f, 1f, 0.045f));
+
+            _setHeaderButton = new GUIStyle(Menu.UiHeaderStyle)
+            {
+                richText = true,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(4, 8, 3, 3),
+                margin = new RectOffset(0, 0, 0, 0),
+                fixedHeight = 24f
+            };
+
+            _rowStrip = new GUIStyle(GUIStyle.none)
+            {
+                padding = new RectOffset(5, 5, 3, 3),
+                margin = new RectOffset(0, 0, 1, 1)
+            };
+            _rowStrip.normal.background = Menu.MakeRoundedTex(64, 26, new Color(0.048f, 0.05f, 0.057f, 0.72f), 5, 1, new Color(1f, 1f, 1f, 0.045f));
+
+            _rowStripSelected = new GUIStyle(_rowStrip);
+            _rowStripSelected.normal.background = Menu.MakeRoundedTex(64, 30, new Color(0.06f, 0.22f, 0.12f, 0.72f), 6, 1, new Color(0.22f, 0.95f, 0.42f, 0.58f));
+
+            _directionBadge = new GUIStyle(Menu.UiBadgeStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 11,
+                fontStyle = FontStyle.Bold,
+                padding = new RectOffset(6, 6, 2, 2)
+            };
+            _directionBadge.normal.textColor = new Color(0.95f, 0.9f, 0.86f, 1f);
+            _directionBadge.normal.background = Menu.MakeRoundedTex(64, 22, new Color(0.085f, 0.073f, 0.064f, 0.96f), 6, 1, new Color(0.9f, 0.48f, 0.24f, 0.22f));
+
+            _directionBadgeSelected = new GUIStyle(_directionBadge);
+            _directionBadgeSelected.normal.textColor = new Color(0.9f, 1f, 0.92f, 1f);
+            _directionBadgeSelected.normal.background = Menu.MakeRoundedTex(64, 24, new Color(0.08f, 0.30f, 0.16f, 0.98f), 6, 1, new Color(0.28f, 1f, 0.48f, 0.62f));
+
+            _emptyState = new GUIStyle(Menu.UiMutedWrappedStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 13,
+                fontStyle = FontStyle.Bold,
+                padding = new RectOffset(16, 16, 10, 10)
+            };
         }
 
         private static void EnsureBackingArrays(TrickSetData set)
@@ -1232,9 +1733,14 @@ namespace rowemod.Mods
         }
 
         private static void DrawRowBackground(int index)
+            => DrawRowBackground(index, false);
+
+        private static void DrawRowBackground(int index, bool selected)
         {
             var r = GUILayoutUtility.GetRect(1, 22, GUILayout.ExpandWidth(true));
-            Color bg = (index % 2 == 0) ? new Color(1,1,1,0.06f) : new Color(1,1,1,0.03f);
+            Color bg = selected
+                ? new Color(0.9f, 0.42f, 0.2f, 0.28f)
+                : (index % 2 == 0) ? new Color(1,1,1,0.06f) : new Color(1,1,1,0.03f);
             EditorishFill(r, bg);
             GUI.skin.label.CalcHeight(GUIContent.none, r.width); // keep layout happy
             GUI.BeginGroup(r);
@@ -1272,6 +1778,7 @@ namespace rowemod.Mods
             for (int i = 0; i < n; i++)
             {
                 var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                if (!IsBmxTrickObject(obj)) continue;
                 if (RowMatchesSearch(i < DefaultDirectionLabels.Length ? DefaultDirectionLabels[i] : $"Index {i}",
                                      CleanTrickName(obj)))
                     return true;
@@ -1284,8 +1791,15 @@ namespace rowemod.Mods
             enabled = 0; total = 0;
             if (set?._dataList == null) return;
             var flags = _trickEnabled[setKey];
-            total = Mathf.Min(set._dataList.Count, flags.Length);
-            for (int i = 0; i < total; i++) if (flags[i]) enabled++;
+            int count = Mathf.Min(set._dataList.Count, flags.Length);
+            for (int i = 0; i < count; i++)
+            {
+                var obj = set._dataList[(Index)i] as UnityEngine.Object;
+                if (!IsBmxTrickObject(obj)) continue;
+
+                total++;
+                if (flags[i]) enabled++;
+            }
         }
 
         private static void SetAllFoldouts(bool open)
@@ -1379,6 +1893,18 @@ namespace rowemod.Mods
         
         private static string CleanTrickName(UnityEngine.Object obj)
             => obj == null ? "(null)" : CleanTrickName(obj.name);
+
+        internal static bool IsBmxTrickObject(UnityEngine.Object obj)
+        {
+            if (obj == null)
+                return false;
+
+            string raw = obj.name ?? string.Empty;
+            if (raw.IndexOf("Scooter", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+
+            return true;
+        }
 
         private static string CleanTrickName(string raw)
         {

@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using Il2CppInterop.Runtime;
+using Il2CppMashBox.Addons.CharacterController;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.BMX_Physics_Development;
+using Il2CppMashBox.Character;
 using Il2CppMashBox.Core.Runtime.Gameplay.ActivityTracking;
 using Il2CppMashBoxSDK.Maps.Rigging;
 using Il2CppMashBoxSDK.Services;
@@ -117,6 +119,11 @@ namespace rowemod.Challenges
         private static float _nextCompletionPollTime;
         private static bool _wasLocalPlayerInsideArea;
         private static bool _currentAttemptHasConfirmedLanding;
+        private static bool _currentAttemptHasLineEndConfirmation;
+        private static bool _hasGroundedSample;
+        private static bool _wasLocalPlayerGrounded;
+        private static bool _loggedGroundedLineEndWait;
+        private static string _lastGroundedSource = "none";
         private static int _lastSeenHistoryCount;
         private static string _lastSeenHistorySource = "none";
         private static string _lastSeenTrickText = "none";
@@ -162,6 +169,7 @@ namespace rowemod.Challenges
         private static Action<NetworkPlayer> _networkPlayerSpawnedListener;
         private static HarmonyLib.Harmony _networkPlayerLifecycleHarmony;
         private static bool _networkPlayerLifecycleHooksInstalled;
+        private static bool _lineEndEventBound;
         private static float _nextActivePlayerLookupWarningTime;
         private static float _nextUpdateErrorLogTime;
         private static HarmonyLib.Harmony _trickCaptureHarmony;
@@ -309,9 +317,7 @@ namespace rowemod.Challenges
 
         private static bool AreTrickHooksEnabled()
         {
-            return IsRuntimeEnabled() &&
-                   Config.challengeRuntimeSettings != null &&
-                   Config.challengeRuntimeSettings.trickHooksEnabled;
+            return IsRuntimeEnabled();
         }
 
         public static void ResetWindowState()
@@ -602,6 +608,11 @@ namespace rowemod.Challenges
 
             _wasLocalPlayerInsideArea = inside;
 
+            if (inside)
+                UpdateGroundedAttemptCleanup();
+            else
+                ResetGroundedTracking();
+
             if (inside && AreTrickHooksEnabled())
                 BindPlayerTrickGameplayEvents(null);
         }
@@ -785,8 +796,8 @@ namespace rowemod.Challenges
             Color panelColor = new Color(0.07f, 0.08f, 0.11f, 0.95f);
             Color panelAltColor = new Color(0.10f, 0.115f, 0.155f, 0.96f);
             Color panelHoverColor = new Color(0.14f, 0.16f, 0.21f, 0.98f);
-            Color accentColor = new Color(0.32f, 0.72f, 1f, 0.95f);
-            Color accentSoftColor = new Color(0.18f, 0.36f, 0.56f, 0.75f);
+            Color accentColor = new Color(0.92f, 0.42f, 0.18f, 0.95f);
+            Color accentSoftColor = new Color(0.48f, 0.22f, 0.12f, 0.78f);
             Color borderColor = new Color(1f, 1f, 1f, 0.14f);
             Font trickFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
 
@@ -1933,6 +1944,13 @@ namespace rowemod.Challenges
                 return;
             }
 
+            if (!_currentAttemptHasLineEndConfirmation &&
+                ShouldWaitForLineEndBeforeCompletion(out string lineWaitReason))
+            {
+                _lastCompletionDiagnostic = $"Waiting for line to end: {lineWaitReason}.";
+                return;
+            }
+
             List<string> history = GetCurrentTrickHistory();
             UpdateCompletionDiagnostics(history);
             List<string> attemptHistory = _capturedAttemptTricks.Count > 0
@@ -2010,7 +2028,7 @@ namespace rowemod.Challenges
 
                 if (!TryGetSpinCaptureInfo(displayName, out int degrees, out bool standaloneSpin))
                 {
-                    sanitized.Add(displayName);
+                    AddSanitizedDisplayTrick(sanitized, displayName);
                     continue;
                 }
 
@@ -2030,10 +2048,29 @@ namespace rowemod.Challenges
                     continue;
                 }
 
-                sanitized.Add(displayName);
+                AddSanitizedDisplayTrick(sanitized, displayName);
             }
 
             return sanitized;
+        }
+
+        private static void AddSanitizedDisplayTrick(List<string> sanitized, string displayName)
+        {
+            if (sanitized == null || string.IsNullOrWhiteSpace(displayName))
+                return;
+
+            string normalized = NormalizeTrickName(displayName);
+            if (!string.IsNullOrEmpty(normalized) &&
+                sanitized.Count > 0 &&
+                string.Equals(
+                    NormalizeTrickName(sanitized[sanitized.Count - 1]),
+                    normalized,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            sanitized.Add(displayName);
         }
 
         private static void BeginLocalSetRecording()
@@ -2122,7 +2159,222 @@ namespace rowemod.Challenges
             _entryHistorySnapshot.AddRange(GetCurrentTrickHistory());
             _lastCheckedAttemptSignature = null;
             _currentAttemptHasConfirmedLanding = false;
+            _currentAttemptHasLineEndConfirmation = false;
+            _loggedGroundedLineEndWait = false;
+            PrimeGroundedTracking();
             _lastCompletionDiagnostic = "Tracking tricks performed inside the area.";
+        }
+
+        private static void UpdateGroundedAttemptCleanup()
+        {
+            if (!TryIsLocalPlayerGrounded(out bool grounded, out string source))
+                return;
+
+            bool landedThisSample = _hasGroundedSample && !_wasLocalPlayerGrounded && grounded;
+            _hasGroundedSample = true;
+            _wasLocalPlayerGrounded = grounded;
+            _lastGroundedSource = source;
+
+            if (!grounded)
+                return;
+
+            if (!landedThisSample && !_currentAttemptHasConfirmedLanding)
+                return;
+
+            if (landedThisSample)
+                _currentAttemptHasConfirmedLanding = true;
+
+            if (!_currentAttemptHasLineEndConfirmation &&
+                ShouldWaitForLineEndBeforeCompletion(out string lineWaitReason))
+            {
+                _lastCompletionDiagnostic = $"Grounded; waiting for line to end: {lineWaitReason}.";
+                if (!_loggedGroundedLineEndWait)
+                {
+                    _loggedGroundedLineEndWait = true;
+                    Log.Msg($"[MPChallenge][Tricks] Grounded but line is still active ({lineWaitReason}); waiting for PlayerTrickGameplay.OnEndLineConfirmed.");
+                }
+
+                return;
+            }
+
+            CleanseGroundedAttempt(source);
+        }
+
+        private static void CleanseGroundedAttempt(string source)
+        {
+            int clearedTricks = _capturedAttemptTricks.Count;
+            int clearedPositions = _recordedSetWorldPositions.Count;
+
+            if (clearedTricks > 0 || _currentAttemptHasConfirmedLanding)
+                SafeCheckLocalLineCompletion();
+
+            _capturedAttemptTricks.Clear();
+            _capturedAttemptTrickTimes.Clear();
+            _recordedSetWorldPositions.Clear();
+            _entryHistorySnapshot.Clear();
+            _entryHistorySnapshot.AddRange(GetCurrentTrickHistory());
+            _lastCheckedAttemptSignature = null;
+            _currentAttemptHasConfirmedLanding = false;
+            _currentAttemptHasLineEndConfirmation = false;
+            _loggedGroundedLineEndWait = false;
+
+            if (clearedTricks > 0 || clearedPositions > 0)
+            {
+                Log.Msg(
+                    $"[MPChallenge][Tricks] Cleansed grounded attempt via {source}: " +
+                    $"tricks={clearedTricks}, positions={clearedPositions}.");
+            }
+        }
+
+        private static bool ShouldWaitForLineEndBeforeCompletion(out string reason)
+        {
+            reason = "none";
+
+            if (_currentAttemptHasLineEndConfirmation)
+                return false;
+
+            if (TryIsPlayerTrickLineRunning(out bool lineRunning, out string lineSource) && lineRunning)
+            {
+                reason = lineSource;
+                return true;
+            }
+
+            if (_lineEndEventBound)
+            {
+                reason = "awaiting PlayerTrickGameplay.OnEndLineConfirmed";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryIsPlayerTrickLineRunning(out bool lineRunning, out string source)
+        {
+            lineRunning = false;
+            source = "none";
+
+            PlayerTrickGameplay gameplay = ResolvePlayerTrickGameplay(null);
+            if (gameplay == null)
+                return false;
+
+            if (!TryReadBool(() => gameplay.IsRunningCombo, out lineRunning))
+                return false;
+
+            source = $"PlayerTrickGameplay.IsRunningCombo:{GetSafeGameObjectName(gameplay.gameObject)}";
+            return true;
+        }
+
+        private static void PrimeGroundedTracking()
+        {
+            if (TryIsLocalPlayerGrounded(out bool grounded, out string source))
+            {
+                _hasGroundedSample = true;
+                _wasLocalPlayerGrounded = grounded;
+                _lastGroundedSource = source;
+                return;
+            }
+
+            ResetGroundedTracking();
+        }
+
+        private static void ResetGroundedTracking()
+        {
+            _hasGroundedSample = false;
+            _wasLocalPlayerGrounded = false;
+            _lastGroundedSource = "none";
+        }
+
+        private static bool TryIsLocalPlayerGrounded(out bool grounded, out string source)
+        {
+            grounded = false;
+            source = "none";
+
+            CharacterManager characterManager = ResolveLocalCharacterManager();
+            if (characterManager != null && TryReadBool(() => characterManager.Grounded, out grounded))
+            {
+                source = $"CharacterManager.Grounded:{GetSafeGameObjectName(characterManager.gameObject)}";
+                return true;
+            }
+
+            MGCharacterController controller = ResolveLocalCharacterController();
+            if (controller != null && TryReadBool(() => controller.Grounded, out grounded))
+            {
+                source = $"MGCharacterController.Grounded:{GetSafeGameObjectName(controller.gameObject)}";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static CharacterManager ResolveLocalCharacterManager()
+        {
+            CharacterManager manager = null;
+
+            if (Memory.rMbCharacter != null)
+                manager = Memory.rMbCharacter.GetComponentInChildren<CharacterManager>(true);
+            if (manager == null && Memory.physicsDrivenCharacter != null)
+                manager = Memory.physicsDrivenCharacter.GetComponentInChildren<CharacterManager>(true);
+            if (manager != null)
+                return manager;
+
+            CharacterManager[] managers = UnityEngine.Object.FindObjectsOfType<CharacterManager>();
+            if (managers == null || managers.Length == 0)
+                return null;
+
+            foreach (CharacterManager candidate in managers)
+            {
+                if (candidate != null &&
+                    TryReadBool(() => candidate.IsLocalPlayer, out bool isLocalPlayer) &&
+                    isLocalPlayer)
+                {
+                    return candidate;
+                }
+            }
+
+            return managers.FirstOrDefault(candidate => candidate != null);
+        }
+
+        private static MGCharacterController ResolveLocalCharacterController()
+        {
+            MGCharacterController controller = null;
+
+            if (Memory.rMbCharacter != null)
+                controller = Memory.rMbCharacter.GetComponentInChildren<MGCharacterController>(true);
+            if (controller == null && Memory.physicsDrivenCharacter != null)
+                controller = Memory.physicsDrivenCharacter.GetComponentInChildren<MGCharacterController>(true);
+            if (controller != null)
+                return controller;
+
+            return UnityEngine.Object.FindObjectOfType<MGCharacterController>();
+        }
+
+        private static bool TryReadBool(System.Func<bool> read, out bool value)
+        {
+            value = false;
+            if (read == null)
+                return false;
+
+            try
+            {
+                value = read();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string GetSafeGameObjectName(GameObject gameObject)
+        {
+            try
+            {
+                return gameObject != null ? gameObject.name ?? "unnamed" : "unknown";
+            }
+            catch
+            {
+                return "unknown";
+            }
         }
 
         private static void CaptureLocalTrick(TrickDetection source, string trickName)
@@ -2157,13 +2409,16 @@ namespace rowemod.Challenges
                 _wasLocalPlayerInsideArea = true;
             }
 
-            captured = captured.Trim();
+            captured = GetChallengeDisplayName(captured);
+            if (string.IsNullOrWhiteSpace(captured))
+                return false;
+
             RememberChallengeName(captured);
             float now = Time.unscaledTime;
-            if (IsLikelyStaleRepeatedCapture(captured, now))
+            if (IsLikelyDuplicateCapture(captured, source, now))
             {
-                _lastCompletionDiagnostic = $"Ignored stale repeat: {GetChallengeDisplayName(captured)}.";
-                Log.Msg($"[MPChallenge][Tricks] Ignored stale repeat trick from {source}: '{captured}'.");
+                _lastCompletionDiagnostic = $"Ignored duplicate capture: {GetChallengeDisplayName(captured)}.";
+                Log.Msg($"[MPChallenge][Tricks] Ignored duplicate trick capture from {source}: '{captured}'.");
                 return false;
             }
 
@@ -2188,7 +2443,7 @@ namespace rowemod.Challenges
             return true;
         }
 
-        private static bool IsLikelyStaleRepeatedCapture(string trickName, float now)
+        private static bool IsLikelyDuplicateCapture(string trickName, string source, float now)
         {
             if (_capturedAttemptTricks.Count == 0)
                 return false;
@@ -2208,35 +2463,22 @@ namespace rowemod.Challenges
                        elapsedSincePreviousCapture <= StaleRepeatCaptureWindow;
             }
 
-            if (!ActiveChallengeRequiresRepeatedTrick(normalized))
-                return false;
-
             bool alreadyCapturedThisTrick = _capturedAttemptTricks
                 .Any(captured => string.Equals(NormalizeTrickName(captured), normalized, StringComparison.Ordinal));
             if (!alreadyCapturedThisTrick)
                 return false;
 
-            return elapsedSincePreviousCapture >= 0f &&
-                   elapsedSincePreviousCapture <= StaleRepeatCaptureWindow;
+            return IsReplayTrickCaptureSource(source);
         }
 
-        private static bool ActiveChallengeRequiresRepeatedTrick(string normalizedTrickName)
+        private static bool IsReplayTrickCaptureSource(string source)
         {
-            if (_activeChallenge?.Tricks == null || string.IsNullOrEmpty(normalizedTrickName))
+            if (string.IsNullOrWhiteSpace(source))
                 return false;
 
-            int count = 0;
-            foreach (string requiredTrick in _activeChallenge.Tricks)
-            {
-                if (!string.Equals(NormalizeTrickName(requiredTrick), normalizedTrickName, StringComparison.Ordinal))
-                    continue;
-
-                count++;
-                if (count > 1)
-                    return true;
-            }
-
-            return false;
+            return source.IndexOf("OnConfirmLanding", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   source.IndexOf("OnAbilityComboConfirmed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   source.IndexOf("OnEndLineConfirmed", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool ApplyBikeStartSet(string playerKey, string playerName)
@@ -2825,10 +3067,11 @@ namespace rowemod.Challenges
                 GetPlayerTrickUnityEvent(gameplay, "OnConfirmLanding"),
                 _onConfirmLandingListener,
                 "OnConfirmLanding");
-            addedAny |= AddTrickGameplayListener(
+            bool lineEndAdded = AddTrickGameplayListener(
                 GetPlayerTrickUnityEvent(gameplay, "OnEndLineConfirmed"),
                 _onEndLineConfirmedListener,
                 "OnEndLineConfirmed");
+            addedAny |= lineEndAdded;
             addedAny |= AddTrickGameplayListener(
                 GetPlayerTrickUnityEvent(gameplay, "OnComboFailed"),
                 _onComboFailedListener,
@@ -2842,6 +3085,7 @@ namespace rowemod.Challenges
             }
 
             _subscribedTrickGameplay = gameplay;
+            _lineEndEventBound = lineEndAdded;
             _nextTrickGameplayBindRetryTime = 0f;
             Log.Msg($"[MPChallenge][Tricks] Bound PlayerTrickGameplay events on '{gameplay.gameObject.name}'.");
         }
@@ -2895,6 +3139,7 @@ namespace rowemod.Challenges
             finally
             {
                 _subscribedTrickGameplay = null;
+                _lineEndEventBound = false;
             }
         }
 
@@ -2943,22 +3188,22 @@ namespace rowemod.Challenges
 
         private static void HandleAbilityPerformed()
         {
-            HandlePlayerTrickGameplayEvent("OnAbilityPerformed", false, false);
+            HandlePlayerTrickGameplayEvent("OnAbilityPerformed", false, false, false);
         }
 
         private static void HandleAbilityComboConfirmed()
         {
-            HandlePlayerTrickGameplayEvent("OnAbilityComboConfirmed", false, false);
+            HandlePlayerTrickGameplayEvent("OnAbilityComboConfirmed", false, false, false);
         }
 
         private static void HandleConfirmLanding()
         {
-            HandlePlayerTrickGameplayEvent("OnConfirmLanding", true, true);
+            HandlePlayerTrickGameplayEvent("OnConfirmLanding", true, false, false);
         }
 
         private static void HandleEndLineConfirmed()
         {
-            HandlePlayerTrickGameplayEvent("OnEndLineConfirmed", true, true);
+            HandlePlayerTrickGameplayEvent("OnEndLineConfirmed", true, true, true);
         }
 
         private static void HandleComboFailed()
@@ -2988,6 +3233,7 @@ namespace rowemod.Challenges
         private static void HandlePlayerTrickGameplayEvent(
             string eventName,
             bool confirmsLanding,
+            bool confirmsLineEnd,
             bool checkCompletion)
         {
             if (!AreTrickHooksEnabled())
@@ -3004,6 +3250,8 @@ namespace rowemod.Challenges
                 CapturePlayerTrickGameplaySnapshot(eventName);
                 if (confirmsLanding)
                     _currentAttemptHasConfirmedLanding = true;
+                if (confirmsLineEnd)
+                    _currentAttemptHasLineEndConfirmation = true;
 
                 if (checkCompletion)
                     SafeCheckLocalLineCompletion();
@@ -3021,27 +3269,66 @@ namespace rowemod.Challenges
                 return;
 
             HashSet<string> capturedThisEvent = new HashSet<string>(StringComparer.Ordinal);
-            CaptureUniqueGameplayTrick(
-                gameplay.GetCurrentAbilityTrick(),
-                $"PlayerTrickGameplay.{eventName}.GetCurrentAbilityTrick()",
-                capturedThisEvent);
-            CaptureUniqueGameplayTrick(
-                gameplay.GetLastAbilityTrick(),
-                $"PlayerTrickGameplay.{eventName}.GetLastAbilityTrick()",
-                capturedThisEvent);
+            List<GameplayTrickSnapshot> snapshot = new List<GameplayTrickSnapshot>
+            {
+                BuildGameplayTrickSnapshot(
+                    gameplay.GetCurrentAbilityTrick(),
+                    $"PlayerTrickGameplay.{eventName}.GetCurrentAbilityTrick()"),
+                BuildGameplayTrickSnapshot(
+                    gameplay.GetLastAbilityTrick(),
+                    $"PlayerTrickGameplay.{eventName}.GetLastAbilityTrick()")
+            };
+
+            if (snapshot.Any(item => string.Equals(item.Normalized, "nose manual", StringComparison.Ordinal)))
+                snapshot.RemoveAll(item => string.Equals(item.Normalized, "manual", StringComparison.Ordinal));
+
+            foreach (GameplayTrickSnapshot item in snapshot)
+                CaptureUniqueGameplayTrick(item, capturedThisEvent);
+        }
+
+        private struct GameplayTrickSnapshot
+        {
+            public string Text;
+            public string DisplayName;
+            public string Normalized;
+            public string Source;
+        }
+
+        private static GameplayTrickSnapshot BuildGameplayTrickSnapshot(object trickValue, string source)
+        {
+            string text = ExtractTrickText(trickValue);
+            string displayName = GetChallengeDisplayName(text);
+            return new GameplayTrickSnapshot
+            {
+                Text = text,
+                DisplayName = displayName,
+                Normalized = NormalizeTrickName(displayName),
+                Source = source
+            };
         }
 
         private static void CaptureUniqueGameplayTrick(
-            object trickValue,
-            string source,
+            GameplayTrickSnapshot trick,
             HashSet<string> capturedThisEvent)
         {
-            string text = ExtractTrickText(trickValue);
-            string normalized = NormalizeTrickName(text);
-            if (string.IsNullOrEmpty(normalized) || !capturedThisEvent.Add(normalized))
+            if (string.IsNullOrEmpty(trick.Normalized) || !capturedThisEvent.Add(trick.Normalized))
                 return;
 
-            CaptureAttemptTrick(text, source, false);
+            if (IsLastAbilityTrickSource(trick.Source) &&
+                _capturedAttemptTricks.Any(captured =>
+                    string.Equals(NormalizeTrickName(captured), trick.Normalized, StringComparison.Ordinal)))
+            {
+                Log.Msg($"[MPChallenge][Tricks] Ignored already-captured last ability trick from {trick.Source}: '{trick.DisplayName}'.");
+                return;
+            }
+
+            CaptureAttemptTrick(trick.DisplayName, trick.Source, false);
+        }
+
+        private static bool IsLastAbilityTrickSource(string source)
+        {
+            return !string.IsNullOrWhiteSpace(source) &&
+                   source.IndexOf("GetLastAbilityTrick", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool IsLocalTrickDetection(TrickDetection candidate)
@@ -3178,6 +3465,9 @@ namespace rowemod.Challenges
             _entryHistorySnapshot.Clear();
             _lastCheckedAttemptSignature = null;
             _currentAttemptHasConfirmedLanding = false;
+            _currentAttemptHasLineEndConfirmation = false;
+            _loggedGroundedLineEndWait = false;
+            ResetGroundedTracking();
             _lastSeenHistoryCount = 0;
             _lastSeenHistorySource = "none";
             _lastSeenTrickText = "none";
@@ -3246,7 +3536,8 @@ namespace rowemod.Challenges
             if (string.IsNullOrWhiteSpace(name))
                 return string.Empty;
 
-            string separated = InsertWordBoundaries(name.Trim())
+            string cleaned = StripUnityRichTextTags(name.Trim());
+            string separated = InsertWordBoundaries(cleaned)
                 .Replace("_", " ")
                 .Replace("-", " ");
             string[] tokens = separated.Split(
@@ -3267,7 +3558,62 @@ namespace rowemod.Challenges
                 displayTokens.RemoveRange(0, 2);
             }
 
-            return string.Join(" ", displayTokens);
+            return CanonicalizeChallengeDisplayName(string.Join(" ", displayTokens));
+        }
+
+        private static string CanonicalizeChallengeDisplayName(string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+                return string.Empty;
+
+            string normalized = displayName.Trim();
+            while (normalized.Contains("  "))
+                normalized = normalized.Replace("  ", " ");
+
+            if (string.Equals(normalized, "Nosey", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "Nose Manny", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "Nose Mannie", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Nose Manual";
+            }
+
+            if (string.Equals(normalized, "Manny", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "Mannie", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Manual";
+            }
+
+            return normalized;
+        }
+
+        private static string StripUnityRichTextTags(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return value;
+
+            List<char> chars = new List<char>(value.Length);
+            bool inTag = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '<')
+                {
+                    inTag = true;
+                    continue;
+                }
+
+                if (inTag)
+                {
+                    if (c == '>')
+                        inTag = false;
+
+                    continue;
+                }
+
+                chars.Add(c);
+            }
+
+            return new string(chars.ToArray());
         }
 
         private static bool TryGetSpinCaptureInfo(string trickName, out int degrees, out bool standaloneSpin)

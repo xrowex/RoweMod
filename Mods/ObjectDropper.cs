@@ -62,10 +62,11 @@ namespace rowemod.Mods
         private static UnityEngine.Camera activeCamera;
         private static bool canPlacePreview = false;
         private static GUIStyle notPlaceableWarningStyle;
-
-        // Foldout states for Dropper tab
-        private static bool dropperExpanded = true;
-        private static bool transformControlsExpanded = true;
+        private static Vector2 prefabListScroll = Vector2.zero;
+        private static Vector2 spawnedListScroll = Vector2.zero;
+        private static string prefabSearch = string.Empty;
+        private static string dropperStatus = "Select an object, then click in the world to place it.";
+        private static float nextAssetLoadAttemptTime = 0f;
 
         // Initialize the dropper by finding references
         public static void Initialize()
@@ -155,20 +156,21 @@ namespace rowemod.Mods
 
                 if (Memory.dropperPrefabs == null || Memory.dropperPrefabs.Count == 0)
                 {
-                    Log.Warning("No prefabs available to spawn in ObjectDropper.");
+                    SetDropperStatus("No objects are loaded for the dropper.", true);
                     return;
                 }
 
                 if (string.IsNullOrEmpty(selectedPrefabName))
                 {
-                    Log.Warning("No prefab selected. Please select a prefab in the Object Dropper menu.");
+                    SetDropperStatus("Select an object before placing.", true);
                     return;
                 }
 
                 if (!Memory.dropperPrefabNames.Contains(selectedPrefabName))
                 {
-                    Log.Warning($"Selected prefab '{selectedPrefabName}' is no longer valid. Clearing selection.");
+                    SetDropperStatus($"Selected object '{selectedPrefabName}' is no longer available.", true);
                     selectedPrefabName = null;
+                    DestroyPreviewObject();
                     return;
                 }
 
@@ -183,13 +185,13 @@ namespace rowemod.Mods
 
                 if (activeCamera == null)
                 {
-                    Log.Warning("Cannot spawn object because active camera is null.");
+                    SetDropperStatus("Cannot place object: no active camera found.", true);
                     return;
                 }
 
                 if (previewObject != null && previewObject.activeSelf && !canPlacePreview)
                 {
-                    Log.Warning("Cannot spawn object because the preview is not placeable.");
+                    SetDropperStatus("Cannot place object here.", true);
                     return;
                 }
 
@@ -211,6 +213,7 @@ namespace rowemod.Mods
                     GameObject previewSpawned = Object.Instantiate(prefabToSpawn, previewObject.transform.position, previewObject.transform.rotation);
                     ConfigureSpawnedObject(previewSpawned);
                     spawnedObjects.Add(previewSpawned);
+                    SetDropperStatus($"Placed {selectedPrefabName}.", false);
                     Log.Msg($"Spawned object from preview at {previewObject.transform.position}, rotation: {previewObject.transform.rotation.eulerAngles}");
                     return;
                 }
@@ -257,47 +260,14 @@ namespace rowemod.Mods
                     GameObject spawned = Object.Instantiate(prefabToSpawn, position, rotation);
                     
 
-                    if (spawned != null && spawned.GetComponent<Rigidbody>() != null)
-                    {
-                        spawned.AddComponent<RecordableBody>();
-                        Log.Msg($"Added RecordableBody to {spawned.name} as it has a Rigidbody component");
-                    }
-
-                    if (spawned.GetComponentInChildren<AimConstraint>() != null)
-                    {
-                        Log.Msg("Object has an AimConstraint component");
-
-                        var aimConstraints = spawned.GetComponentsInChildren<AimConstraint>();
-
-                        // Clear existing sources just in case
-                        foreach (var aimConstraint in aimConstraints)
-                        {
-                            aimConstraint.SetSources(new Il2CppSystem.Collections.Generic.List<ConstraintSource>());
-                            
-                            ConstraintSource source = new ConstraintSource
-                            {
-                                sourceTransform = Memory.chassisRb.transform,
-                                weight = 1.0f
-                            };
-
-                            Log.Msg("AimConstraint sourceTransform set to " + Memory.chassisRb.transform.name);
-
-                            aimConstraint.AddSource(source);
-
-                            aimConstraint.constraintActive = true;
-                            aimConstraint.locked = true;
-                            
-                            // Optional: Force update (may help in some cases)
-                            aimConstraint.enabled = false;
-                            aimConstraint.enabled = true;
-                        }
-                    }
+                    ConfigureSpawnedObject(spawned);
                     spawnedObjects.Add(spawned);
+                    SetDropperStatus($"Placed {selectedPrefabName}.", false);
                     Log.Msg($"Spawned object under mouse at {position}, rotation: {rotation.eulerAngles}");
                 }
                 else
                 {
-                    Log.Warning("Raycast under mouse did not hit ground.");
+                    SetDropperStatus("Cannot place object: no valid surface under cursor.", true);
                 }
             }
 
@@ -330,16 +300,7 @@ namespace rowemod.Mods
                 previewYRotation %= 360f;
             }
 
-            // Refresh camera
-            if (activeCamera == null)
-            {
-                var brain = GameObject.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
-                if (brain != null && brain.gameObject.TryGetComponent(out UnityEngine.Camera cam))
-                {
-                    activeCamera = cam;
-                    Log.Msg($"Active camera assigned: {cam.name}");
-                }
-            }
+            RefreshActiveCamera();
 
             // Update preview position/rotation
             // Disable preview object if not on Dropper tab
@@ -350,6 +311,12 @@ namespace rowemod.Mods
             }
             else
             {
+                if (string.IsNullOrEmpty(selectedPrefabName))
+                {
+                    DestroyPreviewObject();
+                    return;
+                }
+
                 if (previewObject != null && !previewObject.activeSelf)
                     previewObject.SetActive(true);
 
@@ -371,6 +338,14 @@ namespace rowemod.Mods
             {
                 activeCamera = cam;
                 Log.Msg($"Active camera assigned: {cam.name}");
+                return;
+            }
+
+            UnityEngine.Camera mainCamera = UnityEngine.Camera.main;
+            if (mainCamera != null)
+            {
+                activeCamera = mainCamera;
+                Log.Msg($"Active camera assigned from Camera.main: {mainCamera.name}");
             }
         }
 
@@ -673,7 +648,7 @@ namespace rowemod.Mods
         {
             if (selectedObjects.Count == 0)
             {
-                Log.Warning("No objects selected to delete.");
+                SetDropperStatus("No spawned objects are selected.", true);
                 return;
             }
 
@@ -690,6 +665,7 @@ namespace rowemod.Mods
                 }
             }
             selectedObjects.Clear();
+            SetDropperStatus($"Deleted {deletedCount} selected object(s).", false);
             Log.Msg($"Deleted {deletedCount} selected objects.");
 
             // Reset transform offsets after deletion
@@ -701,55 +677,95 @@ namespace rowemod.Mods
         // Draw the UI for the Dropper tab
         public static void DrawDropperTab()
         {
-            // Update toggle styles if menu accent color has changed
             InitializeToggleStyles();
-
-            // Displaying header for Object Dropper tab
-            dropperExpanded = Menu.ModernFoldout("Object Dropper", dropperExpanded);
-            if (!dropperExpanded) return;
+            EnsureDropperAssetsLoaded(false);
 
             if (Memory.dropperPrefabs == null || Memory.dropperPrefabNames.Count == 0)
             {
-                GUILayout.Label("No objects available to spawn.", Menu.labelStyle);
+                DestroyPreviewObject();
+                Menu.BeginPane("Object Dropper", "Dropper objects load from bundled prefabs named dropper_*.");
+                GUILayout.Label("No objects available to spawn.", Menu.UiHeaderStyle);
+                GUILayout.Label("Load a bundle with dropper prefabs, then refresh this tab.", Menu.UiMutedWrappedStyle);
+                GUILayout.Space(10f);
+                if (Menu.PrimaryButton("Refresh Objects", GUILayout.Width(150f), GUILayout.Height(26f)))
+                {
+                    EnsureDropperAssetsLoaded(true);
+                }
+                Menu.EndPane();
                 return;
             }
 
-            // Adding prefab buttons
-            GUILayout.Label("Available Prefabs:", Menu.labelStyle);
-            foreach (string prefabName in Memory.dropperPrefabNames)
+            spawnedObjects.RemoveAll(o => o == null);
+            selectedObjects.RemoveAll(o => o == null);
+
+            float paneHeight = Menu.GetContentPaneHeight(100f);
+            float leftWidth = Mathf.Max(260f, Menu.windowRect.width * 0.34f);
+
+            Menu.BeginTwoPane(paneHeight);
+
+            Menu.BeginPane("Object Library", "Pick an object to preview, then click outside the menu to place it.", GUILayout.Width(leftWidth), GUILayout.Height(paneHeight));
+            Menu.BeginToolbar();
+            Menu.SearchRow(ref prefabSearch, Mathf.Max(160f, leftWidth - 115f), "Search");
+            Menu.EndToolbar();
+
+            string normalizedSearch = prefabSearch?.Trim() ?? string.Empty;
+            List<string> filteredPrefabs = Memory.dropperPrefabNames
+                .Where(name => string.IsNullOrEmpty(normalizedSearch) || name.IndexOf(normalizedSearch, StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            if (filteredPrefabs.Count == 0)
             {
-                if (GUILayout.Button(prefabName, Menu.highQualityButtonStyle, GUILayout.Width(500f), GUILayout.Height(20f)))
-                {
-                    selectedPrefabName = prefabName;
-                    Log.Msg($"Selected prefab: {selectedPrefabName}");
-
-                    int index = Memory.dropperPrefabNames.IndexOf(prefabName);
-                    if (index >= 0 && index < Memory.dropperPrefabs.Count)
-                    {
-                        var prefab = Memory.dropperPrefabs[index];
-                        CreatePreviewMaterial();
-                        BuildPreviewObject(prefab);
-                    }
-                }
-            }
-
-            // Moved Delete buttons to be vertically placed right of Spawned Objects list
-            GUILayout.Space(10);
-            GUILayout.BeginHorizontal();
-
-            // Left column: Spawned Objects list
-            GUILayout.BeginVertical(GUILayout.Width(500f));
-            GUILayout.Label("Spawned Objects:", Menu.labelStyle);
-            if (spawnedObjects.Count == 0)
-            {
-                GUILayout.Label("No objects spawned.", Menu.labelStyle);
+                Menu.DrawEmptyState("No matching objects.", "Clear the search filter to show all dropper objects.");
             }
             else
             {
-                // Clean up any nulls in both lists just in case
-                spawnedObjects.RemoveAll(o => o == null);
-                selectedObjects.RemoveAll(o => o == null);
+                prefabListScroll = GUILayout.BeginScrollView(prefabListScroll, false, true, GUILayout.ExpandHeight(true));
+                foreach (string prefabName in filteredPrefabs)
+                {
+                    bool isSelectedPrefab = string.Equals(selectedPrefabName, prefabName, StringComparison.Ordinal);
+                    if (GUILayout.Button(prefabName, isSelectedPrefab ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle, GUILayout.Height(26f)))
+                    {
+                        SelectPrefab(prefabName);
+                    }
+                }
+                GUILayout.EndScrollView();
+            }
 
+            Menu.EndPane();
+
+            Menu.BeginPane("Placement", "Preview follows the cursor. Mouse wheel rotates the selected object.", GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
+
+            GUILayout.Label($"Selected: {(selectedPrefabName ?? "None")}", Menu.UiHeaderStyle);
+            GUILayout.Label(dropperStatus, Menu.UiMutedWrappedStyle);
+
+            Menu.BeginToolbar();
+            if (Menu.SecondaryButton("Clear Selection", GUILayout.Width(130f), GUILayout.Height(26f)))
+            {
+                selectedPrefabName = null;
+                DestroyPreviewObject();
+                SetDropperStatus("Selection cleared.", false);
+            }
+
+            if (Menu.DangerButton("Delete Selected", GUILayout.Width(130f), GUILayout.Height(26f)))
+            {
+                DeleteSelectedObjects();
+            }
+
+            if (Menu.DangerButton("Delete All", GUILayout.Width(105f), GUILayout.Height(26f)))
+            {
+                DeleteAllSpawnedObjects();
+            }
+            Menu.EndToolbar();
+
+            GUILayout.Space(8f);
+            Menu.DrawSectionTitle($"Spawned Objects ({spawnedObjects.Count}/{MaxSpawnedObjects})", $"{selectedObjects.Count} selected.");
+            if (spawnedObjects.Count == 0)
+            {
+                Menu.DrawEmptyState("No objects spawned.", "Select an object, then click in the world to place it.");
+            }
+            else
+            {
+                spawnedListScroll = GUILayout.BeginScrollView(spawnedListScroll, false, true, GUILayout.MinHeight(120f), GUILayout.MaxHeight(220f));
                 for (int i = 0; i < spawnedObjects.Count; i++)
                 {
                     GameObject obj = spawnedObjects[i];
@@ -767,78 +783,48 @@ namespace rowemod.Mods
                         displayName = obj.name;
 
                     string label = $"Object {i + 1}: {displayName}";
-
                     bool isSelected = selectedObjects.Contains(obj);
-
-                    // Fallback if styles haven't been built for some reason
-                    GUIStyle toggleStyle =
-                        (isSelected ? toggleOnStyle : toggleOffStyle) ?? Menu.highQualityButtonStyle;
-
-                    if (GUILayout.Button(label, toggleStyle,
-                            GUILayout.Width(500f), GUILayout.Height(20f)))
+                    if (GUILayout.Button(label, isSelected ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle, GUILayout.Height(24f)))
                     {
                         ToggleObjectSelection(obj);
                     }
                 }
+                GUILayout.EndScrollView();
             }
-            GUILayout.EndVertical();
 
-            // Right column: Delete buttons stacked vertically, right-aligned and spaced down
-            GUILayout.BeginVertical(GUILayout.Width(300f));
-            GUILayout.Space(30); // Space to align with first Spawned Objects toggle button
-            GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace(); // Right-align buttons
-            GUILayout.BeginVertical();
-            if (GUILayout.Button("<b>Delete All Spawned Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
-            {
-                DeleteAllSpawnedObjects();
-            }
-            if (GUILayout.Button("<b>Delete Selected Objects</b>", Menu.highQualityButtonStyle, GUILayout.Width(200f), GUILayout.Height(30f)))
-            {
-                DeleteSelectedObjects();
-            }
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-
-            GUILayout.EndHorizontal();
-
-            // Adding transform controls for selected objects
             if (selectedObjects.Count > 0)
             {
-                GUILayout.Space(10);
-                transformControlsExpanded = Menu.ModernFoldout("Transform Controls", transformControlsExpanded);
+                GUILayout.Space(8f);
+                Menu.BeginAltPane("Transform Controls", "Offsets apply live to the selected spawned objects.");
 
-                if (transformControlsExpanded)
+                // Position sliders with live updates
+                Vector3 prevPositionOffset = positionOffset;
+
+                Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
+                if (positionOffset.x != prevPositionOffset.x)
                 {
-                    // Position sliders with live updates
-                    Vector3 prevPositionOffset = positionOffset;
+                    ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
+                    if (positionOffset.x == 0f) positionOffset.x = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Position X by {positionOffset.x - prevPositionOffset.x} for selected objects.");
+                }
 
-                    Menu.ModernSlider("Position X", ref positionOffset.x, -5f, 5f);
-                    if (positionOffset.x != prevPositionOffset.x)
-                    {
-                        ApplyTransformOffsets(new Vector3(positionOffset.x - prevPositionOffset.x, 0, 0), Vector3.zero);
-                        if (positionOffset.x == 0f) positionOffset.x = 0f; // Reset to zero if slider is at zero
-                        Log.Msg($"Live-updated Position X by {positionOffset.x - prevPositionOffset.x} for selected objects.");
-                    }
+                prevPositionOffset = positionOffset;
+                Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
+                if (positionOffset.y != prevPositionOffset.y)
+                {
+                    ApplyTransformOffsets(new Vector3(0, positionOffset.y - prevPositionOffset.y, 0), Vector3.zero);
+                    if (positionOffset.y == 0f) positionOffset.y = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Position Y by {positionOffset.y - prevPositionOffset.y} for selected objects.");
+                }
 
-                    prevPositionOffset = positionOffset;
-                    Menu.ModernSlider("Position Up/Down", ref positionOffset.y, -5f, 5f);
-                    if (positionOffset.y != prevPositionOffset.y)
-                    {
-                        ApplyTransformOffsets(new Vector3(0, positionOffset.y - prevPositionOffset.y, 0), Vector3.zero);
-                        if (positionOffset.y == 0f) positionOffset.y = 0f; // Reset to zero if slider is at zero
-                        Log.Msg($"Live-updated Position Y by {positionOffset.y - prevPositionOffset.y} for selected objects.");
-                    }
-
-                    prevPositionOffset = positionOffset;
-                    Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
-                    if (positionOffset.z != prevPositionOffset.z)
-                    {
-                        ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);
-                        if (positionOffset.z == 0f) positionOffset.z = 0f; // Reset to zero if slider is at zero
-                        Log.Msg($"Live-updated Position Z by {positionOffset.z - prevPositionOffset.z} for selected objects.");
-                    }
+                prevPositionOffset = positionOffset;
+                Menu.ModernSlider("Position Z", ref positionOffset.z, -5f, 5f);
+                if (positionOffset.z != prevPositionOffset.z)
+                {
+                    ApplyTransformOffsets(new Vector3(0, 0, positionOffset.z - prevPositionOffset.z), Vector3.zero);
+                    if (positionOffset.z == 0f) positionOffset.z = 0f; // Reset to zero if slider is at zero
+                    Log.Msg($"Live-updated Position Z by {positionOffset.z - prevPositionOffset.z} for selected objects.");
+                }
                     GUILayout.Space(5);
 
                     // Rotation sliders with live updates
@@ -869,12 +855,83 @@ namespace rowemod.Mods
                         Log.Msg($"Live-updated Rotation Z by {rotationOffset.z - prevRotationOffset.z} for selected objects.");
                     }
                     GUILayout.Space(5);
-                }
+                Menu.EndPane();
             }
 
-            // Displaying currently selected prefab and number of selected objects
-            GUILayout.Label($"Current Selected Prefab: {(selectedPrefabName ?? "None")}", Menu.labelStyle);
-            GUILayout.Label($"Selected Objects: {selectedObjects.Count}", Menu.labelStyle);
+            Menu.EndPane();
+            Menu.EndTwoPane();
+        }
+
+        private static void EnsureDropperAssetsLoaded(bool forceReload)
+        {
+            if (!forceReload && Memory.dropperPrefabs != null && Memory.dropperPrefabs.Count > 0)
+                return;
+
+            float now = Time.unscaledTime;
+            if (!forceReload && now < nextAssetLoadAttemptTime)
+                return;
+
+            nextAssetLoadAttemptTime = now + 5f;
+
+            try
+            {
+                Memory.LoadAllAssetBundles(forceReload);
+                if (Memory.dropperPrefabs != null && Memory.dropperPrefabs.Count > 0)
+                    SetDropperStatus($"Loaded {Memory.dropperPrefabs.Count} dropper object(s).", false);
+            }
+            catch (Exception ex)
+            {
+                SetDropperStatus("Could not load dropper bundles: " + ex.Message, true);
+            }
+        }
+
+        private static void SelectPrefab(string prefabName)
+        {
+            if (string.IsNullOrEmpty(prefabName))
+                return;
+
+            int index = Memory.dropperPrefabNames.IndexOf(prefabName);
+            if (index < 0 || index >= Memory.dropperPrefabs.Count)
+            {
+                SetDropperStatus($"Could not find object '{prefabName}'.", true);
+                selectedPrefabName = null;
+                DestroyPreviewObject();
+                return;
+            }
+
+            selectedPrefabName = prefabName;
+            previewYRotation = 0f;
+            Log.Msg($"Selected prefab: {selectedPrefabName}");
+
+            CreatePreviewMaterial();
+            if (previewMaterial == null)
+            {
+                SetDropperStatus("Could not create preview material.", true);
+                DestroyPreviewObject();
+                return;
+            }
+
+            BuildPreviewObject(Memory.dropperPrefabs[index]);
+            SetDropperStatus($"Selected {selectedPrefabName}. Click outside the menu to place it.", false);
+        }
+
+        private static void SetDropperStatus(string message, bool warning)
+        {
+            dropperStatus = message;
+            if (warning)
+                Log.Warning("[Dropper] " + message);
+        }
+
+        private static void DestroyPreviewObject()
+        {
+            if (previewObject != null)
+            {
+                UnityEngine.Object.Destroy(previewObject);
+                previewObject = null;
+            }
+
+            canPlacePreview = false;
+            previewBottomOffset = 0f;
         }
 
         // Reset the Dropper tab to default state
@@ -883,7 +940,9 @@ namespace rowemod.Mods
             // Resetting selected prefab and clear selections
             selectedPrefabName = null;
             ClearSelection();
+            DestroyPreviewObject();
             Config.misc.disableDroneCollider = false;
+            dropperStatus = "Select an object, then click in the world to place it.";
             Log.Msg("Object Dropper tab reset: Selected prefab and objects cleared.");
         }
 
@@ -903,6 +962,7 @@ namespace rowemod.Mods
                 }
             }
             spawnedObjects.Clear();
+            SetDropperStatus($"Deleted {count} spawned object(s).", false);
             Log.Msg($"Deleted {count} spawned objects.");
         }
 
@@ -971,8 +1031,19 @@ namespace rowemod.Mods
 
         private static void BuildPreviewObject(GameObject prefab)
         {
-            if (previewObject != null)
-                UnityEngine.Object.Destroy(previewObject);
+            DestroyPreviewObject();
+
+            if (prefab == null)
+            {
+                SetDropperStatus("Selected object prefab is missing.", true);
+                return;
+            }
+
+            if (previewMaterial == null)
+            {
+                SetDropperStatus("Preview material is missing.", true);
+                return;
+            }
 
             previewObject = UnityEngine.Object.Instantiate(prefab);
             previewObject.name = "[Preview] " + prefab.name;

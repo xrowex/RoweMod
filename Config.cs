@@ -131,7 +131,77 @@ namespace rowemod
         public bool enabled { get; set; } = true;
         public bool networkingEnabled { get; set; } = false;
         public bool autoOpenEnabled { get; set; } = false;
-        public bool trickHooksEnabled { get; set; } = false;
+        public bool trickHooksEnabled { get; set; } = true;
+    }
+
+    public class ManualCatchSettings
+    {
+        public bool enabled { get; set; } = false;
+        public bool debugLogging { get; set; } = true;
+    }
+
+    public class TrickAnimationDebugSettings
+    {
+        public bool enabled { get; set; } = true;
+        public bool editorEnabled { get; set; } = true;
+        public Dictionary<string, TrickAnimationOverride> overrides { get; set; } = new Dictionary<string, TrickAnimationOverride>();
+    }
+
+    public class TrickAnimationOverride
+    {
+        public float overallSpeedMult { get; set; }
+        public float enterSpeedMult { get; set; }
+        public float loopSpeedMult { get; set; }
+        public float loopMult { get; set; }
+        public float tweakSpeedMult { get; set; }
+        public float exitSpeedMult { get; set; }
+        public float tweakBeginBlendNormalizedTime { get; set; }
+        public bool onlyFireIfInAir { get; set; }
+        public bool allowLandingHolding { get; set; }
+        public bool hasClipOverride { get; set; }
+        public string playerEnterClip { get; set; }
+        public string playerLoopClip { get; set; }
+        public string playerTweakClip { get; set; }
+        public string playerExitClip { get; set; }
+        public string playerMirrorEnterClip { get; set; }
+        public string playerMirrorLoopClip { get; set; }
+        public string playerMirrorTweakClip { get; set; }
+        public string playerMirrorExitClip { get; set; }
+        public string vehicleEnterClip { get; set; }
+        public string vehicleLoopClip { get; set; }
+        public string vehicleTweakClip { get; set; }
+        public string vehicleExitClip { get; set; }
+        public string vehicleMirrorEnterClip { get; set; }
+        public string vehicleMirrorLoopClip { get; set; }
+        public string vehicleMirrorTweakClip { get; set; }
+        public string vehicleMirrorExitClip { get; set; }
+        public List<TrickPoseOverride> poseOverrides { get; set; } = new List<TrickPoseOverride>();
+        public List<TrickIkTargetOverride> ikTargetOverrides { get; set; } = new List<TrickIkTargetOverride>();
+    }
+
+    public class TrickPoseOverride
+    {
+        public bool enabled { get; set; } = true;
+        public string phase { get; set; } = "Any";
+        public string bone { get; set; } = "Hips";
+        public SerializableVector3 localRotationEuler { get; set; } = new SerializableVector3(0f, 0f, 0f);
+        public SerializableVector3 localPositionOffset { get; set; } = new SerializableVector3(0f, 0f, 0f);
+        public float weight { get; set; } = 1f;
+    }
+
+    public class TrickIkTargetOverride
+    {
+        public bool enabled { get; set; } = true;
+        public string phase { get; set; } = "Any";
+        public string goal { get; set; } = "LeftHand";
+        public int targetId { get; set; } = -1;
+        public bool activateTarget { get; set; } = true;
+        public SerializableVector3 localPositionOffset { get; set; } = new SerializableVector3(0f, 0f, 0f);
+        public SerializableVector3 localRotationEuler { get; set; } = new SerializableVector3(0f, 0f, 0f);
+        public float offsetWeight { get; set; } = 1f;
+        public float humanIkWeight { get; set; } = 1f;
+        public float limbPositionWeight { get; set; } = 1f;
+        public float limbRotationWeight { get; set; } = 1f;
     }
 
     public class TrickEntry
@@ -267,8 +337,8 @@ namespace rowemod
             droneBodyToggle = true,
             droneEmitterToggle = true,
             showPlayerUserNameTargets = true,
-            menuAccentR = 0.3f,
-            menuAccentG = 0.3f,
+            menuAccentR = 0.87f,
+            menuAccentG = 0.5f,
             menuAccentB = 0.3f,
             disableEmoteOnBike = false,
             disableFreeCamCollider = false,
@@ -284,6 +354,8 @@ namespace rowemod
         public static Dictionary<string, MotorTuningConfigEntry> motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
         public static UpdaterSettings updaterSettings = new UpdaterSettings();
         public static ChallengeRuntimeSettings challengeRuntimeSettings = new ChallengeRuntimeSettings();
+        public static ManualCatchSettings manualCatchSettings = new ManualCatchSettings();
+        public static TrickAnimationDebugSettings trickAnimationDebugSettings = new TrickAnimationDebugSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
 
@@ -301,6 +373,8 @@ namespace rowemod
             public Dictionary<string, MotorTuningConfigEntry> motorTuningData { get; set; }
             public UpdaterSettings updaterSettingsData { get; set; }
             public ChallengeRuntimeSettings challengeRuntimeSettingsData { get; set; }
+            public ManualCatchSettings manualCatchSettingsData { get; set; }
+            public TrickAnimationDebugSettings trickAnimationDebugSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
         }
@@ -354,6 +428,8 @@ namespace rowemod
                     motorTuningData = motorTuning,
                     updaterSettingsData = updaterSettings,
                     challengeRuntimeSettingsData = challengeRuntimeSettings,
+                    manualCatchSettingsData = manualCatchSettings,
+                    trickAnimationDebugSettingsData = trickAnimationDebugSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
                 }, Formatting.Indented);
@@ -385,6 +461,10 @@ namespace rowemod
                 jsonContent.IndexOf("\"autoSkipIntro\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasChallengeRuntimeSettings =
                 jsonContent.IndexOf("\"challengeRuntimeSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasManualCatchSettings =
+                jsonContent.IndexOf("\"manualCatchSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasTrickAnimationDebugSettings =
+                jsonContent.IndexOf("\"trickAnimationDebugSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
             disclaimerAccepted = jsonData.disclaimerAccepted;
             autoSkipIntro = !hasAutoSkipIntro || jsonData.autoSkipIntro;
@@ -432,6 +512,43 @@ namespace rowemod
             motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
             updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
+            manualCatchSettings = jsonData.manualCatchSettingsData ?? new ManualCatchSettings();
+            trickAnimationDebugSettings = jsonData.trickAnimationDebugSettingsData ?? new TrickAnimationDebugSettings();
+            if (trickAnimationDebugSettings.overrides == null)
+            {
+                trickAnimationDebugSettings.overrides = new Dictionary<string, TrickAnimationOverride>();
+            }
+            foreach (TrickAnimationOverride trickOverride in trickAnimationDebugSettings.overrides.Values)
+            {
+                if (trickOverride == null)
+                    continue;
+
+                trickOverride.poseOverrides ??= new List<TrickPoseOverride>();
+                foreach (TrickPoseOverride poseOverride in trickOverride.poseOverrides)
+                {
+                    if (poseOverride == null)
+                        continue;
+
+                    poseOverride.phase ??= "Any";
+                    poseOverride.bone ??= "Hips";
+                    if (poseOverride.weight <= 0f)
+                        poseOverride.weight = 1f;
+                }
+
+                trickOverride.ikTargetOverrides ??= new List<TrickIkTargetOverride>();
+                foreach (TrickIkTargetOverride ikOverride in trickOverride.ikTargetOverrides)
+                {
+                    if (ikOverride == null)
+                        continue;
+
+                    ikOverride.phase ??= "Any";
+                    ikOverride.goal ??= "LeftHand";
+                    ikOverride.offsetWeight = Clamp01OrDefault(ikOverride.offsetWeight, 1f);
+                    ikOverride.humanIkWeight = Clamp01OrDefault(ikOverride.humanIkWeight, 1f);
+                    ikOverride.limbPositionWeight = Clamp01OrDefault(ikOverride.limbPositionWeight, 1f);
+                    ikOverride.limbRotationWeight = Clamp01OrDefault(ikOverride.limbRotationWeight, 1f);
+                }
+            }
             if (string.IsNullOrWhiteSpace(updaterSettings.manifestUrl))
             {
                 updaterSettings.manifestUrl = new UpdaterSettings().manifestUrl;
@@ -448,12 +565,26 @@ namespace rowemod
             if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
             if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
 
-            if (!hasChallengeRuntimeSettings)
+            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasTrickAnimationDebugSettings)
             {
                 Save();
             }
             
             Log.Msg($"Config loaded successfully.");
+        }
+
+        private static float Clamp01OrDefault(float value, float defaultValue)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                return defaultValue;
+
+            if (value < 0f)
+                return 0f;
+
+            if (value > 1f)
+                return 1f;
+
+            return value;
         }
         
         public static void SetCharacterModelPath(Custom.Slot slot, string path)
@@ -630,8 +761,8 @@ namespace rowemod
                 droneBodyToggle = true,
                 droneEmitterToggle = true,
                 showPlayerUserNameTargets = showPlayerUserNameTargets,
-                menuAccentR = 0.3f,
-                menuAccentG = 0.3f,
+                menuAccentR = 0.87f,
+                menuAccentG = 0.5f,
                 menuAccentB = 0.3f,
                 disableEmoteOnBike = false,
                 disableFreeCamCollider = false,

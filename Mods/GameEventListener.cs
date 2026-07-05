@@ -6,6 +6,7 @@ using System.Collections;
 using Il2CppFusion;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.Character;
+using rowemod.Mods;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
@@ -30,6 +31,10 @@ namespace rowemod.Mods
         private GameEvent _playerResetAtMarker;
         private GameEvent _playerCloseReplay;
         private GameEvent _titleLoopGameplayEnter;
+        private GameEvent _titleLoopGameplayExit;
+        private GameEvent _titleLoopPauseMenuEnter;
+        private GameEvent _titleLoopMainMenuEnter;
+        private GameEvent _titleLoopLoadingScreenEnter;
         private GameEvent _mainMenuOpen;
 
         public void Initialize()
@@ -40,6 +45,10 @@ namespace rowemod.Mods
             _playerResetAtMarker = null;
             _playerCloseReplay = null;
             _titleLoopGameplayEnter = null;
+            _titleLoopGameplayExit = null;
+            _titleLoopPauseMenuEnter = null;
+            _titleLoopMainMenuEnter = null;
+            _titleLoopLoadingScreenEnter = null;
             _mainMenuOpen = null;
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
@@ -67,6 +76,22 @@ namespace rowemod.Mods
                 if (ev.name.Contains("GameEvent_TitleLoop_Gameplay_OnEnter"))
                 {
                     _titleLoopGameplayEnter = ev;
+                }
+                if (ev.name.Contains("GameEvent_TitleLoop_Gameplay_OnExit"))
+                {
+                    _titleLoopGameplayExit = ev;
+                }
+                if (ev.name.Contains("GameEvent_TitleLoop_PauseMenu_OnEnter"))
+                {
+                    _titleLoopPauseMenuEnter = ev;
+                }
+                if (ev.name.Contains("GameEvent_TitleLoop_MainMenu_OnEnter"))
+                {
+                    _titleLoopMainMenuEnter = ev;
+                }
+                if (ev.name.Contains("GameEvent_TitleLoop_LoadingScreen_OnEnter"))
+                {
+                    _titleLoopLoadingScreenEnter = ev;
                 }
                 if (ev.name.Contains("GameEvent_UI_OnMenuOpen"))
                 {
@@ -136,6 +161,11 @@ namespace rowemod.Mods
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnTitleLoopGameplayOnEnter);
             _titleLoopGameplayEnter.OnRaise.AddListener(gameplayOnEnterAction);
 
+            SubscribeOptional(_titleLoopGameplayExit, "GameEvent_TitleLoop_Gameplay_OnExit", OnTitleLoopGameplayOnExit);
+            SubscribeOptional(_titleLoopPauseMenuEnter, "GameEvent_TitleLoop_PauseMenu_OnEnter", OnTitleLoopPauseMenuOnEnter);
+            SubscribeOptional(_titleLoopMainMenuEnter, "GameEvent_TitleLoop_MainMenu_OnEnter", OnTitleLoopMainMenuOnEnter);
+            SubscribeOptional(_titleLoopLoadingScreenEnter, "GameEvent_TitleLoop_LoadingScreen_OnEnter", OnTitleLoopLoadingScreenOnEnter);
+
             //main menu open
             if (_mainMenuOpen == null)
             {
@@ -149,6 +179,19 @@ namespace rowemod.Mods
             _mainMenuOpen.OnRaise.AddListener(mainMenuOpen);
 
 
+        }
+
+        private static void SubscribeOptional(GameEvent gameEvent, string label, System.Action callback)
+        {
+            if (gameEvent == null)
+            {
+                Log.Warning($"{label} is null; pie menu gameplay-state guard may miss that transition.");
+                return;
+            }
+
+            Log.Msg($"{label} found! Subscribing to event...");
+            UnityAction action = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(callback);
+            gameEvent.OnRaise.AddListener(action);
         }
 
         public static void OnSceneInitialized(string sceneName)
@@ -254,7 +297,9 @@ namespace rowemod.Mods
         {
             if (!RemoteKillSwitched.isModEnabled)
                 return;
-            
+
+            Main.IsGameMainMenuActive = true;
+            Main.IsGameplayInputActive = false;
             Log.Msg("GameEvent_UI_OnMenuOpen triggered!");
             //MelonCoroutines.Start(DelayedLoadPreset());
         }
@@ -336,11 +381,12 @@ namespace rowemod.Mods
             {
                 if (!RemoteKillSwitched.isModEnabled) return;
                 Log.Msg($"Player Spawned: {go.name}");
+                Main.IsGameMainMenuActive = false;
+                Main.IsGameplayInputActive = true;
                 Memory.physicsDrivenCharacter = go;
                 Memory.rMbCharacter = go.transform.parent?.gameObject;
                 Memory.gamePlayer = go;
             
-                
 
                 if (Memory.gamePlayer)
                 {
@@ -418,6 +464,9 @@ namespace rowemod.Mods
                 if (RemoteKillSwitched.isModEnabled)
                 {
                     Log.Msg($"Menu Player Spawned: {go.name}");
+                    Main.IsGameMainMenuActive = true;
+                    Main.IsGameplayInputActive = false;
+                    Main.playableSceneLoaded = false;
                     Memory.physicsDrivenCharacter = go;
                     Memory.rMbCharacter = go.transform.parent?.gameObject;
                     Memory.menuPlayer = go;
@@ -451,6 +500,8 @@ namespace rowemod.Mods
         {
             if (RemoteKillSwitched.isModEnabled)
             {
+                Main.IsGameMainMenuActive = false;
+                Main.IsGameplayInputActive = true;
                 Log.Msg("GameEvent_TitleLoop_Gameplay_OnEnter triggered!");
                 // Delayed bike materials load to bypass shop load
                
@@ -464,7 +515,47 @@ namespace rowemod.Mods
                 
                 //TrickMods.LoadTricksFromConfig();
             }
-            
+
+        }
+
+        private void OnTitleLoopGameplayOnExit()
+        {
+            if (!RemoteKillSwitched.isModEnabled)
+                return;
+
+            Main.IsGameplayInputActive = false;
+            Log.Msg("GameEvent_TitleLoop_Gameplay_OnExit triggered; pie menu input disabled.");
+        }
+
+        private void OnTitleLoopPauseMenuOnEnter()
+        {
+            if (!RemoteKillSwitched.isModEnabled)
+                return;
+
+            Main.IsGameMainMenuActive = true;
+            Main.IsGameplayInputActive = false;
+            Log.Msg("GameEvent_TitleLoop_PauseMenu_OnEnter triggered; pie menu input disabled.");
+        }
+
+        private void OnTitleLoopMainMenuOnEnter()
+        {
+            if (!RemoteKillSwitched.isModEnabled)
+                return;
+
+            Main.IsGameMainMenuActive = true;
+            Main.IsGameplayInputActive = false;
+            Main.playableSceneLoaded = false;
+            Log.Msg("GameEvent_TitleLoop_MainMenu_OnEnter triggered; pie menu input disabled.");
+        }
+
+        private void OnTitleLoopLoadingScreenOnEnter()
+        {
+            if (!RemoteKillSwitched.isModEnabled)
+                return;
+
+            Main.IsGameMainMenuActive = true;
+            Main.IsGameplayInputActive = false;
+            Log.Msg("GameEvent_TitleLoop_LoadingScreen_OnEnter triggered; pie menu input disabled.");
         }
         
         public IEnumerator DelayedLoadPreset()

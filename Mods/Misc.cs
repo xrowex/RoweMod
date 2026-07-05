@@ -31,6 +31,8 @@ namespace rowemod.Mods
         private static Il2CppMashBoxSDK.Maps.Rigging.MBNetworkedObjectSpawner driftCarSpawnerType;
         private static GameObject driftTrikeSpawnerHost;
         private static Il2CppMashBoxSDK.Maps.Rigging.MBNetworkedObjectSpawner driftTrikeSpawnerType;
+        private static bool temporaryNeverBailOverrideActive;
+        private static bool temporaryNeverBailOverrideValue;
         
 
         public static void Update()
@@ -43,8 +45,7 @@ namespace rowemod.Mods
                 driftTrikeSpawnerType.spawnPoint = Memory.activeMarkerTransform;
             Memory.RefreshDroneComponents();
             // Update Ragdoll Behaviour
-            if (activeRagdollBehaviour != null)
-                activeRagdollBehaviour._invinsible = misc.neverBail;
+            ApplyNeverBailState();
 
             // Update Drone Rigidbody Mass
             if (droneRb != null)
@@ -95,6 +96,21 @@ namespace rowemod.Mods
             }
 
             ApplyPlayerUserNameTargetsVisibility();
+        }
+
+        public static void SetTemporaryNeverBailOverride(bool active, bool value = false)
+        {
+            temporaryNeverBailOverrideActive = active;
+            temporaryNeverBailOverrideValue = value;
+            ApplyNeverBailState();
+        }
+
+        private static void ApplyNeverBailState()
+        {
+            if (activeRagdollBehaviour != null)
+                activeRagdollBehaviour._invinsible = temporaryNeverBailOverrideActive
+                    ? temporaryNeverBailOverrideValue
+                    : misc.neverBail;
         }
 
         public static void ApplyPlayerUserNameTargetsVisibility(bool force = false)

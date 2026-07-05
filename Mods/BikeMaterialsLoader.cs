@@ -86,6 +86,9 @@ namespace rowemod.Mods
         
         private static string _newPresetName = "";
         private static int _selectedPresetIndex = 0;
+        private static Vector2 _categoryScroll;
+        private static Vector2 _materialScroll;
+        private static Vector2 _presetScroll;
 
         public static void ResetTabState()
         {
@@ -105,14 +108,15 @@ namespace rowemod.Mods
         {
             try
             {
-                GUILayout.BeginHorizontal();
+                float paneHeight = Menu.GetContentPaneHeight(150f);
+                Menu.BeginTwoPane(paneHeight);
                 
-                GUILayout.BeginVertical(GUILayout.Width(200));
-                GUILayout.Label("Categories:", Menu.labelStyle);
+                BeginPane("Categories", "Toggle parts or pick where a material should apply.", GUILayout.Width(255f), GUILayout.Height(paneHeight));
 
+                _categoryScroll = GUILayout.BeginScrollView(_categoryScroll, false, true, GUILayout.ExpandHeight(true));
                 foreach (var category in categories)
                 {
-                    GUILayout.BeginHorizontal();
+                    GUILayout.BeginHorizontal(GUILayout.Height(28f));
 
                     // Toggle
                     if (_categoryVisibility == null)
@@ -135,7 +139,8 @@ namespace rowemod.Mods
                     }
 
                     // Button
-                    if (GUILayout.Button(category.Value.displayName, highQualityButtonStyle))
+                    bool isSelected = string.Equals(_selectedCategory, category.Key, StringComparison.Ordinal);
+                    if (GUILayout.Button(category.Value.displayName, isSelected ? UiRowButtonSelectedStyle : UiRowButtonStyle))
                     {
                         _selectedCategory = category.Key;
                         _selectedFolder = Path.Combine(BikeRootPath, category.Value.displayName);
@@ -143,11 +148,17 @@ namespace rowemod.Mods
 
                     GUILayout.EndHorizontal();
                 }
-                GUILayout.EndVertical();
+                GUILayout.EndScrollView();
+                EndPane();
 
-                GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-                GUILayout.Label("Materials:", Menu.labelStyle);
+                GUILayout.Space(8f);
 
+                string materialTitle = _selectedCategory != null && categories.ContainsKey(_selectedCategory)
+                    ? categories[_selectedCategory].displayName
+                    : "Materials";
+                BeginPane(materialTitle, "Choose a material bundle for the selected bike part.", GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
+
+                _materialScroll = GUILayout.BeginScrollView(_materialScroll, false, true, GUILayout.ExpandHeight(true));
                 if (!string.IsNullOrEmpty(_selectedFolder) && Directory.Exists(_selectedFolder))
                 {
                     foreach (var materialFile in Directory.GetFiles(_selectedFolder, "*.material"))
@@ -155,13 +166,13 @@ namespace rowemod.Mods
                         string materialName = Path.GetFileNameWithoutExtension(materialFile);
 
                         GUILayout.BeginHorizontal();
-                        Rect buttonRect = GUILayoutUtility.GetRect(new GUIContent(materialName), Menu.highQualityButtonStyle);
+                        Rect buttonRect = GUILayoutUtility.GetRect(new GUIContent(materialName), UiRowButtonStyle);
 
-                        if (GUI.Button(buttonRect, materialName, Menu.highQualityButtonStyle))
+                        if (GUI.Button(buttonRect, materialName, UiRowButtonStyle))
                         {
                             Material loadedMaterial = LoadMaterialFromFile(materialFile);
 
-                            // 🔧 Disable decals if applicable
+                            // Disable decals if applicable.
                             if (loadedMaterial != null && loadedMaterial.HasProperty("_SupportDecals"))
                             {
                                 loadedMaterial.SetFloat("_SupportDecals", 0f);
@@ -174,8 +185,8 @@ namespace rowemod.Mods
                             }
                             else
                             {
-                                Log.Error($"[rowemod] Failed to apply material. Invalid category: {_selectedCategory}");
-                            }
+                            Log.Error($"[rowemod] Failed to apply material. Invalid category: {_selectedCategory}");
+                        }
 
                         }
 
@@ -184,19 +195,21 @@ namespace rowemod.Mods
                 }
                 else
                 {
-                    GUILayout.Label("No materials found or folder does not exist.", Menu.labelStyle);
+                    GUILayout.Label("No materials found or folder does not exist.", UiMutedWrappedStyle);
                 }
+                GUILayout.EndScrollView();
 
-                GUILayout.EndVertical();
-                GUILayout.EndHorizontal();
+                EndPane();
+                Menu.EndTwoPane();
 
-                GUILayout.Label("Bike Material Presets", Menu.labelStyle);
+                GUILayout.Space(8f);
+                BeginPane("Presets", "Save or load the current bike material setup.");
 
                 // Text field to enter new preset name
-                _newPresetName = GUILayout.TextField(_newPresetName, 25);
+                _newPresetName = GUILayout.TextField(_newPresetName, 25, UiSearchFieldStyle);
 
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Save Preset", Menu.highQualityButtonStyle))
+                if (PrimaryButton("Save Preset", GUILayout.Width(120f), GUILayout.Height(26f)))
                 {
                     if (!string.IsNullOrWhiteSpace(_newPresetName))
                     {
@@ -213,18 +226,19 @@ namespace rowemod.Mods
 
                 if (availableBikePresets.Count > 0)
                 {
-                    GUILayout.BeginVertical();
+                    _presetScroll = GUILayout.BeginScrollView(_presetScroll, false, true, GUILayout.MinWidth(180f), GUILayout.MaxHeight(150f));
                     for (int i = 0; i < availableBikePresets.Count; i++)
                     {
-                        if (GUILayout.Button(availableBikePresets[i], Menu.highQualityButtonStyle))
+                        if (GUILayout.Button(availableBikePresets[i], UiRowButtonStyle))
                         {
                             _selectedPresetIndex = i;
                             LoadBikeMaterialPreset(availableBikePresets[_selectedPresetIndex]);
                         }
                     }
-                    GUILayout.EndVertical();
+                    GUILayout.EndScrollView();
                 }
                 GUILayout.EndHorizontal();
+                EndPane();
             }
             catch (Exception ex)
             {
