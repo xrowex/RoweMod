@@ -18,13 +18,13 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.8", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.0.9", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.0.8";
+        public const string ModVersion = "3.0.9";
         private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -298,6 +298,7 @@ namespace rowemod
                 TrickAnimationDiagnostics.Update();
                 TrickAnimationEditor.Update();
                 TrickMods.Update();
+                Mods.Camera.Update();
 
                 if (Config.challengeRuntimeSettings.enabled)
                 {

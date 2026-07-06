@@ -617,11 +617,15 @@ namespace rowemod
                             ApplyPlayerUserNameTargetsVisibility(true);
                         }
 
+                        GUI.enabled = MultiplayerChallengeManager.FeatureEnabled;
                         if (PrimaryButton(MultiplayerChallengeManager.IsOpen ? "Close Challenge UI" : "Open Challenge UI", GUILayout.Width(160f), GUILayout.Height(26f)))
                         {
                             MultiplayerChallengeManager.ToggleWindow();
                         }
+                        GUI.enabled = true;
                         EndToolbar();
+                        if (!MultiplayerChallengeManager.FeatureEnabled)
+                            GUILayout.Label("MP BIKE challenge work is disabled for now. The code is still kept for later.", UiMutedWrappedStyle);
                         EndPane();
                         break;
                     

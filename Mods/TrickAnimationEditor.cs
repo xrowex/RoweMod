@@ -57,6 +57,8 @@ namespace rowemod.Mods
         private static GUIStyle smallButtonStyle;
         private static GUIStyle panelAltStyle;
         private static GUIStyle rowButtonStyle;
+        private static GUIStyle clipSourceButtonStyle;
+        private static GUIStyle clipSourceSelectedButtonStyle;
         private static GUIStyle searchFieldStyle;
         private static int styleRevision = -1;
 
@@ -863,8 +865,8 @@ namespace rowemod.Mods
             }
 
             string search = (clipSourceSearch ?? string.Empty).Trim();
-            int shown = 0;
-            for (int i = 0; i < clipSources.Count && shown < 12; i++)
+            List<int> matchingSourceIndices = new List<int>(clipSources.Count);
+            for (int i = 0; i < clipSources.Count; i++)
             {
                 SyncTrickAnimationData source = clipSources[i];
                 if (source == null)
@@ -874,16 +876,25 @@ namespace rowemod.Mods
                 if (search.Length > 0 && sourceName.IndexOf(search, System.StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
 
-                shown++;
-                string prefix = i == selectedClipSourceIndex ? "> " : string.Empty;
-                if (GUILayout.Button(prefix + sourceName, i == selectedClipSourceIndex ? Menu.UiRowButtonSelectedStyle : rowButtonStyle))
-                    selectedClipSourceIndex = i;
+                matchingSourceIndices.Add(i);
             }
 
-            if (shown == 0)
+            if (matchingSourceIndices.Count == 0)
+            {
                 GUILayout.Label(search.Length > 0 ? "No source tricks match the search." : "No source tricks available.", mutedStyle);
-            else if (shown >= 12)
-                GUILayout.Label("Showing first 12 matches. Search to narrow the replacement source.", mutedStyle);
+            }
+            else
+            {
+                if (selectedClipSourceIndex < 0 || !matchingSourceIndices.Contains(selectedClipSourceIndex))
+                    selectedClipSourceIndex = matchingSourceIndices[0];
+
+                SyncTrickAnimationData previewSelectedSource = GetSelectedClipSource();
+                GUILayout.Label(
+                    $"Showing {matchingSourceIndices.Count} source trick{(matchingSourceIndices.Count == 1 ? string.Empty : "s")}. Selected: {TrickName(previewSelectedSource)}",
+                    mutedStyle);
+
+                DrawClipSourceGrid(matchingSourceIndices);
+            }
 
             SyncTrickAnimationData selectedSource = GetSelectedClipSource();
             if (selectedSource == null)
@@ -904,6 +915,46 @@ namespace rowemod.Mods
             Menu.EndToolbar();
             GUILayout.Label("After replacing clips, use Save Override above to persist it.", mutedStyle);
             Menu.EndPane();
+        }
+
+        private static void DrawClipSourceGrid(List<int> sourceIndices)
+        {
+            if (sourceIndices == null || sourceIndices.Count == 0)
+                return;
+
+            float usableWidth = Mathf.Max(360f, Menu.windowRect.width * 0.48f);
+            int columns = Mathf.Clamp(Mathf.FloorToInt(usableWidth / 170f), 2, 4);
+            int column = 0;
+
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < sourceIndices.Count; i++)
+            {
+                int sourceIndex = sourceIndices[i];
+                SyncTrickAnimationData source = sourceIndex >= 0 && sourceIndex < clipSources.Count ? clipSources[sourceIndex] : null;
+                if (source == null)
+                    continue;
+
+                bool selected = sourceIndex == selectedClipSourceIndex;
+                string sourceName = TrickName(source);
+                if (GUILayout.Button(sourceName, selected ? clipSourceSelectedButtonStyle : clipSourceButtonStyle, GUILayout.Height(26f), GUILayout.ExpandWidth(true)))
+                    selectedClipSourceIndex = sourceIndex;
+
+                column++;
+                if (column < columns)
+                    continue;
+
+                GUILayout.EndHorizontal();
+                column = 0;
+                if (i < sourceIndices.Count - 1)
+                    GUILayout.BeginHorizontal();
+            }
+
+            if (column != 0)
+            {
+                for (int empty = column; empty < columns; empty++)
+                    GUILayout.Space(1f);
+                GUILayout.EndHorizontal();
+            }
         }
 
         private static void DrawPoseOverlayTools(SyncTrickAnimationData target, string dataKey)
@@ -2358,6 +2409,24 @@ namespace rowemod.Mods
                 padding = new RectOffset(10, 10, 4, 4),
                 margin = new RectOffset(0, 0, 1, 1)
             };
+            clipSourceButtonStyle = new GUIStyle(Menu.UiPillStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                clipping = TextClipping.Clip,
+                fontSize = 12,
+                padding = new RectOffset(8, 8, 4, 4),
+                margin = new RectOffset(2, 2, 2, 2)
+            };
+            clipSourceSelectedButtonStyle = new GUIStyle(clipSourceButtonStyle)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            clipSourceSelectedButtonStyle.normal.background = Menu.MakeRoundedTex(64, 26, new Color(0.08f, 0.34f, 0.16f, 0.96f), 7, 1, new Color(0.25f, 0.86f, 0.42f, 0.8f));
+            clipSourceSelectedButtonStyle.hover.background = Menu.MakeRoundedTex(64, 26, new Color(0.10f, 0.42f, 0.20f, 0.98f), 7, 1, new Color(0.36f, 1f, 0.55f, 0.9f));
+            clipSourceSelectedButtonStyle.active.background = Menu.MakeRoundedTex(64, 26, new Color(0.06f, 0.28f, 0.13f, 0.98f), 7, 1, new Color(0.20f, 0.72f, 0.34f, 0.9f));
+            clipSourceSelectedButtonStyle.normal.textColor = Color.white;
+            clipSourceSelectedButtonStyle.hover.textColor = Color.white;
+            clipSourceSelectedButtonStyle.active.textColor = Color.white;
             searchFieldStyle = new GUIStyle(Menu.UiSearchFieldStyle)
             {
                 alignment = TextAnchor.MiddleLeft,

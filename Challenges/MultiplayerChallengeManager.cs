@@ -21,6 +21,7 @@ namespace rowemod.Challenges
 {
     public static class MultiplayerChallengeManager
     {
+        public const bool FeatureEnabled = false;
         public const string RoweModMarkerName = "I_HAVE_ROWE_MOD";
 
         private const int WindowId = 0x524f5745;
@@ -274,7 +275,7 @@ namespace rowemod.Challenges
         }
 
         public static bool IsOpen => _isOpen;
-        public static bool HasActiveChallenge => _activeChallenge != null;
+        public static bool HasActiveChallenge => FeatureEnabled && _activeChallenge != null;
 
         public static void ToggleWindow()
         {
@@ -298,7 +299,8 @@ namespace rowemod.Challenges
 
         private static bool IsRuntimeEnabled()
         {
-            return Config.challengeRuntimeSettings == null || Config.challengeRuntimeSettings.enabled;
+            return FeatureEnabled &&
+                   (Config.challengeRuntimeSettings == null || Config.challengeRuntimeSettings.enabled);
         }
 
         private static bool IsNetworkingEnabled()

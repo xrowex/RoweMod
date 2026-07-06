@@ -20,6 +20,7 @@ namespace rowemod.Mods
         private const int RequestTimeoutSeconds = 15;
         private const long MaxDownloadBytes = 25L * 1024L * 1024L;
         private const string UpdateDirectoryName = "Updates";
+        private const int MaxPatchNotesDisplayLength = 900;
 
         private static readonly object CoroutineLock = new object();
         private static Rect windowRect = new Rect(80f, 80f, 560f, 320f);
@@ -38,6 +39,9 @@ namespace rowemod.Mods
         private static GUIStyle updateTitleStyle;
         private static GUIStyle updateInfoStyle;
         private static GUIStyle updateStatusStyle;
+        private static GUIStyle patchNotesBoxStyle;
+        private static GUIStyle patchNotesTitleStyle;
+        private static GUIStyle patchNotesStyle;
         private static GUIStyle primaryButtonStyle;
         private static GUIStyle secondaryButtonStyle;
         private static GUIStyle bannerStyle;
@@ -50,6 +54,7 @@ namespace rowemod.Mods
             public string downloadUrl { get; set; }
             public string sha256 { get; set; }
             public string notesUrl { get; set; }
+            public string patchNotes { get; set; }
             public string requiredGameVersion { get; set; }
         }
 
@@ -129,6 +134,7 @@ namespace rowemod.Mods
                     "Download the update now, then close BMX Streets to finish installing.",
                     updateStatusStyle ?? GUI.skin.label);
 
+            DrawPatchNotes();
             GUILayout.Space(14f);
 
             GUILayout.BeginHorizontal();
@@ -166,6 +172,30 @@ namespace rowemod.Mods
             GUILayout.EndHorizontal();
 
             GUI.DragWindow();
+        }
+
+        private static void DrawPatchNotes()
+        {
+            if (availableManifest == null || string.IsNullOrWhiteSpace(availableManifest.patchNotes))
+                return;
+
+            GUILayout.Space(10f);
+            GUILayout.Label("Patch Notes", patchNotesTitleStyle ?? updateInfoStyle ?? GUI.skin.label);
+            GUILayout.BeginVertical(patchNotesBoxStyle ?? GUI.skin.box);
+            GUILayout.Label(FormatPatchNotes(availableManifest.patchNotes), patchNotesStyle ?? GUI.skin.label);
+            GUILayout.EndVertical();
+        }
+
+        private static string FormatPatchNotes(string notes)
+        {
+            if (string.IsNullOrWhiteSpace(notes))
+                return string.Empty;
+
+            string normalized = notes.Trim().Replace("\r\n", "\n").Replace("\r", "\n");
+            if (normalized.Length <= MaxPatchNotesDisplayLength)
+                return normalized;
+
+            return normalized.Substring(0, MaxPatchNotesDisplayLength).TrimEnd() + "...";
         }
 
         private static void EnsureStyles()
@@ -222,6 +252,23 @@ namespace rowemod.Mods
             updateStatusStyle.wordWrap = true;
             updateStatusStyle.alignment = TextAnchor.MiddleCenter;
 
+            patchNotesBoxStyle = new GUIStyle(GUI.skin.box);
+            patchNotesBoxStyle.normal.background = panelBackground;
+            patchNotesBoxStyle.border = new RectOffset(7, 7, 7, 7);
+            patchNotesBoxStyle.padding = new RectOffset(12, 12, 8, 8);
+            patchNotesBoxStyle.margin = new RectOffset(0, 0, 4, 0);
+
+            patchNotesTitleStyle = new GUIStyle(updateInfoStyle);
+            patchNotesTitleStyle.normal.textColor = Color.white;
+            patchNotesTitleStyle.fontStyle = FontStyle.Bold;
+            patchNotesTitleStyle.alignment = TextAnchor.MiddleLeft;
+
+            patchNotesStyle = new GUIStyle(Menu.labelStyle ?? GUI.skin.label);
+            patchNotesStyle.normal.textColor = new Color(0.88f, 0.9f, 0.94f, 1f);
+            patchNotesStyle.fontSize = 12;
+            patchNotesStyle.wordWrap = true;
+            patchNotesStyle.alignment = TextAnchor.UpperLeft;
+
             primaryButtonStyle = new GUIStyle(Menu.highQualityButtonStyle ?? GUI.skin.button);
             primaryButtonStyle.normal.background = accentBackground;
             primaryButtonStyle.hover.background = accentHoverBackground;
@@ -263,7 +310,7 @@ namespace rowemod.Mods
         private static void CenterUpdateWindow()
         {
             const float width = 560f;
-            const float height = 320f;
+            const float height = 390f;
             windowRect = new Rect(
                 Mathf.Max(12f, (Screen.width - width) * 0.5f),
                 Mathf.Max(12f, (Screen.height - height) * 0.5f),

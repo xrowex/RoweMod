@@ -70,7 +70,6 @@ namespace rowemod.Utils
         public static GameObject lastEquippedBars;
         public static GameObject lastEquippedFrame;
         public static GameObject lastEquippedStem;
-        
         // Camera
         public static Camera roweCam;
         public static BMXCMCameraTarget camTarget;
@@ -429,6 +428,7 @@ namespace rowemod.Utils
                 {
                     Log.Error("tpVirtualCam component not found in ThirdPersonCamera.");
                 }
+                
             }
             else
             {
