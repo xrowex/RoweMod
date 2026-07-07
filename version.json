@@ -1,8 +1,8 @@
 {
-    "version":  "3.0.10",
+    "version":  "3.1",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "eabd87ad359b0cfc96d6f7bb6c57b5f10b9e2bcc70d4e0230f9269b7c63b76da",
+    "sha256":  "e2444d305dc85959b7f76acd37f3bca66bd62d835ea29cec05ba70e481746dac",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Add a Camera tab with a toggle for the left-stick camera offset switch.",
+    "patchNotes":  "Release 3.1",
     "requiredGameVersion":  ""
 }
