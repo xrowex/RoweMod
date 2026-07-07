@@ -61,6 +61,9 @@ namespace rowemod.Mods
 
         public static void Update()
         {
+            if (!rowemod.Config.cameraSettings.leftStickOffsetSwitch)
+                return;
+
             if (Menu.isOpen)
                 return;
 

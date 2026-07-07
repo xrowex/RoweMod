@@ -1,8 +1,8 @@
 {
-    "version":  "3.0.9",
+    "version":  "3.0.10",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "454af4e46e2ae7e7c646c0717c5cb22746acf589bfa7c9fe80e683afd1af4ed3",
+    "sha256":  "eabd87ad359b0cfc96d6f7bb6c57b5f10b9e2bcc70d4e0230f9269b7c63b76da",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Add in-game patch notes, disable unfinished MP BIKE challenge runtime, improve Tricks quick animation selection, and add left-stick camera offset flip.",
+    "patchNotes":  "Add a Camera tab with a toggle for the left-stick camera offset switch.",
     "requiredGameVersion":  ""
 }

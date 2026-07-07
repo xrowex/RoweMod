@@ -140,6 +140,11 @@ namespace rowemod
         public bool debugLogging { get; set; } = true;
     }
 
+    public class CameraSettings
+    {
+        public bool leftStickOffsetSwitch { get; set; } = true;
+    }
+
     public class TrickAnimationDebugSettings
     {
         public bool enabled { get; set; } = true;
@@ -355,6 +360,7 @@ namespace rowemod
         public static UpdaterSettings updaterSettings = new UpdaterSettings();
         public static ChallengeRuntimeSettings challengeRuntimeSettings = new ChallengeRuntimeSettings();
         public static ManualCatchSettings manualCatchSettings = new ManualCatchSettings();
+        public static CameraSettings cameraSettings = new CameraSettings();
         public static TrickAnimationDebugSettings trickAnimationDebugSettings = new TrickAnimationDebugSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
@@ -374,6 +380,7 @@ namespace rowemod
             public UpdaterSettings updaterSettingsData { get; set; }
             public ChallengeRuntimeSettings challengeRuntimeSettingsData { get; set; }
             public ManualCatchSettings manualCatchSettingsData { get; set; }
+            public CameraSettings cameraSettingsData { get; set; }
             public TrickAnimationDebugSettings trickAnimationDebugSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
@@ -429,6 +436,7 @@ namespace rowemod
                     updaterSettingsData = updaterSettings,
                     challengeRuntimeSettingsData = challengeRuntimeSettings,
                     manualCatchSettingsData = manualCatchSettings,
+                    cameraSettingsData = cameraSettings,
                     trickAnimationDebugSettingsData = trickAnimationDebugSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
@@ -463,6 +471,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"challengeRuntimeSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasManualCatchSettings =
                 jsonContent.IndexOf("\"manualCatchSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasCameraSettings =
+                jsonContent.IndexOf("\"cameraSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasTrickAnimationDebugSettings =
                 jsonContent.IndexOf("\"trickAnimationDebugSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
@@ -513,6 +523,7 @@ namespace rowemod
             updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
             manualCatchSettings = jsonData.manualCatchSettingsData ?? new ManualCatchSettings();
+            cameraSettings = jsonData.cameraSettingsData ?? new CameraSettings();
             trickAnimationDebugSettings = jsonData.trickAnimationDebugSettingsData ?? new TrickAnimationDebugSettings();
             if (trickAnimationDebugSettings.overrides == null)
             {
@@ -565,7 +576,7 @@ namespace rowemod
             if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
             if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
 
-            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasTrickAnimationDebugSettings)
+            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasCameraSettings || !hasTrickAnimationDebugSettings)
             {
                 Save();
             }
@@ -789,6 +800,11 @@ namespace rowemod
                 challengeSizeY = 5f,
                 challengeSizeZ = 20f
             };
+        }
+
+        public static void ResetCameraTab()
+        {
+            cameraSettings = new CameraSettings();
         }
 
         public static GrindPoseConfigEntry GetOrCreateGrindPoseEntry(string poseKey)

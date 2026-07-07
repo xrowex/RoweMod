@@ -36,6 +36,7 @@ namespace rowemod
         public enum Tab
         {
             Physics,
+            Camera,
             Bike,
             BikePoser,
             Grinds,
@@ -83,6 +84,7 @@ namespace rowemod
         private static readonly (string label, Tab tab)[] _visibleTabs =
         {
             ("Physics", Tab.Physics),
+            ("Camera", Tab.Camera),
             ("Tricks", Tab.Tricks),
             ("Bike", Tab.Bike),
             ("Bike Poser", Tab.BikePoser),
@@ -447,6 +449,9 @@ namespace rowemod
 
                         EndTwoPane();
 
+                        break;
+                    case Tab.Camera:
+                        DrawCameraSettings();
                         break;
                     case Tab.Bike:
                         float bikePaneHeight = GetContentPaneHeight(24f);
@@ -994,6 +999,9 @@ namespace rowemod
                     RestoreMotorTuningDefaults();
                     _motorTuningNeedsRefresh = true;
                     Mods.Physics.Update();
+                    break;
+                case Tab.Camera:
+                    Config.ResetCameraTab();
                     break;
                 case Tab.Tricks:
                     TrickMods.ResetCustomTricks();
@@ -2167,6 +2175,18 @@ namespace rowemod
                 return "MotorVehicleSettings";
 
             return vehicleSettings.name;
+        }
+
+        public static void DrawCameraSettings()
+        {
+            BeginPane("Camera Controls", "Camera shortcuts that run during gameplay while the RoweMod menu is closed.");
+            bool leftStickOffsetSwitch = Config.cameraSettings.leftStickOffsetSwitch;
+            ModernToggle("Left Stick Click Flips Camera Offset", ref leftStickOffsetSwitch, "camera_left_stick_offset_switch");
+            if (leftStickOffsetSwitch != Config.cameraSettings.leftStickOffsetSwitch)
+                Config.cameraSettings.leftStickOffsetSwitch = leftStickOffsetSwitch;
+            GUILayout.Space(6f);
+            GUILayout.Label("When enabled, clicking the left stick flips the horizontal camera offset to the opposite side.", UiMutedWrappedStyle);
+            EndPane();
         }
 
         public static void DrawGraphicsSettings()
