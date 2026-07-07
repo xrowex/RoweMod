@@ -1,8 +1,8 @@
 {
-    "version":  "3.1",
+    "version":  "3.1.1",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "e2444d305dc85959b7f76acd37f3bca66bd62d835ea29cec05ba70e481746dac",
+    "sha256":  "a716209b8f4921be29414df45476d0be8a8bdd19b847170d0e7e444a86126200",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Release 3.1",
+    "patchNotes":  "Improve Tricks tab layout, autosave animation overrides, and delay no-bail restore after leaving the tab.",
     "requiredGameVersion":  ""
 }

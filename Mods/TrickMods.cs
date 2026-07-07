@@ -484,8 +484,10 @@ namespace rowemod.Mods
         private static string _lastPreviewLogKey = string.Empty;
         private static bool _tricksNoBailOverrideActive;
         private static bool _tricksNoBailUserValue;
+        private static float _tricksNoBailRestoreTime = -1f;
         private static readonly Vector3 TrickPreviewPlayerOffset = new Vector3(0f, 1.25f, 0f);
         private const float TrickPreviewFireInterval = 2f;
+        private const float TrickNoBailExitGraceSeconds = 1f;
 
         public static void DrawTrickMenuPro()
         {
@@ -633,7 +635,9 @@ namespace rowemod.Mods
 
         private static void DrawTrickListPane(float paneHeight)
         {
-            GUILayout.BeginVertical(_card, GUILayout.Width(Mathf.Min(500f, Mathf.Max(390f, Menu.windowRect.width * 0.38f))), GUILayout.Height(paneHeight));
+            float contentWidth = Mathf.Max(620f, Menu.windowRect.width - 180f);
+            float mapWidth = Mathf.Clamp(contentWidth * 0.52f, 560f, 760f);
+            GUILayout.BeginVertical(_card, GUILayout.Width(mapWidth), GUILayout.Height(paneHeight));
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Trick Map", _cardHeader);
@@ -644,9 +648,9 @@ namespace rowemod.Mods
             GUILayout.Space(8);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Direction", _rowLabelLeft, GUILayout.Width(92));
+            GUILayout.Label("Direction", _rowLabelLeft, GUILayout.Width(76));
             GUILayout.Label("Trick", _rowLabelLeft);
-            GUILayout.Label("Action", _rowLabelLeft, GUILayout.Width(74));
+            GUILayout.Label("Action", _rowLabelLeft, GUILayout.Width(64));
             GUILayout.EndHorizontal();
 
             _trickListScroll = GUILayout.BeginScrollView(_trickListScroll, GUILayout.ExpandHeight(true));
@@ -706,7 +710,7 @@ namespace rowemod.Mods
 
                         bool isSelected = IsSelectedTrick(setKey, i);
                         GUILayout.BeginHorizontal(isSelected ? _rowStripSelected : _rowStrip, GUILayout.Height(30));
-                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(20), GUILayout.Height(22));
+                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(18), GUILayout.Height(22));
                         DrawDirectionCell(dir, isSelected);
 
                         using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
@@ -716,7 +720,7 @@ namespace rowemod.Mods
                                 SelectTrick(set, i, dir, trickName);
                         }
 
-                        if (GUILayout.Button("Replace", _miniBtn, GUILayout.Width(70), GUILayout.Height(24)))
+                        if (GUILayout.Button("Replace", _miniBtn, GUILayout.Width(64), GUILayout.Height(24)))
                             OpenTrickPicker(set, i);
 
                         GUILayout.EndHorizontal();
@@ -899,6 +903,7 @@ namespace rowemod.Mods
             if (!_tricksTabActive || !Menu.isOpen || Menu.currentTab != Menu.Tab.Tricks)
             {
                 RestorePreviewState();
+                ProcessPendingNoBailRestore();
                 return;
             }
 
@@ -927,6 +932,7 @@ namespace rowemod.Mods
         public static void OnTricksTabEntered()
         {
             _tricksTabActive = true;
+            _tricksNoBailRestoreTime = -1f;
             _needsAutoSelectTrick = GetSelectedAnimationData() == null;
             EnableTricksNoBailOverride();
         }
@@ -936,7 +942,7 @@ namespace rowemod.Mods
             _tricksTabActive = false;
             _previewEnabled = false;
             RestorePreviewState();
-            RestoreTricksNoBailOverride();
+            ScheduleTricksNoBailRestore();
         }
 
         private static void EnableTricksNoBailOverride()
@@ -946,8 +952,29 @@ namespace rowemod.Mods
 
             _tricksNoBailUserValue = Config.misc.neverBail;
             _tricksNoBailOverrideActive = true;
+            _tricksNoBailRestoreTime = -1f;
             Misc.SetTemporaryNeverBailOverride(true, true);
             Log.Msg($"[TricksPreview] No Bail forced while Tricks tab is active. userNoBail={_tricksNoBailUserValue}.");
+        }
+
+        private static void ScheduleTricksNoBailRestore()
+        {
+            if (!_tricksNoBailOverrideActive)
+                return;
+
+            _tricksNoBailRestoreTime = Time.unscaledTime + TrickNoBailExitGraceSeconds;
+            Log.Msg($"[TricksPreview] No Bail restore scheduled in {TrickNoBailExitGraceSeconds:0.#}s after Tricks tab exit.");
+        }
+
+        private static void ProcessPendingNoBailRestore()
+        {
+            if (!_tricksNoBailOverrideActive || _tricksNoBailRestoreTime < 0f)
+                return;
+
+            if (Time.unscaledTime < _tricksNoBailRestoreTime)
+                return;
+
+            RestoreTricksNoBailOverride();
         }
 
         private static void RestoreTricksNoBailOverride()
@@ -956,6 +983,7 @@ namespace rowemod.Mods
                 return;
 
             _tricksNoBailOverrideActive = false;
+            _tricksNoBailRestoreTime = -1f;
             Misc.SetTemporaryNeverBailOverride(false);
             Log.Msg($"[TricksPreview] No Bail restored after Tricks tab exit. userNoBail={Config.misc.neverBail}.");
         }
@@ -1501,7 +1529,7 @@ namespace rowemod.Mods
 
         private static void DrawDirectionCell(string dir, bool selected = false)
         {
-            GUILayout.Label(FormatDirectionLabel(dir), selected ? _directionBadgeSelected : _directionBadge, GUILayout.Width(82), GUILayout.Height(24));
+            GUILayout.Label(FormatDirectionLabel(dir), selected ? _directionBadgeSelected : _directionBadge, GUILayout.Width(74), GUILayout.Height(24));
         }
 
         private static string FormatDirectionLabel(string dir)

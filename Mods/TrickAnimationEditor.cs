@@ -57,6 +57,7 @@ namespace rowemod.Mods
         private static GUIStyle smallButtonStyle;
         private static GUIStyle panelAltStyle;
         private static GUIStyle rowButtonStyle;
+        private static GUIStyle saveButtonStyle;
         private static GUIStyle clipSourceButtonStyle;
         private static GUIStyle clipSourceSelectedButtonStyle;
         private static GUIStyle searchFieldStyle;
@@ -368,36 +369,16 @@ namespace rowemod.Mods
                 status = $"Edited {trickName}. Changes are live in memory.";
             }
 
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Save Override", smallButtonStyle, GUILayout.Width(130)))
-            {
-                Config.trickAnimationDebugSettings.overrides[dataKey] = CaptureOverride(data, dataKey);
-                Config.Save();
-                status = $"Saved animation override for {trickName}.";
-                Log.Msg($"[TrickAnimEditor] Saved override for {trickName} ({dataKey}).");
-            }
+            Menu.BeginToolbar();
+            if (GUILayout.Button("SAVE", saveButtonStyle, GUILayout.Width(110f), GUILayout.Height(26f)))
+                SaveAnimationOverride(data, dataKey, $"Saved animation override for {trickName}.");
 
-            if (GUILayout.Button("Reset Runtime", smallButtonStyle, GUILayout.Width(130)))
-            {
-                RestoreRuntimeDefault(data);
-                status = $"Reset runtime values for {trickName}.";
-            }
+            if (Menu.DangerButton("RESET", GUILayout.Width(110f), GUILayout.Height(26f)))
+                ResetAnimationOverride(data, dataKey, trickName);
 
-            if (GUILayout.Button("Remove Saved Override", smallButtonStyle, GUILayout.Width(180)))
-            {
-                if (Config.trickAnimationDebugSettings.overrides.Remove(dataKey))
-                {
-                    Config.Save();
-                    RestoreRuntimeDefault(data);
-                    status = $"Removed saved override for {trickName}.";
-                }
-                else
-                {
-                    status = $"No saved override exists for {trickName}.";
-                }
-            }
-
-            GUILayout.EndHorizontal();
+            bool hasSavedOverride = Config.trickAnimationDebugSettings.overrides.ContainsKey(dataKey);
+            GUILayout.Label(hasSavedOverride ? "Saved override active." : "No saved override yet.", mutedStyle, GUILayout.Height(24f));
+            Menu.EndToolbar();
 
             DrawClipCopyTools(data);
 
@@ -913,7 +894,7 @@ namespace rowemod.Mods
             if (Menu.PrimaryButton("Use Both", GUILayout.Width(95f), GUILayout.Height(24f)))
                 CopyClipsFromSource(selectedSource, target, true, true);
             Menu.EndToolbar();
-            GUILayout.Label("After replacing clips, use Save Override above to persist it.", mutedStyle);
+            GUILayout.Label("Animation replacements auto-save immediately. Use RESET above to remove the saved override.", mutedStyle);
             Menu.EndPane();
         }
 
@@ -1397,8 +1378,34 @@ namespace rowemod.Mods
 
             suppressAutoApplyUntil = Time.unscaledTime + 5f;
             string label = player && vehicle ? "human+bike" : player ? "human" : "bike";
-            status = $"Copied {label} animation from {TrickName(source)} to {TrickName(target)}. Save Override to persist.";
+            string targetKey = GetDataKey(target);
+            SaveAnimationOverride(
+                target,
+                targetKey,
+                $"Copied and auto-saved {label} animation from {TrickName(source)} to {TrickName(target)}.");
             Log.Msg($"[TrickAnimEditor] Copied {label} clips from {TrickName(source)} to {TrickName(target)}.");
+        }
+
+        private static void SaveAnimationOverride(SyncTrickAnimationData data, string dataKey, string message)
+        {
+            EnsureSettings();
+            Config.trickAnimationDebugSettings.overrides[dataKey] = CaptureOverride(data, dataKey);
+            Config.Save();
+            status = message;
+            Log.Msg($"[TrickAnimEditor] Saved override for {TrickName(data)} ({dataKey}).");
+        }
+
+        private static void ResetAnimationOverride(SyncTrickAnimationData data, string dataKey, string trickName)
+        {
+            EnsureSettings();
+            bool removed = Config.trickAnimationDebugSettings.overrides.Remove(dataKey);
+            Config.Save();
+            RestoreRuntimeDefault(data);
+            suppressAutoApplyUntil = Time.unscaledTime + 5f;
+            status = removed
+                ? $"Reset {trickName} to runtime defaults and removed saved override."
+                : $"Reset {trickName} to runtime defaults.";
+            Log.Msg($"[TrickAnimEditor] Reset override for {trickName} ({dataKey}). removedSaved={removed}.");
         }
 
         private static bool CopyAnimationData(TrickAnimationData source, TrickAnimationData target)
@@ -2409,6 +2416,18 @@ namespace rowemod.Mods
                 padding = new RectOffset(10, 10, 4, 4),
                 margin = new RectOffset(0, 0, 1, 1)
             };
+            saveButtonStyle = new GUIStyle(Menu.UiMiniButtonStyle)
+            {
+                fontStyle = FontStyle.Bold,
+                fontSize = 12,
+                padding = new RectOffset(10, 10, 4, 4)
+            };
+            saveButtonStyle.normal.background = Menu.MakeRoundedTex(64, 28, new Color(0.08f, 0.34f, 0.16f, 0.96f), 7, 1, new Color(0.25f, 0.86f, 0.42f, 0.8f));
+            saveButtonStyle.hover.background = Menu.MakeRoundedTex(64, 28, new Color(0.10f, 0.42f, 0.20f, 0.98f), 7, 1, new Color(0.36f, 1f, 0.55f, 0.9f));
+            saveButtonStyle.active.background = Menu.MakeRoundedTex(64, 28, new Color(0.06f, 0.28f, 0.13f, 0.98f), 7, 1, new Color(0.20f, 0.72f, 0.34f, 0.9f));
+            saveButtonStyle.normal.textColor = Color.white;
+            saveButtonStyle.hover.textColor = Color.white;
+            saveButtonStyle.active.textColor = Color.white;
             clipSourceButtonStyle = new GUIStyle(Menu.UiPillStyle)
             {
                 alignment = TextAnchor.MiddleCenter,
