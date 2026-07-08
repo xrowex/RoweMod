@@ -35,6 +35,8 @@ namespace rowemod
 
     public class MotorTuningConfigEntry
     {
+        public bool enabled { get; set; }
+        public bool enabledMigrated { get; set; }
         public float forceFactor { get; set; }
         public float maxForce { get; set; }
         public float maxSpeed { get; set; }

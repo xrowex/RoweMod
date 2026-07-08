@@ -92,9 +92,22 @@ namespace rowemod.Mods
                     string tuneKey = string.IsNullOrEmpty(vehicleInstance.name) ? "MotorVehicleSettings" : vehicleInstance.name;
                     if (motorTuning != null && motorTuning.TryGetValue(tuneKey, out MotorTuningConfigEntry tune) && tune != null)
                     {
-                        vehicleInstance.EngineSettings._forceFactor = tune.forceFactor;
-                        vehicleInstance.EngineSettings._maxForce = tune.maxForce;
-                        vehicleInstance.EngineSettings._maxSpeed = tune.maxSpeed;
+                        MigrateMotorTuningEnabledFlag(
+                            tune,
+                            vehicleInstance.EngineSettings._forceFactor,
+                            vehicleInstance.EngineSettings._maxForce,
+                            vehicleInstance.EngineSettings._maxSpeed);
+                        if (tune.enabled)
+                        {
+                            vehicleInstance.EngineSettings._forceFactor = tune.forceFactor;
+                            vehicleInstance.EngineSettings._maxForce = tune.maxForce;
+                            vehicleInstance.EngineSettings._maxSpeed = tune.maxSpeed;
+                        }
+                        else
+                        {
+                            vehicleInstance.EngineSettings._forceFactor = physics.bmxForceFactor;
+                            vehicleInstance.EngineSettings._maxSpeed = physics.bmxMaxSpeed;
+                        }
                     }
                     else
                     {
@@ -109,6 +122,22 @@ namespace rowemod.Mods
                 }
             }
 
+        }
+
+        private static void MigrateMotorTuningEnabledFlag(
+            MotorTuningConfigEntry tune,
+            float defaultForceFactor,
+            float defaultMaxForce,
+            float defaultMaxSpeed)
+        {
+            if (tune == null || tune.enabledMigrated)
+                return;
+
+            tune.enabled =
+                !Mathf.Approximately(tune.forceFactor, defaultForceFactor) ||
+                !Mathf.Approximately(tune.maxForce, defaultMaxForce) ||
+                !Mathf.Approximately(tune.maxSpeed, defaultMaxSpeed);
+            tune.enabledMigrated = true;
         }
     }
 }

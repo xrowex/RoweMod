@@ -1,8 +1,8 @@
 {
-    "version":  "3.1.1",
+    "version":  "3.1.2",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "a716209b8f4921be29414df45476d0be8a8bdd19b847170d0e7e444a86126200",
+    "sha256":  "efd7b31b02cf4a7669d8b482a57b7052c35e543fc441f877b0833414677a0830",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Improve Tricks tab layout, autosave animation overrides, and delay no-bail restore after leaving the tab.",
+    "patchNotes":  "Remove multiplayer kick tools from the Misc tab. Make per-vehicle motor tuning opt-in so global Push Force and Max Speed are not overridden unless enabled.",
     "requiredGameVersion":  ""
 }

@@ -4,9 +4,7 @@ using static rowemod.Config;
 using static rowemod.Mods.Misc;
 using static rowemod.Mods.Custom;
 using static rowemod.Mods.BikeMaterialsLoader;
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppMashBox.Addons.ContentManagment;
-using Il2CppMashBox.Addons.NetworkingFusion;
 using rowemod.Utils;
 using MelonLoader.Utils;
 using UnityEngine.InputSystem;
@@ -23,7 +21,6 @@ using System.Collections;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using Il2CppInterop.Runtime;
 using Il2CppMashBox.Core.Runtime.Physics.Vehicle;
 using rowemod.Challenges;
@@ -225,7 +222,6 @@ namespace rowemod
         // Foldout states for Physics tab
         private static bool mxExpanded = true;
         private static bool challengeSettingsExpanded = true;
-        private static string _mpKickStatus = "Host/master only. Join or host a multiplayer session to manage players.";
         private static bool _motorTuningNeedsRefresh = true;
         private static string _motorTuningStatusText = "Open Motor Tuning to load values.";
         private static readonly List<MotorTuningEntry> _motorTuningEntries = new List<MotorTuningEntry>();
@@ -424,9 +420,10 @@ namespace rowemod
                         Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
                         Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
 
-                        DrawSectionTitle("Speed");
-                        Slider("Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
-                        Slider("Max Speed", ref physics.bmxMaxSpeed, 7.5f, 2f, 15f);
+                        DrawSectionTitle("Global Speed");
+                        GUILayout.Label("Used by vehicles that do not have per-vehicle motor tuning enabled.", UiMutedWrappedStyle);
+                        Slider("Global Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
+                        Slider("Global Max Speed", ref physics.bmxMaxSpeed, 7.5f, 2f, 15f);
                         EndPane();
 
                         GUILayout.Space(8f);
@@ -442,6 +439,7 @@ namespace rowemod
                         Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
 
                         DrawSectionTitle("Motor Tuning");
+                        GUILayout.Label("Per-vehicle tuning is opt-in. Disabled vehicles use the global speed settings on the left.", UiMutedWrappedStyle);
                         if (_motorTuningNeedsRefresh)
                             RefreshMotorTuningData();
                         DrawMotorTuningData();
@@ -568,9 +566,6 @@ namespace rowemod
                         }
                         EndPane();
 
-                        BeginPane("Players", "Kick tools for detected network players.");
-                        DrawMultiplayerPlayerKickList();
-                        EndPane();
                         break;
 
                     case Tab.Graphics:
@@ -1065,7 +1060,6 @@ namespace rowemod
                     ApplyPlayerUserNameTargetsVisibility(true);
                     ResetChallengeSettings(false);
                     MultiplayerChallengeManager.ResetWindowState();
-                    _mpKickStatus = "Host/master only. Join or host a multiplayer session to manage players.";
                     break;
                 case Tab.Challenge:
                     ResetChallengeSettings(true);
@@ -1131,403 +1125,6 @@ namespace rowemod
                     Config.challengeSettings.challengeSizeY,
                     Config.challengeSettings.challengeSizeZ));
             }
-        }
-
-        private static void DrawMultiplayerPlayerKickList()
-        {
-            NetworkPlayer[] players;
-            try
-            {
-                players = UnityEngine.Object.FindObjectsOfType<NetworkPlayer>(true);
-            }
-            catch (Exception ex)
-            {
-                DrawEmptyState("Could not read network players", ex.Message);
-                return;
-            }
-
-            if (players == null || players.Length == 0)
-            {
-                DrawEmptyState("No network players found.", _mpKickStatus);
-                return;
-            }
-
-            bool anyKickAuthority = false;
-            foreach (NetworkPlayer player in players)
-            {
-                if (player == null)
-                    continue;
-
-                if (RunnerCanKick(SafeGetRunner(player)))
-                {
-                    anyKickAuthority = true;
-                    break;
-                }
-            }
-
-            GUILayout.Label(anyKickAuthority
-                ? "Kick sends a Fusion disconnect request for that player."
-                : "Kick controls require host/server or shared-mode master authority.", UiMutedWrappedStyle);
-
-            foreach (NetworkPlayer player in players)
-            {
-                if (player == null)
-                    continue;
-
-                DrawMultiplayerPlayerKickRow(player);
-            }
-
-            if (!string.IsNullOrWhiteSpace(_mpKickStatus))
-            {
-                GUILayout.Space(4f);
-                GUILayout.Label(_mpKickStatus, UiMutedWrappedStyle);
-            }
-        }
-
-        private static void DrawMultiplayerPlayerKickRow(NetworkPlayer player)
-        {
-            string displayName = ResolveNetworkPlayerDisplayName(player);
-            bool isLocalPlayer = IsLocalNetworkPlayerForMenu(player);
-            Il2CppFusion.NetworkRunner runner = SafeGetRunner(player);
-            bool hasKickAuthority = RunnerCanKick(runner);
-            bool hasValidPlayerRef = TryGetNetworkPlayerRef(player, out Il2CppFusion.PlayerRef playerRef);
-            bool canKick = !isLocalPlayer && hasKickAuthority && hasValidPlayerRef;
-
-            GUILayout.BeginHorizontal(UiPanelAltStyle);
-            GUILayout.Label(isLocalPlayer ? $"{displayName} (You)" : displayName, UiRowLabelStyle, GUILayout.MinWidth(220f));
-
-            string status = GetNetworkPlayerKickStatus(isLocalPlayer, runner, hasKickAuthority, hasValidPlayerRef, playerRef);
-            GUILayout.Label(status, UiRowMutedLabelStyle, GUILayout.MinWidth(160f));
-
-            bool previousEnabled = GUI.enabled;
-            GUI.enabled = previousEnabled && canKick;
-            if (DangerButton("Kick", GUILayout.Width(86f), GUILayout.Height(24f)))
-            {
-                TryKickNetworkPlayer(player);
-            }
-            GUI.enabled = previousEnabled;
-            GUILayout.EndHorizontal();
-        }
-
-        private static string GetNetworkPlayerKickStatus(bool isLocalPlayer, Il2CppFusion.NetworkRunner runner, bool hasKickAuthority, bool hasValidPlayerRef, Il2CppFusion.PlayerRef playerRef)
-        {
-            if (isLocalPlayer)
-                return "local";
-
-            if (runner == null)
-                return "no runner";
-
-            if (!IsRunnerInSession(runner))
-                return "not in session";
-
-            if (!hasKickAuthority)
-                return "host only";
-
-            if (!hasValidPlayerRef)
-                return "invalid ref";
-
-            return $"ref {playerRef.RawEncoded}";
-        }
-
-        private static bool TryKickNetworkPlayer(NetworkPlayer player)
-        {
-            if (player == null)
-            {
-                _mpKickStatus = "Kick failed: no player selected.";
-                return false;
-            }
-
-            string displayName = ResolveNetworkPlayerDisplayName(player);
-            if (IsLocalNetworkPlayerForMenu(player))
-            {
-                _mpKickStatus = "Kick blocked: refusing to disconnect the local player.";
-                return false;
-            }
-
-            Il2CppFusion.NetworkRunner runner = SafeGetRunner(player);
-            if (!RunnerCanKick(runner))
-            {
-                _mpKickStatus = "Kick failed: host/server or shared-mode master authority required.";
-                return false;
-            }
-
-            if (!TryGetNetworkPlayerRef(player, out Il2CppFusion.PlayerRef playerRef))
-            {
-                _mpKickStatus = "Kick failed: invalid player reference.";
-                return false;
-            }
-
-            try
-            {
-                runner.Disconnect(playerRef, new Il2CppStructArray<byte>(0));
-                _mpKickStatus = $"Kick requested for {displayName}.";
-                Log.Msg($"[MP] Kick requested for {displayName} (PlayerRef {playerRef.RawEncoded}).");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _mpKickStatus = $"Kick failed: {ex.Message}";
-                Log.Warning($"[MP] Kick failed for {displayName}: {ex}");
-                return false;
-            }
-        }
-
-        private static Il2CppFusion.NetworkRunner SafeGetRunner(NetworkPlayer player)
-        {
-            try
-            {
-                return player != null ? player.Runner : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static bool RunnerCanKick(Il2CppFusion.NetworkRunner runner)
-        {
-            try
-            {
-                return runner != null &&
-                       runner.IsRunning &&
-                       runner.IsInSession &&
-                       (runner.IsServer || runner.IsSharedModeMasterClient);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool IsRunnerInSession(Il2CppFusion.NetworkRunner runner)
-        {
-            try
-            {
-                return runner != null && runner.IsRunning && runner.IsInSession;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryGetNetworkPlayerRef(NetworkPlayer player, out Il2CppFusion.PlayerRef playerRef)
-        {
-            playerRef = Il2CppFusion.PlayerRef.Invalid;
-            if (player == null)
-                return false;
-
-            try
-            {
-                playerRef = player.PlayerReference;
-                return playerRef.IsRealPlayer;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool IsLocalNetworkPlayerForMenu(NetworkPlayer player)
-        {
-            if (player == null)
-                return false;
-
-            try
-            {
-                if (player.IsLocalPlayer)
-                    return true;
-            }
-            catch
-            {
-                // Fall back to reflected fields/properties below.
-            }
-
-            return TryGetBoolMemberForMenu(player, "_isLocal", out bool isLocal) && isLocal;
-        }
-
-        private static string ResolveNetworkPlayerDisplayName(NetworkPlayer player)
-        {
-            if (player == null)
-                return "Unknown Player";
-
-            string name = TryGetStringMemberForMenu(player, "DisplayName") ??
-                          TryGetStringMemberForMenu(player, "PlayerName") ??
-                          TryGetStringMemberForMenu(player, "UserName") ??
-                          TryGetStringMemberForMenu(player, "Username") ??
-                          TryGetStringMemberForMenu(player, "NickName") ??
-                          TryGetStringMemberForMenu(player, "Nickname") ??
-                          TryGetStringMemberForMenu(player, "Name") ??
-                          TryGetStringMemberForMenu(player, "_displayName") ??
-                          TryGetStringMemberForMenu(player, "_playerName") ??
-                          TryGetStringMemberForMenu(player, "_userName") ??
-                          TryGetStringMemberForMenu(player, "_username") ??
-                          TryGetStringMemberForMenu(player, "_nickName") ??
-                          TryGetStringMemberForMenu(player, "_nickname");
-
-            if (IsUsableNetworkPlayerText(name))
-                return name.Trim();
-
-            if (IsLocalNetworkPlayerForMenu(player))
-            {
-                string steamName = GetSteamPersonaNameForMenu();
-                if (IsUsableNetworkPlayerText(steamName))
-                    return steamName.Trim();
-            }
-
-            try
-            {
-                string gameObjectName = player.gameObject != null ? player.gameObject.name : null;
-                if (IsUsableNetworkPlayerText(gameObjectName))
-                    return gameObjectName.Trim();
-            }
-            catch
-            {
-                // Ignore unavailable IL2CPP game object data.
-            }
-
-            return $"Player {Math.Abs(player.GetInstanceID())}";
-        }
-
-        private static bool TryGetBoolMemberForMenu(object target, string memberName, out bool value)
-        {
-            value = false;
-            object raw = TryGetMemberValueForMenu(target, memberName);
-            if (raw is bool boolValue)
-            {
-                value = boolValue;
-                return true;
-            }
-
-            return raw != null && bool.TryParse(raw.ToString(), out value);
-        }
-
-        private static string TryGetStringMemberForMenu(object target, string memberName)
-        {
-            return ExtractReadableNetworkPlayerText(TryGetMemberValueForMenu(target, memberName));
-        }
-
-        private static object TryGetMemberValueForMenu(object target, string memberName)
-        {
-            if (target == null || string.IsNullOrEmpty(memberName))
-                return null;
-
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            Type type = target.GetType();
-
-            try
-            {
-                PropertyInfo property = type.GetProperty(memberName, flags);
-                if (property != null && property.CanRead)
-                    return property.GetValue(target, null);
-            }
-            catch
-            {
-                // Ignore reflected IL2CPP property access failures.
-            }
-
-            try
-            {
-                FieldInfo field = type.GetField(memberName, flags);
-                if (field != null)
-                    return field.GetValue(target);
-            }
-            catch
-            {
-                // Ignore reflected IL2CPP field access failures.
-            }
-
-            return null;
-        }
-
-        private static string ExtractReadableNetworkPlayerText(object value)
-        {
-            if (value == null)
-                return null;
-
-            if (value is string directString)
-                return IsUsableNetworkPlayerText(directString) ? directString.Trim() : null;
-
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            string[] memberNames =
-            {
-                "Value",
-                "String",
-                "Text",
-                "Name",
-                "_value",
-                "_string",
-                "_text",
-                "_name",
-                "m_Value",
-                "m_String",
-                "m_Text"
-            };
-
-            Type type = value.GetType();
-            foreach (string memberName in memberNames)
-            {
-                try
-                {
-                    PropertyInfo property = type.GetProperty(memberName, flags);
-                    if (property != null && property.CanRead)
-                    {
-                        string nestedValue = ExtractReadableNetworkPlayerText(property.GetValue(value, null));
-                        if (IsUsableNetworkPlayerText(nestedValue))
-                            return nestedValue.Trim();
-                    }
-                }
-                catch
-                {
-                    // Continue trying other reflected members.
-                }
-
-                try
-                {
-                    FieldInfo field = type.GetField(memberName, flags);
-                    if (field != null)
-                    {
-                        string nestedValue = ExtractReadableNetworkPlayerText(field.GetValue(value));
-                        if (IsUsableNetworkPlayerText(nestedValue))
-                            return nestedValue.Trim();
-                    }
-                }
-                catch
-                {
-                    // Continue trying other reflected members.
-                }
-            }
-
-            string text = value.ToString();
-            return IsUsableNetworkPlayerText(text) ? text.Trim() : null;
-        }
-
-        private static string GetSteamPersonaNameForMenu()
-        {
-            try
-            {
-                string personaName = Il2CppSteamworks.SteamFriends.GetPersonaName();
-                return IsUsableNetworkPlayerText(personaName) ? personaName.Trim() : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static bool IsUsableNetworkPlayerText(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return false;
-
-            string trimmed = text.Trim();
-            return !string.Equals(trimmed, "null", StringComparison.OrdinalIgnoreCase) &&
-                   !string.Equals(trimmed, "(null)", StringComparison.OrdinalIgnoreCase) &&
-                   !trimmed.StartsWith("Il2Cpp", StringComparison.Ordinal) &&
-                   !trimmed.StartsWith("System.", StringComparison.Ordinal) &&
-                   !trimmed.Contains("NetworkString`") &&
-                   !trimmed.Contains("`1[") &&
-                   !trimmed.Contains("[Il2Cpp");
         }
 
         //-------------------------------------------------------------------
@@ -2072,6 +1669,8 @@ namespace rowemod
                     {
                         defaultEntry = new MotorTuningConfigEntry
                         {
+                            enabled = false,
+                            enabledMigrated = true,
                             forceFactor = engineSettings._forceFactor,
                             maxForce = engineSettings._maxForce,
                             maxSpeed = engineSettings._maxSpeed
@@ -2083,6 +1682,8 @@ namespace rowemod
                     {
                         savedEntry = new MotorTuningConfigEntry
                         {
+                            enabled = false,
+                            enabledMigrated = true,
                             forceFactor = defaultEntry.forceFactor,
                             maxForce = defaultEntry.maxForce,
                             maxSpeed = defaultEntry.maxSpeed
@@ -2090,9 +1691,20 @@ namespace rowemod
                         motorTuning[configKey] = savedEntry;
                     }
 
-                    engineSettings._forceFactor = savedEntry.forceFactor;
-                    engineSettings._maxForce = savedEntry.maxForce;
-                    engineSettings._maxSpeed = savedEntry.maxSpeed;
+                    MigrateMotorTuningEnabledFlag(savedEntry, defaultEntry);
+
+                    if (savedEntry.enabled)
+                    {
+                        engineSettings._forceFactor = savedEntry.forceFactor;
+                        engineSettings._maxForce = savedEntry.maxForce;
+                        engineSettings._maxSpeed = savedEntry.maxSpeed;
+                    }
+                    else
+                    {
+                        engineSettings._forceFactor = physics.bmxForceFactor;
+                        engineSettings._maxForce = defaultEntry.maxForce;
+                        engineSettings._maxSpeed = physics.bmxMaxSpeed;
+                    }
 
                     _motorTuningEntries.Add(new MotorTuningEntry
                     {
@@ -2132,6 +1744,8 @@ namespace rowemod
                 {
                     tune = new MotorTuningConfigEntry
                     {
+                        enabled = false,
+                        enabledMigrated = true,
                         forceFactor = entry.DefaultForceFactor,
                         maxForce = entry.DefaultMaxForce,
                         maxSpeed = entry.DefaultMaxSpeed
@@ -2141,6 +1755,33 @@ namespace rowemod
 
                 GUILayout.Space(2f);
                 GUILayout.Label(entry.VehicleName, labelStyle);
+
+                bool enabled = tune.enabled;
+                bool nextEnabled = ModernToggle("Use advanced motor tuning", ref enabled, $"motor_tuning_{entry.ConfigKey}_enabled");
+                if (nextEnabled != tune.enabled)
+                {
+                    tune.enabled = nextEnabled;
+                    if (tune.enabled)
+                    {
+                        engineSettings._forceFactor = tune.forceFactor;
+                        engineSettings._maxForce = tune.maxForce;
+                        engineSettings._maxSpeed = tune.maxSpeed;
+                    }
+                    else
+                    {
+                        engineSettings._forceFactor = physics.bmxForceFactor;
+                        engineSettings._maxForce = entry.DefaultMaxForce;
+                        engineSettings._maxSpeed = physics.bmxMaxSpeed;
+                    }
+                }
+
+                if (!tune.enabled)
+                {
+                    GUILayout.Label(
+                        $"Using global speed: push={physics.bmxForceFactor:0.##}, max speed={physics.bmxMaxSpeed:0.##}. Max force remains default ({entry.DefaultMaxForce:0.##}).",
+                        UiMutedWrappedStyle);
+                    continue;
+                }
 
                 float forceFactor = tune.forceFactor;
                 float maxForce = tune.maxForce;
@@ -2167,6 +1808,25 @@ namespace rowemod
                 engineSettings._maxForce = maxForce;
                 engineSettings._maxSpeed = maxSpeed;
             }
+        }
+
+        private static void MigrateMotorTuningEnabledFlag(MotorTuningConfigEntry savedEntry, MotorTuningConfigEntry defaultEntry)
+        {
+            if (savedEntry == null || defaultEntry == null || savedEntry.enabled)
+                return;
+
+            if (savedEntry.enabledMigrated)
+                return;
+
+            bool differsFromDefaults =
+                !Mathf.Approximately(savedEntry.forceFactor, defaultEntry.forceFactor) ||
+                !Mathf.Approximately(savedEntry.maxForce, defaultEntry.maxForce) ||
+                !Mathf.Approximately(savedEntry.maxSpeed, defaultEntry.maxSpeed);
+
+            if (differsFromDefaults)
+                savedEntry.enabled = true;
+
+            savedEntry.enabledMigrated = true;
         }
 
         private static string GetMotorTuningConfigKey(MotorVehicleSettings vehicleSettings)
