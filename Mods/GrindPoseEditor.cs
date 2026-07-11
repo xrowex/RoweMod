@@ -40,6 +40,11 @@ namespace rowemod.Mods
         private static int _lastLoggedForcedPoseIndex = -1;
         private static string _lastLoggedForcedPoseName;
         private const float GrindSliderResetDefault = 2f;
+        private static GameObject _poseComMarker;
+        private static GameObject _liveComMarker;
+        private static Material _poseComMaterial;
+        private static Material _liveComMaterial;
+        private static bool _loggedMissingComTransform;
         
         private sealed class PoseDefaults
         {
@@ -123,6 +128,50 @@ namespace rowemod.Mods
             }
 
             Menu.EndPane();
+        }
+
+        public static void Update()
+        {
+            bool tabActive = Menu.isOpen && Menu.currentTab == Menu.Tab.Grinds && _isGrindsTabStateApplied;
+            if (!tabActive || !Config.grindPoseData.showCenterOfMassVisual)
+            {
+                SetComMarkersVisible(false, false);
+                return;
+            }
+
+            RefreshPoseCache();
+            if (_selectedPoseIndex < 0 || _selectedPoseIndex >= PoseCache.Count)
+            {
+                SetComMarkersVisible(false, false);
+                return;
+            }
+
+            BikeGrindPoseData selectedPose = PoseCache[_selectedPoseIndex];
+            if (selectedPose == null || !TryGetComReferenceTransform(out Transform referenceTransform))
+            {
+                SetComMarkersVisible(false, false);
+                return;
+            }
+
+            float scale = Mathf.Clamp(Config.grindPoseData.centerOfMassVisualScale, 0.05f, 1f);
+            EnsureComMarker(ref _poseComMarker, "RoweMod_GrindPose_COM", new Color(0.1f, 1f, 0.25f, 1f), ref _poseComMaterial);
+            _poseComMarker.transform.position = referenceTransform.TransformPoint(selectedPose.ChassisCM);
+            _poseComMarker.transform.localScale = Vector3.one * scale;
+            _poseComMarker.SetActive(true);
+
+            Vector3 liveCom = Vector3.zero;
+            bool showLive = Config.grindPoseData.showLiveCenterOfMassVisual && TryGetLiveCenterOfMass(out liveCom);
+            if (showLive)
+            {
+                EnsureComMarker(ref _liveComMarker, "RoweMod_Live_COM", new Color(0.1f, 0.85f, 1f, 1f), ref _liveComMaterial);
+                _liveComMarker.transform.position = liveCom;
+                _liveComMarker.transform.localScale = Vector3.one * (scale * 0.75f);
+                _liveComMarker.SetActive(true);
+            }
+            else if (_liveComMarker != null)
+            {
+                _liveComMarker.SetActive(false);
+            }
         }
 
         private static void DrawPresetControls()
@@ -217,7 +266,12 @@ namespace rowemod.Mods
         {
             var clone = new GrindPoseSettings
             {
-                poses = new Dictionary<string, GrindPoseConfigEntry>()
+                poses = new Dictionary<string, GrindPoseConfigEntry>(),
+                showCenterOfMassVisual = source?.showCenterOfMassVisual ?? false,
+                showLiveCenterOfMassVisual = source?.showLiveCenterOfMassVisual ?? false,
+                centerOfMassVisualScale = source != null && source.centerOfMassVisualScale > 0f
+                    ? source.centerOfMassVisualScale
+                    : 0.18f
             };
 
             if (source?.poses == null)
@@ -475,6 +529,8 @@ namespace rowemod.Mods
             _loggedMissingAnimatedVehicleEventResponder = false;
             _loggedMissingAnimatedOnJump = false;
             _animatedOnJumpInvokedThisOpen = false;
+            _loggedMissingComTransform = false;
+            DestroyComMarkers();
             Log.Msg("[Grinds] Exited grinds tab.");
         }
 
@@ -549,6 +605,7 @@ namespace rowemod.Mods
             {
                 Config.ResetGrindsTab();
                 ApplyLerpSpeedToRuntime();
+                DestroyComMarkers();
                 Config.Save();
                 return;
             }
@@ -574,6 +631,7 @@ namespace rowemod.Mods
 
             Config.ResetGrindsTab();
             ApplyLerpSpeedToRuntime();
+            DestroyComMarkers();
             Config.Save();
             Log.Msg($"Reset {resetCount} grind poses to captured defaults.");
         }
@@ -636,6 +694,7 @@ namespace rowemod.Mods
             EndSectionBox();
             
             BeginSectionBox("Center of Mass");
+            DrawComVisualControls();
             changed |= DrawVector3Field("Chassis CM", poseKey, "ChassisCM", pose.ChassisCM, -2f, 2f, defaults.ChassisCM, v => pose.ChassisCM = v);
             changed |= DrawVector3Field("Driver CM", poseKey, "DriverCM", pose.DriverCM, -2f, 2f, defaults.DriverCM, v => pose.DriverCM = v);
             EndSectionBox();
@@ -663,6 +722,42 @@ namespace rowemod.Mods
         private static void EndSectionBox()
         {
             Menu.EndPane();
+        }
+
+        private static void DrawComVisualControls()
+        {
+            bool showPoseCom = Config.grindPoseData.showCenterOfMassVisual;
+            Menu.ModernToggle("Show COM Ball", ref showPoseCom, "grinds_show_com_ball");
+            if (showPoseCom != Config.grindPoseData.showCenterOfMassVisual)
+            {
+                Config.grindPoseData.showCenterOfMassVisual = showPoseCom;
+                if (!showPoseCom)
+                    SetComMarkersVisible(false, false);
+                Config.Save();
+            }
+
+            bool showLiveCom = Config.grindPoseData.showLiveCenterOfMassVisual;
+            Menu.ModernToggle("Show Live COM", ref showLiveCom, "grinds_show_live_com_ball");
+            if (showLiveCom != Config.grindPoseData.showLiveCenterOfMassVisual)
+            {
+                Config.grindPoseData.showLiveCenterOfMassVisual = showLiveCom;
+                if (!showLiveCom && _liveComMarker != null)
+                    _liveComMarker.SetActive(false);
+                Config.Save();
+            }
+
+            float markerScale = Config.grindPoseData.centerOfMassVisualScale > 0f
+                ? Config.grindPoseData.centerOfMassVisualScale
+                : 0.18f;
+            DrawResettableSlider("COM Ball Size", ref markerScale, 0.05f, 1f, 0.18f, "grinds_com_ball_size");
+            if (!Mathf.Approximately(markerScale, Config.grindPoseData.centerOfMassVisualScale))
+            {
+                Config.grindPoseData.centerOfMassVisualScale = markerScale;
+                Config.Save();
+            }
+
+            GUILayout.Label("Green = selected pose Chassis CM. Cyan = live runtime COM.", Menu.UiMutedWrappedStyle);
+            GUILayout.Space(4f);
         }
 
         private static bool DrawBoolField(string label, string poseKey, string fieldName, bool currentValue, Action<bool> apply)
@@ -756,6 +851,140 @@ namespace rowemod.Mods
             }
 
             GUILayout.EndScrollView();
+        }
+
+        private static bool TryGetComReferenceTransform(out Transform referenceTransform)
+        {
+            referenceTransform = null;
+
+            if (Memory.chassisRb != null)
+            {
+                referenceTransform = Memory.chassisRb.transform;
+                _loggedMissingComTransform = false;
+                return true;
+            }
+
+            if (Memory.rCenterOfMassBehaviour != null)
+            {
+                referenceTransform = Memory.rCenterOfMassBehaviour.transform;
+                _loggedMissingComTransform = false;
+                return true;
+            }
+
+            if (Memory.bikeGrindPoser != null)
+            {
+                referenceTransform = Memory.bikeGrindPoser.transform;
+                _loggedMissingComTransform = false;
+                return true;
+            }
+
+            if (!_loggedMissingComTransform)
+            {
+                _loggedMissingComTransform = true;
+                Log.Warning("[Grinds] Cannot draw COM marker: no chassis, center-of-mass, or grind poser transform is available.");
+            }
+
+            return false;
+        }
+
+        private static bool TryGetLiveCenterOfMass(out Vector3 worldCenterOfMass)
+        {
+            worldCenterOfMass = Vector3.zero;
+
+            try
+            {
+                if (Memory.rCenterOfMassBehaviour != null)
+                {
+                    worldCenterOfMass = Memory.rCenterOfMassBehaviour.WorldCenterOfMass;
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[Grinds] Failed to read live CenterOfMassBehaviour.WorldCenterOfMass: {ex.Message}");
+            }
+
+            if (Memory.chassisRb != null)
+            {
+                worldCenterOfMass = Memory.chassisRb.worldCenterOfMass;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void EnsureComMarker(
+            ref GameObject marker,
+            string markerName,
+            Color color,
+            ref Material material)
+        {
+            if (marker != null)
+                return;
+
+            marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            marker.name = markerName;
+            marker.hideFlags = HideFlags.DontSave;
+
+            Collider collider = marker.GetComponent<Collider>();
+            if (collider != null)
+                UnityEngine.Object.Destroy(collider);
+
+            MeshRenderer renderer = marker.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                material ??= BuildComMarkerMaterial(color);
+                renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+                renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+            }
+
+            marker.SetActive(false);
+        }
+
+        private static Material BuildComMarkerMaterial(Color color)
+        {
+            Shader shader = Shader.Find("HDRP/Unlit") ??
+                            Shader.Find("Unlit/Color") ??
+                            Shader.Find("Sprites/Default") ??
+                            Shader.Find("Standard");
+            Material material = new Material(shader);
+            material.name = "RoweMod Grind COM Marker Material";
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", color);
+            if (material.HasProperty("_EmissiveColor"))
+                material.SetColor("_EmissiveColor", color);
+
+            return material;
+        }
+
+        private static void SetComMarkersVisible(bool poseVisible, bool liveVisible)
+        {
+            if (_poseComMarker != null)
+                _poseComMarker.SetActive(poseVisible);
+            if (_liveComMarker != null)
+                _liveComMarker.SetActive(liveVisible);
+        }
+
+        private static void DestroyComMarkers()
+        {
+            if (_poseComMarker != null)
+                UnityEngine.Object.Destroy(_poseComMarker);
+            if (_liveComMarker != null)
+                UnityEngine.Object.Destroy(_liveComMarker);
+            if (_poseComMaterial != null)
+                UnityEngine.Object.Destroy(_poseComMaterial);
+            if (_liveComMaterial != null)
+                UnityEngine.Object.Destroy(_liveComMaterial);
+
+            _poseComMarker = null;
+            _liveComMarker = null;
+            _poseComMaterial = null;
+            _liveComMaterial = null;
         }
 
         private static void RefreshPoseCache(bool force = false)

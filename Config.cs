@@ -245,6 +245,9 @@ namespace rowemod
     public class GrindPoseSettings
     {
         public Dictionary<string, GrindPoseConfigEntry> poses { get; set; } = new Dictionary<string, GrindPoseConfigEntry>();
+        public bool showCenterOfMassVisual { get; set; } = false;
+        public bool showLiveCenterOfMassVisual { get; set; } = false;
+        public float centerOfMassVisualScale { get; set; } = 0.18f;
     }
 
     public static class Config
@@ -572,6 +575,11 @@ namespace rowemod
                 grindPoseData.poses = new Dictionary<string, GrindPoseConfigEntry>();
             }
 
+            if (grindPoseData.centerOfMassVisualScale <= 0f)
+            {
+                grindPoseData.centerOfMassVisualScale = 0.18f;
+            }
+
             //set new config variables to defaults if 0
             if (physics.bmxForceFactor <= 0f) physics.bmxForceFactor = 0.07f;
             if (physics.bmxMaxSpeed <= 0f) physics.bmxMaxSpeed = 7.5f;
@@ -788,7 +796,10 @@ namespace rowemod
         {
             grindPoseData = new GrindPoseSettings
             {
-                poses = new Dictionary<string, GrindPoseConfigEntry>()
+                poses = new Dictionary<string, GrindPoseConfigEntry>(),
+                showCenterOfMassVisual = false,
+                showLiveCenterOfMassVisual = false,
+                centerOfMassVisualScale = 0.18f
             };
             physics.grindPoseLerpSpeed = 2f;
         }

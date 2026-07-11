@@ -1,8 +1,8 @@
 {
-    "version":  "3.1.2",
+    "version":  "3.1.3",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "efd7b31b02cf4a7669d8b482a57b7052c35e543fc441f877b0833414677a0830",
+    "sha256":  "bdf646d05553650ecdd20e81e4a389b6a5b0a0b9b8a3ff7e8a61976bb724a387",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Remove multiplayer kick tools from the Misc tab. Make per-vehicle motor tuning opt-in so global Push Force and Max Speed are not overridden unless enabled.",
+    "patchNotes":  "Add a Grinds tab center-of-mass visualizer. Enable the green COM ball to see the selected grind pose Chassis CM, optionally show the live runtime COM in cyan, and adjust marker size from the Center of Mass section.",
     "requiredGameVersion":  ""
 }
