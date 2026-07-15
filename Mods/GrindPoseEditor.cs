@@ -45,6 +45,9 @@ namespace rowemod.Mods
         private static Material _poseComMaterial;
         private static Material _liveComMaterial;
         private static bool _loggedMissingComTransform;
+        private static bool _forcedPoseAppliedThisOpen;
+        private static int _forcedPoseApplyCountThisOpen;
+        private static float _nextDebugPoseStateLogTime;
         
         private sealed class PoseDefaults
         {
@@ -88,6 +91,10 @@ namespace rowemod.Mods
             if (Menu.DangerButton("Reset All To Default", GUILayout.Width(170f), GUILayout.Height(26f)))
             {
                 ResetAllPosesToDefault();
+            }
+            if (Menu.SecondaryButton("Log Pose State", GUILayout.Width(130f), GUILayout.Height(26f)))
+            {
+                LogForcedPoseState("manual");
             }
             GUILayout.FlexibleSpace();
             Menu.EndToolbar();
@@ -133,6 +140,12 @@ namespace rowemod.Mods
         public static void Update()
         {
             bool tabActive = Menu.isOpen && Menu.currentTab == Menu.Tab.Grinds && _isGrindsTabStateApplied;
+            if (tabActive && Config.grindPoseData.debugPoseApplyLogging && Time.unscaledTime >= _nextDebugPoseStateLogTime)
+            {
+                _nextDebugPoseStateLogTime = Time.unscaledTime + 2f;
+                LogForcedPoseState("debug-tick");
+            }
+
             if (!tabActive || !Config.grindPoseData.showCenterOfMassVisual)
             {
                 SetComMarkersVisible(false, false);
@@ -257,7 +270,7 @@ namespace rowemod.Mods
             }
 
             ApplyConfigToRuntime(true);
-            ApplyForcedPoseFromSelection();
+            _forcedPoseAppliedThisOpen = ApplyForcedPoseFromSelection("preset-load");
             Config.Save();
             Log.Msg($"Loaded grind pose preset '{presetName}'.");
         }
@@ -271,7 +284,8 @@ namespace rowemod.Mods
                 showLiveCenterOfMassVisual = source?.showLiveCenterOfMassVisual ?? false,
                 centerOfMassVisualScale = source != null && source.centerOfMassVisualScale > 0f
                     ? source.centerOfMassVisualScale
-                    : 0.18f
+                    : 0.18f,
+                debugPoseApplyLogging = source?.debugPoseApplyLogging ?? false
             };
 
             if (source?.poses == null)
@@ -306,16 +320,20 @@ namespace rowemod.Mods
 
         public static void OnGrindsTabEntered()
         {
-            if (!_isGrindsTabStateApplied)
+            bool firstEnter = !_isGrindsTabStateApplied;
+            if (firstEnter)
             {
                 Log.Msg("[Grinds] Entered grinds tab.");
             }
 
             _isGrindsTabStateApplied = true;
 
-            RefreshPoseCache();
-            ApplyForcedPoseFromSelection();
-            InvokeAnimatedOnJumpOncePerOpen();
+            if (firstEnter)
+            {
+                RefreshPoseCache();
+                _forcedPoseAppliedThisOpen = ApplyForcedPoseFromSelection("tab-enter");
+                InvokeAnimatedOnJumpOncePerOpen();
+            }
 
             if (!_playerOffsetApplied && Memory.customizableEntity != null)
             {
@@ -336,7 +354,7 @@ namespace rowemod.Mods
             }
         }
 
-        private static void ApplyForcedPoseFromSelection()
+        private static bool ApplyForcedPoseFromSelection(string reason)
         {
             if (Memory.bikeGrindPoser == null)
             {
@@ -345,7 +363,8 @@ namespace rowemod.Mods
                     Log.Warning("[Grinds] Memory.bikeGrindPoser is null; cannot force grind pose.");
                     _loggedMissingBikeGrindPoser = true;
                 }
-                return;
+                LogForcedPoseState($"{reason}:missing-poser");
+                return false;
             }
 
             if (_loggedMissingBikeGrindPoser)
@@ -361,7 +380,8 @@ namespace rowemod.Mods
                     Log.Warning("[Grinds] Pose cache is empty; cannot set _forcedGrindPose yet.");
                     _loggedEmptyPoseCache = true;
                 }
-                return;
+                LogForcedPoseState($"{reason}:empty-cache");
+                return false;
             }
 
             if (_loggedEmptyPoseCache)
@@ -384,7 +404,8 @@ namespace rowemod.Mods
                     Log.Warning($"[Grinds] Selected pose at index {_selectedPoseIndex} is null.");
                     _loggedNullSelectedPose = true;
                 }
-                return;
+                LogForcedPoseState($"{reason}:null-selected");
+                return false;
             }
 
             _loggedNullSelectedPose = false;
@@ -393,6 +414,7 @@ namespace rowemod.Mods
             Memory.bikeGrindPoser._forcedGrindPose = selectedPose;
             Memory.bikeGrindPoser._lerpSpeedAir = Config.physics.grindPoseLerpSpeed;
             Memory.bikeGrindPoser._lerpSpeed = Config.physics.grindPoseLerpSpeed;
+            _forcedPoseApplyCountThisOpen++;
 
             if (_loggedMissingForcePoseField || _loggedForcePoseTypeMismatch)
             {
@@ -412,10 +434,17 @@ namespace rowemod.Mods
             if (_lastLoggedForcedPoseIndex != _selectedPoseIndex ||
                 !string.Equals(_lastLoggedForcedPoseName, selectedPoseName, StringComparison.Ordinal))
             {
-                Log.Msg($"[Grinds] Forced pose applied. index={_selectedPoseIndex}, pose='{selectedPoseName}'.");
+                Log.Msg($"[Grinds] Forced pose applied. reason={reason}, count={_forcedPoseApplyCountThisOpen}, index={_selectedPoseIndex}, pose='{selectedPoseName}'.");
                 _lastLoggedForcedPoseIndex = _selectedPoseIndex;
                 _lastLoggedForcedPoseName = selectedPoseName;
             }
+
+            if (Config.grindPoseData.debugPoseApplyLogging)
+            {
+                LogForcedPoseState($"{reason}:applied");
+            }
+
+            return true;
         }
 
         private static void InvokeAnimatedOnJumpOncePerOpen()
@@ -488,6 +517,30 @@ namespace rowemod.Mods
             return $"Pose {_selectedPoseIndex}";
         }
 
+        private static void LogForcedPoseState(string reason)
+        {
+            try
+            {
+                bool hasPoser = Memory.bikeGrindPoser != null;
+                bool forcePose = hasPoser && Memory.bikeGrindPoser._forcePose;
+                BikeGrindPoseData forcedPose = hasPoser ? Memory.bikeGrindPoser._forcedGrindPose : null;
+                string forcedPoseName = GetPoseDebugName(forcedPose);
+                BikeGrindPoseData selectedPose = _selectedPoseIndex >= 0 && _selectedPoseIndex < PoseCache.Count
+                    ? PoseCache[_selectedPoseIndex]
+                    : null;
+                string selectedPoseName = GetPoseDebugName(selectedPose);
+
+                Log.Msg(
+                    $"[Grinds][Debug] reason={reason}, hasPoser={hasPoser}, forcePose={forcePose}, " +
+                    $"forcedPose='{forcedPoseName}', selectedIndex={_selectedPoseIndex}, selectedPose='{selectedPoseName}', " +
+                    $"poseCache={PoseCache.Count}, appliedThisOpen={_forcedPoseAppliedThisOpen}, applyCountThisOpen={_forcedPoseApplyCountThisOpen}.");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[Grinds][Debug] Failed to inspect forced pose state for {reason}: {ex.Message}");
+            }
+        }
+
         public static void OnGrindsTabExited()
         {
             if (!_isGrindsTabStateApplied)
@@ -513,6 +566,9 @@ namespace rowemod.Mods
             }
 
             _isGrindsTabStateApplied = false;
+            _forcedPoseAppliedThisOpen = false;
+            _forcedPoseApplyCountThisOpen = 0;
+            _nextDebugPoseStateLogTime = 0f;
             _playerOffsetApplied = false;
             _playerTransformWhenApplied = null;
             _springBodyStateCaptured = false;
@@ -726,6 +782,15 @@ namespace rowemod.Mods
 
         private static void DrawComVisualControls()
         {
+            bool debugPoseApplyLogging = Config.grindPoseData.debugPoseApplyLogging;
+            Menu.ModernToggle("Debug Forced Pose Logs", ref debugPoseApplyLogging, "grinds_debug_pose_apply");
+            if (debugPoseApplyLogging != Config.grindPoseData.debugPoseApplyLogging)
+            {
+                Config.grindPoseData.debugPoseApplyLogging = debugPoseApplyLogging;
+                Config.Save();
+                LogForcedPoseState(debugPoseApplyLogging ? "debug-enabled" : "debug-disabled");
+            }
+
             bool showPoseCom = Config.grindPoseData.showCenterOfMassVisual;
             Menu.ModernToggle("Show COM Ball", ref showPoseCom, "grinds_show_com_ball");
             if (showPoseCom != Config.grindPoseData.showCenterOfMassVisual)
@@ -843,6 +908,7 @@ namespace rowemod.Mods
                     if (GUILayout.Button($"<b>{label}</b>", style, GUILayout.Width(145f), GUILayout.Height(28f)))
                     {
                         _selectedPoseIndex = capturedIndex;
+                        _forcedPoseAppliedThisOpen = ApplyForcedPoseFromSelection("selection");
                     }
 
                     index++;

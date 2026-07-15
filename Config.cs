@@ -108,6 +108,8 @@ namespace rowemod
     public struct Misc
     {
         public bool neverBail;
+        public bool disableBoneBreaking;
+        public float boneBreakingStrength;
         public float droneMass;
         public bool droneBodyToggle;
         public bool droneEmitterToggle;
@@ -248,6 +250,7 @@ namespace rowemod
         public bool showCenterOfMassVisual { get; set; } = false;
         public bool showLiveCenterOfMassVisual { get; set; } = false;
         public float centerOfMassVisualScale { get; set; } = 0.18f;
+        public bool debugPoseApplyLogging { get; set; } = false;
     }
 
     public static class Config
@@ -343,6 +346,8 @@ namespace rowemod
         public static Misc misc = new Misc
         {
             neverBail = false,
+            disableBoneBreaking = false,
+            boneBreakingStrength = 1f,
             droneMass = 10f,
             droneBodyToggle = true,
             droneEmitterToggle = true,
@@ -470,6 +475,8 @@ namespace rowemod
             string jsonContent = File.ReadAllText(cfgFile);
             bool hasShowPlayerUserNameTargets =
                 jsonContent.IndexOf("\"showPlayerUserNameTargets\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasBoneBreakingStrength =
+                jsonContent.IndexOf("\"boneBreakingStrength\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasAutoSkipIntro =
                 jsonContent.IndexOf("\"autoSkipIntro\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasChallengeRuntimeSettings =
@@ -517,6 +524,14 @@ namespace rowemod
             if (!hasShowPlayerUserNameTargets)
             {
                 misc.showPlayerUserNameTargets = true;
+            }
+            if (!hasBoneBreakingStrength)
+            {
+                misc.boneBreakingStrength = 1f;
+            }
+            else
+            {
+                misc.boneBreakingStrength = Math.Max(0.25f, Math.Min(5f, misc.boneBreakingStrength));
             }
             tricks = jsonData.customTricksData;
             if (tricks.trickSets == null)
@@ -778,6 +793,8 @@ namespace rowemod
             misc = new Misc
             {
                 neverBail = false,
+                disableBoneBreaking = false,
+                boneBreakingStrength = 1f,
                 droneMass = 10f,
                 droneBodyToggle = true,
                 droneEmitterToggle = true,
@@ -799,7 +816,8 @@ namespace rowemod
                 poses = new Dictionary<string, GrindPoseConfigEntry>(),
                 showCenterOfMassVisual = false,
                 showLiveCenterOfMassVisual = false,
-                centerOfMassVisualScale = 0.18f
+                centerOfMassVisualScale = 0.18f,
+                debugPoseApplyLogging = false
             };
             physics.grindPoseLerpSpeed = 2f;
         }

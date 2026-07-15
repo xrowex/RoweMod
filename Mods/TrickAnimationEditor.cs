@@ -28,12 +28,12 @@ namespace rowemod.Mods
         private static Vector2 trickCatalogScroll;
         private static Vector2 selectedTrickScroll;
         private static Vector2 poseScroll;
-        private static Vector2 ikTargetScroll;
         private static bool showClipDetails;
         private static bool showAdvancedFlags;
         private static bool showClipCopyTools = true;
         private static bool showPoseOverlayTools;
         private static bool showIkTargetTools;
+        private static int expandedIkTargetEditIndex;
         private static string clipSourceSearch = string.Empty;
         private static string trickCatalogSearch = string.Empty;
         private static int selectedClipSourceIndex = -1;
@@ -50,6 +50,15 @@ namespace rowemod.Mods
         private static string lastPoseLogKey = string.Empty;
         private static string lastAppliedPoseLogKey = string.Empty;
         private static string lastAppliedIkLogKey = string.Empty;
+        private static string lastIkApplyStatusKey = string.Empty;
+        private static float nextIkApplyStatusLogTime;
+        private static bool activePoseFromBrainFallback;
+        private static HumanIK[] cachedHumanIks = System.Array.Empty<HumanIK>();
+        private static IKTarget[] cachedIkTargets = System.Array.Empty<IKTarget>();
+        private static UnityIKLimb[] cachedUnityIkLimbs = System.Array.Empty<UnityIKLimb>();
+        private static int cachedTwoBoneIkCount;
+        private static float nextIkCacheScanTime;
+        private static string lastIkCacheLogKey = string.Empty;
 
         private static GUIStyle cardStyle;
         private static GUIStyle headerStyle;
@@ -79,6 +88,7 @@ namespace rowemod.Mods
 
         private static readonly string[] PhaseOptions = { "Any", "Enter", "Tweak", "Loop", "Exit" };
         private static readonly string[] IkGoalOptions = { "LeftHand", "RightHand", "LeftFoot", "RightFoot" };
+        private const float IkCacheScanInterval = 2f;
 
         private static readonly HumanBodyBones[] EditableBones =
         {
@@ -153,6 +163,7 @@ namespace rowemod.Mods
             }
 
             PollBrain();
+            EnsureIkRuntimeCache(false);
 
             if (Time.unscaledTime >= nextOverrideScanTime && Time.unscaledTime >= suppressAutoApplyUntil)
             {
@@ -165,7 +176,13 @@ namespace rowemod.Mods
         {
             EnsureSettings();
             RestorePoseOverlays();
-            RestoreIkTargetOverlays();
+            if (!Config.trickAnimationDebugSettings.editorEnabled)
+            {
+                RestoreIkTargetOverlays();
+                return;
+            }
+
+            ApplyIkTargetOverlays();
         }
 
         public static void NotifyAnimatorPhase(TrickAnimator animator, SyncTrickAnimationData data, string phaseName)
@@ -182,12 +199,31 @@ namespace rowemod.Mods
             activePoseDataKey = dataKey;
             activePhase = normalizedPhase;
             activePoseUntil = Time.unscaledTime + 10f;
+            activePoseFromBrainFallback = false;
+            EnsureIkRuntimeCache(false);
 
             if (logKey != lastPoseLogKey)
             {
                 lastPoseLogKey = logKey;
                 Log.Msg($"[TrickAnimEditor] Active animation phase: trick='{TrickName(data)}', phase={normalizedPhase}.");
             }
+        }
+
+        public static void NotifyPreviewTrick(SyncTrickAnimationData data)
+        {
+            ActivateIkPreviewFromBrain(data);
+        }
+
+        public static void NotifyPreviewEnded()
+        {
+            if (!activePoseFromBrainFallback)
+                return;
+
+            activePoseFromBrainFallback = false;
+            activePoseUntil = 0f;
+            activePoseData = null;
+            activePoseDataKey = string.Empty;
+            RestoreIkTargetOverlays();
         }
 
         public static void DrawEditor()
@@ -383,8 +419,10 @@ namespace rowemod.Mods
             DrawClipCopyTools(data);
 
             GUILayout.Space(8);
-            Menu.BeginAltPane("Pose / IK Editing", "Temporarily disabled for performance. Saved pose and IK data remains in config, but the runtime editor does not expose or apply it in this UI pass.");
-            GUILayout.Label("Use speed controls and human/bike animation replacement for now.", mutedStyle);
+            Menu.BeginAltPane("IK Editor", "Offsets the game's existing hand/foot IK targets while this trick phase is active.");
+            DrawIkTargetTools(data, dataKey);
+            GUILayout.Space(4);
+            GUILayout.Label("Pose/bone editing remains disabled for performance. IK edits use the game's existing solver targets and saved trick config.", mutedStyle);
             Menu.EndPane();
 
             GUILayout.Space(8);
@@ -480,6 +518,37 @@ namespace rowemod.Mods
             selectedTrickCatalogKey = currentKey;
             selectedTrickCatalogIndex = FindCatalogIndexByKey(currentKey);
             status = $"Captured {currentName}.";
+            ActivateIkPreviewFromBrain(data);
+        }
+
+        private static void ActivateIkPreviewFromBrain(SyncTrickAnimationData data)
+        {
+            if (data == null)
+                return;
+
+            string dataKey = GetDataKey(data);
+            if (string.IsNullOrEmpty(dataKey))
+                return;
+
+            activePoseData = data;
+            activePoseDataKey = dataKey;
+            activePhase = "Any";
+            activePoseUntil = Time.unscaledTime + 1.25f;
+            activePoseFromBrainFallback = true;
+            if (activeAnimator == null)
+                activeAnimator = ResolveActiveTrickAnimator();
+
+            EnsureIkRuntimeCache(false);
+
+            if (Config.trickAnimationDebugSettings.overrides.TryGetValue(dataKey, out TrickAnimationOverride values) &&
+                values?.ikTargetOverrides != null &&
+                values.ikTargetOverrides.Count > 0)
+            {
+                LogIkApplyStatus(
+                    "active",
+                    $"brain fallback armed for {TrickName(data)} with {values.ikTargetOverrides.Count} IK edit(s).",
+                    force: true);
+            }
         }
 
         private static void EnsureTrickCatalog(bool force)
@@ -903,11 +972,9 @@ namespace rowemod.Mods
             if (sourceIndices == null || sourceIndices.Count == 0)
                 return;
 
-            float usableWidth = Mathf.Max(360f, Menu.windowRect.width * 0.48f);
-            int columns = Mathf.Clamp(Mathf.FloorToInt(usableWidth / 170f), 2, 4);
-            int column = 0;
+            List<int> bmxSources = new List<int>();
+            List<int> scooterSources = new List<int>();
 
-            GUILayout.BeginHorizontal();
             for (int i = 0; i < sourceIndices.Count; i++)
             {
                 int sourceIndex = sourceIndices[i];
@@ -915,27 +982,71 @@ namespace rowemod.Mods
                 if (source == null)
                     continue;
 
-                bool selected = sourceIndex == selectedClipSourceIndex;
-                string sourceName = TrickName(source);
-                if (GUILayout.Button(sourceName, selected ? clipSourceSelectedButtonStyle : clipSourceButtonStyle, GUILayout.Height(26f), GUILayout.ExpandWidth(true)))
-                    selectedClipSourceIndex = sourceIndex;
-
-                column++;
-                if (column < columns)
-                    continue;
-
-                GUILayout.EndHorizontal();
-                column = 0;
-                if (i < sourceIndices.Count - 1)
-                    GUILayout.BeginHorizontal();
+                if (IsScooterAnimationSource(source))
+                    scooterSources.Add(sourceIndex);
+                else
+                    bmxSources.Add(sourceIndex);
             }
 
-            if (column != 0)
+            DrawClipSourceSelector("BMX", bmxSources);
+            GUILayout.Space(4f);
+            DrawClipSourceSelector("Scooter", scooterSources);
+        }
+
+        private static void DrawClipSourceSelector(string title, List<int> sourceIndices)
+        {
+            GUILayout.BeginHorizontal(panelAltStyle);
+            GUILayout.Label($"{title} ({sourceIndices.Count})", mutedStyle, GUILayout.Width(95f));
+
+            if (sourceIndices.Count == 0)
             {
-                for (int empty = column; empty < columns; empty++)
-                    GUILayout.Space(1f);
+                GUILayout.Label("No matches.", mutedStyle, GUILayout.ExpandWidth(true));
                 GUILayout.EndHorizontal();
+                return;
             }
+
+            int localIndex = GetLocalClipSourceIndex(sourceIndices);
+            int sourceIndex = sourceIndices[localIndex];
+
+            if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28f), GUILayout.Height(24f)))
+                selectedClipSourceIndex = sourceIndices[WrapIndex(localIndex - 1, sourceIndices.Count)];
+
+            SyncTrickAnimationData source = sourceIndex >= 0 && sourceIndex < clipSources.Count ? clipSources[sourceIndex] : null;
+            string sourceName = TrickName(source);
+            bool selected = sourceIndex == selectedClipSourceIndex;
+            if (GUILayout.Button(sourceName, selected ? clipSourceSelectedButtonStyle : clipSourceButtonStyle, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
+                selectedClipSourceIndex = sourceIndex;
+
+            if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28f), GUILayout.Height(24f)))
+                selectedClipSourceIndex = sourceIndices[WrapIndex(localIndex + 1, sourceIndices.Count)];
+
+            GUILayout.EndHorizontal();
+        }
+
+        private static int GetLocalClipSourceIndex(List<int> sourceIndices)
+        {
+            if (sourceIndices == null || sourceIndices.Count == 0)
+                return 0;
+
+            int index = sourceIndices.IndexOf(selectedClipSourceIndex);
+            return index >= 0 ? index : 0;
+        }
+
+        private static int WrapIndex(int index, int count)
+        {
+            if (count <= 0)
+                return 0;
+            if (index < 0)
+                return count - 1;
+            if (index >= count)
+                return 0;
+            return index;
+        }
+
+        private static bool IsScooterAnimationSource(SyncTrickAnimationData source)
+        {
+            string rawName = GetDataKey(source) ?? string.Empty;
+            return rawName.IndexOf("Scooter", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static void DrawPoseOverlayTools(SyncTrickAnimationData target, string dataKey)
@@ -1071,7 +1182,7 @@ namespace rowemod.Mods
         {
             showIkTargetTools = GUILayout.Toggle(
                 showIkTargetTools,
-                showIkTargetTools ? "v IK Target Edits" : "> IK Target Edits",
+                showIkTargetTools ? "v IK Editor" : "> IK Editor",
                 headerStyle);
 
             if (!showIkTargetTools)
@@ -1080,6 +1191,7 @@ namespace rowemod.Mods
             GUILayout.Label(
                 "Moves the game's existing IK target transforms while this trick phase is active. This is separate from bone edits and lets the IK solver pull hands or feet toward edited targets.",
                 mutedStyle);
+            DrawIkSnapshot();
 
             TrickAnimationOverride values = GetOrCreateAnimationOverride(target, dataKey);
             values.ikTargetOverrides ??= new List<TrickIkTargetOverride>();
@@ -1088,6 +1200,7 @@ namespace rowemod.Mods
             if (GUILayout.Button("Add IK Edit", smallButtonStyle, GUILayout.Width(125)))
             {
                 values.ikTargetOverrides.Add(new TrickIkTargetOverride());
+                expandedIkTargetEditIndex = values.ikTargetOverrides.Count - 1;
                 suppressAutoApplyUntil = Time.unscaledTime + 5f;
                 status = $"Added IK target edit for {TrickName(target)}. Throw the trick to preview it live.";
             }
@@ -1106,6 +1219,11 @@ namespace rowemod.Mods
                 RestoreIkTargetOverlays();
                 status = $"Cleared IK target edits for {TrickName(target)}.";
             }
+            if (GUILayout.Button("Refresh IK Cache", smallButtonStyle, GUILayout.Width(135)))
+            {
+                RequestIkCacheRefresh();
+                status = "IK cache refresh queued.";
+            }
 
             GUILayout.EndHorizontal();
 
@@ -1117,7 +1235,6 @@ namespace rowemod.Mods
                 return;
             }
 
-            ikTargetScroll = GUILayout.BeginScrollView(ikTargetScroll, GUILayout.Height(360));
             for (int i = 0; i < values.ikTargetOverrides.Count; i++)
             {
                 TrickIkTargetOverride edit = values.ikTargetOverrides[i];
@@ -1131,21 +1248,16 @@ namespace rowemod.Mods
 
                 GUILayout.BeginVertical(panelAltStyle);
                 GUILayout.BeginHorizontal();
-                edit.enabled = GUILayout.Toggle(edit.enabled, $"IK {i + 1}", GUILayout.Width(70));
-                GUILayout.Label($"Phase: {NormalizePhaseName(edit.phase)}", mutedStyle, GUILayout.Width(115));
-                if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28)))
-                    edit.phase = StepOption(NormalizePhaseName(edit.phase), PhaseOptions, -1);
-                if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28)))
-                    edit.phase = StepOption(NormalizePhaseName(edit.phase), PhaseOptions, 1);
-
-                GUILayout.Label($"Goal: {NormalizeIkGoalName(edit.goal)}", mutedStyle, GUILayout.Width(125));
-                if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28)))
-                    edit.goal = StepOption(NormalizeIkGoalName(edit.goal), IkGoalOptions, -1);
-                if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28)))
-                    edit.goal = StepOption(NormalizeIkGoalName(edit.goal), IkGoalOptions, 1);
+                edit.enabled = GUILayout.Toggle(edit.enabled, GUIContent.none, GUILayout.Width(18), GUILayout.Height(22));
+                bool expanded = expandedIkTargetEditIndex == i;
+                string summary = $"{(expanded ? "v" : ">")} IK {i + 1}: {NormalizeIkGoalName(edit.goal)} / {NormalizePhaseName(edit.phase)} / Target {(edit.targetId < 0 ? "Auto" : edit.targetId.ToString())}";
+                if (GUILayout.Button(summary, expanded ? clipSourceSelectedButtonStyle : clipSourceButtonStyle, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
+                    expandedIkTargetEditIndex = expanded ? -1 : i;
                 if (GUILayout.Button("Remove", smallButtonStyle, GUILayout.Width(78)))
                 {
                     values.ikTargetOverrides.RemoveAt(i);
+                    if (expandedIkTargetEditIndex >= values.ikTargetOverrides.Count)
+                        expandedIkTargetEditIndex = values.ikTargetOverrides.Count - 1;
                     i--;
                     suppressAutoApplyUntil = Time.unscaledTime + 5f;
                     status = $"Removed IK target edit for {TrickName(target)}.";
@@ -1156,7 +1268,39 @@ namespace rowemod.Mods
 
                 GUILayout.EndHorizontal();
 
+                if (expandedIkTargetEditIndex != i)
+                {
+                    GUILayout.EndVertical();
+                    continue;
+                }
+
                 bool changed = false;
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"Phase: {NormalizePhaseName(edit.phase)}", mutedStyle, GUILayout.Width(115));
+                if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28)))
+                {
+                    edit.phase = StepOption(NormalizePhaseName(edit.phase), PhaseOptions, -1);
+                    changed = true;
+                }
+                if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28)))
+                {
+                    edit.phase = StepOption(NormalizePhaseName(edit.phase), PhaseOptions, 1);
+                    changed = true;
+                }
+
+                GUILayout.Label($"Goal: {NormalizeIkGoalName(edit.goal)}", mutedStyle, GUILayout.Width(125));
+                if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28)))
+                {
+                    edit.goal = StepOption(NormalizeIkGoalName(edit.goal), IkGoalOptions, -1);
+                    changed = true;
+                }
+                if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28)))
+                {
+                    edit.goal = StepOption(NormalizeIkGoalName(edit.goal), IkGoalOptions, 1);
+                    changed = true;
+                }
+                GUILayout.EndHorizontal();
+
                 GUILayout.BeginHorizontal();
                 GUILayout.Label($"Target ID: {(edit.targetId < 0 ? "Auto" : edit.targetId.ToString())}", mutedStyle, GUILayout.Width(125));
                 if (GUILayout.Button("-", smallButtonStyle, GUILayout.Width(28)))
@@ -1228,7 +1372,25 @@ namespace rowemod.Mods
                     changed = true;
                 }
 
+                if (GUILayout.Button("Max Weights", smallButtonStyle, GUILayout.Width(115)))
+                {
+                    edit.offsetWeight = 1f;
+                    edit.humanIkWeight = 1f;
+                    edit.limbPositionWeight = 1f;
+                    edit.limbRotationWeight = 1f;
+                    changed = true;
+                }
+
                 GUILayout.EndHorizontal();
+
+                if ((Mathf.Abs(edit.localPositionOffset.x) > 0.001f ||
+                     Mathf.Abs(edit.localPositionOffset.y) > 0.001f ||
+                     Mathf.Abs(edit.localPositionOffset.z) > 0.001f) &&
+                    edit.humanIkWeight <= 0.001f &&
+                    edit.limbPositionWeight <= 0.001f)
+                {
+                    GUILayout.Label("Position offsets need Human IK Weight or Limb Pos Weight above 0 to visibly pull the limb.", mutedStyle);
+                }
 
                 if (changed)
                 {
@@ -1240,14 +1402,12 @@ namespace rowemod.Mods
                 GUILayout.EndVertical();
             }
 
-            GUILayout.EndScrollView();
-            DrawIkSnapshot();
             DrawIkTargetCatalog();
         }
 
         private static void DrawIkTargetCatalog()
         {
-            IKTarget[] targets = SafeRead(() => UnityEngine.Object.FindObjectsOfType<IKTarget>(), null);
+            IKTarget[] targets = cachedIkTargets;
             if (targets == null || targets.Length == 0)
                 return;
 
@@ -1272,10 +1432,37 @@ namespace rowemod.Mods
 
         private static void DrawIkSnapshot()
         {
-            int humanIkCount = SafeRead(() => UnityEngine.Object.FindObjectsOfType<HumanIK>()?.Length ?? 0, 0);
-            int targetCount = SafeRead(() => UnityEngine.Object.FindObjectsOfType<IKTarget>()?.Length ?? 0, 0);
-            int twoBoneCount = SafeRead(() => UnityEngine.Object.FindObjectsOfType<Il2CppMashBox.Core.Runtime.InverseKinematics.TwoBoneIK>()?.Length ?? 0, 0);
-            GUILayout.Label($"IK present: HumanIK={humanIkCount}, IKTarget={targetCount}, TwoBoneIK={twoBoneCount}", mutedStyle);
+            int humanIkCount = cachedHumanIks?.Length ?? 0;
+            int targetCount = cachedIkTargets?.Length ?? 0;
+            int limbCount = cachedUnityIkLimbs?.Length ?? 0;
+            GUILayout.Label($"IK cache: HumanIK={humanIkCount}, IKTarget={targetCount}, UnityIKLimb={limbCount}, TwoBoneIK={cachedTwoBoneIkCount}", mutedStyle);
+        }
+
+        private static void RequestIkCacheRefresh()
+        {
+            nextIkCacheScanTime = 0f;
+        }
+
+        private static void EnsureIkRuntimeCache(bool force)
+        {
+            if (!force && Time.unscaledTime < nextIkCacheScanTime)
+                return;
+
+            nextIkCacheScanTime = Time.unscaledTime + IkCacheScanInterval;
+
+            cachedHumanIks = SafeRead(() => UnityEngine.Object.FindObjectsOfType<HumanIK>(), null) ?? System.Array.Empty<HumanIK>();
+            cachedIkTargets = SafeRead(() => UnityEngine.Object.FindObjectsOfType<IKTarget>(), null) ?? System.Array.Empty<IKTarget>();
+            cachedUnityIkLimbs = SafeRead(() => UnityEngine.Object.FindObjectsOfType<UnityIKLimb>(), null) ?? System.Array.Empty<UnityIKLimb>();
+            cachedTwoBoneIkCount = SafeRead(
+                () => UnityEngine.Object.FindObjectsOfType<Il2CppMashBox.Core.Runtime.InverseKinematics.TwoBoneIK>()?.Length ?? 0,
+                0);
+
+            string logKey = $"{cachedHumanIks.Length}|{cachedIkTargets.Length}|{cachedUnityIkLimbs.Length}|{cachedTwoBoneIkCount}";
+            if (logKey != lastIkCacheLogKey)
+            {
+                lastIkCacheLogKey = logKey;
+                Log.Msg($"[TrickAnimEditor] IK cache: HumanIK={cachedHumanIks.Length}, IKTarget={cachedIkTargets.Length}, UnityIKLimb={cachedUnityIkLimbs.Length}, TwoBoneIK={cachedTwoBoneIkCount}.");
+            }
         }
 
         private static TrickAnimationOverride GetOrCreateAnimationOverride(SyncTrickAnimationData data, string dataKey)
@@ -1401,6 +1588,7 @@ namespace rowemod.Mods
             bool removed = Config.trickAnimationDebugSettings.overrides.Remove(dataKey);
             Config.Save();
             RestoreRuntimeDefault(data);
+            RestoreIkTargetOverlays();
             suppressAutoApplyUntil = Time.unscaledTime + 5f;
             status = removed
                 ? $"Reset {trickName} to runtime defaults and removed saved override."
@@ -1525,9 +1713,6 @@ namespace rowemod.Mods
             {
                 SyncTrickAnimationData data = allData[i];
                 if (data == null)
-                    continue;
-
-                if (!TrickMods.IsBmxTrickObject(data))
                     continue;
 
                 string key = GetDataKey(data);
@@ -1764,7 +1949,7 @@ namespace rowemod.Mods
             if (edit == null || !TryParseIkGoal(edit.goal, out AvatarIKGoal goal))
                 return null;
 
-            IKTarget[] targets = SafeRead(() => UnityEngine.Object.FindObjectsOfType<IKTarget>(), null);
+            IKTarget[] targets = cachedIkTargets;
             if (targets == null || targets.Length == 0)
                 return null;
 
@@ -1796,14 +1981,59 @@ namespace rowemod.Mods
             return active ?? fallback;
         }
 
+        private static TrickAnimator ResolveActiveTrickAnimator()
+        {
+            try
+            {
+                TrickAnimator[] animators = UnityEngine.Object.FindObjectsOfType<TrickAnimator>();
+                if (animators == null || animators.Length == 0)
+                    return null;
+
+                for (int i = 0; i < animators.Length; i++)
+                {
+                    TrickAnimator animator = animators[i];
+                    if (animator != null && SafeRead(() => animator.isActiveAndEnabled, false))
+                        return animator;
+                }
+
+                return animators[0];
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void LogIkApplyStatus(string reason, string details, bool force = false)
+        {
+            string key = $"{reason}|{details}";
+            if (!force && key == lastIkApplyStatusKey && Time.unscaledTime < nextIkApplyStatusLogTime)
+                return;
+
+            lastIkApplyStatusKey = key;
+            nextIkApplyStatusLogTime = Time.unscaledTime + 1.5f;
+            Log.Msg($"[TrickAnimEditor] IK {reason}: {details}");
+        }
+
+        private static string FormatIkTarget(IKTarget target)
+        {
+            if (target == null)
+                return "(null)";
+
+            return
+                $"{SafeRead(() => target.name, "(unnamed)")}, " +
+                $"goal={SafeRead(() => target.GoalType.ToString(), "?")}, " +
+                $"id={SafeRead(() => target.TargetID, -1)}, " +
+                $"active={SafeRead(() => target.Active, false)}";
+        }
+
         private static void ApplyIkTargetOverlays()
         {
             ikTargetTouchedThisFrame.Clear();
             humanIkTouchedThisFrame.Clear();
             limbTouchedThisFrame.Clear();
 
-            if (activeAnimator == null ||
-                activePoseData == null ||
+            if (activePoseData == null ||
                 string.IsNullOrEmpty(activePoseDataKey) ||
                 Time.unscaledTime > activePoseUntil)
             {
@@ -1823,32 +2053,57 @@ namespace rowemod.Mods
                 return;
             }
 
-            bool playing = SafeRead(() => activeAnimator.character != null && activeAnimator.character.IsPlayingTrickAnimation(), true);
+            bool playing = activePoseFromBrainFallback ||
+                (activeAnimator != null &&
+                 SafeRead(() => activeAnimator.character != null && activeAnimator.character.IsPlayingTrickAnimation(), false));
             if (!playing)
             {
                 RestoreInactiveIkTargetStates();
                 RestoreInactiveHumanIkWeightStates();
                 RestoreInactiveLimbWeightStates();
+                LogIkApplyStatus("skip", $"not playing according to TrickAnimator for {TrickName(activePoseData)}.");
                 return;
             }
 
             int appliedCount = 0;
+            int disabledCount = 0;
+            int zeroWeightCount = 0;
+            int phaseSkippedCount = 0;
+            int unresolvedCount = 0;
+            string firstTarget = string.Empty;
             for (int i = 0; i < values.ikTargetOverrides.Count; i++)
             {
                 TrickIkTargetOverride edit = values.ikTargetOverrides[i];
-                if (edit == null || !edit.enabled || edit.offsetWeight <= 0f)
+                if (edit == null || !edit.enabled)
+                {
+                    disabledCount++;
                     continue;
+                }
+
+                if (edit.offsetWeight <= 0f)
+                {
+                    zeroWeightCount++;
+                    continue;
+                }
 
                 NormalizeIkTargetOverride(edit);
                 if (!PhaseMatches(edit.phase, activePhase))
+                {
+                    phaseSkippedCount++;
                     continue;
+                }
 
                 IKTarget target = ResolveIkTarget(edit);
                 if (target == null)
+                {
+                    unresolvedCount++;
                     continue;
+                }
 
                 ApplyIkTargetToTransform(target, edit);
                 ApplyIkWeights(target, edit);
+                if (string.IsNullOrEmpty(firstTarget))
+                    firstTarget = FormatIkTarget(target);
                 appliedCount++;
             }
 
@@ -1858,8 +2113,19 @@ namespace rowemod.Mods
                 if (applyLogKey != lastAppliedIkLogKey)
                 {
                     lastAppliedIkLogKey = applyLogKey;
-                    Log.Msg($"[TrickAnimEditor] Applied {appliedCount} IK target edit(s) to {TrickName(activePoseData)} during {activePhase}.");
+                    Log.Msg(
+                        $"[TrickAnimEditor] Applied {appliedCount} IK target edit(s) to {TrickName(activePoseData)} " +
+                        $"during {activePhase} via {(activePoseFromBrainFallback ? "brain fallback" : "phase hook")}. " +
+                        $"First target: {firstTarget}.");
                 }
+            }
+            else
+            {
+                LogIkApplyStatus(
+                    "skip",
+                    $"{TrickName(activePoseData)} phase={activePhase}, edits={values.ikTargetOverrides.Count}, " +
+                    $"disabled={disabledCount}, zeroWeight={zeroWeightCount}, phaseSkipped={phaseSkippedCount}, " +
+                    $"unresolved={unresolvedCount}, targets={cachedIkTargets?.Length ?? 0}.");
             }
 
             RestoreInactiveIkTargetStates();
@@ -1927,7 +2193,7 @@ namespace rowemod.Mods
             if (target == null || !TryParseIkGoal(edit.goal, out AvatarIKGoal goal))
                 return;
 
-            HumanIK[] humanIks = SafeRead(() => UnityEngine.Object.FindObjectsOfType<HumanIK>(), null);
+            HumanIK[] humanIks = cachedHumanIks;
             if (humanIks != null)
             {
                 for (int i = 0; i < humanIks.Length; i++)

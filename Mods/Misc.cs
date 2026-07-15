@@ -2,7 +2,9 @@ using Il2CppMashBox.Core.Runtime.Input;
 using MelonLoader;
 using rowemod.Utils;
 using System;
+using System.Collections.Generic;
 using Il2CppMashBox.Addons.NetworkingFusion;
+using Il2CppMashBox.Addons.PhysicsDrivenAnimation.BeyondMeat;
 using Il2CppMashBox.Addons.SessionMarker;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -33,6 +35,20 @@ namespace rowemod.Mods
         private static Il2CppMashBoxSDK.Maps.Rigging.MBNetworkedObjectSpawner driftTrikeSpawnerType;
         private static bool temporaryNeverBailOverrideActive;
         private static bool temporaryNeverBailOverrideValue;
+        private const float BoneHitboxRefreshInterval = 1f;
+        private static readonly Dictionary<int, BoneHitboxRuntimeState> boneHitboxOriginalStates =
+            new Dictionary<int, BoneHitboxRuntimeState>();
+        private static bool? lastDisableBoneBreaking;
+        private static float lastBoneBreakingStrength = float.NaN;
+        private static float nextBoneHitboxRefreshTime;
+        private static int lastBoneHitboxCount = -1;
+
+        private sealed class BoneHitboxRuntimeState
+        {
+            public BoneHitbox Hitbox;
+            public float MinNormalDeltaV;
+            public float DamageMultiplier;
+        }
         
 
         public static void Update()
@@ -46,6 +62,7 @@ namespace rowemod.Mods
             Memory.RefreshDroneComponents();
             // Update Ragdoll Behaviour
             ApplyNeverBailState();
+            ApplyBoneBreakingState();
 
             // Update Drone Rigidbody Mass
             if (droneRb != null)
@@ -111,6 +128,117 @@ namespace rowemod.Mods
                 activeRagdollBehaviour._invinsible = temporaryNeverBailOverrideActive
                     ? temporaryNeverBailOverrideValue
                     : misc.neverBail;
+        }
+
+        public static void ApplyBoneBreakingState(bool force = false)
+        {
+            bool disableBoneBreaking = misc.disableBoneBreaking;
+            float boneBreakingStrength = Mathf.Clamp(misc.boneBreakingStrength, 0.25f, 5f);
+            misc.boneBreakingStrength = boneBreakingStrength;
+            bool stateChanged = lastDisableBoneBreaking != disableBoneBreaking;
+            bool strengthChanged = float.IsNaN(lastBoneBreakingStrength) ||
+                                   !Mathf.Approximately(lastBoneBreakingStrength, boneBreakingStrength);
+            bool hasOverride = disableBoneBreaking || !Mathf.Approximately(boneBreakingStrength, 1f);
+
+            if (!force && !stateChanged && !strengthChanged)
+            {
+                if (!hasOverride || Time.unscaledTime < nextBoneHitboxRefreshTime)
+                    return;
+            }
+
+            nextBoneHitboxRefreshTime = Time.unscaledTime + BoneHitboxRefreshInterval;
+
+            try
+            {
+                BoneHitbox[] hitboxes = FindLocalBoneHitboxes();
+                int changedCount = 0;
+
+                foreach (BoneHitbox hitbox in hitboxes)
+                {
+                    if (hitbox == null)
+                        continue;
+
+                    int instanceId = hitbox.GetInstanceID();
+                    if (!boneHitboxOriginalStates.ContainsKey(instanceId))
+                    {
+                        boneHitboxOriginalStates[instanceId] = new BoneHitboxRuntimeState
+                        {
+                            Hitbox = hitbox,
+                            MinNormalDeltaV = hitbox.minNormalDeltaV,
+                            DamageMultiplier = hitbox.damageMultiplier
+                        };
+                    }
+                }
+
+                foreach (BoneHitboxRuntimeState state in boneHitboxOriginalStates.Values)
+                {
+                    if (state.Hitbox == null)
+                        continue;
+
+                    float targetMinNormalDeltaV = disableBoneBreaking
+                        ? float.MaxValue
+                        : state.MinNormalDeltaV;
+                    float targetDamageMultiplier = disableBoneBreaking
+                        ? 0f
+                        : state.DamageMultiplier / boneBreakingStrength;
+
+                    bool changed = false;
+                    if (state.Hitbox.minNormalDeltaV != targetMinNormalDeltaV)
+                    {
+                        state.Hitbox.minNormalDeltaV = targetMinNormalDeltaV;
+                        changed = true;
+                    }
+
+                    if (!Mathf.Approximately(state.Hitbox.damageMultiplier, targetDamageMultiplier))
+                    {
+                        state.Hitbox.damageMultiplier = targetDamageMultiplier;
+                        changed = true;
+                    }
+
+                    if (changed)
+                        changedCount++;
+                }
+
+                if (!hasOverride)
+                    boneHitboxOriginalStates.Clear();
+
+                if (force || stateChanged || strengthChanged || hitboxes.Length != lastBoneHitboxCount || changedCount > 0)
+                {
+                    string mode = disableBoneBreaking
+                        ? "blocked"
+                        : Mathf.Approximately(boneBreakingStrength, 1f) ? "stock" : "scaled";
+                    Log.Msg(
+                        $"[BrokenBones] BeyondMeat collision damage {mode} | " +
+                        $"strength={boneBreakingStrength:0.00}x, hitboxes={hitboxes.Length}, changed={changedCount}.");
+                }
+
+                lastDisableBoneBreaking = disableBoneBreaking;
+                lastBoneBreakingStrength = boneBreakingStrength;
+                lastBoneHitboxCount = hitboxes.Length;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[BrokenBones] Failed to update BoneHitbox state: {ex.Message}");
+            }
+        }
+
+        private static BoneHitbox[] FindLocalBoneHitboxes()
+        {
+            if (physicsDrivenCharacter != null)
+            {
+                BoneHitbox[] hitboxes = physicsDrivenCharacter.GetComponentsInChildren<BoneHitbox>(true);
+                if (hitboxes != null && hitboxes.Length > 0)
+                    return hitboxes;
+            }
+
+            if (beyondMeatSystem != null)
+            {
+                BoneHitbox[] hitboxes = beyondMeatSystem.GetComponentsInChildren<BoneHitbox>(true);
+                if (hitboxes != null && hitboxes.Length > 0)
+                    return hitboxes;
+            }
+
+            return Array.Empty<BoneHitbox>();
         }
 
         public static void ApplyPlayerUserNameTargetsVisibility(bool force = false)

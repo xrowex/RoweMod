@@ -538,6 +538,21 @@ namespace rowemod
                         BeginPane("General", "Gameplay helpers, cleanup actions, and menu accent color.");
                         ModernToggle("Skip Main Intro", ref Config.autoSkipIntro);
                         ModernToggle("No Bail", ref misc.neverBail);
+                        bool boneBreakingEnabled = !misc.disableBoneBreaking;
+                        ModernToggle("Bone Breaking", ref boneBreakingEnabled, "misc_bone_breaking");
+                        bool disableBoneBreaking = !boneBreakingEnabled;
+                        if (disableBoneBreaking != misc.disableBoneBreaking)
+                        {
+                            misc.disableBoneBreaking = disableBoneBreaking;
+                            Mods.Misc.ApplyBoneBreakingState(true);
+                        }
+                        if (boneBreakingEnabled)
+                        {
+                            float previousBoneBreakingStrength = misc.boneBreakingStrength;
+                            Slider("Bone Strength", ref misc.boneBreakingStrength, 1f, 0.25f, 5f);
+                            if (!Mathf.Approximately(previousBoneBreakingStrength, misc.boneBreakingStrength))
+                                Mods.Misc.ApplyBoneBreakingState(true);
+                        }
                         ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
 
                         BeginToolbar();
@@ -877,9 +892,6 @@ namespace rowemod
             {
                 Event currentEvent = Event.current;
                 if (currentEvent == null || currentEvent.type != EventType.ScrollWheel)
-                    return;
-
-                if (currentTab == Tab.Tricks)
                     return;
 
                 Rect contentRect = GetContentVisibleRect();

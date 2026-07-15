@@ -402,6 +402,7 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                Misc.ApplyBoneBreakingState(true);
                 rowemod.Challenges.MultiplayerChallengeManager.OnLocalPlayerSpawned(go);
                 Memory.LoadAllAssetBundles();
                 Misc.ApplyPlayerUserNameTargetsVisibility(true);
