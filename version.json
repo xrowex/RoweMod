@@ -1,8 +1,8 @@
 {
-    "version":  "3.1.4",
+    "version":  "3.2",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "5efab053d18e34135fa38746189bc2f404befa0d345f135da586fe5a6b86d9f7",
+    "sha256":  "f9be4acff8714abdc56808895042d5741b5233c231c55f3662b6930bb5037809",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Add Bone Breaking and Bone Strength controls to Misc. Improve Tricks with reachable pane scrolling, compact preset and IK controls, separate BMX and Scooter animation pickers, restored Bri Flip and Grand Slam mappings, and tighter IK preview cleanup. Add grind forced-pose diagnostics.",
+    "patchNotes":  "Performance: remove the IK editor, trick animation diagnostics, and recurring global trick scans. Saved trick overrides now refresh when game and trick state changes. Add optional nose-manual center-of-mass and rider-inertia tuning with COM, front-pivot, projection, and lever-arm debug visualization. Remove the experimental direct nose steering controls, release grace, and Hang 5/Hang On interception.",
     "requiredGameVersion":  ""
 }

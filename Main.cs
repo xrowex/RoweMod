@@ -18,13 +18,13 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.1.4", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.2", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.1.4";
+        public const string ModVersion = "3.2";
         private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -46,7 +46,6 @@ namespace rowemod
         {
             CreateModDirectories();
             HarmonyInstance.PatchAll();
-            TrickAnimationDiagnostics.Install(HarmonyInstance);
         }
         
         
@@ -219,6 +218,11 @@ namespace rowemod
                 rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
             GameEventListener.OnSceneInitialized(sceneName);
 
+            bool isGameplayScene =
+                !string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase);
+            TrickAnimationEditor.OnSceneInitialized(isGameplayScene);
+
             if (string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase))
             {
@@ -295,7 +299,6 @@ namespace rowemod
                     PieMenu.Update();
                 }
 
-                TrickAnimationDiagnostics.Update();
                 TrickAnimationEditor.Update();
                 TrickMods.Update();
                 Mods.Camera.Update();
@@ -337,6 +340,20 @@ namespace rowemod
 
             if (playableSceneLoaded && rMbCharacter)
                 TrickAnimationEditor.LateUpdate();
+        }
+
+        public override void OnFixedUpdate()
+        {
+            if (!_startupAccessGranted ||
+                !RemoteKillSwitched.isModEnabled ||
+                !playableSceneLoaded ||
+                !rMbCharacter)
+            {
+                Mods.Physics.ReleaseNoseManualTuning();
+                return;
+            }
+
+            Mods.Physics.UpdateNoseManualTuning();
         }
         
         public override void OnGUI()
@@ -707,6 +724,7 @@ namespace rowemod
 
         public override void OnDeinitializeMelon()
         {
+            Mods.Physics.ReleaseNoseManualTuning();
             DebugTools.Cleanup();
             rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
             if (EnablePieMenu)

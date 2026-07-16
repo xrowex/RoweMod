@@ -142,7 +142,6 @@ namespace rowemod.Mods
                     continue;
 
                 trickOverride.poseOverrides ??= new List<TrickPoseOverride>();
-                trickOverride.ikTargetOverrides ??= new List<TrickIkTargetOverride>();
             }
         }
 

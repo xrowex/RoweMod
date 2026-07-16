@@ -189,6 +189,8 @@ namespace rowemod.Mods
                 "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2",
                 "Rebuild", "Refresh", "Init", "Initialize", "Setup", "Build"
             );
+
+            TrickAnimationEditor.RequestRuntimeRefresh("trick runtime rebuilt");
         }
 
         // Toggle enabled -> disabled -> enabled on every instance of these types
@@ -497,19 +499,6 @@ namespace rowemod.Mods
             GUI.SetNextControlName("trickSearch");
             var newSearch = GUILayout.TextField(_uiSearch, _searchField, GUILayout.Width(240), GUILayout.Height(24));
             if (newSearch != _uiSearch) _uiSearch = newSearch;
-
-            bool animationDebugLogs = Config.trickAnimationDebugSettings.enabled;
-            bool updatedAnimationDebugLogs = GUILayout.Toggle(
-                animationDebugLogs,
-                animationDebugLogs ? "Logs On" : "Logs Off",
-                animationDebugLogs ? _pillOn : _pill,
-                GUILayout.Width(84),
-                GUILayout.Height(24));
-            if (updatedAnimationDebugLogs != Config.trickAnimationDebugSettings.enabled)
-            {
-                Config.trickAnimationDebugSettings.enabled = updatedAnimationDebugLogs;
-                Config.Save();
-            }
 
             GUILayout.FlexibleSpace();
 
@@ -969,6 +958,7 @@ namespace rowemod.Mods
             _tricksTabActive = true;
             _tricksNoBailRestoreTime = -1f;
             _needsAutoSelectTrick = GetSelectedAnimationData() == null;
+            TrickAnimationEditor.RequestRuntimeRefresh("Tricks tab entered", true);
             EnableTricksNoBailOverride();
         }
 

@@ -506,7 +506,6 @@
 		<Compile Include="Mods\RoweGutFaceFmodDiagnostics.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
-		<Compile Include="Mods\TrickAnimationDiagnostics.cs" />
 		<Compile Include="Mods\TrickAnimationEditor.cs" />
 		<Compile Include="Mods\TrickMods.cs" />
 		<Compile Include="Mods\TrickPreset.cs" />

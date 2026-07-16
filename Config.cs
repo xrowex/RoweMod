@@ -21,6 +21,13 @@ namespace rowemod
         public float steerDamp;
         public float manualAngle;
         public float noseManualAngle;
+        public bool noseManualTurnTuning;
+        public float noseManualChassisComForwardOffset;
+        public float noseManualChassisComVerticalOffset;
+        public float noseManualDriverComForwardOffset;
+        public float noseManualDriverComVerticalOffset;
+        public float noseManualComTurnLean;
+        public float noseManualDriverInertiaMultiplier;
         public float spinMultiplier;
         public float sideHopPower;
         public float vertAssistCorrectionStrength;
@@ -151,7 +158,6 @@ namespace rowemod
 
     public class TrickAnimationDebugSettings
     {
-        public bool enabled { get; set; } = true;
         public bool editorEnabled { get; set; } = true;
         public Dictionary<string, TrickAnimationOverride> overrides { get; set; } = new Dictionary<string, TrickAnimationOverride>();
     }
@@ -185,7 +191,6 @@ namespace rowemod
         public string vehicleMirrorTweakClip { get; set; }
         public string vehicleMirrorExitClip { get; set; }
         public List<TrickPoseOverride> poseOverrides { get; set; } = new List<TrickPoseOverride>();
-        public List<TrickIkTargetOverride> ikTargetOverrides { get; set; } = new List<TrickIkTargetOverride>();
     }
 
     public class TrickPoseOverride
@@ -196,21 +201,6 @@ namespace rowemod
         public SerializableVector3 localRotationEuler { get; set; } = new SerializableVector3(0f, 0f, 0f);
         public SerializableVector3 localPositionOffset { get; set; } = new SerializableVector3(0f, 0f, 0f);
         public float weight { get; set; } = 1f;
-    }
-
-    public class TrickIkTargetOverride
-    {
-        public bool enabled { get; set; } = true;
-        public string phase { get; set; } = "Any";
-        public string goal { get; set; } = "LeftHand";
-        public int targetId { get; set; } = -1;
-        public bool activateTarget { get; set; } = true;
-        public SerializableVector3 localPositionOffset { get; set; } = new SerializableVector3(0f, 0f, 0f);
-        public SerializableVector3 localRotationEuler { get; set; } = new SerializableVector3(0f, 0f, 0f);
-        public float offsetWeight { get; set; } = 1f;
-        public float humanIkWeight { get; set; } = 1f;
-        public float limbPositionWeight { get; set; } = 1f;
-        public float limbRotationWeight { get; set; } = 1f;
     }
 
     public class TrickEntry
@@ -270,6 +260,13 @@ namespace rowemod
             steerDamp = 5.0f,
             manualAngle = 30f,
             noseManualAngle = 30f,
+            noseManualTurnTuning = false,
+            noseManualChassisComForwardOffset = 0f,
+            noseManualChassisComVerticalOffset = 0f,
+            noseManualDriverComForwardOffset = 0f,
+            noseManualDriverComVerticalOffset = 0f,
+            noseManualComTurnLean = 0f,
+            noseManualDriverInertiaMultiplier = 1f,
             spinMultiplier = 1f,
             sideHopPower = 1f,
             vertAssistCorrectionStrength = 30f,
@@ -477,6 +474,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"showPlayerUserNameTargets\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasBoneBreakingStrength =
                 jsonContent.IndexOf("\"boneBreakingStrength\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasNoseManualComTuning =
+                jsonContent.IndexOf("\"noseManualDriverInertiaMultiplier\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasAutoSkipIntro =
                 jsonContent.IndexOf("\"autoSkipIntro\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasChallengeRuntimeSettings =
@@ -493,6 +492,24 @@ namespace rowemod
 
             // Assign values from JSON, preserving defaults if fields are missing
             physics = jsonData.physicsData;
+            if (!hasNoseManualComTuning)
+            {
+                physics.noseManualChassisComForwardOffset = 0f;
+                physics.noseManualChassisComVerticalOffset = 0f;
+                physics.noseManualDriverComForwardOffset = 0f;
+                physics.noseManualDriverComVerticalOffset = 0f;
+                physics.noseManualComTurnLean = 0f;
+                physics.noseManualDriverInertiaMultiplier = 1f;
+            }
+            else
+            {
+                physics.noseManualChassisComForwardOffset = Math.Max(-1f, Math.Min(1f, physics.noseManualChassisComForwardOffset));
+                physics.noseManualChassisComVerticalOffset = Math.Max(-1f, Math.Min(1f, physics.noseManualChassisComVerticalOffset));
+                physics.noseManualDriverComForwardOffset = Math.Max(-1f, Math.Min(1f, physics.noseManualDriverComForwardOffset));
+                physics.noseManualDriverComVerticalOffset = Math.Max(-1f, Math.Min(1f, physics.noseManualDriverComVerticalOffset));
+                physics.noseManualComTurnLean = Math.Max(-0.5f, Math.Min(0.5f, physics.noseManualComTurnLean));
+                physics.noseManualDriverInertiaMultiplier = Math.Max(0.25f, Math.Min(3f, physics.noseManualDriverInertiaMultiplier));
+            }
             character = new CustomCharacter
             {
                 lastLoadedPresetCharacter = jsonData.customCharacterData.lastLoadedPresetCharacter,
@@ -564,20 +581,6 @@ namespace rowemod
                     poseOverride.bone ??= "Hips";
                     if (poseOverride.weight <= 0f)
                         poseOverride.weight = 1f;
-                }
-
-                trickOverride.ikTargetOverrides ??= new List<TrickIkTargetOverride>();
-                foreach (TrickIkTargetOverride ikOverride in trickOverride.ikTargetOverrides)
-                {
-                    if (ikOverride == null)
-                        continue;
-
-                    ikOverride.phase ??= "Any";
-                    ikOverride.goal ??= "LeftHand";
-                    ikOverride.offsetWeight = Clamp01OrDefault(ikOverride.offsetWeight, 1f);
-                    ikOverride.humanIkWeight = Clamp01OrDefault(ikOverride.humanIkWeight, 1f);
-                    ikOverride.limbPositionWeight = Clamp01OrDefault(ikOverride.limbPositionWeight, 1f);
-                    ikOverride.limbRotationWeight = Clamp01OrDefault(ikOverride.limbRotationWeight, 1f);
                 }
             }
             if (string.IsNullOrWhiteSpace(updaterSettings.manifestUrl))
@@ -679,6 +682,13 @@ namespace rowemod
                 steerDamp = 5.0f,
                 manualAngle = 30f,
                 noseManualAngle = 30f,
+                noseManualTurnTuning = false,
+                noseManualChassisComForwardOffset = 0f,
+                noseManualChassisComVerticalOffset = 0f,
+                noseManualDriverComForwardOffset = 0f,
+                noseManualDriverComVerticalOffset = 0f,
+                noseManualComTurnLean = 0f,
+                noseManualDriverInertiaMultiplier = 1f,
                 spinMultiplier = 1f,
                 sideHopPower = 1f,
                 vertAssistCorrectionStrength = 30f,

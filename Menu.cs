@@ -437,6 +437,18 @@ namespace rowemod
                         DrawSectionTitle("Manuals");
                         Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
                         Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
+                        ModernToggle("Nose Manual COM / Inertia Tuning", ref physics.noseManualTurnTuning);
+                        if (physics.noseManualTurnTuning)
+                        {
+                            DrawSectionTitle("Nose Manual Center Of Mass");
+                            GUILayout.Label("Offsets are local to the bike and restore after the physical nose pivot ends. Turn Lean shifts the rider sideways with steering input.", UiMutedWrappedStyle);
+                            Slider("Chassis COM Forward", ref physics.noseManualChassisComForwardOffset, 0f, -1f, 1f);
+                            Slider("Chassis COM Height", ref physics.noseManualChassisComVerticalOffset, 0f, -1f, 1f);
+                            Slider("Rider COM Forward", ref physics.noseManualDriverComForwardOffset, 0f, -1f, 1f);
+                            Slider("Rider COM Height", ref physics.noseManualDriverComVerticalOffset, 0f, -1f, 1f);
+                            Slider("Rider COM Turn Lean", ref physics.noseManualComTurnLean, 0f, -0.5f, 0.5f);
+                            Slider("Nose Rider Inertia", ref physics.noseManualDriverInertiaMultiplier, 1f, 0.25f, 3f);
+                        }
 
                         DrawSectionTitle("Motor Tuning");
                         GUILayout.Label("Per-vehicle tuning is opt-in. Disabled vehicles use the global speed settings on the left.", UiMutedWrappedStyle);
