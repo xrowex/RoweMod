@@ -24,12 +24,10 @@ namespace rowemod.Mods
         private static Vector2 selectedTrickScroll;
         private static Vector2 poseScroll;
         private static bool showClipDetails;
-        private static bool showAdvancedFlags;
-        private static bool showClipCopyTools = true;
+        private static bool showAdvancedControls;
         private static bool showPoseOverlayTools;
         private static string clipSourceSearch = string.Empty;
         private static string trickCatalogSearch = string.Empty;
-        private static int selectedClipSourceIndex = -1;
         private static int selectedTrickCatalogIndex = -1;
         private static string selectedTrickCatalogKey = string.Empty;
         private static string status = "Throw a trick to load animation data.";
@@ -47,9 +45,7 @@ namespace rowemod.Mods
         private static GUIStyle smallButtonStyle;
         private static GUIStyle panelAltStyle;
         private static GUIStyle rowButtonStyle;
-        private static GUIStyle saveButtonStyle;
         private static GUIStyle clipSourceButtonStyle;
-        private static GUIStyle clipSourceSelectedButtonStyle;
         private static GUIStyle searchFieldStyle;
         private static int styleRevision = -1;
 
@@ -66,6 +62,20 @@ namespace rowemod.Mods
         private static bool trickCatalogDirty = true;
         private static bool clipSourceCatalogDirty = true;
         private static string runtimeRefreshReason = "startup";
+        private static SyncTrickAnimationData pendingAutoSaveData;
+        private static string pendingAutoSaveKey = string.Empty;
+        private static string pendingAutoSaveName = string.Empty;
+        private static float pendingAutoSaveAt;
+        private const float AutoSaveDelay = 0.4f;
+
+        private static bool animationSourcePickerOpen;
+        private static bool animationSourcePickerScooter;
+        private static bool animationSourceCopyPlayer;
+        private static bool animationSourceCopyVehicle;
+        private static SyncTrickAnimationData animationSourceTarget;
+        private static Vector2 animationSourcePickerScroll;
+        private static Rect animationSourcePickerRect = new Rect(0f, 0f, 540f, 500f);
+        private const int AnimationSourcePickerWindowId = 0x31A501;
 
         private static readonly string[] PhaseOptions = { "Any", "Enter", "Tweak", "Loop", "Exit" };
 
@@ -105,6 +115,7 @@ namespace rowemod.Mods
         public static void Update()
         {
             EnsureSettings();
+            ProcessPendingAutoSave();
             if (!Config.trickAnimationDebugSettings.editorEnabled)
             {
                 RestorePoseOverlays();
@@ -146,6 +157,18 @@ namespace rowemod.Mods
             activePoseDataKey = string.Empty;
         }
 
+        public static void CloseTricksUi()
+        {
+            if (pendingAutoSaveData != null)
+            {
+                pendingAutoSaveAt = 0f;
+                ProcessPendingAutoSave();
+            }
+
+            animationSourcePickerOpen = false;
+            animationSourceTarget = null;
+        }
+
         public static void OnSceneInitialized(bool gameplayScene)
         {
             RestorePoseOverlays();
@@ -172,6 +195,11 @@ namespace rowemod.Mods
             runtimeRefreshRequested = false;
             runtimeRefreshIncludeAllLoadedData = false;
             runtimeRefreshReason = string.Empty;
+            pendingAutoSaveData = null;
+            pendingAutoSaveKey = string.Empty;
+            pendingAutoSaveName = string.Empty;
+            animationSourcePickerOpen = false;
+            animationSourceTarget = null;
 
             if (gameplayScene)
                 RequestRuntimeRefresh("gameplay scene initialized");
@@ -325,6 +353,8 @@ namespace rowemod.Mods
             if (data == null)
                 return;
 
+            ProcessPendingAutoSave();
+
             string trickName = TrickName(data);
             if (!string.IsNullOrWhiteSpace(title))
                 GUILayout.Label(title, headerStyle);
@@ -332,16 +362,20 @@ namespace rowemod.Mods
 
             bool changed = false;
             changed |= DrawFloatSlider("Overall Speed", data._overallSpeedMult, 0.05f, 10f, v => data._overallSpeedMult = v);
-            changed |= DrawFloatSlider("Enter Speed", data._enterSpeedMult, 0.05f, 5f, v => data._enterSpeedMult = v);
-            GUILayout.Label($"Derived Loop Speed: {SafeRead(() => data.LoopSpeedMult, 1f):0.###}", mutedStyle);
-            changed |= DrawFloatSlider("Loop Mult", data._loopMult, 0.05f, 5f, v => data._loopMult = v);
-            changed |= DrawFloatSlider("Tweak Speed", data._tweakSpeedMult, 0.05f, 10f, v => data._tweakSpeedMult = v);
-            changed |= DrawFloatSlider("Exit Speed", data._exitSpeedMult, 0.05f, 5f, v => data._exitSpeedMult = v);
-            changed |= DrawFloatSlider("Tweak Blend At", data._tweakBeginBlendNormalizedTime, 0f, 1f, v => data._tweakBeginBlendNormalizedTime = v);
 
-            showAdvancedFlags = GUILayout.Toggle(showAdvancedFlags, showAdvancedFlags ? "v Advanced Flags" : "> Advanced Flags", headerStyle);
-            if (showAdvancedFlags)
+            showAdvancedControls = GUILayout.Toggle(
+                showAdvancedControls,
+                showAdvancedControls ? "v Advanced Timing & Flags" : "> Advanced Timing & Flags",
+                headerStyle);
+            if (showAdvancedControls)
             {
+                changed |= DrawFloatSlider("Enter Speed", data._enterSpeedMult, 0.05f, 5f, v => data._enterSpeedMult = v);
+                GUILayout.Label($"Derived Loop Speed: {SafeRead(() => data.LoopSpeedMult, 1f):0.###}", mutedStyle);
+                changed |= DrawFloatSlider("Loop Mult", data._loopMult, 0.05f, 5f, v => data._loopMult = v);
+                changed |= DrawFloatSlider("Tweak Speed", data._tweakSpeedMult, 0.05f, 10f, v => data._tweakSpeedMult = v);
+                changed |= DrawFloatSlider("Exit Speed", data._exitSpeedMult, 0.05f, 5f, v => data._exitSpeedMult = v);
+                changed |= DrawFloatSlider("Tweak Blend At", data._tweakBeginBlendNormalizedTime, 0f, 1f, v => data._tweakBeginBlendNormalizedTime = v);
+
                 bool onlyAir = data._onlyFireIfInAir;
                 bool nextOnlyAir = GUILayout.Toggle(onlyAir, "Only Fire If In Air");
                 if (nextOnlyAir != onlyAir)
@@ -362,24 +396,26 @@ namespace rowemod.Mods
             if (changed)
             {
                 suppressAutoApplyUntil = Time.unscaledTime + 5f;
-                status = $"Edited {trickName}. Changes are live in memory.";
+                ScheduleAutoSave(data, dataKey, trickName);
             }
 
             Menu.BeginToolbar();
-            if (GUILayout.Button("SAVE", saveButtonStyle, GUILayout.Width(110f), GUILayout.Height(26f)))
-                SaveAnimationOverride(data, dataKey, $"Saved animation override for {trickName}.");
-
-            if (Menu.DangerButton("RESET", GUILayout.Width(110f), GUILayout.Height(26f)))
+            if (Menu.DangerButton("Reset Trick Animation", GUILayout.Width(158f), GUILayout.Height(26f)))
                 ResetAnimationOverride(data, dataKey, trickName);
 
             bool hasSavedOverride = Config.trickAnimationDebugSettings.overrides.ContainsKey(dataKey);
-            GUILayout.Label(hasSavedOverride ? "Saved override active." : "No saved override yet.", mutedStyle, GUILayout.Height(24f));
+            bool savePending = pendingAutoSaveData != null &&
+                string.Equals(pendingAutoSaveKey, dataKey, System.StringComparison.OrdinalIgnoreCase);
+            GUILayout.Label(
+                savePending ? "Saving changes..." : hasSavedOverride ? "Saved" : "Using game defaults",
+                mutedStyle,
+                GUILayout.Height(24f));
             Menu.EndToolbar();
 
             DrawClipCopyTools(data);
 
             GUILayout.Space(8);
-            showClipDetails = GUILayout.Toggle(showClipDetails, showClipDetails ? "v Animation Clips" : "> Animation Clips", headerStyle);
+            showClipDetails = GUILayout.Toggle(showClipDetails, showClipDetails ? "v Clip Details" : "> Clip Details", headerStyle);
             if (showClipDetails)
             {
                 DrawClipInfo("Player Enter", SafeRead(() => data.PlayerEnterClip, null));
@@ -891,161 +927,139 @@ namespace rowemod.Mods
 
         private static void DrawClipCopyTools(SyncTrickAnimationData target)
         {
-            Menu.BeginAltPane("Quick Animation Picker", "Pick a source trick, then replace this trick's human animation, bike animation, or both.");
-            showClipCopyTools = GUILayout.Toggle(
-                showClipCopyTools,
-                showClipCopyTools ? "Hide Picker" : "Show Picker",
-                showClipCopyTools ? Menu.UiPillActiveStyle : Menu.UiPillStyle,
-                GUILayout.Width(110f),
-                GUILayout.Height(24f));
-            if (!showClipCopyTools)
-            {
-                Menu.EndPane();
-                return;
-            }
-
+            Menu.BeginAltPane("Animation Source", "Copy human or bike clips from another loaded trick.");
             EnsureClipSourceCatalog(false);
-
-            Menu.BeginToolbar();
-            Menu.SearchRow(ref clipSourceSearch, 220f, "Search");
-            if (Menu.SecondaryButton("Refresh", GUILayout.Width(80f), GUILayout.Height(24f)))
-                EnsureClipSourceCatalog(true);
-            Menu.EndToolbar();
 
             if (clipSources.Count == 0)
             {
                 GUILayout.Label("No loaded SyncTrickAnimationData sources found yet.", mutedStyle);
+                if (Menu.SecondaryButton("Refresh Sources", GUILayout.Width(120f), GUILayout.Height(24f)))
+                    EnsureClipSourceCatalog(true);
                 Menu.EndPane();
                 return;
             }
 
+            GUILayout.Label($"Human clips: {ClipSummary(SafeRead(() => target.PlayerEnterClip, null))}", mutedStyle);
+            GUILayout.Label($"Bike clips: {ClipSummary(SafeRead(() => target.VehicleEnterClip, null))}", mutedStyle);
+            Menu.BeginToolbar();
+            if (Menu.SecondaryButton("Change Human", GUILayout.Width(120f), GUILayout.Height(24f)))
+                OpenAnimationSourcePicker(target, true, false);
+            if (Menu.SecondaryButton("Change Bike", GUILayout.Width(110f), GUILayout.Height(24f)))
+                OpenAnimationSourcePicker(target, false, true);
+            if (Menu.PrimaryButton("Change Both", GUILayout.Width(110f), GUILayout.Height(24f)))
+                OpenAnimationSourcePicker(target, true, true);
+            Menu.EndToolbar();
+            GUILayout.Label("Selecting a source copies and saves the chosen clips immediately.", mutedStyle);
+            Menu.EndPane();
+        }
+
+        public static void DrawAnimationSourcePickerPopup()
+        {
+            if (!animationSourcePickerOpen || animationSourceTarget == null)
+                return;
+
+            EnsureSettings();
+            InitStyles();
+            if (Event.current.type == EventType.MouseDown && !animationSourcePickerRect.Contains(Event.current.mousePosition))
+            {
+                animationSourcePickerOpen = false;
+                return;
+            }
+
+            animationSourcePickerRect.x = Mathf.Clamp(animationSourcePickerRect.x, 10f, Mathf.Max(10f, Screen.width - animationSourcePickerRect.width - 10f));
+            animationSourcePickerRect.y = Mathf.Clamp(animationSourcePickerRect.y, 10f, Mathf.Max(10f, Screen.height - animationSourcePickerRect.height - 10f));
+            animationSourcePickerRect = GUI.Window(
+                AnimationSourcePickerWindowId,
+                animationSourcePickerRect,
+                (GUI.WindowFunction)DrawAnimationSourcePickerWindow,
+                "Animation Source");
+        }
+
+        private static void OpenAnimationSourcePicker(SyncTrickAnimationData target, bool copyPlayer, bool copyVehicle)
+        {
+            if (target == null)
+                return;
+
+            EnsureClipSourceCatalog(false);
+            animationSourceTarget = target;
+            animationSourceCopyPlayer = copyPlayer;
+            animationSourceCopyVehicle = copyVehicle;
+            animationSourcePickerScroll = Vector2.zero;
+            clipSourceSearch = string.Empty;
+            animationSourcePickerRect = new Rect(
+                Mathf.Max(10f, (Screen.width - 540f) * 0.5f),
+                Mathf.Max(10f, (Screen.height - 500f) * 0.5f),
+                540f,
+                500f);
+            animationSourcePickerOpen = true;
+        }
+
+        private static void DrawAnimationSourcePickerWindow(int id)
+        {
+            GUILayout.BeginVertical(cardStyle);
+            string mode = animationSourceCopyPlayer && animationSourceCopyVehicle
+                ? "human and bike"
+                : animationSourceCopyPlayer ? "human" : "bike";
+            GUILayout.Label($"Copy {mode} animation into {TrickName(animationSourceTarget)}", headerStyle);
+            GUILayout.Label("Choose a source trick. The replacement saves immediately.", mutedStyle);
+
+            Menu.BeginToolbar();
+            Menu.SearchRow(ref clipSourceSearch, 280f, "Search");
+            if (Menu.SecondaryButton("Refresh", GUILayout.Width(72f), GUILayout.Height(24f)))
+                EnsureClipSourceCatalog(true);
+            if (Menu.DangerButton("Close", GUILayout.Width(64f), GUILayout.Height(24f)))
+                animationSourcePickerOpen = false;
+            Menu.EndToolbar();
+
+            Menu.BeginToolbar();
+            if (GUILayout.Toggle(!animationSourcePickerScooter, "BMX", !animationSourcePickerScooter ? Menu.UiPillActiveStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
+            {
+                if (animationSourcePickerScooter)
+                    animationSourcePickerScroll = Vector2.zero;
+                animationSourcePickerScooter = false;
+            }
+            if (GUILayout.Toggle(animationSourcePickerScooter, "Scooter", animationSourcePickerScooter ? Menu.UiPillActiveStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
+            {
+                if (!animationSourcePickerScooter)
+                    animationSourcePickerScroll = Vector2.zero;
+                animationSourcePickerScooter = true;
+            }
+            Menu.EndToolbar();
+
             string search = (clipSourceSearch ?? string.Empty).Trim();
-            List<int> matchingSourceIndices = new List<int>(clipSources.Count);
+            int matches = 0;
+            animationSourcePickerScroll = GUILayout.BeginScrollView(animationSourcePickerScroll, GUILayout.Height(330f));
             for (int i = 0; i < clipSources.Count; i++)
             {
                 SyncTrickAnimationData source = clipSources[i];
-                if (source == null)
+                if (source == null || source == animationSourceTarget || IsScooterAnimationSource(source) != animationSourcePickerScooter)
                     continue;
 
                 string sourceName = TrickName(source);
                 if (search.Length > 0 && sourceName.IndexOf(search, System.StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
 
-                matchingSourceIndices.Add(i);
+                matches++;
+                if (GUILayout.Button(sourceName, clipSourceButtonStyle, GUILayout.Height(28f), GUILayout.ExpandWidth(true)))
+                {
+                    CopyClipsFromSource(source, animationSourceTarget, animationSourceCopyPlayer, animationSourceCopyVehicle);
+                    animationSourcePickerOpen = false;
+                }
             }
+            if (matches == 0)
+                GUILayout.Label(search.Length > 0 ? "No source tricks match this search." : "No sources are available in this category.", mutedStyle);
+            GUILayout.EndScrollView();
 
-            if (matchingSourceIndices.Count == 0)
-            {
-                GUILayout.Label(search.Length > 0 ? "No source tricks match the search." : "No source tricks available.", mutedStyle);
-            }
-            else
-            {
-                if (selectedClipSourceIndex < 0 || !matchingSourceIndices.Contains(selectedClipSourceIndex))
-                    selectedClipSourceIndex = matchingSourceIndices[0];
-
-                SyncTrickAnimationData previewSelectedSource = GetSelectedClipSource();
-                GUILayout.Label(
-                    $"Showing {matchingSourceIndices.Count} source trick{(matchingSourceIndices.Count == 1 ? string.Empty : "s")}. Selected: {TrickName(previewSelectedSource)}",
-                    mutedStyle);
-
-                DrawClipSourceGrid(matchingSourceIndices);
-            }
-
-            SyncTrickAnimationData selectedSource = GetSelectedClipSource();
-            if (selectedSource == null)
-            {
-                GUILayout.Label("Select a source trick to copy clips from.", mutedStyle);
-                Menu.EndPane();
-                return;
-            }
-
-            GUILayout.Label($"Source: {TrickName(selectedSource)}", mutedStyle);
-            Menu.BeginToolbar();
-            if (Menu.PrimaryButton("Use Human Animation", GUILayout.Width(160f), GUILayout.Height(24f)))
-                CopyClipsFromSource(selectedSource, target, true, false);
-            if (Menu.PrimaryButton("Use Bike Animation", GUILayout.Width(155f), GUILayout.Height(24f)))
-                CopyClipsFromSource(selectedSource, target, false, true);
-            if (Menu.PrimaryButton("Use Both", GUILayout.Width(95f), GUILayout.Height(24f)))
-                CopyClipsFromSource(selectedSource, target, true, true);
-            Menu.EndToolbar();
-            GUILayout.Label("Animation replacements auto-save immediately. Use RESET above to remove the saved override.", mutedStyle);
-            Menu.EndPane();
+            GUILayout.EndVertical();
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
         }
 
-        private static void DrawClipSourceGrid(List<int> sourceIndices)
+        private static string ClipSummary(AnimationClip clip)
         {
-            if (sourceIndices == null || sourceIndices.Count == 0)
-                return;
+            if (clip == null)
+                return "game default / unavailable";
 
-            List<int> bmxSources = new List<int>();
-            List<int> scooterSources = new List<int>();
-
-            for (int i = 0; i < sourceIndices.Count; i++)
-            {
-                int sourceIndex = sourceIndices[i];
-                SyncTrickAnimationData source = sourceIndex >= 0 && sourceIndex < clipSources.Count ? clipSources[sourceIndex] : null;
-                if (source == null)
-                    continue;
-
-                if (IsScooterAnimationSource(source))
-                    scooterSources.Add(sourceIndex);
-                else
-                    bmxSources.Add(sourceIndex);
-            }
-
-            DrawClipSourceSelector("BMX", bmxSources);
-            GUILayout.Space(4f);
-            DrawClipSourceSelector("Scooter", scooterSources);
-        }
-
-        private static void DrawClipSourceSelector(string title, List<int> sourceIndices)
-        {
-            GUILayout.BeginHorizontal(panelAltStyle);
-            GUILayout.Label($"{title} ({sourceIndices.Count})", mutedStyle, GUILayout.Width(95f));
-
-            if (sourceIndices.Count == 0)
-            {
-                GUILayout.Label("No matches.", mutedStyle, GUILayout.ExpandWidth(true));
-                GUILayout.EndHorizontal();
-                return;
-            }
-
-            int localIndex = GetLocalClipSourceIndex(sourceIndices);
-            int sourceIndex = sourceIndices[localIndex];
-
-            if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28f), GUILayout.Height(24f)))
-                selectedClipSourceIndex = sourceIndices[WrapIndex(localIndex - 1, sourceIndices.Count)];
-
-            SyncTrickAnimationData source = sourceIndex >= 0 && sourceIndex < clipSources.Count ? clipSources[sourceIndex] : null;
-            string sourceName = TrickName(source);
-            bool selected = sourceIndex == selectedClipSourceIndex;
-            if (GUILayout.Button(sourceName, selected ? clipSourceSelectedButtonStyle : clipSourceButtonStyle, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
-                selectedClipSourceIndex = sourceIndex;
-
-            if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28f), GUILayout.Height(24f)))
-                selectedClipSourceIndex = sourceIndices[WrapIndex(localIndex + 1, sourceIndices.Count)];
-
-            GUILayout.EndHorizontal();
-        }
-
-        private static int GetLocalClipSourceIndex(List<int> sourceIndices)
-        {
-            if (sourceIndices == null || sourceIndices.Count == 0)
-                return 0;
-
-            int index = sourceIndices.IndexOf(selectedClipSourceIndex);
-            return index >= 0 ? index : 0;
-        }
-
-        private static int WrapIndex(int index, int count)
-        {
-            if (count <= 0)
-                return 0;
-            if (index < 0)
-                return count - 1;
-            if (index >= count)
-                return 0;
-            return index;
+            return string.IsNullOrWhiteSpace(clip.name) ? "unnamed clip" : clip.name;
         }
 
         private static bool IsScooterAnimationSource(SyncTrickAnimationData source)
@@ -1255,9 +1269,54 @@ namespace rowemod.Mods
             Log.Msg($"[TrickAnimEditor] Copied {label} clips from {TrickName(source)} to {TrickName(target)}.");
         }
 
+        private static void ScheduleAutoSave(SyncTrickAnimationData data, string dataKey, string trickName)
+        {
+            if (pendingAutoSaveData != null &&
+                !string.Equals(pendingAutoSaveKey, dataKey, System.StringComparison.OrdinalIgnoreCase))
+            {
+                pendingAutoSaveAt = 0f;
+                ProcessPendingAutoSave();
+            }
+
+            pendingAutoSaveData = data;
+            pendingAutoSaveKey = dataKey ?? string.Empty;
+            pendingAutoSaveName = trickName ?? "trick";
+            pendingAutoSaveAt = Time.unscaledTime + AutoSaveDelay;
+            status = $"Saving {pendingAutoSaveName}...";
+        }
+
+        private static void ProcessPendingAutoSave()
+        {
+            if (pendingAutoSaveData == null || Time.unscaledTime < pendingAutoSaveAt)
+                return;
+
+            SyncTrickAnimationData data = pendingAutoSaveData;
+            string dataKey = pendingAutoSaveKey;
+            string trickName = pendingAutoSaveName;
+            pendingAutoSaveData = null;
+            pendingAutoSaveKey = string.Empty;
+            pendingAutoSaveName = string.Empty;
+
+            SaveAnimationOverride(data, dataKey, $"Saved animation changes for {trickName}.");
+        }
+
+        private static void ClearPendingAutoSave(string dataKey)
+        {
+            if (pendingAutoSaveData == null ||
+                !string.Equals(pendingAutoSaveKey, dataKey, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            pendingAutoSaveData = null;
+            pendingAutoSaveKey = string.Empty;
+            pendingAutoSaveName = string.Empty;
+        }
+
         private static void SaveAnimationOverride(SyncTrickAnimationData data, string dataKey, string message)
         {
             EnsureSettings();
+            ClearPendingAutoSave(dataKey);
             Config.trickAnimationDebugSettings.overrides[dataKey] = CaptureOverride(data, dataKey);
             RegisterRuntimeData(data, false);
             ApplySavedOverrideToCachedKey(dataKey);
@@ -1269,6 +1328,7 @@ namespace rowemod.Mods
         private static void ResetAnimationOverride(SyncTrickAnimationData data, string dataKey, string trickName)
         {
             EnsureSettings();
+            ClearPendingAutoSave(dataKey);
             bool removed = Config.trickAnimationDebugSettings.overrides.Remove(dataKey);
             RegisterRuntimeData(data, false);
             Config.Save();
@@ -1441,18 +1501,8 @@ namespace rowemod.Mods
             }
 
             clipSources.Sort((a, b) => string.Compare(TrickName(a), TrickName(b), System.StringComparison.OrdinalIgnoreCase));
-            if (selectedClipSourceIndex >= clipSources.Count)
-                selectedClipSourceIndex = clipSources.Count - 1;
 
             clipSourceCatalogDirty = false;
-        }
-
-        private static SyncTrickAnimationData GetSelectedClipSource()
-        {
-            if (selectedClipSourceIndex < 0 || selectedClipSourceIndex >= clipSources.Count)
-                return null;
-
-            return clipSources[selectedClipSourceIndex];
         }
 
         private static SyncTrickAnimationData ResolveV2TrickData(TrickSystemBrainV2 brain, int setId, int slotId)
@@ -1899,18 +1949,6 @@ namespace rowemod.Mods
                 padding = new RectOffset(10, 10, 4, 4),
                 margin = new RectOffset(0, 0, 1, 1)
             };
-            saveButtonStyle = new GUIStyle(Menu.UiMiniButtonStyle)
-            {
-                fontStyle = FontStyle.Bold,
-                fontSize = 12,
-                padding = new RectOffset(10, 10, 4, 4)
-            };
-            saveButtonStyle.normal.background = Menu.MakeRoundedTex(64, 28, new Color(0.08f, 0.34f, 0.16f, 0.96f), 7, 1, new Color(0.25f, 0.86f, 0.42f, 0.8f));
-            saveButtonStyle.hover.background = Menu.MakeRoundedTex(64, 28, new Color(0.10f, 0.42f, 0.20f, 0.98f), 7, 1, new Color(0.36f, 1f, 0.55f, 0.9f));
-            saveButtonStyle.active.background = Menu.MakeRoundedTex(64, 28, new Color(0.06f, 0.28f, 0.13f, 0.98f), 7, 1, new Color(0.20f, 0.72f, 0.34f, 0.9f));
-            saveButtonStyle.normal.textColor = Color.white;
-            saveButtonStyle.hover.textColor = Color.white;
-            saveButtonStyle.active.textColor = Color.white;
             clipSourceButtonStyle = new GUIStyle(Menu.UiPillStyle)
             {
                 alignment = TextAnchor.MiddleCenter,
@@ -1919,16 +1957,6 @@ namespace rowemod.Mods
                 padding = new RectOffset(8, 8, 4, 4),
                 margin = new RectOffset(2, 2, 2, 2)
             };
-            clipSourceSelectedButtonStyle = new GUIStyle(clipSourceButtonStyle)
-            {
-                fontStyle = FontStyle.Bold
-            };
-            clipSourceSelectedButtonStyle.normal.background = Menu.MakeRoundedTex(64, 26, new Color(0.08f, 0.34f, 0.16f, 0.96f), 7, 1, new Color(0.25f, 0.86f, 0.42f, 0.8f));
-            clipSourceSelectedButtonStyle.hover.background = Menu.MakeRoundedTex(64, 26, new Color(0.10f, 0.42f, 0.20f, 0.98f), 7, 1, new Color(0.36f, 1f, 0.55f, 0.9f));
-            clipSourceSelectedButtonStyle.active.background = Menu.MakeRoundedTex(64, 26, new Color(0.06f, 0.28f, 0.13f, 0.98f), 7, 1, new Color(0.20f, 0.72f, 0.34f, 0.9f));
-            clipSourceSelectedButtonStyle.normal.textColor = Color.white;
-            clipSourceSelectedButtonStyle.hover.textColor = Color.white;
-            clipSourceSelectedButtonStyle.active.textColor = Color.white;
             searchFieldStyle = new GUIStyle(Menu.UiSearchFieldStyle)
             {
                 alignment = TextAnchor.MiddleLeft,

@@ -58,7 +58,6 @@ namespace rowemod.Mods
         private static string _pickerSearch = "";
 
         // Optional: a little style cache
-        private static GUIStyle _pickerBox, _pickerRow, _pickerSearchStyle;
         
         // Replace your DirectionGlyphMap with this:
         private static readonly Dictionary<string, string> DirectionGlyphMap = new()
@@ -281,7 +280,7 @@ namespace rowemod.Mods
             _pickerRect = ClampToScreen(_pickerRect, 10f);
 
             // Draw the floating popup window
-            _pickerRect = GUI.Window(PickerWindowId, _pickerRect, (GUI.WindowFunction)PickerWindow, "Trick Picker");
+            _pickerRect = GUI.Window(PickerWindowId, _pickerRect, (GUI.WindowFunction)PickerWindow, "Change Mapped Trick");
         }
 
         private static void PickerWindow(int id)
@@ -289,7 +288,17 @@ namespace rowemod.Mods
             // Dark background like your main cards
             GUILayout.BeginVertical(_card);   // instead of "box"
 
-            GUILayout.Label($"Replace Trick in {_pickerSet.name} [Slot {_pickerSlot}]", _cardHeader);
+            string currentName = string.Empty;
+            try
+            {
+                currentName = CleanTrickName(_pickerSet._dataList[(Index)_pickerSlot] as UnityEngine.Object);
+            }
+            catch
+            {
+                currentName = "Current trick";
+            }
+            GUILayout.Label($"{_selectedTrickDirection}: {currentName}", _cardHeader);
+            GUILayout.Label("Choose the trick assigned to this controller direction.", _rowLabelRight);
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search:", GUILayout.Width(60));
@@ -452,6 +461,10 @@ namespace rowemod.Mods
         private static string _presetName = "";
         private static string _selectedPresetName = "";
         private static string _presetStatus = "Save and restore trick toggles, replacements, and animation overrides.";
+        private static bool _presetsExpanded;
+        private static bool _compactShowEditor;
+        private static Vector2 _trickMapScroll;
+        private static Vector2 _selectedTrickScroll;
         private static readonly Dictionary<string, bool> _foldouts = new();
         private static readonly Dictionary<string, bool> _animationEditorFoldouts = new();
         private static bool _stylesInited;
@@ -495,16 +508,24 @@ namespace rowemod.Mods
                 Config.trickAnimationDebugSettings = new TrickAnimationDebugSettings();
 
             Menu.BeginToolbar();
-            GUILayout.Label("Search", _toolbarLabel, GUILayout.Width(54));
+            GUILayout.Label("Find a mapping", _toolbarLabel, GUILayout.Width(92));
             GUI.SetNextControlName("trickSearch");
             var newSearch = GUILayout.TextField(_uiSearch, _searchField, GUILayout.Width(240), GUILayout.Height(24));
             if (newSearch != _uiSearch) _uiSearch = newSearch;
 
-            GUILayout.FlexibleSpace();
+            string presetLabel = string.IsNullOrWhiteSpace(_selectedPresetName)
+                ? "Presets"
+                : $"Preset: {_selectedPresetName}";
+            if (Menu.SecondaryButton(
+                    _presetsExpanded ? "Hide Presets" : presetLabel,
+                    GUILayout.Width(160f),
+                    GUILayout.Height(24f)))
+            {
+                _presetsExpanded = !_presetsExpanded;
+            }
 
-            if (GUILayout.Button("Expand All", _miniBtn, GUILayout.Width(82), GUILayout.Height(24))) SetAllFoldouts(true);
-            if (GUILayout.Button("Collapse All", _miniBtn, GUILayout.Width(92), GUILayout.Height(24))) SetAllFoldouts(false);
-            if (GUILayout.Button("Reset Tricks", Menu.UiDangerButtonStyle, GUILayout.Width(96), GUILayout.Height(24))) ResetCustomTricks();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Reset All Tricks", Menu.UiDangerButtonStyle, GUILayout.Width(116), GUILayout.Height(24))) ResetCustomTricks();
             Menu.EndToolbar();
 
             EnsureTrickDataReadyForMenu();
@@ -519,14 +540,33 @@ namespace rowemod.Mods
             }
 
             float presetManagerHeight = GetTrickPresetManagerHeight();
-            DrawTrickPresetManager(presetManagerHeight);
+            if (_presetsExpanded)
+                DrawTrickPresetManager();
 
             float paneHeight = GetTricksTwoPaneHeight(presetManagerHeight);
-            GUILayout.BeginHorizontal();
-            DrawTrickListPane(paneHeight);
-            GUILayout.Space(8);
-            DrawSelectedTrickPane(paneHeight);
-            GUILayout.EndHorizontal();
+            bool compactLayout = Menu.windowRect.width < 1120f;
+            if (compactLayout)
+            {
+                Menu.BeginToolbar();
+                if (GUILayout.Toggle(!_compactShowEditor, "Input Map", !_compactShowEditor ? _pillOn : _pill, GUILayout.Width(110f), GUILayout.Height(24f)))
+                    _compactShowEditor = false;
+                if (GUILayout.Toggle(_compactShowEditor, "Trick Editor", _compactShowEditor ? _pillOn : _pill, GUILayout.Width(110f), GUILayout.Height(24f)))
+                    _compactShowEditor = true;
+                Menu.EndToolbar();
+
+                if (_compactShowEditor)
+                    DrawSelectedTrickPane(paneHeight);
+                else
+                    DrawTrickListPane(paneHeight, true);
+            }
+            else
+            {
+                GUILayout.BeginHorizontal();
+                DrawTrickListPane(paneHeight, false);
+                GUILayout.Space(8);
+                DrawSelectedTrickPane(paneHeight);
+                GUILayout.EndHorizontal();
+            }
 
             // final refresh once if anything changed this frame
             if (_pendingRefresh)
@@ -542,6 +582,9 @@ namespace rowemod.Mods
 
         private static float GetTrickPresetManagerHeight()
         {
+            if (!_presetsExpanded)
+                return 0f;
+
             List<string> presets = TrickPreset.GetAvailablePresets();
             return presets.Count == 0 ? 116f : 150f;
         }
@@ -556,13 +599,13 @@ namespace rowemod.Mods
             return Mathf.Max(180f, available);
         }
 
-        private static void DrawTrickPresetManager(float paneHeight)
+        private static void DrawTrickPresetManager()
         {
             List<string> presets = TrickPreset.GetAvailablePresets();
             if (string.IsNullOrEmpty(_selectedPresetName) && presets.Count > 0)
                 _selectedPresetName = presets[0];
 
-            Menu.BeginPane("Preset Manager", "Save the full Tricks tab state: enabled tricks, replacements, and animation speed/clip overrides.");
+            Menu.BeginPane("Trick Presets", "Save or restore the complete mapping and animation setup.");
 
             Menu.BeginToolbar();
             GUILayout.Label("Name", _toolbarLabel, GUILayout.Width(42f));
@@ -659,25 +702,34 @@ namespace rowemod.Mods
             _selectedPresetName = presets[index];
         }
 
-        private static void DrawTrickListPane(float paneHeight)
+        private static void DrawTrickListPane(float paneHeight, bool expandWidth)
         {
             float contentWidth = Mathf.Max(620f, Menu.windowRect.width - 180f);
-            float mapWidth = Mathf.Clamp(contentWidth * 0.52f, 560f, 760f);
-            GUILayout.BeginVertical(_card, GUILayout.Width(mapWidth), GUILayout.MinHeight(paneHeight));
+            float mapWidth = Mathf.Clamp(contentWidth * 0.40f, 430f, 620f);
+            GUILayoutOption widthOption = expandWidth ? GUILayout.ExpandWidth(true) : GUILayout.Width(mapWidth);
+            GUILayout.BeginVertical(_card, widthOption, GUILayout.Height(paneHeight));
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Trick Map", _cardHeader);
+            GUILayout.Label("Input Map", _cardHeader);
             GUILayout.FlexibleSpace();
-            GUILayout.Label("BMX only", _badge, GUILayout.Width(66));
+            if (GUILayout.Button("Expand", _miniBtn, GUILayout.Width(62), GUILayout.Height(22))) SetAllFoldouts(true);
+            if (GUILayout.Button("Collapse", _miniBtn, GUILayout.Width(68), GUILayout.Height(22))) SetAllFoldouts(false);
             GUILayout.EndHorizontal();
-            GUILayout.Label("Pick a direction row to edit, replace, or preview that trick.", _rowLabelRight);
+            GUILayout.Label("Select a direction to inspect or change its mapped trick.", _rowLabelRight);
             GUILayout.Space(8);
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Direction", _rowLabelLeft, GUILayout.Width(76));
             GUILayout.Label("Trick", _rowLabelLeft);
-            GUILayout.Label("Action", _rowLabelLeft, GUILayout.Width(64));
+            GUILayout.Label("On", _rowLabelLeft, GUILayout.Width(28));
             GUILayout.EndHorizontal();
+
+            _trickMapScroll = GUILayout.BeginScrollView(
+                _trickMapScroll,
+                false,
+                true,
+                GUILayout.ExpandWidth(true),
+                GUILayout.ExpandHeight(true));
 
             int visibleSetCount = 0;
             foreach (var set in rTrickSetData)
@@ -734,18 +786,15 @@ namespace rowemod.Mods
 
                         bool isSelected = IsSelectedTrick(setKey, i);
                         GUILayout.BeginHorizontal(isSelected ? _rowStripSelected : _rowStrip, GUILayout.Height(30));
-                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(18), GUILayout.Height(22));
                         DrawDirectionCell(dir, isSelected);
 
                         using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
                         {
-                            string rowLabel = isSelected ? $"Selected: {trickName}" : trickName;
-                            if (GUILayout.Button(rowLabel, isSelected ? _rowButtonSelected : _rowButton, GUILayout.MinWidth(150), GUILayout.Height(24)))
+                            if (GUILayout.Button(trickName, isSelected ? _rowButtonSelected : _rowButton, GUILayout.MinWidth(150), GUILayout.Height(24)))
                                 SelectTrick(set, i, dir, trickName);
                         }
 
-                        if (GUILayout.Button("Replace", _miniBtn, GUILayout.Width(64), GUILayout.Height(24)))
-                            OpenTrickPicker(set, i);
+                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(22), GUILayout.Height(22));
 
                         GUILayout.EndHorizontal();
 
@@ -766,22 +815,31 @@ namespace rowemod.Mods
             if (visibleSetCount == 0)
                 GUILayout.Label($"No BMX tricks match \"{_uiSearch.Trim()}\".", _emptyState);
 
+            GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
 
         private static void DrawSelectedTrickPane(float paneHeight)
         {
-            GUILayout.BeginVertical(_card, GUILayout.ExpandWidth(true), GUILayout.MinHeight(paneHeight));
+            GUILayout.BeginVertical(_card, GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
 
             SyncTrickAnimationData animationData = GetSelectedAnimationData();
+            if (animationData == null && _previewEnabled)
+            {
+                _previewEnabled = false;
+                RestorePreviewState();
+            }
             GUILayout.BeginHorizontal();
             GUILayout.Label("Selected Trick", _cardHeader);
             GUILayout.FlexibleSpace();
+            GUI.enabled = animationData != null;
             bool nextPreview = GUILayout.Toggle(
                 _previewEnabled,
-                _previewEnabled ? "Preview On" : "Preview Off",
+                _previewEnabled ? "Stop Preview" : "Start Preview",
                 _previewEnabled ? _pillOn : _pill,
-                GUILayout.Width(110));
+                GUILayout.Width(116),
+                GUILayout.Height(24f));
+            GUI.enabled = true;
             if (nextPreview != _previewEnabled)
             {
                 _previewEnabled = nextPreview;
@@ -790,11 +848,6 @@ namespace rowemod.Mods
                     RestorePreviewState();
             }
 
-            if (GUILayout.Button("Stop", _miniBtn, GUILayout.Width(62)))
-            {
-                _previewEnabled = false;
-                RestorePreviewState();
-            }
             GUILayout.EndHorizontal();
 
             if (animationData == null)
@@ -811,20 +864,33 @@ namespace rowemod.Mods
             GUILayout.Label(_selectedTrickDirection, _directionBadge, GUILayout.Width(82), GUILayout.Height(22));
             GUILayout.Label(_selectedTrickName, _cardHeader);
             GUILayout.FlexibleSpace();
+            if (Menu.SecondaryButton("Change Mapped Trick", GUILayout.Width(154f), GUILayout.Height(24f)))
+                OpenTrickPicker(_selectedTrickSet, _selectedTrickSlot);
             GUILayout.EndHorizontal();
-            GUILayout.Label("Preview lifts and freezes the player, then fires the selected trick every 2 seconds.", _rowLabelRight);
+            GUILayout.Label(
+                _previewEnabled
+                    ? "Preview is active and repeats every 2 seconds."
+                    : "Preview lifts and freezes the player while this trick repeats.",
+                _rowLabelRight);
             GUILayout.Space(8);
 
+            _selectedTrickScroll = GUILayout.BeginScrollView(
+                _selectedTrickScroll,
+                false,
+                true,
+                GUILayout.ExpandWidth(true),
+                GUILayout.ExpandHeight(true));
             string contextKey = $"{_selectedTrickSetKey}:{_selectedTrickSlot}";
             TrickAnimationEditor.DrawSelectedTrickPanel(
                 animationData,
                 contextKey,
                 string.Empty);
+            GUILayout.EndScrollView();
 
             GUILayout.EndVertical();
         }
 
-        private static void SelectTrick(TrickSetData set, int slot, string direction, string trickName)
+        private static void SelectTrick(TrickSetData set, int slot, string direction, string trickName, bool showEditor = true)
         {
             TrickAnimationEditor.NotifyPreviewEnded();
             _selectedTrickSet = set;
@@ -833,6 +899,9 @@ namespace rowemod.Mods
             _selectedTrickDirection = direction;
             _selectedTrickName = trickName;
             _needsAutoSelectTrick = false;
+            _selectedTrickScroll = Vector2.zero;
+            if (showEditor)
+                _compactShowEditor = true;
             _previewEnabled = true;
             _nextPreviewFireTime = 0f;
 
@@ -887,12 +956,12 @@ namespace rowemod.Mods
                     if (!flags[i])
                         continue;
 
-                    UnityEngine.Object obj = set._dataList[(Index)i] as UnityEngine.Object;
-                    if (!IsBmxTrickObject(obj))
+                    SyncTrickAnimationData animationData = set._dataList[(Index)i] as SyncTrickAnimationData;
+                    if (animationData == null || !IsBmxTrickObject(animationData))
                         continue;
 
                     string dir = i < DefaultDirectionLabels.Length ? DefaultDirectionLabels[i] : $"Index {i}";
-                    SelectTrick(set, i, dir, CleanTrickName(obj));
+                    SelectTrick(set, i, dir, CleanTrickName(animationData), false);
                     return true;
                 }
             }
@@ -902,12 +971,11 @@ namespace rowemod.Mods
 
         private static void OpenTrickPicker(TrickSetData set, int slot)
         {
-            var btnRect = GUILayoutUtility.GetLastRect();
-            Vector2 screenPos = GUIUtility.GUIToScreenPoint(new Vector2(btnRect.x, btnRect.y + btnRect.height));
-            float popupX = Menu.previousWindowPosition.x + Menu.windowRect.width + 280f + 20f;
-            float popupY = screenPos.y;
-
-            _pickerRect = new Rect(popupX, popupY, 280f, 320f);
+            _pickerRect = new Rect(
+                Mathf.Max(10f, (Screen.width - 500f) * 0.5f),
+                Mathf.Max(10f, (Screen.height - 480f) * 0.5f),
+                500f,
+                480f);
             _pickerOpen = true;
             _pickerSet = set;
             _pickerSlot = slot;
@@ -955,19 +1023,22 @@ namespace rowemod.Mods
 
         public static void OnTricksTabEntered()
         {
+            EnableTricksNoBailOverride();
             _tricksTabActive = true;
+            _compactShowEditor = false;
             _tricksNoBailRestoreTime = -1f;
             _needsAutoSelectTrick = GetSelectedAnimationData() == null;
             TrickAnimationEditor.RequestRuntimeRefresh("Tricks tab entered", true);
-            EnableTricksNoBailOverride();
         }
 
         public static void OnTricksTabExited()
         {
             _tricksTabActive = false;
+            _pickerOpen = false;
             _previewEnabled = false;
             RestorePreviewState();
             TrickAnimationEditor.NotifyPreviewEnded();
+            TrickAnimationEditor.CloseTricksUi();
             ScheduleTricksNoBailRestore();
         }
 

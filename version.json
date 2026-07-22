@@ -1,8 +1,8 @@
 {
-    "version":  "3.2",
+    "version":  "3.2.1",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "f9be4acff8714abdc56808895042d5741b5233c231c55f3662b6930bb5037809",
+    "sha256":  "db327c9f6faf141571b22b89a36af0ae10666f57007e4b5961a19a6b79c3738e",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Performance: remove the IK editor, trick animation diagnostics, and recurring global trick scans. Saved trick overrides now refresh when game and trick state changes. Add optional nose-manual center-of-mass and rider-inertia tuning with COM, front-pivot, projection, and lever-arm debug visualization. Remove the experimental direct nose steering controls, release grace, and Hang 5/Hang On interception.",
+    "patchNotes":  "Tricks workflow overhaul: opening the Tricks tab now enables a temporary No Bail override before trick data and preview initialization. RoweMod automatically selects an editable BMX trick while keeping the Input Map open. Search or select a mapping, open Trick Editor to preview it, adjust animation timing, or swap human and bike animation sources. Animation changes auto-save, presets stay compact until opened, and No Bail returns to the player\u0027s saved setting one second after leaving the tab. Improved pane scrolling and searchable trick and animation-source dialogs.",
     "requiredGameVersion":  ""
 }

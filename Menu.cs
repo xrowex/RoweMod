@@ -902,6 +902,12 @@ namespace rowemod
         {
             try
             {
+                if (currentTab == Tab.Tricks)
+                {
+                    scrollOffset = 0f;
+                    return;
+                }
+
                 Event currentEvent = Event.current;
                 if (currentEvent == null || currentEvent.type != EventType.ScrollWheel)
                     return;
