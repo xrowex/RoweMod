@@ -1,8 +1,8 @@
 {
-    "version":  "3.2.1",
+    "version":  "3.2.2",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "db327c9f6faf141571b22b89a36af0ae10666f57007e4b5961a19a6b79c3738e",
+    "sha256":  "ba1cc108b2b9fb28f60bcc89e267a672d678a279133ea19866a50d2759ee0c36",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Tricks workflow overhaul: opening the Tricks tab now enables a temporary No Bail override before trick data and preview initialization. RoweMod automatically selects an editable BMX trick while keeping the Input Map open. Search or select a mapping, open Trick Editor to preview it, adjust animation timing, or swap human and bike animation sources. Animation changes auto-save, presets stay compact until opened, and No Bail returns to the player\u0027s saved setting one second after leaving the tab. Improved pane scrolling and searchable trick and animation-source dialogs.",
+    "patchNotes":  "Fixed disabled tricks disappearing from the Input Map and search results. Disabled mappings now remain visible and can be enabled again without deleting the config. Reset All Tricks now restores original mappings, rebuilds the available-trick catalog, and saves the repaired state. Trick references are preserved across player respawns and runtime refreshes, and original, configured, and live tricks remain available in replacement searches.",
     "requiredGameVersion":  ""
 }
