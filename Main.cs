@@ -18,13 +18,13 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.2.2", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.2.3", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.2.2";
+        public const string ModVersion = "3.2.3";
         private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -40,6 +40,7 @@ namespace rowemod
         private static string _startupRetryMessage = string.Empty;
         private static bool _showPrivacyDisclaimer = false;
         private static bool _showPrivacyDisclaimerConfirmation = false;
+        private static bool _runtimeContributionsReleased = true;
 
 
         public override void OnEarlyInitializeMelon()
@@ -176,6 +177,7 @@ namespace rowemod
                 Log.Msg($"Failed to save configuration: {ex.Message}");
             }
 
+            LeftStickGestureRouter.Initialize();
             AutoUpdater.Initialize();
             LogRuntimeDiagnosticsSettings();
 
@@ -206,6 +208,16 @@ namespace rowemod
         }
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
+            bool isGameplayScene =
+                !string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase);
+            Mods.Physics.ReleaseNoseManualTuning();
+            RiderStyleEditor.OnSceneInitialized(isGameplayScene);
+            BikeOnlyStance.OnSceneInitialized(isGameplayScene);
+            _runtimeContributionsReleased = true;
+            LeftStickGestureRouter.OnSceneInitialized();
+            Mods.Camera.OnSceneInitialized();
+
             if (!_startupAccessGranted)
                 return;
 
@@ -218,9 +230,6 @@ namespace rowemod
                 rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
             GameEventListener.OnSceneInitialized(sceneName);
 
-            bool isGameplayScene =
-                !string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase);
             TrickAnimationEditor.OnSceneInitialized(isGameplayScene);
 
             if (string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) ||
@@ -233,7 +242,7 @@ namespace rowemod
             
             DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
-            RoweGutFaceFmodDiagnostics.OnSceneInitialized(sceneName);
+            RoweGutFaceUnityAudioDiagnostics.OnSceneInitialized(sceneName);
 
             cachedHDRCameras = UnityEngine.Camera.allCameras
                 .Select(cam => cam.GetComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>())
@@ -274,6 +283,7 @@ namespace rowemod
         {
             if (SteamUserManager.LastAccessDeniedByBan)
             {
+                ReleaseRuntimeContributions();
                 _startupAccessGranted = false;
                 _showStartupBlockedWarning = true;
                 _showStartupRetryWarning = false;
@@ -288,9 +298,13 @@ namespace rowemod
             HandleMenuToggle();
 
             if (!RemoteKillSwitched.isModEnabled)
+            {
+                ReleaseRuntimeContributions();
                 return;
+            }
 
-            DebugTools.Update();
+            if (DebugTools.RequiresUpdate)
+                DebugTools.Update();
 
             if (playableSceneLoaded && rMbCharacter)
             {
@@ -299,34 +313,26 @@ namespace rowemod
                     PieMenu.Update();
                 }
 
-                TrickAnimationEditor.Update();
-                TrickMods.Update();
-                Mods.Camera.Update();
-                GrindPoseEditor.Update();
-                Mods.Misc.ApplyBoneBreakingState();
-
+                if (TrickAnimationEditor.RequiresUpdate)
+                    TrickAnimationEditor.Update();
+                if (TrickMods.RequiresUpdate)
+                    TrickMods.Update();
+                if (GrindPoseEditor.RequiresUpdate)
+                    GrindPoseEditor.Update();
                 if (Config.challengeRuntimeSettings.enabled)
                 {
                     rowemod.Challenges.MultiplayerChallengeManager.Update();
                 }
 
-                BikePoseEditor.Update();
+                if (BikePoseEditor.RequiresUpdate)
+                    BikePoseEditor.Update();
 
                 if (!EnablePieMenu || (!PieMenu.IsOpen && !PieMenu.ConsumedInputThisFrame))
                 {
-                    ObjectDropper.Update();
+                    if (ObjectDropper.RequiresUpdate)
+                        ObjectDropper.Update();
                 }
 
-                if (!misc.showPlayerUserNameTargets)
-                {
-                    Mods.Misc.ApplyPlayerUserNameTargetsVisibility();
-                }
-
-                if (isOpen)
-                {
-                    Mods.Physics.Update();
-                    //Mods.Misc.Update();
-                }
             }
         }
 
@@ -336,10 +342,21 @@ namespace rowemod
                 return;
 
             if (!RemoteKillSwitched.isModEnabled)
+            {
+                ReleaseRuntimeContributions();
                 return;
+            }
 
             if (playableSceneLoaded && rMbCharacter)
-                TrickAnimationEditor.LateUpdate();
+            {
+                if (RiderStyleEditor.RuntimeEnabled)
+                {
+                    _runtimeContributionsReleased = false;
+                    RiderStyleEditor.LateUpdate();
+                }
+                if (TrickAnimationEditor.RequiresLateUpdate)
+                    TrickAnimationEditor.LateUpdate();
+            }
         }
 
         public override void OnFixedUpdate()
@@ -349,11 +366,28 @@ namespace rowemod
                 !playableSceneLoaded ||
                 !rMbCharacter)
             {
-                Mods.Physics.ReleaseNoseManualTuning();
+                ReleaseRuntimeContributions();
                 return;
             }
 
+            _runtimeContributionsReleased = false;
             Mods.Physics.UpdateNoseManualTuning();
+        }
+
+        public static void NotifyRuntimeContributionApplied()
+        {
+            _runtimeContributionsReleased = false;
+        }
+
+        private static void ReleaseRuntimeContributions()
+        {
+            if (_runtimeContributionsReleased)
+                return;
+
+            Mods.Physics.ReleaseNoseManualTuning();
+            RiderStyleEditor.Cleanup();
+            BikeOnlyStance.Cleanup();
+            _runtimeContributionsReleased = true;
         }
         
         public override void OnGUI()
@@ -725,7 +759,10 @@ namespace rowemod
 
         public override void OnDeinitializeMelon()
         {
-            Mods.Physics.ReleaseNoseManualTuning();
+            ReleaseRuntimeContributions();
+            TrickAnimationEditor.Cleanup();
+            LeftStickGestureRouter.Cleanup();
+            Config.FlushPendingSave();
             DebugTools.Cleanup();
             rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
             if (EnablePieMenu)
@@ -798,6 +835,7 @@ namespace rowemod
             if (isOpen == open)
                 return;
 
+            LeftStickGestureRouter.Cancel();
             isOpen = open;
 
             try
@@ -815,10 +853,11 @@ namespace rowemod
                 else
                 {
                     GrindPoseEditor.OnGrindsTabExited();
+                    RiderStyleEditor.OnTabExited();
                     TrickMods.OnTricksTabExited();
                     Cursor.visible = IsGameMainMenuActive || !IsGameplayInputActive;
                     Cursor.lockState = Cursor.visible ? CursorLockMode.None : CursorLockMode.Confined;
-                    Config.Save();
+                    Config.FlushPendingSave();
                 }
             }
             catch (Exception e)

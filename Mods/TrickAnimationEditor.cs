@@ -8,9 +8,11 @@ namespace rowemod.Mods
 {
     internal static class TrickAnimationEditor
     {
-        private const float BrainPollInterval = 0.05f;
+        private const float BrainFallbackPollInterval = 0.5f;
 
         private static TrickSystemBrainV2 observedBrain;
+        private static Il2CppSystem.Action trickFiredHandler;
+        private static bool trickFiredEventBound;
         private static SyncTrickAnimationData currentData;
         private static float nextBrainPollTime;
         private static int currentSetId = -1;
@@ -45,8 +47,12 @@ namespace rowemod.Mods
         private static GUIStyle smallButtonStyle;
         private static GUIStyle panelAltStyle;
         private static GUIStyle rowButtonStyle;
+        private static GUIStyle selectedRowButtonStyle;
         private static GUIStyle clipSourceButtonStyle;
         private static GUIStyle searchFieldStyle;
+        private static GUIStyle activePillStyle;
+        private static GUIStyle sliderStyle;
+        private static GUIStyle sliderThumbStyle;
         private static int styleRevision = -1;
 
         private static readonly Dictionary<int, TrickAnimationOverride> runtimeDefaults = new Dictionary<int, TrickAnimationOverride>();
@@ -56,6 +62,7 @@ namespace rowemod.Mods
         private static readonly Dictionary<string, AnimationClip> clipLookup = new Dictionary<string, AnimationClip>();
         private static readonly Dictionary<int, AppliedPoseState> appliedPoseStates = new Dictionary<int, AppliedPoseState>();
         private static readonly HashSet<int> poseTouchedThisFrame = new HashSet<int>();
+        private static readonly List<int> poseRemovalScratch = new List<int>();
         private static float suppressAutoApplyUntil;
         private static bool runtimeRefreshRequested = true;
         private static bool runtimeRefreshIncludeAllLoadedData;
@@ -135,10 +142,45 @@ namespace rowemod.Mods
             }
         }
 
+        public static bool RequiresLateUpdate =>
+            appliedPoseStates.Count > 0 ||
+            (Config.trickAnimationDebugSettings?.editorEnabled == true &&
+             activePoseData != null &&
+             Time.unscaledTime <= activePoseUntil);
+
+        public static bool RequiresUpdate =>
+            pendingAutoSaveData != null ||
+            (Config.trickAnimationDebugSettings?.editorEnabled == true &&
+             (runtimeRefreshRequested || !trickFiredEventBound));
+
+        public static void OnLocalPlayerSpawned()
+        {
+            TrickSystemBrainV2 brain = null;
+            try
+            {
+                if (Memory.rMbCharacter != null)
+                {
+                    brain = Memory.rMbCharacter
+                        .GetComponentInChildren<TrickSystemBrainV2>(true);
+                }
+            }
+            catch
+            {
+                brain = null;
+            }
+
+            if (brain != null)
+            {
+                SetObservedBrain(brain);
+                RequestRuntimeRefresh("local trick brain spawned");
+            }
+        }
+
         public static void LateUpdate()
         {
             EnsureSettings();
             RestorePoseOverlays();
+            ApplyPoseOverlays();
         }
 
         public static void NotifyPreviewTrick(SyncTrickAnimationData data)
@@ -172,6 +214,7 @@ namespace rowemod.Mods
         public static void OnSceneInitialized(bool gameplayScene)
         {
             RestorePoseOverlays();
+            UnbindTrickFiredEvent();
             observedBrain = null;
             currentData = null;
             activeAnimator = null;
@@ -203,6 +246,11 @@ namespace rowemod.Mods
 
             if (gameplayScene)
                 RequestRuntimeRefresh("gameplay scene initialized");
+        }
+
+        public static void Cleanup()
+        {
+            OnSceneInitialized(false);
         }
 
         public static void RequestRuntimeRefresh(string reason, bool includeAllLoadedData = false)
@@ -440,10 +488,14 @@ namespace rowemod.Mods
 
         private static void PollBrain()
         {
+            if (observedBrain != null && trickFiredEventBound)
+                return;
+
             if (Time.unscaledTime < nextBrainPollTime)
                 return;
 
-            nextBrainPollTime = Time.unscaledTime + BrainPollInterval;
+            nextBrainPollTime =
+                Time.unscaledTime + BrainFallbackPollInterval;
 
             try
             {
@@ -455,9 +507,12 @@ namespace rowemod.Mods
                         return;
 
                     brain = brains[0];
-                    observedBrain = brain;
+                    SetObservedBrain(brain);
                     RequestRuntimeRefresh("trick brain discovered");
                 }
+
+                if (trickFiredEventBound)
+                    return;
 
                 int firedSetId = SafeRead(() => brain._lastFiredSetId, -999);
                 int firedSlotId = SafeRead(() => brain._lastFiredSlotId, -999);
@@ -492,6 +547,106 @@ namespace rowemod.Mods
             catch (System.Exception ex)
             {
                 status = $"Trick animation editor poll failed: {ex.Message}";
+            }
+        }
+
+        private static void SetObservedBrain(TrickSystemBrainV2 brain)
+        {
+            if (brain == null)
+                return;
+
+            if (observedBrain != null)
+            {
+                try
+                {
+                    if (observedBrain.GetInstanceID() == brain.GetInstanceID())
+                    {
+                        if (!trickFiredEventBound)
+                            BindTrickFiredEvent();
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Rebind below.
+                }
+            }
+
+            UnbindTrickFiredEvent();
+            observedBrain = brain;
+            BindTrickFiredEvent();
+        }
+
+        private static void BindTrickFiredEvent()
+        {
+            if (observedBrain == null || trickFiredEventBound)
+                return;
+
+            try
+            {
+                trickFiredHandler ??=
+                    Il2CppInterop.Runtime.DelegateSupport
+                        .ConvertDelegate<Il2CppSystem.Action>(OnTrickFired);
+                observedBrain.OnFiredTrick += trickFiredHandler;
+                trickFiredEventBound = true;
+                Log.Msg("[TrickAnimEditor] Bound native OnFiredTrick event.");
+            }
+            catch (System.Exception ex)
+            {
+                trickFiredEventBound = false;
+                Log.Warning(
+                    $"[TrickAnimEditor] OnFiredTrick binding failed; " +
+                    $"using throttled fallback: {ex.Message}");
+            }
+        }
+
+        private static void UnbindTrickFiredEvent()
+        {
+            if (observedBrain != null &&
+                trickFiredEventBound &&
+                trickFiredHandler != null)
+            {
+                try
+                {
+                    observedBrain.OnFiredTrick -= trickFiredHandler;
+                }
+                catch
+                {
+                    // Scene teardown can invalidate the native delegate first.
+                }
+            }
+
+            trickFiredEventBound = false;
+        }
+
+        private static void OnTrickFired()
+        {
+            try
+            {
+                if (Config.trickAnimationDebugSettings?.editorEnabled != true)
+                    return;
+
+                TrickSystemBrainV2 brain = observedBrain;
+                if (brain == null)
+                    return;
+
+                int firedSetId = SafeRead(() => brain._lastFiredSetId, -999);
+                int firedSlotId = SafeRead(() => brain._lastFiredSlotId, -999);
+                if (firedSetId < 0 || firedSlotId < 0)
+                    return;
+
+                SyncTrickAnimationData data =
+                    ResolveV2TrickData(brain, firedSetId, firedSlotId);
+                if (data != null)
+                    TrackCurrentTrick(data, firedSetId, firedSlotId);
+
+                lastObservedSetId = firedSetId;
+                lastObservedSlotId = firedSlotId;
+                lastObservedTimeSinceFire = 0f;
+            }
+            catch (System.Exception ex)
+            {
+                status = $"Trick fire event failed: {ex.Message}";
             }
         }
 
@@ -628,7 +783,7 @@ namespace rowemod.Mods
                 bool selected = i == selectedTrickCatalogIndex || string.Equals(key, selectedTrickCatalogKey, System.StringComparison.OrdinalIgnoreCase);
                 bool saved = Config.trickAnimationDebugSettings.overrides.ContainsKey(key);
                 string label = $"{(selected ? "> " : string.Empty)}{name}{(saved ? " *" : string.Empty)}";
-                if (GUILayout.Button(label, selected ? Menu.UiRowButtonSelectedStyle : rowButtonStyle))
+                if (GUILayout.Button(label, selected ? selectedRowButtonStyle : rowButtonStyle))
                 {
                     selectedTrickCatalogIndex = i;
                     selectedTrickCatalogKey = key;
@@ -701,7 +856,7 @@ namespace rowemod.Mods
                 if (brains != null && brains.Length > 0)
                 {
                     brain = brains[0];
-                    observedBrain = brain;
+                    SetObservedBrain(brain);
                 }
             }
 
@@ -946,7 +1101,7 @@ namespace rowemod.Mods
                 OpenAnimationSourcePicker(target, true, false);
             if (Menu.SecondaryButton("Change Bike", GUILayout.Width(110f), GUILayout.Height(24f)))
                 OpenAnimationSourcePicker(target, false, true);
-            if (Menu.PrimaryButton("Change Both", GUILayout.Width(110f), GUILayout.Height(24f)))
+            if (GUILayout.Button("Change Both", activePillStyle, GUILayout.Width(110f), GUILayout.Height(24f)))
                 OpenAnimationSourcePicker(target, true, true);
             Menu.EndToolbar();
             GUILayout.Label("Selecting a source copies and saves the chosen clips immediately.", mutedStyle);
@@ -1012,13 +1167,13 @@ namespace rowemod.Mods
             Menu.EndToolbar();
 
             Menu.BeginToolbar();
-            if (GUILayout.Toggle(!animationSourcePickerScooter, "BMX", !animationSourcePickerScooter ? Menu.UiPillActiveStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
+            if (GUILayout.Toggle(!animationSourcePickerScooter, "BMX", !animationSourcePickerScooter ? activePillStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
             {
                 if (animationSourcePickerScooter)
                     animationSourcePickerScroll = Vector2.zero;
                 animationSourcePickerScooter = false;
             }
-            if (GUILayout.Toggle(animationSourcePickerScooter, "Scooter", animationSourcePickerScooter ? Menu.UiPillActiveStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
+            if (GUILayout.Toggle(animationSourcePickerScooter, "Scooter", animationSourcePickerScooter ? activePillStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
             {
                 if (!animationSourcePickerScooter)
                     animationSourcePickerScroll = Vector2.zero;
@@ -1532,7 +1687,7 @@ namespace rowemod.Mods
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label($"{label}: {value:0.###}", GUILayout.Width(170));
-            float next = GUILayout.HorizontalSlider(value, min, max, GUILayout.Width(260));
+            float next = GUILayout.HorizontalSlider(value, min, max, sliderStyle, sliderThumbStyle, GUILayout.Width(260));
             GUILayout.Label($"{min:0.##}", mutedStyle, GUILayout.Width(34));
             GUILayout.Label($"{max:0.##}", mutedStyle, GUILayout.Width(34));
             GUILayout.EndHorizontal();
@@ -1567,7 +1722,7 @@ namespace rowemod.Mods
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label(label, GUILayout.Width(24));
-            float next = GUILayout.HorizontalSlider(value, min, max, GUILayout.Width(260));
+            float next = GUILayout.HorizontalSlider(value, min, max, sliderStyle, sliderThumbStyle, GUILayout.Width(260));
             GUILayout.Label($"{next:0.###}", mutedStyle, GUILayout.Width(60));
             GUILayout.EndHorizontal();
 
@@ -1811,7 +1966,7 @@ namespace rowemod.Mods
             if (appliedPoseStates.Count == 0)
                 return;
 
-            List<int> remove = new List<int>();
+            poseRemovalScratch.Clear();
             foreach (KeyValuePair<int, AppliedPoseState> pair in appliedPoseStates)
             {
                 if (!forceAll && poseTouchedThisFrame.Contains(pair.Key))
@@ -1828,11 +1983,13 @@ namespace rowemod.Mods
                         state.Transform.localPosition = state.BasePosition;
                 }
 
-                remove.Add(pair.Key);
+                poseRemovalScratch.Add(pair.Key);
             }
 
-            for (int i = 0; i < remove.Count; i++)
-                appliedPoseStates.Remove(remove[i]);
+            for (int i = 0; i < poseRemovalScratch.Count; i++)
+                appliedPoseStates.Remove(poseRemovalScratch[i]);
+
+            poseRemovalScratch.Clear();
         }
 
         private static float Clamp01(float value)
@@ -1949,6 +2106,28 @@ namespace rowemod.Mods
                 padding = new RectOffset(10, 10, 4, 4),
                 margin = new RectOffset(0, 0, 1, 1)
             };
+            selectedRowButtonStyle = new GUIStyle(rowButtonStyle)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            Texture2D selectedGreen = Menu.MakeRoundedTex(64, 28, new Color(0.08f, 0.30f, 0.16f, 0.98f), 7, 1, new Color(0.28f, 1f, 0.48f, 0.62f));
+            Texture2D selectedGreenHover = Menu.MakeRoundedTex(64, 28, new Color(0.11f, 0.38f, 0.20f, 0.99f), 7, 1, new Color(0.36f, 1f, 0.56f, 0.78f));
+            selectedRowButtonStyle.normal.background = selectedGreen;
+            selectedRowButtonStyle.hover.background = selectedGreenHover;
+            selectedRowButtonStyle.active.background = selectedGreen;
+            selectedRowButtonStyle.normal.textColor = new Color(0.90f, 1f, 0.93f, 1f);
+            selectedRowButtonStyle.hover.textColor = Color.white;
+            selectedRowButtonStyle.active.textColor = Color.white;
+            activePillStyle = new GUIStyle(Menu.UiPillStyle)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            activePillStyle.normal.background = selectedGreen;
+            activePillStyle.hover.background = selectedGreenHover;
+            activePillStyle.active.background = selectedGreen;
+            activePillStyle.normal.textColor = new Color(0.90f, 1f, 0.93f, 1f);
+            activePillStyle.hover.textColor = Color.white;
+            activePillStyle.active.textColor = Color.white;
             clipSourceButtonStyle = new GUIStyle(Menu.UiPillStyle)
             {
                 alignment = TextAnchor.MiddleCenter,
@@ -1963,6 +2142,20 @@ namespace rowemod.Mods
                 padding = new RectOffset(9, 9, 3, 3),
                 margin = new RectOffset(0, 6, 0, 0)
             };
+            sliderStyle = new GUIStyle(GUI.skin.horizontalSlider)
+            {
+                fixedHeight = 7f
+            };
+            sliderStyle.normal.background = Menu.MakeRoundedTex(64, 8, new Color(0.10f, 0.11f, 0.13f, 1f), 4, 1, new Color(1f, 1f, 1f, 0.10f));
+            sliderThumbStyle = new GUIStyle(GUI.skin.horizontalSliderThumb)
+            {
+                fixedWidth = 10f,
+                fixedHeight = 16f
+            };
+            Texture2D greenThumb = Menu.MakeRoundedTex(12, 18, new Color(0.24f, 0.82f, 0.42f, 1f), 5, 1, new Color(0.48f, 1f, 0.64f, 0.72f));
+            sliderThumbStyle.normal.background = greenThumb;
+            sliderThumbStyle.hover.background = greenThumb;
+            sliderThumbStyle.active.background = greenThumb;
         }
 
         private static string GetDataKey(SyncTrickAnimationData data)

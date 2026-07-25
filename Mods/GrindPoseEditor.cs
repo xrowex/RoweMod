@@ -10,6 +10,9 @@ namespace rowemod.Mods
 {
     public static class GrindPoseEditor
     {
+        public static bool RequiresUpdate =>
+            Menu.isOpen && Menu.currentTab == Menu.Tab.Grinds;
+
         private const string RequiredPosePrefix = "BMX_";
         private static readonly List<BikeGrindPoseData> PoseCache = new List<BikeGrindPoseData>();
         private static readonly List<string> PoseKeys = new List<string>();
@@ -105,7 +108,7 @@ namespace rowemod.Mods
             if (!Mathf.Approximately(grindPoseLerpSpeed, Config.physics.grindPoseLerpSpeed))
             {
                 Config.physics.grindPoseLerpSpeed = grindPoseLerpSpeed;
-                Config.Save();
+                Config.RequestSave();
             }
             GUILayout.Space(4f);
             DrawPresetControls();
@@ -131,7 +134,7 @@ namespace rowemod.Mods
             bool changed = DrawPoseEditor(selectedPose, poseKey);
             if (changed)
             {
-                Config.Save();
+                Config.RequestSave();
             }
 
             Menu.EndPane();
@@ -818,7 +821,7 @@ namespace rowemod.Mods
             if (!Mathf.Approximately(markerScale, Config.grindPoseData.centerOfMassVisualScale))
             {
                 Config.grindPoseData.centerOfMassVisualScale = markerScale;
-                Config.Save();
+                Config.RequestSave();
             }
 
             GUILayout.Label("Green = selected pose Chassis CM. Cyan = live runtime COM.", Menu.UiMutedWrappedStyle);

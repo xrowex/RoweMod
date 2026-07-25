@@ -24,6 +24,8 @@ namespace rowemod.Mods
         private static string lastPivotError = string.Empty;
         private static string statusText = "Center of mass marker is off.";
 
+        public static bool RequiresUpdate => showCenterOfMassMarker;
+
         public static void DrawDebugTab()
         {
             Menu.BeginPane("Center Of Mass", "Visualize the current physics center of mass in the world.");

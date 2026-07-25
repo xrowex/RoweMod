@@ -1,8 +1,8 @@
 {
-    "version":  "3.2.2",
+    "version":  "3.2.3",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "ba1cc108b2b9fb28f60bcc89e267a672d678a279133ea19866a50d2759ee0c36",
+    "sha256":  "03c3f8d2699da5dc5aab7a39b8f3b877de7fef894f2c07995fcbe266df888d86",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Fixed disabled tricks disappearing from the Input Map and search results. Disabled mappings now remain visible and can be enabled again without deleting the config. Reset All Tricks now restores original mappings, rebuilds the available-trick catalog, and saves the repaired state. Trick references are preserved across player respawns and runtime refreshes, and original, configured, and live tricks remain available in replacement searches.",
+    "patchNotes":  "Added Bike-Only Stance controls that switch the bike, pedals, rider motion, and local IK without changing native trick or grind bindings. Tap the left stick to flip the camera offset, or hold it for 0.5 seconds to switch bike stance while consuming the camera tap. Added configurable local rider head tracking under Rider Tools. Improved trick animation preview cleanup and runtime restore behavior. Reduced steady-state work through event-driven updates, cached component lookups, debounced configuration saves, and quieter optional nose-manual diagnostics.",
     "requiredGameVersion":  ""
 }

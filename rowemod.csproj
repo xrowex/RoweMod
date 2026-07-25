@@ -486,6 +486,7 @@
 		<Compile Include="Mods\BikeMaterialPreset.cs" />
 		<Compile Include="Mods\BikeMaterialsLoader.cs" />
 		<Compile Include="Mods\BikePoseEditor.cs" />
+		<Compile Include="Mods\BikeOnlyStance.cs" />
 		<Compile Include="Mods\Camera.cs" />
 		<Compile Include="Mods\ClothingPreset.cs" />
 		<Compile Include="Mods\ControllerMenuInput.cs" />
@@ -495,6 +496,7 @@
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\GrindPoseEditor.cs" />
 		<Compile Include="Mods\GrindPosePreset.cs" />
+		<Compile Include="Mods\LeftStickGestureRouter.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\MotorVehicleUtils.cs" />
 		<Compile Include="Mods\ObjectDropper.cs" />
@@ -503,7 +505,8 @@
 		<Compile Include="Mods\PieMenu.cs" />
 		<Compile Include="Mods\ReplayInputPatch.cs" />
 		<Compile Include="Mods\RemoteKillSwitch.cs" />
-		<Compile Include="Mods\RoweGutFaceFmodDiagnostics.cs" />
+		<Compile Include="Mods\RoweGutFaceUnityAudioDiagnostics.cs" />
+		<Compile Include="Mods\RiderStyleEditor.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
 		<Compile Include="Mods\TrickAnimationEditor.cs" />
@@ -521,7 +524,7 @@
 		<Folder Include="DLL\" />
 	</ItemGroup>
 
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(SkipRoweModDeploy)' != 'true'">
 		<MakeDir Directories="$(ProjectDir)DLL" />
 		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ProjectDir)DLL\" />
 		<Copy SourceFiles="$(TargetPath)" DestinationFolder="C:\Program Files (x86)\Steam\steamapps\common\BMX Streets\Mods\" />

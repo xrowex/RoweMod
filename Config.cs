@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using MelonLoader;
 using Newtonsoft.Json;
 using rowemod.Mods;
 using rowemod.Utils;
+using UnityEngine;
 
 namespace rowemod
 {
@@ -22,6 +25,7 @@ namespace rowemod
         public float manualAngle;
         public float noseManualAngle;
         public bool noseManualTurnTuning;
+        public bool noseManualDebugLogging;
         public float noseManualChassisComForwardOffset;
         public float noseManualChassisComVerticalOffset;
         public float noseManualDriverComForwardOffset;
@@ -156,6 +160,31 @@ namespace rowemod
         public bool leftStickOffsetSwitch { get; set; } = true;
     }
 
+    public class BikeOnlyStanceSettings
+    {
+        public bool enabled { get; set; }
+        public bool goofy { get; set; }
+        public bool holdLeftStickToSwitchStance { get; set; } = true;
+    }
+
+    public class RiderHeadTrackingSettings
+    {
+        public bool enabled { get; set; }
+        public float amount { get; set; } = 0.5f;
+        public float maximumYaw { get; set; } = 24f;
+        public float maximumPitch { get; set; } = 12f;
+        public float smoothing { get; set; } = 8f;
+        public float spineWeight { get; set; } = 0.1f;
+        public float chestWeight { get; set; } = 0.2f;
+        public float neckWeight { get; set; } = 0.25f;
+        public float headWeight { get; set; } = 0.45f;
+    }
+
+    public class RiderToolsSettings
+    {
+        public RiderHeadTrackingSettings headTracking { get; set; } = new RiderHeadTrackingSettings();
+    }
+
     public class TrickAnimationDebugSettings
     {
         public bool editorEnabled { get; set; } = true;
@@ -261,6 +290,7 @@ namespace rowemod
             manualAngle = 30f,
             noseManualAngle = 30f,
             noseManualTurnTuning = false,
+            noseManualDebugLogging = false,
             noseManualChassisComForwardOffset = 0f,
             noseManualChassisComVerticalOffset = 0f,
             noseManualDriverComForwardOffset = 0f,
@@ -368,6 +398,9 @@ namespace rowemod
         public static ChallengeRuntimeSettings challengeRuntimeSettings = new ChallengeRuntimeSettings();
         public static ManualCatchSettings manualCatchSettings = new ManualCatchSettings();
         public static CameraSettings cameraSettings = new CameraSettings();
+        public static BikeOnlyStanceSettings bikeOnlyStanceSettings = new BikeOnlyStanceSettings();
+        public static RiderToolsSettings riderToolsSettings =
+            new RiderToolsSettings();
         public static TrickAnimationDebugSettings trickAnimationDebugSettings = new TrickAnimationDebugSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
@@ -388,6 +421,9 @@ namespace rowemod
             public ChallengeRuntimeSettings challengeRuntimeSettingsData { get; set; }
             public ManualCatchSettings manualCatchSettingsData { get; set; }
             public CameraSettings cameraSettingsData { get; set; }
+            public BikeOnlyStanceSettings bikeOnlyStanceSettingsData { get; set; }
+            public RiderToolsSettings riderToolsSettingsData { get; set; }
+            public RiderToolsSettings riderStyleSettingsData { get; set; }
             public TrickAnimationDebugSettings trickAnimationDebugSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
@@ -395,12 +431,74 @@ namespace rowemod
 
         public static string modFolder = Path.Combine(Path.GetDirectoryName(typeof(Config).Assembly.Location), "RoweMod");
         public static string cfgFile { get; } = Path.Combine(modFolder, "cfg.json");
+        private const float DeferredSaveDelaySeconds = 2f;
+        private static bool _deferredSavePending;
+        private static bool _deferredSaveRoutineRunning;
+        private static float _deferredSaveNotBefore;
+        private static bool _configDirty;
+
+        public static void MarkDirty()
+        {
+            _configDirty = true;
+        }
+
+        public static void RequestSave()
+        {
+            _configDirty = true;
+            _deferredSavePending = true;
+            _deferredSaveNotBefore =
+                Time.realtimeSinceStartup + DeferredSaveDelaySeconds;
+
+            if (_deferredSaveRoutineRunning)
+                return;
+
+            _deferredSaveRoutineRunning = true;
+            try
+            {
+                MelonCoroutines.Start(DeferredSaveRoutine());
+            }
+            catch
+            {
+                _deferredSaveRoutineRunning = false;
+                Save();
+            }
+        }
+
+        public static void FlushPendingSave()
+        {
+            if (!_deferredSavePending && !_configDirty)
+                return;
+
+            _deferredSavePending = false;
+            Save();
+        }
+
+        private static IEnumerator DeferredSaveRoutine()
+        {
+            while (_deferredSavePending)
+            {
+                while (_deferredSavePending &&
+                       Time.realtimeSinceStartup < _deferredSaveNotBefore)
+                {
+                    yield return null;
+                }
+
+                if (!_deferredSavePending)
+                    break;
+
+                _deferredSavePending = false;
+                Save();
+            }
+
+            _deferredSaveRoutineRunning = false;
+        }
 
         // Save configuration to JSON file
         public static void Save()
         {
             try
             {
+                _deferredSavePending = false;
                 //Log.Msg($"Saving config to {cfgFile}");
                 Directory.CreateDirectory(modFolder);
                 if (tricks.trickSets == null)
@@ -444,12 +542,15 @@ namespace rowemod
                     challengeRuntimeSettingsData = challengeRuntimeSettings,
                     manualCatchSettingsData = manualCatchSettings,
                     cameraSettingsData = cameraSettings,
+                    bikeOnlyStanceSettingsData = bikeOnlyStanceSettings,
+                    riderToolsSettingsData = riderToolsSettings,
                     trickAnimationDebugSettingsData = trickAnimationDebugSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
                 }, Formatting.Indented);
 
                 File.WriteAllText(cfgFile, contents);
+                _configDirty = false;
                 Log.Msg("Config saved successfully.");
             }
             catch (Exception ex)
@@ -484,6 +585,10 @@ namespace rowemod
                 jsonContent.IndexOf("\"manualCatchSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasCameraSettings =
                 jsonContent.IndexOf("\"cameraSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasBikeOnlyStanceSettings =
+                jsonContent.IndexOf("\"bikeOnlyStanceSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasRiderToolsSettings =
+                jsonContent.IndexOf("\"riderToolsSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasTrickAnimationDebugSettings =
                 jsonContent.IndexOf("\"trickAnimationDebugSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
@@ -561,6 +666,13 @@ namespace rowemod
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
             manualCatchSettings = jsonData.manualCatchSettingsData ?? new ManualCatchSettings();
             cameraSettings = jsonData.cameraSettingsData ?? new CameraSettings();
+            bikeOnlyStanceSettings =
+                jsonData.bikeOnlyStanceSettingsData ?? new BikeOnlyStanceSettings();
+            riderToolsSettings =
+                jsonData.riderToolsSettingsData ??
+                jsonData.riderStyleSettingsData ??
+                new RiderToolsSettings();
+            RiderStyleEditor.NormalizeSettings(riderToolsSettings);
             trickAnimationDebugSettings = jsonData.trickAnimationDebugSettingsData ?? new TrickAnimationDebugSettings();
             if (trickAnimationDebugSettings.overrides == null)
             {
@@ -604,7 +716,9 @@ namespace rowemod
             if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
             if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
 
-            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasCameraSettings || !hasTrickAnimationDebugSettings)
+            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasCameraSettings ||
+                !hasBikeOnlyStanceSettings ||
+                !hasRiderToolsSettings || !hasTrickAnimationDebugSettings)
             {
                 Save();
             }
@@ -683,6 +797,7 @@ namespace rowemod
                 manualAngle = 30f,
                 noseManualAngle = 30f,
                 noseManualTurnTuning = false,
+                noseManualDebugLogging = false,
                 noseManualChassisComForwardOffset = 0f,
                 noseManualChassisComVerticalOffset = 0f,
                 noseManualDriverComForwardOffset = 0f,

@@ -10,6 +10,9 @@ namespace rowemod.Mods
 {
     public static class BikePoseEditor
     {
+        public static bool RequiresUpdate =>
+            Menu.isOpen && Menu.currentTab == Menu.Tab.BikePoser;
+
         private enum GizmoMode
         {
             Move,

@@ -37,6 +37,7 @@ namespace rowemod
             Bike,
             BikePoser,
             Grinds,
+            RiderTools,
             Tricks,
             Character,
             BikeMaterials,
@@ -86,6 +87,7 @@ namespace rowemod
             ("Bike", Tab.Bike),
             ("Bike Poser", Tab.BikePoser),
             ("Grinds", Tab.Grinds),
+            ("Rider Tools", Tab.RiderTools),
             ("Materials", Tab.BikeMaterials),
             ("Character", Tab.Character),
             ("Misc", Tab.Misc),
@@ -121,6 +123,7 @@ namespace rowemod
         public static GUIStyle highQualityButtonStyle;
         public static GUIStyle redButtonStyle;
         public static GUIStyle activeTabButtonStyle;
+        private static GUIStyle tricksActiveTabButtonStyle;
         public static GUIStyle sectionCardStyle;
         public static GUIStyle sectionHeaderStyle;
         public static GUIStyle tabButtonStyle;
@@ -145,6 +148,7 @@ namespace rowemod
         private static Texture2D roundedButtonHover;
         private static Texture2D activeTabBackground;
         private static Texture2D accentColorTexture;
+        private static Texture2D tricksTabIndicatorTexture;
         private static Texture2D tabIndicatorTexture;
         private static Texture2D toggleCapsuleMaskTexture;
         private static Texture2D toggleKnobTexture;
@@ -254,6 +258,8 @@ namespace rowemod
                     DrawScrollableContent();
 
                     DrawResizeHandle();
+                    if (GUI.changed)
+                        Config.MarkDirty();
                 }
             }
             catch (Exception ex)
@@ -406,7 +412,8 @@ namespace rowemod
                 switch (currentTab)
                 {
                     case Tab.Physics:
-                        Mods.Physics.Update();
+                        bool previousGuiChanged = GUI.changed;
+                        GUI.changed = false;
 
                         float physicsPaneHeight = GetContentPaneHeight(24f);
                         BeginTwoPane(physicsPaneHeight);
@@ -448,6 +455,7 @@ namespace rowemod
                             Slider("Rider COM Height", ref physics.noseManualDriverComVerticalOffset, 0f, -1f, 1f);
                             Slider("Rider COM Turn Lean", ref physics.noseManualComTurnLean, 0f, -0.5f, 0.5f);
                             Slider("Nose Rider Inertia", ref physics.noseManualDriverInertiaMultiplier, 1f, 0.25f, 3f);
+                            ModernToggle("Debug Nose Manual Logs", ref physics.noseManualDebugLogging);
                         }
 
                         DrawSectionTitle("Motor Tuning");
@@ -458,6 +466,11 @@ namespace rowemod
                         EndPane();
 
                         EndTwoPane();
+
+                        bool physicsSettingsChanged = GUI.changed;
+                        GUI.changed |= previousGuiChanged;
+                        if (physicsSettingsChanged)
+                            Mods.Physics.Update();
 
                         break;
                     case Tab.Camera:
@@ -476,6 +489,9 @@ namespace rowemod
                         break;
                     case Tab.Grinds:
                         GrindPoseEditor.DrawGrindPoseTab();
+                        break;
+                    case Tab.RiderTools:
+                        RiderStyleEditor.DrawTab();
                         break;
                     case Tab.Tricks:
                         TrickMods.DrawTrickMenuPro();
@@ -993,7 +1009,8 @@ namespace rowemod
                 Rect tabRect = new Rect(0f, tabY, tabWidth, UiNavButtonHeight);
                 bool isSelected = currentTab == tab;
 
-                if (GUI.Button(tabRect, label, isSelected ? activeTabButtonStyle : tabButtonStyle))
+                GUIStyle selectedStyle = tab == Tab.Tricks ? tricksActiveTabButtonStyle : activeTabButtonStyle;
+                if (GUI.Button(tabRect, label, isSelected ? selectedStyle : tabButtonStyle))
                 {
                     SetCurrentTab(tab);
                 }
@@ -1001,7 +1018,7 @@ namespace rowemod
                 if (isSelected)
                 {
                     Rect indicatorRect = new Rect(tabRect.x + 1f, tabRect.y + 7f, 3f, tabRect.height - 14f);
-                    GUI.DrawTexture(indicatorRect, tabIndicatorTexture);
+                    GUI.DrawTexture(indicatorRect, tab == Tab.Tricks ? tricksTabIndicatorTexture : tabIndicatorTexture);
                 }
 
                 tabY += UiNavButtonHeight + UiTabSpacing;
@@ -1049,6 +1066,9 @@ namespace rowemod
                     break;
                 case Tab.Grinds:
                     GrindPoseEditor.ResetAllPosesToDefault();
+                    break;
+                case Tab.RiderTools:
+                    RiderStyleEditor.ResetAll();
                     break;
                 case Tab.Character:
                     ResetCharacterTab();
@@ -1170,6 +1190,11 @@ namespace rowemod
                     GrindPoseEditor.OnGrindsTabExited();
                 }
 
+                if (currentTab == Tab.RiderTools)
+                {
+                    RiderStyleEditor.OnTabExited();
+                }
+
                 if (currentTab == Tab.Tricks)
                 {
                     TrickMods.OnTricksTabExited();
@@ -1183,6 +1208,11 @@ namespace rowemod
                 if (newTab == Tab.Grinds)
                 {
                     GrindPoseEditor.OnGrindsTabEntered();
+                }
+
+                if (newTab == Tab.RiderTools)
+                {
+                    RiderStyleEditor.OnTabEntered();
                 }
 
                 if (newTab == Tab.Tricks)
@@ -1306,6 +1336,7 @@ namespace rowemod
                 activeTabBackground = MakeRoundedTex(40, 32, new Color(uiAccentColor.r * 0.62f, uiAccentColor.g * 0.43f, uiAccentColor.b * 0.31f, 0.88f), 8, 1, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.76f));
                 accentColorTexture = MakeTex(2, 2, uiAccentColor);
                 tabIndicatorTexture = MakeTex(2, 2, uiAccentColor);
+                tricksTabIndicatorTexture = MakeTex(2, 2, new Color(0.24f, 0.82f, 0.42f, 1f));
                 toggleCapsuleMaskTexture = MakeCapsuleTex(96, 52, Color.white, 0, Color.clear);
                 toggleKnobTexture = MakeCircleTex(64, new Color(0.96f, 0.97f, 1f, 1f), 1, new Color(0f, 0f, 0f, 0.45f));
                 _circleTex = toggleKnobTexture;
@@ -1441,6 +1472,21 @@ namespace rowemod
                 activeTabButtonStyle.hover.textColor = uiAccentTextColor;
                 activeTabButtonStyle.active.textColor = uiAccentTextColor;
                 activeTabButtonStyle.fontStyle = FontStyle.Bold;
+                tricksActiveTabButtonStyle = new GUIStyle(tabButtonStyle);
+                Texture2D tricksActiveBackground = MakeRoundedTex(
+                    40,
+                    32,
+                    new Color(0.08f, 0.30f, 0.16f, 0.98f),
+                    8,
+                    1,
+                    new Color(0.28f, 1f, 0.48f, 0.62f));
+                tricksActiveTabButtonStyle.normal.background = tricksActiveBackground;
+                tricksActiveTabButtonStyle.hover.background = tricksActiveBackground;
+                tricksActiveTabButtonStyle.active.background = tricksActiveBackground;
+                tricksActiveTabButtonStyle.normal.textColor = new Color(0.90f, 1f, 0.93f, 1f);
+                tricksActiveTabButtonStyle.hover.textColor = Color.white;
+                tricksActiveTabButtonStyle.active.textColor = Color.white;
+                tricksActiveTabButtonStyle.fontStyle = FontStyle.Bold;
 
                 redButtonStyle = new GUIStyle(highQualityButtonStyle);
                 redButtonStyle.normal.background = MakeRoundedTex(40, 28, uiDangerColor, 7, 1, uiBorderColor);
@@ -1871,11 +1917,13 @@ namespace rowemod
         {
             BeginPane("Camera Controls", "Camera shortcuts that run during gameplay while the RoweMod menu is closed.");
             bool leftStickOffsetSwitch = Config.cameraSettings.leftStickOffsetSwitch;
-            ModernToggle("Left Stick Click Flips Camera Offset", ref leftStickOffsetSwitch, "camera_left_stick_offset_switch");
+            ModernToggle("Left Stick Tap Flips Camera Offset", ref leftStickOffsetSwitch, "camera_left_stick_offset_switch");
             if (leftStickOffsetSwitch != Config.cameraSettings.leftStickOffsetSwitch)
                 Config.cameraSettings.leftStickOffsetSwitch = leftStickOffsetSwitch;
             GUILayout.Space(6f);
-            GUILayout.Label("When enabled, clicking the left stick flips the horizontal camera offset to the opposite side.", UiMutedWrappedStyle);
+            GUILayout.Label(
+                "Release LS before 0.5 seconds to flip the camera. Holding LS for 0.5 seconds is reserved for Bike-Only Stance and will not flip the camera.",
+                UiMutedWrappedStyle);
             EndPane();
         }
 

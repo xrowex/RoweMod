@@ -141,6 +141,12 @@ namespace rowemod.Mods
         {
             try
             {
+                if (!physics.noseManualTurnTuning)
+                {
+                    ReleaseNoseManualTuning();
+                    return;
+                }
+
                 var controller = vehicleController;
                 BMXBalanaceBehaviour balance = controller?._balanaceBehaviour;
                 MotorVehicleSettings vehicleSettings = controller?._motorVehicleSettings;
@@ -172,8 +178,7 @@ namespace rowemod.Mods
                     collisionNosey ||
                     balance._noseyPivoting ||
                     thresholdNosePivot;
-                bool shouldApply = physics.noseManualTurnTuning && physicalNosePivot;
-                if (!shouldApply)
+                if (!physicalNosePivot)
                 {
                     RestoreNoseManualTuningValues();
                     return;
@@ -203,7 +208,7 @@ namespace rowemod.Mods
                 controller._desiredChassisCOM = chassisCom;
                 controller._desiredDriverCOM = driverCom;
 
-                if (!wasApplied)
+                if (!wasApplied && physics.noseManualDebugLogging)
                 {
                     Log.Msg(
                         "[Physics][Nosey] COM tuning active: " +
@@ -239,11 +244,14 @@ namespace rowemod.Mods
             _originalDesiredDriverCom = _noseTuningController?._desiredDriverCOM ?? _originalDriverComMannyInput;
             _noseTuningBaselineCaptured = true;
 
-            Log.Msg(
-                "[Physics][Nosey] Baseline: " +
-                $"chassisCOM={FormatVector(_originalChassisComMannyInput)}, " +
-                $"driverCOM={FormatVector(_originalDriverComMannyInput)}, " +
-                $"driverInertia={FormatVector(_originalDriverInertiaNoseyInput)}.");
+            if (physics.noseManualDebugLogging)
+            {
+                Log.Msg(
+                    "[Physics][Nosey] Baseline: " +
+                    $"chassisCOM={FormatVector(_originalChassisComMannyInput)}, " +
+                    $"driverCOM={FormatVector(_originalDriverComMannyInput)}, " +
+                    $"driverInertia={FormatVector(_originalDriverInertiaNoseyInput)}.");
+            }
         }
 
         private static void RestoreNoseManualTuningValues()
@@ -271,7 +279,7 @@ namespace rowemod.Mods
                 Log.Warning($"[Physics][Nosey] Failed to restore original tuning: {ex.Message}");
             }
 
-            if (_noseTuningApplied)
+            if (_noseTuningApplied && physics.noseManualDebugLogging)
                 Log.Msg("[Physics][Nosey] Turn tuning restored.");
 
             _noseTuningApplied = false;

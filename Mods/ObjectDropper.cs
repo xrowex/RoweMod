@@ -60,13 +60,23 @@ namespace rowemod.Mods
         private static float previewBottomOffset;
         private static float previewYRotation = 0f;
         private static UnityEngine.Camera activeCamera;
+        private static float nextCameraResolveTime;
         private static bool canPlacePreview = false;
         private static GUIStyle notPlaceableWarningStyle;
         private static Vector2 prefabListScroll = Vector2.zero;
         private static Vector2 spawnedListScroll = Vector2.zero;
         private static string prefabSearch = string.Empty;
+        private static readonly List<string> filteredPrefabCache =
+            new List<string>();
+        private static string cachedPrefabSearch = null;
+        private static int cachedPrefabSourceCount = -1;
         private static string dropperStatus = "Select an object, then click in the world to place it.";
         private static float nextAssetLoadAttemptTime = 0f;
+
+        public static bool RequiresUpdate =>
+            (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper) ||
+            wasMenuOpen != Menu.isOpen ||
+            (previewObject != null && previewObject.activeSelf);
 
         // Initialize the dropper by finding references
         public static void Initialize()
@@ -300,8 +310,6 @@ namespace rowemod.Mods
                 previewYRotation %= 360f;
             }
 
-            RefreshActiveCamera();
-
             // Update preview position/rotation
             // Disable preview object if not on Dropper tab
             if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper)
@@ -332,6 +340,10 @@ namespace rowemod.Mods
         {
             if (activeCamera != null)
                 return;
+            if (Time.unscaledTime < nextCameraResolveTime)
+                return;
+
+            nextCameraResolveTime = Time.unscaledTime + 1f;
 
             var brain = GameObject.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
             if (brain != null && brain.gameObject.TryGetComponent(out UnityEngine.Camera cam))
@@ -709,18 +721,16 @@ namespace rowemod.Mods
             Menu.EndToolbar();
 
             string normalizedSearch = prefabSearch?.Trim() ?? string.Empty;
-            List<string> filteredPrefabs = Memory.dropperPrefabNames
-                .Where(name => string.IsNullOrEmpty(normalizedSearch) || name.IndexOf(normalizedSearch, StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
+            RefreshFilteredPrefabCache(normalizedSearch);
 
-            if (filteredPrefabs.Count == 0)
+            if (filteredPrefabCache.Count == 0)
             {
                 Menu.DrawEmptyState("No matching objects.", "Clear the search filter to show all dropper objects.");
             }
             else
             {
                 prefabListScroll = GUILayout.BeginScrollView(prefabListScroll, false, true, GUILayout.ExpandHeight(true));
-                foreach (string prefabName in filteredPrefabs)
+                foreach (string prefabName in filteredPrefabCache)
                 {
                     bool isSelectedPrefab = string.Equals(selectedPrefabName, prefabName, StringComparison.Ordinal);
                     if (GUILayout.Button(prefabName, isSelectedPrefab ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle, GUILayout.Height(26f)))
@@ -860,6 +870,37 @@ namespace rowemod.Mods
 
             Menu.EndPane();
             Menu.EndTwoPane();
+        }
+
+        private static void RefreshFilteredPrefabCache(string normalizedSearch)
+        {
+            int sourceCount = Memory.dropperPrefabNames?.Count ?? 0;
+            if (string.Equals(
+                    cachedPrefabSearch,
+                    normalizedSearch,
+                    StringComparison.Ordinal) &&
+                cachedPrefabSourceCount == sourceCount)
+            {
+                return;
+            }
+
+            cachedPrefabSearch = normalizedSearch;
+            cachedPrefabSourceCount = sourceCount;
+            filteredPrefabCache.Clear();
+            if (Memory.dropperPrefabNames == null)
+                return;
+
+            for (int i = 0; i < Memory.dropperPrefabNames.Count; i++)
+            {
+                string name = Memory.dropperPrefabNames[i];
+                if (string.IsNullOrEmpty(normalizedSearch) ||
+                    name.IndexOf(
+                        normalizedSearch,
+                        StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    filteredPrefabCache.Add(name);
+                }
+            }
         }
 
         private static void EnsureDropperAssetsLoaded(bool forceReload)

@@ -321,9 +321,7 @@ namespace rowemod.Mods
                 return;
             
             Misc.Update();
-            Misc.ApplyPlayerUserNameTargetsVisibility(true);
             Physics.Update();
-            MotorVehicleUtils.FindMxVehicleSettings();
         }
 
 
@@ -402,10 +400,12 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                BikeOnlyStance.OnLocalPlayerSpawned();
+                Main.NotifyRuntimeContributionApplied();
+                TrickAnimationEditor.OnLocalPlayerSpawned();
                 Misc.ApplyBoneBreakingState(true);
                 rowemod.Challenges.MultiplayerChallengeManager.OnLocalPlayerSpawned(go);
                 Memory.LoadAllAssetBundles();
-                Misc.ApplyPlayerUserNameTargetsVisibility(true);
                 PartTweaker.FindParts();
                 GrindPoseEditor.ApplyConfigToRuntime(true);
                 MotorVehicleUtils.FindMxVehicleSettings();
@@ -418,7 +418,7 @@ namespace rowemod.Mods
                 //Memory.UpdateCharacters();
 
                 // Load a saved session marker if it exists
-                if (!string.IsNullOrEmpty(Config.misc.customSessionMarker))
+                if (HasSavedSelection(Config.misc.customSessionMarker))
                 {
                     if (Memory.sessionMarkers != null)
                     {
@@ -482,7 +482,6 @@ namespace rowemod.Mods
                     
                     Memory.FindObjects(go);
                     Memory.LoadAllAssetBundles();
-                    Misc.ApplyPlayerUserNameTargetsVisibility(true);
                     MelonCoroutines.Start(DelayedLoadPreset());
                     MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                     MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
@@ -564,7 +563,8 @@ namespace rowemod.Mods
             
             yield return new WaitForSeconds(4f); // Give it time to fully load scene stuff
 
-            if (Config.character.lastLoadedPresetCharacter!=null & RemoteKillSwitched.isModEnabled)
+            if (HasSavedSelection(Config.character.lastLoadedPresetCharacter) &&
+                RemoteKillSwitched.isModEnabled)
             { 
                 
                 Log.Msg("Manually invoking LoadPreset on TheShop scene...");
@@ -574,6 +574,12 @@ namespace rowemod.Mods
             {
                 Log.Warning("Cannot load preset - missing reference or preset name.");
             }
+        }
+
+        private static bool HasSavedSelection(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) &&
+                   !string.Equals(value, "None", StringComparison.OrdinalIgnoreCase);
         }
     }
 

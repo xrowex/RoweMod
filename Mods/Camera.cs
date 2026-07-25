@@ -4,14 +4,12 @@ using Il2CppCinemachine;
 using Il2CppMashBox.Core.Runtime.Camera;
 using rowemod.Utils;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using static rowemod.Utils.Memory;
 
 namespace rowemod.Mods
 {
     public class Camera
     {
-        private const float InputCooldownSeconds = 0.25f;
         private const float MinMeaningfulOffset = 0.0001f;
         private static readonly BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly string[] FloatOffsetMembers =
@@ -56,29 +54,18 @@ namespace rowemod.Mods
             "m_PositionOffset",
             "ShoulderOffset"
         };
+        private static CameraData _fallbackCameraData;
+        private static CinemachineVirtualCamera _fallbackVirtualCamera;
+        private static bool _fallbackDiscoveryAttempted;
 
-        private static float nextAllowedInputTime;
-
-        public static void Update()
+        public static void OnSceneInitialized()
         {
-            if (!rowemod.Config.cameraSettings.leftStickOffsetSwitch)
-                return;
-
-            if (Menu.isOpen)
-                return;
-
-            Gamepad gamepad = Gamepad.current;
-            if (gamepad?.leftStickButton.wasPressedThisFrame != true)
-                return;
-
-            if (Time.unscaledTime < nextAllowedInputTime)
-                return;
-
-            nextAllowedInputTime = Time.unscaledTime + InputCooldownSeconds;
-            FlipCameraOffset();
+            _fallbackCameraData = null;
+            _fallbackVirtualCamera = null;
+            _fallbackDiscoveryAttempted = false;
         }
 
-        private static void FlipCameraOffset()
+        public static void FlipCameraOffset()
         {
             try
             {
@@ -121,6 +108,26 @@ namespace rowemod.Mods
             if (TryFlipCinemachineOffsets(virtualCam, "VirtualCamera", out changedTarget))
                 return true;
 
+            if (TryFlipCameraData(
+                    _fallbackCameraData,
+                    "Cached CameraData",
+                    out changedTarget))
+            {
+                return true;
+            }
+
+            if (TryFlipCinemachineOffsets(
+                    _fallbackVirtualCamera,
+                    "Cached virtual camera",
+                    out changedTarget))
+            {
+                return true;
+            }
+
+            if (_fallbackDiscoveryAttempted)
+                return false;
+
+            _fallbackDiscoveryAttempted = true;
             CameraData[] cameraDatas = Resources.FindObjectsOfTypeAll<CameraData>();
             foreach (CameraData data in cameraDatas)
             {
@@ -129,7 +136,10 @@ namespace rowemod.Mods
 
                 string label = string.IsNullOrWhiteSpace(data.name) ? "CameraData" : data.name;
                 if (TryFlipCameraData(data, label, out changedTarget))
+                {
+                    _fallbackCameraData = data;
                     return true;
+                }
             }
 
             CinemachineVirtualCamera[] vcams = Resources.FindObjectsOfTypeAll<CinemachineVirtualCamera>();
@@ -140,7 +150,10 @@ namespace rowemod.Mods
 
                 string label = string.IsNullOrWhiteSpace(vcam.name) ? "CinemachineVirtualCamera" : vcam.name;
                 if (TryFlipCinemachineOffsets(vcam, label, out changedTarget))
+                {
+                    _fallbackVirtualCamera = vcam;
                     return true;
+                }
             }
 
             return false;

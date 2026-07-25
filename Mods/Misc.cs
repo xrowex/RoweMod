@@ -2,7 +2,9 @@ using Il2CppMashBox.Core.Runtime.Input;
 using MelonLoader;
 using rowemod.Utils;
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using HarmonyLib;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.Addons.PhysicsDrivenAnimation.BeyondMeat;
 using Il2CppMashBox.Addons.SessionMarker;
@@ -42,6 +44,9 @@ namespace rowemod.Mods
         private static float lastBoneBreakingStrength = float.NaN;
         private static float nextBoneHitboxRefreshTime;
         private static int lastBoneHitboxCount = -1;
+        private static BoneHitbox[] cachedLocalBoneHitboxes =
+            Array.Empty<BoneHitbox>();
+        private static int cachedBoneHitboxRootId;
 
         private sealed class BoneHitboxRuntimeState
         {
@@ -59,7 +64,6 @@ namespace rowemod.Mods
             if (driftTrikeSpawnerType != null && Memory.activeMarkerTransform != null &&
                 driftTrikeSpawnerType.spawnPoint != Memory.activeMarkerTransform)
                 driftTrikeSpawnerType.spawnPoint = Memory.activeMarkerTransform;
-            Memory.RefreshDroneComponents();
             // Update Ragdoll Behaviour
             ApplyNeverBailState();
             ApplyBoneBreakingState();
@@ -224,21 +228,81 @@ namespace rowemod.Mods
 
         private static BoneHitbox[] FindLocalBoneHitboxes()
         {
+            GameObject root = physicsDrivenCharacter != null
+                ? physicsDrivenCharacter
+                : beyondMeatSystem != null ? beyondMeatSystem.gameObject : null;
+            int rootId = root != null ? root.GetInstanceID() : 0;
+            if (rootId != cachedBoneHitboxRootId)
+            {
+                cachedBoneHitboxRootId = rootId;
+                cachedLocalBoneHitboxes = Array.Empty<BoneHitbox>();
+                boneHitboxOriginalStates.Clear();
+            }
+
+            if (cachedLocalBoneHitboxes.Length > 0)
+                return cachedLocalBoneHitboxes;
+
             if (physicsDrivenCharacter != null)
             {
                 BoneHitbox[] hitboxes = physicsDrivenCharacter.GetComponentsInChildren<BoneHitbox>(true);
                 if (hitboxes != null && hitboxes.Length > 0)
-                    return hitboxes;
+                {
+                    cachedLocalBoneHitboxes = hitboxes;
+                    return cachedLocalBoneHitboxes;
+                }
             }
 
             if (beyondMeatSystem != null)
             {
                 BoneHitbox[] hitboxes = beyondMeatSystem.GetComponentsInChildren<BoneHitbox>(true);
                 if (hitboxes != null && hitboxes.Length > 0)
-                    return hitboxes;
+                {
+                    cachedLocalBoneHitboxes = hitboxes;
+                    return cachedLocalBoneHitboxes;
+                }
             }
 
             return Array.Empty<BoneHitbox>();
+        }
+
+        public static void NotifyNetworkPlayerSpawned(NetworkPlayer player)
+        {
+            if (!RemoteKillSwitched.isModEnabled || player == null)
+                return;
+
+            MelonCoroutines.Start(
+                ApplyPlayerUserNameTargetVisibilityAfterSpawn(player));
+        }
+
+        private static IEnumerator ApplyPlayerUserNameTargetVisibilityAfterSpawn(
+            NetworkPlayer player)
+        {
+            yield return null;
+
+            if (player == null)
+                yield break;
+
+            try
+            {
+                PlayerUserNameTarget[] targets =
+                    player.GetComponentsInChildren<PlayerUserNameTarget>(true);
+                bool visible = misc.showPlayerUserNameTargets;
+                for (int i = 0; i < targets.Length; i++)
+                {
+                    PlayerUserNameTarget target = targets[i];
+                    if (target?.gameObject != null &&
+                        target.gameObject.scene.IsValid() &&
+                        target.gameObject.activeSelf != visible)
+                    {
+                        target.gameObject.SetActive(visible);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(
+                    $"[PlayerUserNameTarget] Spawn visibility update failed: {ex.Message}");
+            }
         }
 
         public static void ApplyPlayerUserNameTargetsVisibility(bool force = false)
@@ -576,5 +640,14 @@ namespace rowemod.Mods
             return false;
         }
 
+    }
+
+    [HarmonyPatch(typeof(NetworkPlayer), nameof(NetworkPlayer.Spawned))]
+    internal static class PlayerUserNameTargetSpawnPatch
+    {
+        private static void Postfix(NetworkPlayer __instance)
+        {
+            Misc.NotifyNetworkPlayerSpawned(__instance);
+        }
     }
 }

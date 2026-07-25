@@ -57,20 +57,6 @@ namespace rowemod.Mods
         private static Vector2 _pickerScroll;
         private static string _pickerSearch = "";
 
-        // Optional: a little style cache
-        
-        // Replace your DirectionGlyphMap with this:
-        private static readonly Dictionary<string, string> DirectionGlyphMap = new()
-        {
-            { "Up",    "xbox_dpad_up"    },
-            { "Right", "xbox_dpad_right" },
-            { "Down",  "xbox_dpad_down"  },
-            { "Left",  "xbox_dpad_left"  },
-            // NOTE: No diagonals here on purpose.
-        };
-        private static readonly Dictionary<string, Texture2D> GlyphCache = new();
-
-
         // Popup window placement
         private static Rect _pickerRect = new Rect(0, 0, 360, 340);
         private const int PickerWindowId = 0x315C0DE; // any unique int
@@ -488,7 +474,8 @@ namespace rowemod.Mods
         private static bool _stylesInited;
         private static int _styleRevision = -1;
         private static GUIStyle _card, _cardHeader, _pill, _pillOn, _rowLabelLeft, _rowLabelRight, _rowButton, _rowButtonSelected, _miniBtn, _badge, _searchField;
-        private static GUIStyle _toolbarLabel, _setBlock, _setHeaderButton, _rowStrip, _rowStripSelected, _directionBadge, _directionBadgeSelected, _emptyState;
+        private static GUIStyle _toolbarLabel, _setBlock, _setHeaderButton, _setHeaderCaret, _controllerBumperBadge, _controllerTriggerBadge;
+        private static GUIStyle _rowStrip, _rowStripSelected, _directionBadge, _directionBadgeSelected, _emptyState, _positiveButton;
 
         // tiny “dirty” flag so we only rebuild runtime when something changed
         private static bool _pendingRefresh;
@@ -517,6 +504,12 @@ namespace rowemod.Mods
         private static readonly Vector3 TrickPreviewPlayerOffset = new Vector3(0f, 1.25f, 0f);
         private const float TrickPreviewFireInterval = 2f;
         private const float TrickNoBailExitGraceSeconds = 1f;
+
+        public static bool RequiresUpdate =>
+            (_tricksTabActive &&
+             Menu.isOpen &&
+             Menu.currentTab == Menu.Tab.Tricks) ||
+            (_tricksNoBailOverrideActive && _tricksNoBailRestoreTime >= 0f);
 
         public static void DrawTrickMenuPro()
         {
@@ -629,7 +622,7 @@ namespace rowemod.Mods
             GUILayout.Label("Name", _toolbarLabel, GUILayout.Width(42f));
             _presetName = GUILayout.TextField(_presetName ?? string.Empty, Menu.UiSearchFieldStyle, GUILayout.Width(200f), GUILayout.Height(24f));
 
-            if (Menu.PrimaryButton("Save Current", GUILayout.Width(110f), GUILayout.Height(24f)))
+            if (GUILayout.Button("Save Current", _positiveButton, GUILayout.Width(110f), GUILayout.Height(24f)))
             {
                 string saveName = string.IsNullOrWhiteSpace(_presetName)
                     ? $"Tricks {System.DateTime.Now:yyyy-MM-dd HH-mm}"
@@ -737,7 +730,7 @@ namespace rowemod.Mods
             GUILayout.Space(8);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Direction", _rowLabelLeft, GUILayout.Width(76));
+            GUILayout.Label("Stick", _rowLabelLeft, GUILayout.Width(46));
             GUILayout.Label("Trick", _rowLabelLeft);
             GUILayout.Label("On", _rowLabelLeft, GUILayout.Width(28));
             GUILayout.EndHorizontal();
@@ -764,7 +757,7 @@ namespace rowemod.Mods
                 GUILayout.BeginVertical(_setBlock);
                 GUILayout.BeginHorizontal();
                 bool currentFold = _foldouts.TryGetValue(setKey, out var f) ? f : true;
-                bool newFold = FoldoutButton(currentFold, setDisplay, _setHeaderButton);
+                bool newFold = DrawSetFoldout(currentFold, setDisplay);
                 _foldouts[setKey] = newFold;
 
                 GUILayout.FlexibleSpace();
@@ -879,7 +872,11 @@ namespace rowemod.Mods
             }
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label(_selectedTrickDirection, _directionBadge, GUILayout.Width(82), GUILayout.Height(22));
+            GUILayout.Label(
+                new GUIContent(DirectionArrow(_selectedTrickDirection), null, $"Stick {FormatDirectionLabel(_selectedTrickDirection)}"),
+                _directionBadge,
+                GUILayout.Width(46),
+                GUILayout.Height(24));
             GUILayout.Label(_selectedTrickName, _cardHeader);
             GUILayout.FlexibleSpace();
             if (Menu.SecondaryButton("Change Mapped Trick", GUILayout.Width(154f), GUILayout.Height(24f)))
@@ -1529,18 +1526,6 @@ namespace rowemod.Mods
             return s;
         }
 
-        // Parse a cleaned set title like "Left Shoulder Right Trigger" into glyph IDs
-        private static readonly (string key, string glyph)[] _titleTokens =
-        {
-            ("left shoulder",  "xbox_lb"),
-            ("right shoulder", "xbox_rb"),
-            ("left trigger",   "xbox_lt"),
-            ("right trigger",  "xbox_rt"),
-            // add more if your titles include face buttons, e.g. ("button a","xbox_button_a")
-        };
-        
-
-        // Draw the glyph sequence; fallback to the text title if nothing matched
         // Parse a cleaned set title (e.g., "Left Shoulder Right Trigger") into glyph IDs (LB, RB, etc.)
         private static List<string> TitleToGlyphs(string title)
         {
@@ -1611,48 +1596,77 @@ namespace rowemod.Mods
             return outIds.Count > 0 ? outIds : null;
         }
 
-
-// Draw the glyph sequence; fallback to the text title if nothing matched
-        private static void DrawSetHeaderGlyphs(string setTitle)
+        private static bool DrawSetFoldout(bool open, string setTitle)
         {
-            GUILayout.Label(setTitle, _cardHeader);
+            List<string> glyphs = TitleToGlyphs(setTitle);
+            float contentWidth = glyphs == null
+                ? 190f
+                : 24f + (glyphs.Count * 38f) + (Mathf.Max(0, glyphs.Count - 1) * 12f);
+            Rect rect = GUILayoutUtility.GetRect(contentWidth, 24f, GUILayout.Width(contentWidth), GUILayout.Height(24f));
+            bool next = GUI.Toggle(rect, open, GUIContent.none, _setHeaderButton);
+
+            GUI.Label(new Rect(rect.x, rect.y, 20f, rect.height), open ? "▼" : "▶", _setHeaderCaret);
+            if (glyphs == null || glyphs.Count == 0)
+            {
+                GUI.Label(new Rect(rect.x + 22f, rect.y, rect.width - 22f, rect.height), setTitle, _setHeaderButton);
+                return next;
+            }
+
+            float x = rect.x + 24f;
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                if (i > 0)
+                {
+                    GUI.Label(new Rect(x, rect.y, 12f, rect.height), "+", _setHeaderCaret);
+                    x += 12f;
+                }
+
+                string id = glyphs[i];
+                GUIStyle style = id == "xbox_lt" || id == "xbox_rt"
+                    ? _controllerTriggerBadge
+                    : _controllerBumperBadge;
+                GUI.Label(new Rect(x, rect.y + 1f, 36f, 22f), ControllerGlyphLabel(id), style);
+                x += 38f;
+            }
+
+            return next;
         }
 
-
-        // --- DPI helper (add once, near your fields) ---
-        private static float UIScale => Mathf.Clamp(Screen.height / 1080f, 0.85f, 1.6f);
-
-        // --- Robust loader: Texture2D OR Sprite; Resources OR already-loaded assets ---
-        private static Texture2D GetGlyph(string resourceName)
+        private static string ControllerGlyphLabel(string glyphId)
         {
-            if (GlyphCache.TryGetValue(resourceName, out var tex) && tex) return tex;
-
-            // 1) Try Resources as Texture2D
-            tex = Resources.Load<Texture2D>(resourceName);
-            if (tex) return GlyphCache[resourceName] = tex;
-
-            // 2) Try Resources as Sprite (use underlying texture)
-            var spr = Resources.Load<Sprite>(resourceName);
-            if (spr && spr.texture) return GlyphCache[resourceName] = spr.texture;
-
-            // 3) Search already loaded assets by name (works in IL2CPP builds)
-            var allTex = Resources.FindObjectsOfTypeAll<Texture2D>();
-            for (int i = 0; i < allTex.Length; i++)
-                if (string.Equals(allTex[i].name, resourceName, StringComparison.OrdinalIgnoreCase))
-                    return GlyphCache[resourceName] = allTex[i];
-
-            var allSpr = Resources.FindObjectsOfTypeAll<Sprite>();
-            for (int i = 0; i < allSpr.Length; i++)
-                if (string.Equals(allSpr[i].name, resourceName, StringComparison.OrdinalIgnoreCase) &&
-                    allSpr[i].texture)
-                    return GlyphCache[resourceName] = allSpr[i].texture;
-
-            return null; // fallback will draw text
+            switch (glyphId)
+            {
+                case "xbox_lb": return "LB";
+                case "xbox_rb": return "RB";
+                case "xbox_lt": return "LT";
+                case "xbox_rt": return "RT";
+                default: return "?";
+            }
         }
 
         private static void DrawDirectionCell(string dir, bool selected = false)
         {
-            GUILayout.Label(FormatDirectionLabel(dir), selected ? _directionBadgeSelected : _directionBadge, GUILayout.Width(74), GUILayout.Height(24));
+            GUILayout.Label(
+                new GUIContent(DirectionArrow(dir), null, $"Stick {FormatDirectionLabel(dir)}"),
+                selected ? _directionBadgeSelected : _directionBadge,
+                GUILayout.Width(44),
+                GUILayout.Height(24));
+        }
+
+        private static string DirectionArrow(string dir)
+        {
+            switch (dir)
+            {
+                case "Up": return "↑";
+                case "UpRight": return "↗";
+                case "Right": return "→";
+                case "DownRight": return "↘";
+                case "Down": return "↓";
+                case "DownLeft": return "↙";
+                case "Left": return "←";
+                case "UpLeft": return "↖";
+                default: return "•";
+            }
         }
 
         private static string FormatDirectionLabel(string dir)
@@ -1693,7 +1707,22 @@ namespace rowemod.Mods
                 padding = new RectOffset(10, 10, 3, 3),
                 margin = new RectOffset(4, 0, 0, 0)
             };
-            _pillOn = new GUIStyle(Menu.UiPillActiveStyle);
+            _pillOn = new GUIStyle(Menu.UiPillStyle)
+            {
+                fontStyle = FontStyle.Bold
+            };
+            Texture2D activeGreen = Menu.MakeRoundedTex(64, 24, new Color(0.08f, 0.30f, 0.16f, 0.98f), 7, 1, new Color(0.28f, 1f, 0.48f, 0.62f));
+            Texture2D activeGreenHover = Menu.MakeRoundedTex(64, 24, new Color(0.11f, 0.38f, 0.20f, 0.99f), 7, 1, new Color(0.36f, 1f, 0.56f, 0.78f));
+            _pillOn.normal.background = activeGreen;
+            _pillOn.hover.background = activeGreenHover;
+            _pillOn.active.background = activeGreen;
+            _pillOn.normal.textColor = new Color(0.90f, 1f, 0.93f, 1f);
+            _pillOn.hover.textColor = Color.white;
+            _pillOn.active.textColor = Color.white;
+            _positiveButton = new GUIStyle(_pillOn)
+            {
+                padding = new RectOffset(12, 12, 5, 5)
+            };
 
             _rowLabelLeft = new GUIStyle(Menu.UiRowLabelStyle)
             {
@@ -1776,6 +1805,36 @@ namespace rowemod.Mods
                 margin = new RectOffset(0, 0, 0, 0),
                 fixedHeight = 24f
             };
+            _setHeaderCaret = new GUIStyle(Menu.UiMutedStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 11,
+                fontStyle = FontStyle.Bold
+            };
+            _controllerBumperBadge = new GUIStyle(Menu.UiBadgeStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 11,
+                fontStyle = FontStyle.Bold,
+                padding = new RectOffset(5, 5, 2, 2)
+            };
+            _controllerBumperBadge.normal.background = Menu.MakeRoundedTex(
+                48,
+                24,
+                new Color(0.12f, 0.13f, 0.15f, 0.99f),
+                7,
+                1,
+                new Color(0.58f, 0.62f, 0.68f, 0.48f));
+            _controllerBumperBadge.normal.textColor = new Color(0.94f, 0.96f, 0.98f, 1f);
+            _controllerTriggerBadge = new GUIStyle(_controllerBumperBadge);
+            _controllerTriggerBadge.normal.background = Menu.MakeRoundedTex(
+                48,
+                24,
+                new Color(0.075f, 0.085f, 0.10f, 0.99f),
+                4,
+                1,
+                new Color(0.48f, 0.72f, 0.92f, 0.52f));
+            _controllerTriggerBadge.normal.textColor = new Color(0.84f, 0.93f, 1f, 1f);
 
             _rowStrip = new GUIStyle(GUIStyle.none)
             {
@@ -1790,16 +1849,16 @@ namespace rowemod.Mods
             _directionBadge = new GUIStyle(Menu.UiBadgeStyle)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 11,
+                fontSize = 18,
                 fontStyle = FontStyle.Bold,
-                padding = new RectOffset(6, 6, 2, 2)
+                padding = new RectOffset(4, 4, 0, 2)
             };
-            _directionBadge.normal.textColor = new Color(0.95f, 0.9f, 0.86f, 1f);
-            _directionBadge.normal.background = Menu.MakeRoundedTex(64, 22, new Color(0.085f, 0.073f, 0.064f, 0.96f), 6, 1, new Color(0.9f, 0.48f, 0.24f, 0.22f));
+            _directionBadge.normal.textColor = new Color(0.88f, 0.91f, 0.95f, 1f);
+            _directionBadge.normal.background = Menu.MakeRoundedTex(48, 24, new Color(0.075f, 0.08f, 0.092f, 0.98f), 6, 1, new Color(0.62f, 0.67f, 0.74f, 0.24f));
 
             _directionBadgeSelected = new GUIStyle(_directionBadge);
             _directionBadgeSelected.normal.textColor = new Color(0.9f, 1f, 0.92f, 1f);
-            _directionBadgeSelected.normal.background = Menu.MakeRoundedTex(64, 24, new Color(0.08f, 0.30f, 0.16f, 0.98f), 6, 1, new Color(0.28f, 1f, 0.48f, 0.62f));
+            _directionBadgeSelected.normal.background = Menu.MakeRoundedTex(48, 24, new Color(0.08f, 0.30f, 0.16f, 0.98f), 6, 1, new Color(0.28f, 1f, 0.48f, 0.62f));
 
             _emptyState = new GUIStyle(Menu.UiMutedWrappedStyle)
             {
@@ -1937,7 +1996,7 @@ namespace rowemod.Mods
         {
             var r = GUILayoutUtility.GetRect(1, 22, GUILayout.ExpandWidth(true));
             Color bg = selected
-                ? new Color(0.9f, 0.42f, 0.2f, 0.28f)
+                ? new Color(0.12f, 0.48f, 0.24f, 0.28f)
                 : (index % 2 == 0) ? new Color(1,1,1,0.06f) : new Color(1,1,1,0.03f);
             EditorishFill(r, bg);
             GUI.skin.label.CalcHeight(GUIContent.none, r.width); // keep layout happy
