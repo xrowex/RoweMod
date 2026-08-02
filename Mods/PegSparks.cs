@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using MelonLoader;
 using GameReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
 using Il2CppMashBox.BMX_Physics_Development;
 using rowemod.Utils;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.VFX;
 using Object = UnityEngine.Object;
 
@@ -20,6 +23,12 @@ namespace rowemod.Mods
     {
         private const string BundleFileName = "rowemod_peg_sparks";
         private const string PrefabFileName = "rowemodpegsparks.prefab";
+        private const string BundleDownloadUrl =
+            "https://raw.githubusercontent.com/xrowex/RoweMod/master/Bundles/rowemod_peg_sparks";
+        private const string BundleSha256 =
+            "DD2C7AB0D16125F807D911A2EB07E5695A9555E12D2F611C323C38904C7C640F";
+        private const int BundleDownloadTimeoutSeconds = 30;
+        private const long MaxBundleDownloadBytes = 12L * 1024L * 1024L;
         private const float ImpactCooldownSeconds = 0.12f;
         private const float ReplaySampleExpirySeconds = 0.12f;
         private const float ReplaySeekResetSeconds = 0.35f;
@@ -58,6 +67,7 @@ namespace rowemod.Mods
         private static BMXCollisionHandler _collisionHandler;
         private static AssetBundle _bundle;
         private static bool _ownsBundle;
+        private static bool _bundleDownloadInProgress;
         private static GameObject _rigPrefab;
         private static AudioClip _chingClip;
         private static readonly List<ReplaySample> ReplaySamples =
@@ -316,7 +326,8 @@ namespace rowemod.Mods
 
             if (_collisionHandler == null || !EnsureRigs())
             {
-                _status = "Mount a local bike before running the spark preview.";
+                if (!_bundleDownloadInProgress)
+                    _status = "Mount a local bike before running the spark preview.";
                 return;
             }
 
@@ -529,7 +540,7 @@ namespace rowemod.Mods
 
             if (_bundle == null)
             {
-                _status = "Missing Bundles/rowemod_peg_sparks. Build the Peg Sparks bundle in Unity.";
+                BeginBundleDownload(path);
                 return false;
             }
 
@@ -551,6 +562,72 @@ namespace rowemod.Mods
             }
 
             return true;
+        }
+
+        private static void BeginBundleDownload(string bundlePath)
+        {
+            if (_bundleDownloadInProgress)
+                return;
+
+            _bundleDownloadInProgress = true;
+            _status = "Downloading the Peg Sparks visual bundle...";
+            MelonCoroutines.Start(DownloadBundle(bundlePath));
+        }
+
+        private static System.Collections.IEnumerator DownloadBundle(string bundlePath)
+        {
+            UnityWebRequest request = UnityWebRequest.Get(BundleDownloadUrl);
+            request.timeout = BundleDownloadTimeoutSeconds;
+            yield return request.SendWebRequest();
+
+            try
+            {
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    _status = "Could not download the Peg Sparks visual bundle.";
+                    Log.Warning("[PegSparks] Bundle download failed: " + request.error);
+                    yield break;
+                }
+
+                byte[] data = request.downloadHandler.data;
+                if (data == null || data.Length == 0 || data.Length > MaxBundleDownloadBytes)
+                {
+                    _status = "Peg Sparks bundle download was invalid.";
+                    Log.Warning("[PegSparks] Bundle download was empty or exceeded the size limit.");
+                    yield break;
+                }
+
+                string actualHash;
+                using (SHA256 sha256 = SHA256.Create())
+                    actualHash = BitConverter.ToString(sha256.ComputeHash(data)).Replace("-", string.Empty);
+
+                if (!string.Equals(actualHash, BundleSha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    _status = "Peg Sparks bundle verification failed.";
+                    Log.Warning($"[PegSparks] Bundle hash mismatch. expected={BundleSha256}, actual={actualHash}");
+                    yield break;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(bundlePath));
+                string stagingPath = bundlePath + ".download";
+                File.WriteAllBytes(stagingPath, data);
+                if (File.Exists(bundlePath))
+                    File.Delete(bundlePath);
+                File.Move(stagingPath, bundlePath);
+
+                _status = "Peg Sparks visual bundle downloaded. Initializing...";
+                Log.Msg("[PegSparks] Visual bundle downloaded and verified.");
+            }
+            catch (Exception ex)
+            {
+                _status = "Could not save the Peg Sparks visual bundle.";
+                Log.Warning("[PegSparks] Bundle install failed: " + ex.Message);
+            }
+            finally
+            {
+                _bundleDownloadInProgress = false;
+                request.Dispose();
+            }
         }
 
         private static AssetBundle FindAlreadyLoadedBundle()

@@ -1,6 +1,9 @@
 using System;
 using Il2CppMashBox.Addons.PhysicsDrivenAnimation;
+using Il2CppMashBox.BMX_Physics_Development;
+using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Animator_Motion_Systems;
 using Il2CppMashBox.Character;
+using Il2CppMashBox.Core.Runtime.InverseKinematics;
 using rowemod.Utils;
 using UnityEngine;
 
@@ -28,8 +31,16 @@ namespace rowemod.Mods
 
         private static CharacterManager _characterManager;
         private static FootStanceBinding[] _feet = Array.Empty<FootStanceBinding>();
+        private static CharacterSportsStance _sportsStance;
+        private static TuckUpTest _tuckUp;
+        private static MGSteerableWheel _steerableWheel;
+        private static BMXMotionComponent _bmxMotion;
+        private static FullBodyMotionComponent _fullBodyMotion;
+        private static UnityIKLimb[] _ikLimbs = Array.Empty<UnityIKLimb>();
 
         private static bool _applied;
+        private static bool _feetApplied;
+        private static bool _appliedOppoTrickCompatibility;
         private static bool _appliedGoofy;
         private static bool _dirty = true;
         private static string _status = "Waiting for the local rider.";
@@ -67,7 +78,7 @@ namespace rowemod.Mods
             BikeOnlyStanceSettings settings = Config.bikeOnlyStanceSettings;
             if (settings == null || !settings.enabled)
             {
-                RestoreOriginalFeet();
+                RestoreAppliedStance();
                 _status = _root == null
                     ? "Waiting for the local rider."
                     : "Disabled; native foot placement restored.";
@@ -76,14 +87,18 @@ namespace rowemod.Mods
 
             if (!CanApply())
             {
-                RestoreOriginalFeet();
+                RestoreAppliedStance();
                 return;
             }
 
-            if (!_dirty && _applied && _appliedGoofy == settings.goofy)
+            if (!_dirty && _applied && _appliedGoofy == settings.goofy &&
+                _appliedOppoTrickCompatibility == settings.useOppoTrickCompatibility)
                 return;
 
-            ApplyFootStance(settings.goofy);
+            if (_applied && _appliedOppoTrickCompatibility != settings.useOppoTrickCompatibility)
+                RestoreAppliedStance();
+
+            ApplyFootStance(settings.goofy, settings.useOppoTrickCompatibility);
         }
 
         public static void NotifySettingsChanged()
@@ -101,7 +116,7 @@ namespace rowemod.Mods
 
         public static void OnSceneInitialized(bool gameplayScene)
         {
-            RestoreOriginalFeet();
+            RestoreAppliedStance();
             ClearReferences();
             _status = gameplayScene
                 ? "Waiting for the local rider."
@@ -110,7 +125,7 @@ namespace rowemod.Mods
 
         public static void Cleanup()
         {
-            RestoreOriginalFeet();
+            RestoreAppliedStance();
             ClearReferences();
         }
 
@@ -132,7 +147,7 @@ namespace rowemod.Mods
             _nextResolveTime = Time.unscaledTime + ResolveIntervalSeconds;
             if (changed || force)
             {
-                RestoreOriginalFeet();
+                RestoreAppliedStance();
                 ClearReferences();
             }
 
@@ -143,6 +158,19 @@ namespace rowemod.Mods
             _rootId = rootId;
             _vehicleId = vehicleId;
             _characterManager = root.GetComponentInChildren<CharacterManager>(true);
+            _sportsStance = root.GetComponentInChildren<CharacterSportsStance>(true);
+            if (_sportsStance != null)
+            {
+                _tuckUp = _sportsStance._tuckUpTest;
+                _steerableWheel = _sportsStance._mgSteerableWheel;
+                _bmxMotion = _sportsStance._bmxMotionComponent;
+                _fullBodyMotion = _sportsStance._fullBodyMotionComponent;
+            }
+            _tuckUp ??= root.GetComponentInChildren<TuckUpTest>(true);
+            _steerableWheel ??= root.GetComponentInChildren<MGSteerableWheel>(true);
+            _bmxMotion ??= root.GetComponentInChildren<BMXMotionComponent>(true);
+            _fullBodyMotion ??= root.GetComponentInChildren<FullBodyMotionComponent>(true);
+            _ikLimbs = root.GetComponentsInChildren<UnityIKLimb>(true) ?? Array.Empty<UnityIKLimb>();
 
             FootStancePositioner[] positioners =
                 root.GetComponentsInChildren<FootStancePositioner>(true) ??
@@ -199,7 +227,10 @@ namespace rowemod.Mods
                 return false;
             }
 
-            if (_feet.Length == 0)
+            bool hasLegacyMirror = _tuckUp != null || _steerableWheel != null ||
+                _bmxMotion != null || _fullBodyMotion != null || _ikLimbs.Length > 0;
+            if (_feet.Length == 0 &&
+                !(Config.bikeOnlyStanceSettings?.useOppoTrickCompatibility == true && hasLegacyMirror))
             {
                 _status = "No FootStancePositioner was found on the local rider.";
                 return false;
@@ -208,7 +239,7 @@ namespace rowemod.Mods
             return true;
         }
 
-        private static void ApplyFootStance(bool goofy)
+        private static void ApplyFootStance(bool goofy, bool useOppoTrickCompatibility)
         {
             int appliedCount = 0;
             try
@@ -221,10 +252,13 @@ namespace rowemod.Mods
 
                     positioner.SetGoofy(goofy);
                     appliedCount++;
-                    _applied = true;
                 }
 
                 _applied = appliedCount > 0;
+                _feetApplied = _applied;
+                int mirroredCount = useOppoTrickCompatibility ? ApplyLegacyMotionMirror(goofy) : 0;
+                _applied |= mirroredCount > 0;
+                _appliedOppoTrickCompatibility = useOppoTrickCompatibility && mirroredCount > 0;
                 if (_applied)
                     Main.NotifyRuntimeContributionApplied();
                 _appliedGoofy = goofy;
@@ -236,7 +270,9 @@ namespace rowemod.Mods
                     : "Unknown";
                 _status =
                     $"Feet: {(goofy ? "Goofy" : "Regular")} | " +
-                    $"Tricks/grinds: native {native} | " +
+                    (useOppoTrickCompatibility
+                        ? $"Oppo tricks: compatible ({mirroredCount} motion/IK target(s)) | "
+                        : $"Tricks/grinds: native {native} | ") +
                     $"{appliedCount} foot target(s)";
                 Log.Msg($"[BikeOnlyStance] {_status}");
             }
@@ -248,9 +284,45 @@ namespace rowemod.Mods
             }
         }
 
+        private static int ApplyLegacyMotionMirror(bool goofy)
+        {
+            int count = 0;
+            if (_tuckUp != null) { _tuckUp.SetMirrored(goofy); count++; }
+            if (_steerableWheel != null) { _steerableWheel.Mirror(goofy); count++; }
+            if (_bmxMotion != null) { _bmxMotion.SetMirrored(goofy); count++; }
+            if (_fullBodyMotion != null) { _fullBodyMotion.SetMirrored(goofy); count++; }
+            for (int i = 0; i < _ikLimbs.Length; i++)
+            {
+                UnityIKLimb limb = _ikLimbs[i];
+                if (limb == null) continue;
+                limb.SetMirrored(goofy);
+                count++;
+            }
+            return count;
+        }
+
+        private static void RestoreAppliedStance()
+        {
+            RestoreLegacyMotionMirror();
+            RestoreOriginalFeet();
+            _applied = false;
+            _appliedOppoTrickCompatibility = false;
+            _dirty = true;
+        }
+
+        private static void RestoreLegacyMotionMirror()
+        {
+            if (!_appliedOppoTrickCompatibility)
+                return;
+
+            bool nativeGoofy = NativeGoofy == true;
+            try { ApplyLegacyMotionMirror(nativeGoofy); }
+            catch { }
+        }
+
         private static void RestoreOriginalFeet()
         {
-            if (!_applied)
+            if (!_feetApplied)
                 return;
 
             for (int i = 0; i < _feet.Length; i++)
@@ -269,8 +341,7 @@ namespace rowemod.Mods
                 }
             }
 
-            _applied = false;
-            _dirty = true;
+            _feetApplied = false;
         }
 
         private static void ClearReferences()
@@ -280,7 +351,15 @@ namespace rowemod.Mods
             _vehicleId = 0;
             _characterManager = null;
             _feet = Array.Empty<FootStanceBinding>();
+            _sportsStance = null;
+            _tuckUp = null;
+            _steerableWheel = null;
+            _bmxMotion = null;
+            _fullBodyMotion = null;
+            _ikLimbs = Array.Empty<UnityIKLimb>();
             _applied = false;
+            _feetApplied = false;
+            _appliedOppoTrickCompatibility = false;
             _dirty = true;
             _nextResolveTime = 0f;
         }

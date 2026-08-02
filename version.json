@@ -1,8 +1,8 @@
 {
-    "version":  "3.2.4",
+    "version":  "3.2.5",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "8C15482068C24C1265D409518F620F3ABA96885A81AFF708EEB740CD8A02682A",
+    "sha256":  "8B12CB230D8CC0953E10555FCA19AA688C829F4C6D36BDF8349101875E36E877",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Added Bike-Only Stance controls that switch the bike, pedals, rider motion, and local IK without changing native trick or grind bindings. Tap the left stick to flip the camera offset, or hold it for 0.5 seconds to switch bike stance while consuming the camera tap. Added configurable local rider head tracking under Rider Tools. Improved trick animation preview cleanup and runtime restore behavior. Reduced steady-state work through event-driven updates, cached component lookups, debounced configuration saves, and quieter optional nose-manual diagnostics.",
+    "patchNotes":  "Fixed Peg Sparks delivery: missing visual bundles now download, verify, and load automatically. Fixed Replay Fisheye to use BMX Streets' native percentage scale. Added an opt-in 3.2.3-compatible opposite-stance trick mode while keeping feet-only stance available.",
     "requiredGameVersion":  ""
 }

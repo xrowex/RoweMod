@@ -180,6 +180,22 @@ namespace rowemod.Mods
                 Config.RequestSave();
             }
 
+            bool oppoTrickCompatibility = settings.useOppoTrickCompatibility;
+            if (Menu.ModernToggle(
+                    "Enable Opposite-Stance Tricks (3.2.3 mode)",
+                    ref oppoTrickCompatibility,
+                    "bike_stance_oppo_tricks"))
+            {
+                settings.useOppoTrickCompatibility = oppoTrickCompatibility;
+                BikeOnlyStance.NotifySettingsChanged();
+                Config.RequestSave();
+            }
+            GUILayout.Label(
+                oppoTrickCompatibility
+                    ? "Uses the pre-3.2.4 rider/bike motion mirror so oppo tricks work."
+                    : "Feet-only mode: moves feet without changing trick or grind behavior.",
+                Menu.UiMutedWrappedStyle);
+
             GUILayout.BeginHorizontal();
             bool regularClicked = settings.goofy
                 ? Menu.SecondaryButton(

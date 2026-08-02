@@ -478,7 +478,7 @@ namespace rowemod.Mods
             DrawTrackLabel("FOV", LensTrack.Fov);
             settings.replayTilt = DrawSlider("Camera Tilt", settings.replayTilt, -180f, 180f, controlPrefix + "tilt", ref changed);
             DrawTrackLabel("Tilt", LensTrack.Tilt);
-            settings.replayFisheye = DrawSlider("Fisheye", settings.replayFisheye, -1f, 1f, controlPrefix + "fisheye", ref changed);
+            settings.replayFisheye = DrawSlider("Fisheye (%)", settings.replayFisheye, 0f, 100f, controlPrefix + "fisheye", ref changed);
             DrawTrackLabel("Fisheye", LensTrack.Fisheye);
             settings.replayVignette = DrawSlider("Vignette", settings.replayVignette, 0f, 1f, controlPrefix + "vignette", ref changed);
             DrawTrackLabel("Vignette", LensTrack.Vignette);
@@ -1251,10 +1251,10 @@ namespace rowemod.Mods
             if (cameraSettingsControls == null)
                 return;
 
-            SetLensValue(LensTrack.Fov, cameraSettingsControls._fovSmartData, s.replayFov, fallbackOnly);
-            SetLensValue(LensTrack.Tilt, cameraSettingsControls._tiltAngleSmartData, s.replayTilt, fallbackOnly);
-            SetLensValue(LensTrack.Fisheye, cameraSettingsControls._fisheyeAmountSmartData, s.replayFisheye, fallbackOnly);
-            SetLensValue(LensTrack.Vignette, cameraSettingsControls._vignetteIntensitySmartData, s.replayVignette, fallbackOnly);
+            SetLensValue(LensTrack.Fov, cameraSettingsControls._fovSmartData, s.replayFov, fallbackOnly, value => cameraSettingsControls.fov = value);
+            SetLensValue(LensTrack.Tilt, cameraSettingsControls._tiltAngleSmartData, s.replayTilt, fallbackOnly, value => cameraSettingsControls.tiltAngle = value);
+            SetLensValue(LensTrack.Fisheye, cameraSettingsControls._fisheyeAmountSmartData, s.replayFisheye, fallbackOnly, value => cameraSettingsControls.fisheyeAmount = value);
+            SetLensValue(LensTrack.Vignette, cameraSettingsControls._vignetteIntensitySmartData, s.replayVignette, fallbackOnly, value => cameraSettingsControls.vignetteIntensity = value);
             SetLensValue(LensTrack.Shake, cameraSettingsControls._cameraShakeSmartData, s.replayShakeMode, fallbackOnly);
             SetLensValue(LensTrack.DofState, cameraSettingsControls._DOFStateSmartData, s.replayDofEnabled ? 1f : 0f, fallbackOnly);
             SetLensValue(LensTrack.DofPhysical, cameraSettingsControls._DOFPhysicallyBasedSmartData, s.replayDofPhysicallyBased ? 1f : 0f, fallbackOnly);
@@ -1265,11 +1265,17 @@ namespace rowemod.Mods
             lensApplyPending = false;
         }
 
-        private static void SetLensValue(LensTrack track, SmartDataFloat smart, float value, bool fallbackOnly)
+        private static void SetLensValue(
+            LensTrack track,
+            SmartDataFloat smart,
+            float value,
+            bool fallbackOnly,
+            Action<float> applyImmediate = null)
         {
             if (smart == null || (fallbackOnly && IsNativeTrack(track)))
                 return;
             smart.Value = value;
+            applyImmediate?.Invoke(value);
         }
 
         private static float ReadSmart(SmartDataFloat smart, float fallback)

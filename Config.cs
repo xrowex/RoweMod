@@ -233,6 +233,9 @@ namespace rowemod
         public int bikeOnlyStanceVersion { get; set; } = 1;
         public bool goofy { get; set; }
         public bool holdLeftStickToSwitchStance { get; set; } = true;
+        // Restores the pre-3.2.4 rider/bike motion mirror so the game can perform
+        // opposite-stance tricks. Disabled keeps the strictly feet-only mode.
+        public bool useOppoTrickCompatibility { get; set; }
     }
 
     public class RiderHeadTrackingSettings
@@ -835,10 +838,13 @@ namespace rowemod
             if (settings == null)
                 return;
 
-            settings.cameraLabVersion = 1;
+            if (settings.cameraLabVersion < 2)
+                settings.replayFisheye *= 100f;
+
+            settings.cameraLabVersion = 2;
             settings.replayFov = ClampFinite(settings.replayFov, 5f, 120f, 60f);
             settings.replayTilt = ClampFinite(settings.replayTilt, -180f, 180f, 0f);
-            settings.replayFisheye = ClampFinite(settings.replayFisheye, -1f, 1f, 0f);
+            settings.replayFisheye = ClampFinite(settings.replayFisheye, 0f, 100f, 0f);
             settings.replayVignette = ClampFinite(settings.replayVignette, 0f, 1f, 0.05f);
             settings.replayShakeMode = Math.Max(0, Math.Min(3, settings.replayShakeMode));
             settings.replayNearFocusStart = ClampFinite(settings.replayNearFocusStart, 0f, 1000f, 0f);
