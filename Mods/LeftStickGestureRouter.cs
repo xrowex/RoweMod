@@ -17,6 +17,10 @@ namespace rowemod.Mods
 
         private static Il2CppSystem.Action _afterInputUpdateHandler;
         private static bool _initialized;
+        // onAfterUpdate runs after the Input System has processed its event
+        // batch. Track the persistent control value ourselves rather than
+        // relying on per-frame flags at that point.
+        private static bool _buttonWasPressed;
         private static bool _pressed;
         private static bool _consumed;
         private static float _pressedAt;
@@ -91,6 +95,7 @@ namespace rowemod.Mods
             }
 
             _initialized = false;
+            _buttonWasPressed = false;
         }
 
         private static void ProcessInputUpdate()
@@ -100,12 +105,18 @@ namespace rowemod.Mods
             {
                 if (_pressed)
                     Cancel();
+                _buttonWasPressed = false;
                 return;
             }
 
-            if (gamepad.leftStickButton.wasPressedThisFrame)
+            bool buttonIsPressed = gamepad.leftStickButton.isPressed;
+            if (buttonIsPressed == _buttonWasPressed)
+                return;
+
+            _buttonWasPressed = buttonIsPressed;
+            if (buttonIsPressed)
                 OnStarted();
-            if (gamepad.leftStickButton.wasReleasedThisFrame)
+            else
                 OnCanceled();
         }
 

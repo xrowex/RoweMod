@@ -113,6 +113,8 @@ namespace rowemod.Mods
             GUILayout.Space(4f);
             DrawPresetControls();
             GUILayout.Space(4f);
+            PegSparks.DrawControls();
+            GUILayout.Space(4f);
 
             if (PoseCache.Count == 0)
             {

@@ -21,7 +21,6 @@ namespace rowemod.Mods
 
         private static readonly HashSet<MethodBase> PatchedMenuMethods = new HashSet<MethodBase>();
         private static readonly HashSet<MethodBase> PatchedReplayCommandMethods = new HashSet<MethodBase>();
-        private static readonly HashSet<MethodBase> PatchedReplayEditorMethods = new HashSet<MethodBase>();
         private static readonly HashSet<MethodBase> PatchedInputMethods = new HashSet<MethodBase>();
         private static readonly object ReplayGateLock = new object();
         private static MethodBase patchedGameEventRaiseMethod;
@@ -92,7 +91,6 @@ namespace rowemod.Mods
         public static void ApplyLatePatch(global::HarmonyLib.Harmony harmony)
         {
             PatchReplaySystemCommandMethods(harmony);
-            PatchReplayEditorMethods(harmony);
             PatchReplayOpenGameEvent(harmony);
             PatchOpenMenuGameplayMethods(harmony);
             PatchReplayTransitionMethods(harmony);
@@ -303,12 +301,6 @@ namespace rowemod.Mods
 
             if (patchedCount == 0)
                 Log.Warning("[PieMenu] No ReplaySystem replay-open method was found; native replay command is not gated.");
-        }
-
-        private static void PatchReplayEditorMethods(global::HarmonyLib.Harmony harmony)
-        {
-            // ReplayEditor methods are used by normal replay exit/restore paths too.
-            // Replay opening is gated earlier through commands, menu requests, events, and transitions.
         }
 
         private static void PatchReplayOpenGameEvent(global::HarmonyLib.Harmony harmony)
@@ -873,6 +865,7 @@ namespace rowemod.Mods
         {
             replayOpenedFromPieMenu = false;
             CancelReplayOpenAuthorization();
+            ReplayCameraLight.OnReplayClosed(reason);
             if (!global::rowemod.Menu.isOpen)
             {
                 ControllerMenuInput.SetGameplayInputBlocked(false);
@@ -1104,6 +1097,16 @@ namespace rowemod.Mods
         {
             // Intentionally permissive: replay editor lifecycle methods must run so native close/restore can finish.
             return true;
+        }
+
+        internal static void ReplayCameraKeyframePlaybackPostfix(object __instance)
+        {
+            ReplayCameraLight.OnReplayCameraKeyframePlaybackEntered(__instance);
+        }
+
+        internal static void ReplayRecordableCameraReadyPostfix(object __instance)
+        {
+            ReplayCameraLight.OnRecordableCameraReady(__instance);
         }
 
         internal static bool GameEventRaisePrefix(GameEvent __instance)

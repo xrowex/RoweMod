@@ -29,7 +29,8 @@ namespace rowemod.Mods
         private GameEvent _localGameplayHumanSpawnEvent;
         private GameEvent _localMenuHumanSpawnEvent;
         private GameEvent _playerResetAtMarker;
-        private GameEvent _playerCloseReplay;
+        private GameEvent _replaySystemBeginReplay;
+        private GameEvent _replayExit;
         private GameEvent _titleLoopGameplayEnter;
         private GameEvent _titleLoopGameplayExit;
         private GameEvent _titleLoopPauseMenuEnter;
@@ -43,16 +44,24 @@ namespace rowemod.Mods
             _localGameplayHumanSpawnEvent = null;
             _localMenuHumanSpawnEvent = null;
             _playerResetAtMarker = null;
-            _playerCloseReplay = null;
+            _replaySystemBeginReplay = null;
+            _replayExit = null;
             _titleLoopGameplayEnter = null;
             _titleLoopGameplayExit = null;
             _titleLoopPauseMenuEnter = null;
             _titleLoopMainMenuEnter = null;
             _titleLoopLoadingScreenEnter = null;
             _mainMenuOpen = null;
+            var replayEventNames = new System.Collections.Generic.List<string>();
             GameEvent[] allEvents = Resources.FindObjectsOfTypeAll<GameEvent>();
             foreach (var ev in allEvents)
             {
+                if (ev != null && !string.IsNullOrEmpty(ev.name) &&
+                    ev.name.IndexOf("Replay", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    replayEventNames.Add(ev.name);
+                }
+
                 if (ev.name.Contains("GameEvent_OnResetAtMarker"))
                 {
                     _playerResetAtMarker = ev;
@@ -68,9 +77,14 @@ namespace rowemod.Mods
                     _localMenuHumanSpawnEvent = ev;
                 }
 
-                if (ev.name.Contains("GameEvent_TitleLoop_TransitionTrigger_CloseReplay"))
+                if (ev.name.Contains("GameEvent_ReplaySystem_OnBeginReplay"))
                 {
-                    _playerCloseReplay = ev;
+                    _replaySystemBeginReplay = ev;
+                }
+
+                if (ev.name.Contains("GameEvent_TitleLoop_Replay_OnExit"))
+                {
+                    _replayExit = ev;
                 }
 
                 if (ev.name.Contains("GameEvent_TitleLoop_Gameplay_OnEnter"))
@@ -99,6 +113,9 @@ namespace rowemod.Mods
                 }
 
             }
+
+            Log.Msg("[ReplayLight] Native Replay GameEvent candidates: " +
+                    (replayEventNames.Count == 0 ? "none" : string.Join(", ", replayEventNames)));
 
             ScheduleAutoIntroSkip("event listener initialization");
 
@@ -137,17 +154,12 @@ namespace rowemod.Mods
                 Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerResetAtMarker);
             _playerResetAtMarker.OnRaise.AddListener(resetAction);
 
-            //PLAYER CLOSES replay
-            if (_playerCloseReplay == null)
-            {
-                Log.Error("playerCloseMenu is null!");
-                return;
-            }
+            SubscribeOptional(
+                _replaySystemBeginReplay,
+                "GameEvent_ReplaySystem_OnBeginReplay",
+                OnPlayerOpenReplay);
 
-            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay found! Subscribing to event...");
-            UnityAction closeReplayAction =
-                Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<UnityAction>(OnPlayerCloseReplay);
-            _playerCloseReplay.OnRaise.AddListener(closeReplayAction);
+            SubscribeOptional(_replayExit, "GameEvent_TitleLoop_Replay_OnExit", OnPlayerCloseReplay);
 
             //GAMEPLAY ENTER
             if (_titleLoopGameplayEnter == null)
@@ -308,11 +320,23 @@ namespace rowemod.Mods
             if (!RemoteKillSwitched.isModEnabled)
                 return;
             
-            Log.Msg("GameEvent_TitleLoop_TransitionTrigger_CloseReplay!");
+            Log.Msg("GameEvent_TitleLoop_Replay_OnExit!");
+            ReplayCameraLight.OnReplayClosed("GameEvent_TitleLoop_Replay_OnExit");
+            PegSparks.OnReplayClosed();
 
             Memory.FindObjects(Memory.physicsDrivenCharacter);
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
             MelonCoroutines.Start(DelayedLoadPreset());
+        }
+
+        private void OnPlayerOpenReplay()
+        {
+            if (!RemoteKillSwitched.isModEnabled)
+                return;
+
+            Log.Msg("[ReplayLight] GameEvent_ReplaySystem_OnBeginReplay fired.");
+            ReplayCameraLight.OnReplayOpened(_replaySystemBeginReplay);
+            PegSparks.OnReplayOpened();
         }
 
         private void OnPlayerResetAtMarker()
@@ -322,6 +346,7 @@ namespace rowemod.Mods
             
             Misc.Update();
             Physics.Update();
+            PegSparks.OnLocalPlayerSpawned(Memory.gamePlayer);
         }
 
 
@@ -407,6 +432,7 @@ namespace rowemod.Mods
                 rowemod.Challenges.MultiplayerChallengeManager.OnLocalPlayerSpawned(go);
                 Memory.LoadAllAssetBundles();
                 PartTweaker.FindParts();
+                PegSparks.OnLocalPlayerSpawned(go);
                 GrindPoseEditor.ApplyConfigToRuntime(true);
                 MotorVehicleUtils.FindMxVehicleSettings();
                 MelonCoroutines.Start(DelayedLoadPreset());
@@ -471,6 +497,7 @@ namespace rowemod.Mods
                     Memory.physicsDrivenCharacter = go;
                     Memory.rMbCharacter = go.transform.parent?.gameObject;
                     Memory.menuPlayer = go;
+                    MainMenuCharacterPreview.NotifyMenuCharacterSpawned(go);
                     if(Memory.menuPlayer)
                         Log.Msg($"menuPlayer set to : {Memory.menuPlayer.name}");
                     else
@@ -482,7 +509,6 @@ namespace rowemod.Mods
                     
                     Memory.FindObjects(go);
                     Memory.LoadAllAssetBundles();
-                    MelonCoroutines.Start(DelayedLoadPreset());
                     MelonCoroutines.Start(Memory.DelayedLoadEquippedParts());
                     MelonCoroutines.Start(PartTweaker.DelayedUpdatePartTransforms());
                     MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());

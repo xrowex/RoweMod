@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using Il2CppMashBox.Addons.GameLoop;
 using Il2CppMashBox.Core.Runtime.Physics;
+using Il2CppMashBox.Core.Runtime.SceneManagement;
 using rowemod.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -23,6 +26,10 @@ namespace rowemod.Mods
         private static float lastHorizontalLeverArm;
         private static string lastPivotError = string.Empty;
         private static string statusText = "Center of mass marker is off.";
+        private static readonly List<string> menuMapNames = new List<string>();
+        private static Vector2 menuMapScroll;
+        private static string mapLoaderStatus = "Refresh the registered map list while the main menu is open.";
+        private static bool testSparksAfterMapLoad;
 
         public static bool RequiresUpdate => showCenterOfMassMarker;
 
@@ -56,6 +63,8 @@ namespace rowemod.Mods
             }
             Menu.EndToolbar();
             Menu.EndPane();
+
+            DrawMenuMapLoader();
         }
 
         public static void Update()
@@ -88,6 +97,94 @@ namespace rowemod.Mods
             DestroyObject(ref centerOfMassMaterial);
             DestroyObject(ref frontPivotMaterial);
             DestroyObject(ref centerProjectionMaterial);
+            menuMapNames.Clear();
+            menuMapScroll = Vector2.zero;
+            testSparksAfterMapLoad = false;
+        }
+
+        private static void DrawMenuMapLoader()
+        {
+            Menu.BeginPane("Menu Map Loader", "Debug-only shortcut through the game's registered map service.");
+            GUILayout.Label(mapLoaderStatus, Menu.UiMutedWrappedStyle);
+
+            Menu.BeginToolbar();
+            if (Menu.SecondaryButton("Refresh Maps", GUILayout.Width(140f), GUILayout.Height(26f)))
+                RefreshMenuMaps();
+            Menu.EndToolbar();
+
+            Menu.ModernToggle(
+                "Test Peg Sparks after rider spawns",
+                ref testSparksAfterMapLoad,
+                "debug_test_sparks_after_map_load");
+
+            if (menuMapNames.Count > 0)
+            {
+                menuMapScroll = GUILayout.BeginScrollView(menuMapScroll, GUILayout.Height(150f));
+                for (int i = 0; i < menuMapNames.Count; i++)
+                {
+                    string mapName = menuMapNames[i];
+                    if (Menu.ModernButton($"Load {mapName}", 360f, 26f))
+                    {
+                        LoadMenuMap(mapName);
+                        break;
+                    }
+                }
+                GUILayout.EndScrollView();
+            }
+
+            Menu.EndPane();
+        }
+
+        private static void RefreshMenuMaps()
+        {
+            menuMapNames.Clear();
+
+            try
+            {
+                MapServiceProvider provider = MapServiceProvider._current;
+                var names = provider?._mapNames;
+                if (names != null)
+                {
+                    for (int i = 0; i < names.Count; i++)
+                    {
+                        string name = names[i];
+                        if (!string.IsNullOrWhiteSpace(name) && !menuMapNames.Contains(name))
+                            menuMapNames.Add(name);
+                    }
+                }
+
+                menuMapNames.Sort(StringComparer.OrdinalIgnoreCase);
+                mapLoaderStatus = menuMapNames.Count == 0
+                    ? "No registered maps are ready yet. Wait for the main-menu map cards, then refresh."
+                    : $"Found {menuMapNames.Count} registered maps. Loading uses GameLoopFlow.LoadMap.";
+            }
+            catch (Exception ex)
+            {
+                mapLoaderStatus = $"Could not read registered maps: {ex.Message}";
+                Log.Warning($"[Debug] Map list refresh failed: {ex}");
+            }
+        }
+
+        private static void LoadMenuMap(string mapName)
+        {
+            if (string.IsNullOrWhiteSpace(mapName) || GameLoopFlow.IsTransitioning)
+                return;
+
+            try
+            {
+                mapLoaderStatus = $"Loading {mapName}...";
+                Log.Msg($"[Debug] Requesting native map load: {mapName}");
+                if (testSparksAfterMapLoad)
+                    PegSparks.QueuePreviewOnNextLocalSpawn();
+                Main.CloseRoweModMenu();
+                GameLoopFlow.LoadMap(mapName, true);
+            }
+            catch (Exception ex)
+            {
+                PegSparks.CancelQueuedPreview();
+                mapLoaderStatus = $"Could not load {mapName}: {ex.Message}";
+                Log.Warning($"[Debug] Map load failed: {ex}");
+            }
         }
 
         private static void SetCenterOfMassMarkerVisible(bool visible)

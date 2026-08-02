@@ -34,6 +34,7 @@ namespace rowemod
         {
             Physics,
             Camera,
+            Replay,
             Bike,
             BikePoser,
             Grinds,
@@ -64,17 +65,17 @@ namespace rowemod
         public static float scrollViewHeight = 10000f;
         public static float viewHeight = 0f;
 
-        private const float UiOuterPadding = 14f;
-        private const float UiInnerPadding = 10f;
-        private const float UiControlSpacing = 8f;
-        private const float UiSectionSpacing = 12f;
-        private const float UiTitleBarHeight = 25f;
+        private const float UiOuterPadding = 18f;
+        private const float UiInnerPadding = 14f;
+        private const float UiControlSpacing = 10f;
+        private const float UiSectionSpacing = 14f;
+        private const float UiTitleBarHeight = 30f;
         private const float UiResetButtonWidth = 94f;
         private const float UiTabSpacing = 6f;
-        private const float UiSidebarWidth = 146f;
-        private const float UiLogoAreaHeight = 72f;
-        private const float UiContentHeaderHeight = 42f;
-        private const float UiNavButtonHeight = 32f;
+        private const float UiSidebarWidth = 172f;
+        private const float UiLogoAreaHeight = 86f;
+        private const float UiContentHeaderHeight = 64f;
+        private const float UiNavButtonHeight = 34f;
         private const float UiFoldoutHeight = 30f;
         private const float UiRowHeight = 26f;
         private const float UiContentBottomPadding = 20f;
@@ -83,6 +84,7 @@ namespace rowemod
         {
             ("Physics", Tab.Physics),
             ("Camera", Tab.Camera),
+            ("Replay", Tab.Replay),
             ("Tricks", Tab.Tricks),
             ("Bike", Tab.Bike),
             ("Bike Poser", Tab.BikePoser),
@@ -112,6 +114,7 @@ namespace rowemod
         private static Vector2 dragStartWindowPosition;
         private static int dragControlId = 0;
         private static readonly int dragControlHint = "RoweMod.MainWindowDrag".GetHashCode();
+        private static int activeSliderControlId = 0;
 
         // Style variables
         public static GUIStyle windowStyle;
@@ -130,6 +133,7 @@ namespace rowemod
         public static GUIStyle tabBarStyle;
         public static GUIStyle subtleLabelStyle;
         public static GUIStyle pageTitleStyle;
+        private static GUIStyle pageEyebrowStyle;
         public static GUIStyle panelStyle;
         public static GUIStyle panelAltStyle;
         public static GUIStyle toolbarStyle;
@@ -475,6 +479,9 @@ namespace rowemod
                         break;
                     case Tab.Camera:
                         DrawCameraSettings();
+                        break;
+                    case Tab.Replay:
+                        DrawReplaySettings();
                         break;
                     case Tab.Bike:
                         float bikePaneHeight = GetContentPaneHeight(24f);
@@ -863,7 +870,7 @@ namespace rowemod
         private static void DrawSidebar()
         {
             Rect sidebarRect = new Rect(0f, 0f, UiSidebarWidth, windowRect.height);
-            DrawSolidColorRect(sidebarRect, new Color(0.035f, 0.04f, 0.055f, 0.82f));
+            DrawSolidColorRect(sidebarRect, new Color(0.055f, 0.06f, 0.078f, 0.98f));
 
             Rect dividerRect = new Rect(UiSidebarWidth - 1f, UiTitleBarHeight, 1f, windowRect.height - UiTitleBarHeight);
             DrawSolidColorRect(dividerRect, uiBorderColor);
@@ -873,15 +880,17 @@ namespace rowemod
 
         private static void DrawLogoHeader()
         {
-            Rect logoAreaRect = new Rect(UiOuterPadding, UiTitleBarHeight + 10f, UiSidebarWidth - (UiOuterPadding * 2f), UiLogoAreaHeight - 10f);
+            // Keep the brand mark in the actual upper-left corner of the menu. The version stays
+            // beneath it so the drag title bar remains clear and the logo never becomes a sidebar heading.
+            Rect logoAreaRect = new Rect(UiOuterPadding, 2f, UiSidebarWidth - (UiOuterPadding * 2f), UiTitleBarHeight - 4f);
             if (logoTexture != null && logoTexture.width > 0 && logoTexture.height > 0)
             {
                 float maxLogoWidth = logoAreaRect.width;
-                float maxLogoHeight = 46f;
+                float maxLogoHeight = logoAreaRect.height;
                 float scale = Mathf.Min(maxLogoWidth / logoTexture.width, maxLogoHeight / logoTexture.height);
                 float logoWidth = logoTexture.width * scale;
                 float logoHeight = logoTexture.height * scale;
-                Rect logoRect = new Rect(logoAreaRect.x, logoAreaRect.y + 2f, logoWidth, logoHeight);
+                Rect logoRect = new Rect(logoAreaRect.x, logoAreaRect.y, logoWidth, logoHeight);
 
                 Color previousColor = GUI.color;
                 GUI.color = Color.white;
@@ -893,7 +902,7 @@ namespace rowemod
                 GUI.Label(logoAreaRect, "RoweMod", sectionHeaderStyle);
             }
 
-            Rect versionRect = new Rect(logoAreaRect.x, logoAreaRect.yMax - 18f, logoAreaRect.width, 18f);
+            Rect versionRect = new Rect(UiOuterPadding, UiTitleBarHeight + 6f, UiSidebarWidth - (UiOuterPadding * 2f), 18f);
             GUI.Label(versionRect, $"v. {Main.ModVersion}", subtleLabelStyle);
         }
 
@@ -902,11 +911,13 @@ namespace rowemod
             Rect headerRect = new Rect(GetContentX(), UiTitleBarHeight + UiOuterPadding, GetContentWidth(), UiContentHeaderHeight);
             GUI.Box(headerRect, GUIContent.none, tabBarStyle);
 
-            Rect titleRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y, headerRect.width - UiResetButtonWidth - (UiInnerPadding * 3f), headerRect.height);
+            Rect eyebrowRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + 8f, headerRect.width - UiResetButtonWidth - (UiInnerPadding * 3f), 15f);
+            GUI.Label(eyebrowRect, "ROWEMOD TOOLS", pageEyebrowStyle);
+            Rect titleRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + 22f, headerRect.width - UiResetButtonWidth - (UiInnerPadding * 3f), 32f);
             GUI.Label(titleRect, GetCurrentTabLabel(), pageTitleStyle ?? sectionHeaderStyle);
 
-            Rect resetButtonRect = new Rect(headerRect.xMax - UiInnerPadding - UiResetButtonWidth, headerRect.y + 6f,
-                UiResetButtonWidth, headerRect.height - 12f);
+            Rect resetButtonRect = new Rect(headerRect.xMax - UiInnerPadding - UiResetButtonWidth, headerRect.y + 17f,
+                UiResetButtonWidth, 30f);
             if (GUI.Button(resetButtonRect, "Reset Tab", redButtonStyle ?? highQualityButtonStyle))
             {
                 ResetCurrentTab();
@@ -1044,6 +1055,11 @@ namespace rowemod
                     break;
                 case Tab.Camera:
                     Config.ResetCameraTab();
+                    break;
+                case Tab.Replay:
+                    Config.ResetReplayTab();
+                    ReplayCameraLight.OnSettingsChanged();
+                    ReplayCameraLight.OnLensSettingsChanged();
                     break;
                 case Tab.Tricks:
                     TrickMods.ResetCustomTricks();
@@ -1319,21 +1335,21 @@ namespace rowemod
                 uiAccentTextColor = accentLuma < 0.45f
                     ? Color.Lerp(uiAccentColor, Color.white, 0.68f)
                     : Color.white;
-                uiBackgroundColor = new Color(0.025f, 0.027f, 0.032f, 0.988f);
-                uiPanelColor = new Color(0.043f, 0.046f, 0.054f, 0.965f);
-                uiPanelHoverColor = new Color(0.074f, 0.077f, 0.088f, 0.98f);
-                uiPanelAltColor = new Color(0.057f, 0.06f, 0.07f, 0.97f);
-                uiBorderColor = new Color(1f, 1f, 1f, 0.085f);
-                uiTextPrimaryColor = new Color(0.95f, 0.95f, 0.95f, 1f);
-                uiTextMutedColor = new Color(0.66f, 0.66f, 0.67f, 1f);
+                uiBackgroundColor = new Color(0.038f, 0.043f, 0.055f, 0.995f);
+                uiPanelColor = new Color(0.09f, 0.105f, 0.14f, 0.99f);
+                uiPanelHoverColor = new Color(0.115f, 0.13f, 0.17f, 1f);
+                uiPanelAltColor = new Color(0.062f, 0.071f, 0.095f, 1f);
+                uiBorderColor = new Color(0.22f, 0.25f, 0.32f, 0.92f);
+                uiTextPrimaryColor = new Color(0.95f, 0.96f, 0.98f, 1f);
+                uiTextMutedColor = new Color(0.57f, 0.71f, 0.88f, 1f);
                 uiDangerColor = new Color(0.48f, 0.21f, 0.24f, 0.96f);
                 uiDangerHoverColor = new Color(0.58f, 0.25f, 0.28f, 0.98f);
                 uiDangerActiveColor = new Color(0.38f, 0.15f, 0.18f, 0.98f);
 
-                backgroundTexture = MakeRoundedTex(64, 64, uiBackgroundColor, 11, 1, uiBorderColor);
-                roundedButtonNormal = MakeRoundedTex(40, 28, new Color(0.075f, 0.077f, 0.086f, 0.97f), 7, 1, uiBorderColor);
-                roundedButtonHover = MakeRoundedTex(40, 28, new Color(0.105f, 0.108f, 0.12f, 0.99f), 7, 1, new Color(1f, 1f, 1f, 0.13f));
-                activeTabBackground = MakeRoundedTex(40, 32, new Color(uiAccentColor.r * 0.62f, uiAccentColor.g * 0.43f, uiAccentColor.b * 0.31f, 0.88f), 8, 1, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.76f));
+                backgroundTexture = MakeRoundedTex(64, 64, uiBackgroundColor, 14, 1, uiBorderColor);
+                roundedButtonNormal = MakeRoundedTex(40, 28, new Color(0.052f, 0.06f, 0.078f, 1f), 8, 1, uiBorderColor);
+                roundedButtonHover = MakeRoundedTex(40, 28, new Color(0.095f, 0.108f, 0.14f, 1f), 8, 1, new Color(0.32f, 0.36f, 0.45f, 1f));
+                activeTabBackground = MakeRoundedTex(40, 32, uiAccentColor, 8, 1, Color.Lerp(uiAccentColor, Color.white, 0.16f));
                 accentColorTexture = MakeTex(2, 2, uiAccentColor);
                 tabIndicatorTexture = MakeTex(2, 2, uiAccentColor);
                 tricksTabIndicatorTexture = MakeTex(2, 2, new Color(0.24f, 0.82f, 0.42f, 1f));
@@ -1372,8 +1388,15 @@ namespace rowemod
                 sectionHeaderStyle.fontSize = 13;
 
                 pageTitleStyle = new GUIStyle(sectionHeaderStyle);
-                pageTitleStyle.fontSize = 14;
+                pageTitleStyle.fontSize = 23;
+                pageTitleStyle.fontStyle = FontStyle.Bold;
                 pageTitleStyle.alignment = TextAnchor.MiddleLeft;
+
+                pageEyebrowStyle = new GUIStyle(labelStyle);
+                pageEyebrowStyle.fontSize = 10;
+                pageEyebrowStyle.fontStyle = FontStyle.Bold;
+                pageEyebrowStyle.normal.textColor = uiAccentColor;
+                pageEyebrowStyle.alignment = TextAnchor.MiddleLeft;
 
                 rowLabelStyle = new GUIStyle(labelStyle);
                 rowLabelStyle.richText = true;
@@ -1411,14 +1434,14 @@ namespace rowemod
                 highQualityButtonStyle = new GUIStyle(GUI.skin.button);
                 highQualityButtonStyle.normal.background = roundedButtonNormal;
                 highQualityButtonStyle.hover.background = roundedButtonHover;
-                highQualityButtonStyle.active.background = MakeRoundedTex(40, 28, new Color(0.05f, 0.055f, 0.066f, 0.98f), 7, 1, new Color(1f, 1f, 1f, 0.08f));
+                highQualityButtonStyle.active.background = MakeRoundedTex(40, 28, new Color(0.04f, 0.047f, 0.062f, 1f), 8, 1, uiBorderColor);
                 highQualityButtonStyle.normal.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.hover.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.active.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.fontSize = 12;
                 highQualityButtonStyle.fontStyle = FontStyle.Normal;
                 highQualityButtonStyle.alignment = TextAnchor.MiddleCenter;
-                highQualityButtonStyle.border = new RectOffset(7, 7, 7, 7);
+                highQualityButtonStyle.border = new RectOffset(8, 8, 8, 8);
                 highQualityButtonStyle.padding = new RectOffset(12, 12, 6, 6);
                 highQualityButtonStyle.richText = true;
 
@@ -1444,8 +1467,8 @@ namespace rowemod
 
                 pillActiveButtonStyle = new GUIStyle(pillButtonStyle);
                 pillActiveButtonStyle.normal.background = activeTabBackground;
-                pillActiveButtonStyle.hover.background = MakeRoundedTex(40, 28, new Color(uiAccentColor.r * 0.68f, uiAccentColor.g * 0.5f, uiAccentColor.b * 0.38f, 0.9f), 7, 1, uiAccentColor);
-                pillActiveButtonStyle.active.background = MakeRoundedTex(40, 28, new Color(uiAccentColor.r * 0.52f, uiAccentColor.g * 0.38f, uiAccentColor.b * 0.28f, 0.94f), 7, 1, uiAccentHoverColor);
+                pillActiveButtonStyle.hover.background = MakeRoundedTex(40, 28, uiAccentHoverColor, 8, 1, Color.white);
+                pillActiveButtonStyle.active.background = MakeRoundedTex(40, 28, Color.Lerp(uiAccentColor, Color.black, 0.18f), 8, 1, uiAccentColor);
                 pillActiveButtonStyle.normal.textColor = Color.white;
                 pillActiveButtonStyle.hover.textColor = Color.white;
                 pillActiveButtonStyle.active.textColor = Color.white;
@@ -1497,21 +1520,21 @@ namespace rowemod
                 redButtonStyle.active.textColor = uiTextPrimaryColor;
 
                 sectionCardStyle = new GUIStyle(GUI.skin.box);
-                sectionCardStyle.normal.background = MakeRoundedTex(64, 64, uiPanelColor, 9, 1, uiBorderColor);
+                sectionCardStyle.normal.background = MakeRoundedTex(64, 64, uiPanelColor, 12, 1, uiBorderColor);
                 sectionCardStyle.padding = new RectOffset((int)UiInnerPadding, (int)UiInnerPadding, (int)UiInnerPadding, (int)UiInnerPadding);
                 sectionCardStyle.margin = new RectOffset(0, 0, 0, 0);
-                sectionCardStyle.border = new RectOffset(9, 9, 9, 9);
+                sectionCardStyle.border = new RectOffset(12, 12, 12, 12);
 
                 panelStyle = new GUIStyle(sectionCardStyle);
-                panelStyle.padding = new RectOffset(12, 12, 10, 12);
-                panelStyle.margin = new RectOffset(0, 0, 4, 8);
+                panelStyle.padding = new RectOffset(16, 16, 14, 16);
+                panelStyle.margin = new RectOffset(0, 0, 4, 10);
 
                 panelAltStyle = new GUIStyle(panelStyle);
-                panelAltStyle.normal.background = MakeRoundedTex(64, 64, uiPanelAltColor, 9, 1, uiBorderColor);
+                panelAltStyle.normal.background = MakeRoundedTex(64, 64, uiPanelAltColor, 12, 1, uiBorderColor);
 
                 tabBarStyle = new GUIStyle(GUI.skin.box);
-                tabBarStyle.normal.background = MakeRoundedTex(64, 36, uiPanelColor, 9, 1, uiBorderColor);
-                tabBarStyle.border = new RectOffset(9, 9, 9, 9);
+                tabBarStyle.normal.background = MakeRoundedTex(64, 36, uiPanelColor, 12, 1, uiBorderColor);
+                tabBarStyle.border = new RectOffset(12, 12, 12, 12);
                 tabBarStyle.padding = new RectOffset((int)UiInnerPadding, (int)UiInnerPadding, 4, 4);
                 tabBarStyle.margin = new RectOffset(0, 0, 0, 0);
 
@@ -1528,7 +1551,7 @@ namespace rowemod
                 badgeStyle.padding = new RectOffset(7, 7, 2, 2);
                 badgeStyle.border = new RectOffset(7, 7, 7, 7);
 
-                Texture2D textFieldBackground = MakeRoundedTex(64, 24, new Color(0.032f, 0.033f, 0.038f, 0.99f), 6, 1, new Color(1f, 1f, 1f, 0.115f));
+                Texture2D textFieldBackground = MakeRoundedTex(64, 24, new Color(0.04f, 0.047f, 0.062f, 1f), 7, 1, uiBorderColor);
                 textFieldStyle = new GUIStyle(GUI.skin.textField);
                 textFieldStyle.alignment = TextAnchor.MiddleCenter;
                 textFieldStyle.fontSize = 12;
@@ -1927,6 +1950,40 @@ namespace rowemod
             EndPane();
         }
 
+        public static void DrawReplaySettings()
+        {
+            BeginPane(
+                "Replay Camera",
+                "Camera Lab binds only while Replay is open. Native tracks stay authoritative and missing tracks use session-only RoweMod keys.");
+            ReplayCameraLight.DrawCameraControls("replay_tab_camera_");
+            EndPane();
+
+            BeginPane("Lens", "Long-lens zoom, tilt, fisheye, vignette, and shake controls.");
+            ReplayCameraLight.DrawLensControls("replay_tab_lens_");
+            EndPane();
+
+            BeginPane("Depth of Field", "Keyframe the complete native near/far focus model.");
+            ReplayCameraLight.DrawDofControls("replay_tab_dof_");
+            EndPane();
+
+            BeginPane("Framing", "Capture-safe aspect mattes that never change the game's output resolution.");
+            ReplayCameraLight.DrawFramingControls("replay_tab_frame_");
+            EndPane();
+
+            BeginPane("Camera Light", "A high-quality replay-only local light attached to the active replay camera.");
+            GUILayout.Space(8f);
+            ReplayCameraLight.DrawLightControls("replay_tab_light_");
+            EndPane();
+
+            BeginPane("Keyframes", "The native Add/Delete commands also update RoweMod-owned camera, framing, and light tracks.");
+            ReplayCameraLight.DrawKeyframeControls();
+            EndPane();
+
+            BeginPane("Lens Presets", "Save lens, DoF, shake, and framing values. Light and collision settings remain separate.");
+            ReplayCameraLight.DrawPresetControls();
+            EndPane();
+        }
+
         public static void DrawGraphicsSettings()
         {
             try
@@ -2259,6 +2316,7 @@ namespace rowemod
                     if (sliderRect.Contains(currentEvent.mousePosition))
                     {
                         GUIUtility.hotControl = id;
+                        activeSliderControlId = id;
                         GUIUtility.keyboardControl = 0;
                         SetSliderValueFromMouse(ref target, min, max, sliderRect, currentEvent.mousePosition.x);
                         _sliderTextInputs[sliderKey] = target.ToString("0.00");
@@ -2281,6 +2339,7 @@ namespace rowemod
                     if (GUIUtility.hotControl == id)
                     {
                         GUIUtility.hotControl = 0;
+                        activeSliderControlId = 0;
                         currentEvent.Use();
                     }
                     break;
@@ -2338,6 +2397,26 @@ namespace rowemod
             }
 
             GUILayout.Space(UiControlSpacing);
+        }
+
+        /// <summary>
+        /// Releases only IMGUI controls owned by the RoweMod menu. This prevents a menu that is
+        /// closed mid-drag from retaining Unity's global hot control and blocking other IMGUI tools.
+        /// </summary>
+        public static void ReleaseInputCapture()
+        {
+            int hotControl = GUIUtility.hotControl;
+            if (hotControl != 0 &&
+                (hotControl == resizeControlId || hotControl == dragControlId || hotControl == activeSliderControlId))
+            {
+                GUIUtility.hotControl = 0;
+            }
+
+            isResizing = false;
+            resizeControlId = 0;
+            isDraggingWindow = false;
+            dragControlId = 0;
+            activeSliderControlId = 0;
         }
 
         public static bool Toggle(string text, ref bool value)
