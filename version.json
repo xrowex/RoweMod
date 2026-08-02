@@ -1,7 +1,7 @@
 {
-    "version":  "3.2.3",
+    "version":  "3.2.4",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "03c3f8d2699da5dc5aab7a39b8f3b877de7fef894f2c07995fcbe266df888d86",
+    "sha256":  "8C15482068C24C1265D409518F620F3ABA96885A81AFF708EEB740CD8A02682A",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
     "patchNotes":  "Added Bike-Only Stance controls that switch the bike, pedals, rider motion, and local IK without changing native trick or grind bindings. Tap the left stick to flip the camera offset, or hold it for 0.5 seconds to switch bike stance while consuming the camera tap. Added configurable local rider head tracking under Rider Tools. Improved trick animation preview cleanup and runtime restore behavior. Reduced steady-state work through event-driven updates, cached component lookups, debounced configuration saves, and quieter optional nose-manual diagnostics.",
     "requiredGameVersion":  ""
