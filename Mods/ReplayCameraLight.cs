@@ -116,7 +116,7 @@ namespace rowemod.Mods
         private static bool replaySettingsVisible;
         private static int replayCameraLookupGeneration;
         private static int overlayTab;
-        private static Rect overlayRect = new Rect(24f, 120f, 390f, 610f);
+        private static Rect overlayRect = new Rect(24f, 120f, 440f, 650f);
         private static Vector2 overlayScroll;
         private static string status = "Off";
         private static string keyframeStatus = "Open Replay to audit camera tracks";
@@ -364,7 +364,8 @@ namespace rowemod.Mods
                 OverlayWindowId,
                 overlayRect,
                 (GUI.WindowFunction)DrawOverlayWindow,
-                "RoweMod Camera");
+                "RoweMod Camera",
+                Menu.windowStyle ?? GUI.skin.window);
         }
 
         /// <summary>Shared by the normal RoweMod Replay tab and the native replay settings overlay.</summary>
@@ -584,6 +585,7 @@ namespace rowemod.Mods
                         selectedPreset = name;
                         presetName = name;
                         OnLensSettingsChanged();
+                        OnSettingsChanged();
                     }
                 }
                 if (selected && GUILayout.Button("Rename", Menu.UiButtonStyle, GUILayout.Width(72f)))
@@ -619,33 +621,51 @@ namespace rowemod.Mods
             // The generated July 23 wrappers cannot unstrip GUIContent.Temp(Il2CppStringArray),
             // which is used by GUILayout.Toolbar(string[]). Individual buttons avoid that
             // unsupported overload and are allocation-free after style initialization.
-            GUILayout.BeginHorizontal();
+            Menu.BeginPanel();
+            GUILayout.Label("ROWEMOD REPLAY", Menu.UiMutedStyle);
+            Menu.DrawSectionTitle("Camera Lab", "Lens, depth of field, framing, light, and saved presets.");
+            GUILayout.Space(4f);
+
+            Menu.BeginToolbar();
             DrawOverlayTabButton("Lens", 0);
             DrawOverlayTabButton("DOF", 1);
             DrawOverlayTabButton("Frame", 2);
             DrawOverlayTabButton("Light", 3);
-            GUILayout.EndHorizontal();
+            DrawOverlayTabButton("Presets", 4);
+            Menu.EndToolbar();
+
+            GUILayout.Space(6f);
+            Menu.DrawStatusBadge(status, GUILayout.ExpandWidth(true));
+            GUILayout.Space(6f);
+
             overlayScroll = GUILayout.BeginScrollView(overlayScroll);
+            Menu.BeginAltPanel();
             if (overlayTab == 0)
                 DrawLensControls("replay_overlay_lens_");
             else if (overlayTab == 1)
                 DrawDofControls("replay_overlay_dof_");
             else if (overlayTab == 2)
                 DrawFramingControls("replay_overlay_frame_");
-            else
+            else if (overlayTab == 3)
                 DrawLightControls("replay_overlay_light_");
+            else
+                DrawPresetControls();
+
+            Menu.EndPanel();
             GUILayout.Space(8f);
+
+            Menu.BeginAltPanel();
+            Menu.DrawSectionTitle("Keyframes", "Replay timeline controls");
             DrawKeyframeControls();
+            Menu.EndPanel();
             GUILayout.EndScrollView();
-            GUI.DragWindow(new Rect(0f, 0f, 10000f, 24f));
+            Menu.EndPanel();
+            GUI.DragWindow(new Rect(0f, 0f, 10000f, 32f));
         }
 
         private static void DrawOverlayTabButton(string label, int tab)
         {
-            GUIStyle style = overlayTab == tab && Menu.UiPillActiveStyle != null
-                ? Menu.UiPillActiveStyle
-                : Menu.UiButtonStyle;
-            if (GUILayout.Button(label, style))
+            if (Menu.PillButton(label, overlayTab == tab, GUILayout.ExpandWidth(true), GUILayout.Height(25f)))
                 overlayTab = tab;
         }
 

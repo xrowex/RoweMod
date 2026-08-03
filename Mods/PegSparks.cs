@@ -29,10 +29,8 @@ namespace rowemod.Mods
             "DD2C7AB0D16125F807D911A2EB07E5695A9555E12D2F611C323C38904C7C640F";
         private const int BundleDownloadTimeoutSeconds = 30;
         private const long MaxBundleDownloadBytes = 12L * 1024L * 1024L;
-        private const float ImpactCooldownSeconds = 0.12f;
         private const float ReplaySampleExpirySeconds = 0.12f;
         private const float ReplaySeekResetSeconds = 0.35f;
-        private const float ReplayImpactWindowSeconds = 0.055f;
         private const int MaxReplaySamples = 2400;
         private const int PegCount = 4;
         private static readonly string[] SparkColorProperties =
@@ -69,7 +67,6 @@ namespace rowemod.Mods
         private static bool _ownsBundle;
         private static bool _bundleDownloadInProgress;
         private static GameObject _rigPrefab;
-        private static AudioClip _chingClip;
         private static readonly List<ReplaySample> ReplaySamples =
             new List<ReplaySample>(MaxReplaySamples);
         private static readonly ReplaySample[] ReplayLatestSamples =
@@ -77,11 +74,9 @@ namespace rowemod.Mods
         private static readonly bool[] HasReplayLatestSample = new bool[PegCount];
         private static bool _replayActive;
         private static bool _loggedFirstReplaySample;
-        private static bool _loggedFirstChing;
         private static int _replayCursor;
         private static float _lastReplayPlaybackTime = float.NegativeInfinity;
         private static float _previewUntil;
-        private static float _nextPreviewImpact;
         private static bool _previewOnNextLocalSpawn;
         private static string _status = "Waiting for the local rider.";
 
@@ -189,16 +184,6 @@ namespace rowemod.Mods
             changed |= !Mathf.Approximately(rate, settings.updateRate);
             settings.updateRate = rate;
 
-            bool bursts = settings.impactBursts;
-            Menu.ModernToggle("Entry Impact Bursts", ref bursts, "peg_sparks_bursts");
-            changed |= bursts != settings.impactBursts;
-            settings.impactBursts = bursts;
-
-            float impactAmount = settings.impactAmount;
-            Menu.ModernSlider("Impact Amount", ref impactAmount, 0f, 3f, "peg_sparks_impact_amount");
-            changed |= !Mathf.Approximately(impactAmount, settings.impactAmount);
-            settings.impactAmount = impactAmount;
-
             float sparkSize = settings.sparkSize;
             Menu.ModernSlider("Spark Size", ref sparkSize, 0.25f, 3f, "peg_sparks_size");
             changed |= !Mathf.Approximately(sparkSize, settings.sparkSize);
@@ -218,24 +203,6 @@ namespace rowemod.Mods
             Menu.ModernSlider("Trail Length", ref trail, 0.05f, 1f, "peg_sparks_trail");
             changed |= !Mathf.Approximately(trail, settings.trailSeconds);
             settings.trailSeconds = trail;
-
-            bool ching = settings.chingEnabled;
-            Menu.ModernToggle("Metal Ching", ref ching, "peg_sparks_ching");
-            changed |= ching != settings.chingEnabled;
-            settings.chingEnabled = ching;
-
-            if (settings.chingEnabled)
-            {
-                float volume = settings.chingVolume;
-                Menu.ModernSlider("Ching Volume", ref volume, 0f, 1f, "peg_sparks_ching_volume");
-                changed |= !Mathf.Approximately(volume, settings.chingVolume);
-                settings.chingVolume = volume;
-
-                float pitch = settings.chingPitch;
-                Menu.ModernSlider("Ching Pitch", ref pitch, 0.5f, 1.75f, "peg_sparks_ching_pitch");
-                changed |= !Mathf.Approximately(pitch, settings.chingPitch);
-                settings.chingPitch = pitch;
-            }
 
             bool recordReplay = settings.recordInReplay;
             Menu.ModernToggle("Record for Replay", ref recordReplay, "peg_sparks_replay");
@@ -264,7 +231,6 @@ namespace rowemod.Mods
             StopAllEffects(true);
             _replayActive = false;
             _previewUntil = 0f;
-            _nextPreviewImpact = 0f;
             if (!preserveQueuedPreview)
                 _previewOnNextLocalSpawn = false;
             ResetReplayPlayback();
@@ -279,9 +245,6 @@ namespace rowemod.Mods
                 _bundle.Unload(false);
             _bundle = null;
             _ownsBundle = false;
-            if (_chingClip != null)
-                Object.Destroy(_chingClip);
-            _chingClip = null;
         }
 
         public static void Update()
@@ -333,7 +296,6 @@ namespace rowemod.Mods
 
             StopAllEffects(true);
             _previewUntil = Time.unscaledTime + 3f;
-            _nextPreviewImpact = 0f;
             _status = "Playing a three-second spark preview.";
             Log.Msg("[PegSparks] Manual three-second VFX preview started.");
         }
@@ -355,7 +317,6 @@ namespace rowemod.Mods
             if (_collisionHandler == null || Time.unscaledTime >= _previewUntil)
             {
                 _previewUntil = 0f;
-                _nextPreviewImpact = 0f;
                 StopAllEffects(false);
                 _status = "Spark preview complete.";
                 return;
@@ -377,12 +338,6 @@ namespace rowemod.Mods
                                Vector3.up * 0.2f - tangent * 0.25f;
             PegSparksSettings settings = Config.pegSparksSettings;
             runtime.UpdateContinuous(position, normal, tangent, settings);
-
-            if (Time.unscaledTime >= _nextPreviewImpact)
-            {
-                _nextPreviewImpact = Time.unscaledTime + 0.45f;
-                runtime.PlayImpact(position, normal, tangent, settings);
-            }
         }
 
         private static void UpdateNativePeg(int pegIndex)
@@ -428,7 +383,6 @@ namespace rowemod.Mods
             PegRuntime runtime = Runtimes[pegIndex];
             if (!hasContact)
             {
-                runtime.WasGrinding = false;
                 runtime.StopContinuous(false);
                 return;
             }
@@ -446,33 +400,21 @@ namespace rowemod.Mods
             float slideSpeed = tangent.magnitude;
             if (slideSpeed < settings.minimumSlideSpeed)
             {
-                runtime.WasGrinding = false;
                 runtime.StopContinuous(false);
                 return;
             }
 
             float now = Time.unscaledTime;
             Vector3 normalizedTangent = tangent.normalized;
-            float strength = Mathf.Clamp01(slideSpeed / 10f) * settings.intensity;
-            bool impact = !runtime.WasGrinding && settings.impactBursts &&
-                          now >= runtime.NextImpactTime;
             if (now >= runtime.NextUpdateTime)
             {
                 runtime.NextUpdateTime = now + (1f / Config.pegSparksSettings.updateRate);
                 if (EnsureRig(runtime))
                     runtime.UpdateContinuous(point, normal, normalizedTangent, settings);
 
-                RecordReplaySample(pegIndex, point, normal, normalizedTangent, strength, impact);
+                RecordReplaySample(pegIndex, point, normal, normalizedTangent);
             }
 
-            if (impact && EnsureRig(runtime))
-            {
-                runtime.NextImpactTime = now + ImpactCooldownSeconds;
-                runtime.PlayImpact(point, normal, normalizedTangent, settings);
-                runtime.PlayChing(settings, strength);
-            }
-
-            runtime.WasGrinding = true;
         }
 
         private static bool IsNativePegGrinding()
@@ -647,43 +589,11 @@ namespace rowemod.Mods
             return null;
         }
 
-        private static AudioClip EnsureChingClip()
-        {
-            if (_chingClip != null)
-                return _chingClip;
-
-            const int sampleRate = 44100;
-            const float duration = 0.14f;
-            int sampleCount = Mathf.CeilToInt(sampleRate * duration);
-            float[] samples = new float[sampleCount];
-            for (int i = 0; i < sampleCount; i++)
-            {
-                float time = i / (float)sampleRate;
-                float envelope = Mathf.Exp(-time * 30f);
-                float highRing = Mathf.Sin(2f * Mathf.PI * 4100f * time) * 0.54f;
-                float lowRing = Mathf.Sin(2f * Mathf.PI * 1850f * time) * 0.30f;
-                float grit = Mathf.Sin(2f * Mathf.PI * 7300f * time) *
-                             Mathf.Exp(-time * 58f) * 0.16f;
-                samples[i] = (highRing + lowRing + grit) * envelope;
-            }
-
-            _chingClip = AudioClip.Create(
-                "RoweMod Peg Metal Ching",
-                sampleCount,
-                1,
-                sampleRate,
-                false);
-            _chingClip.SetData(samples, 0);
-            return _chingClip;
-        }
-
         private static void RecordReplaySample(
             int pegIndex,
             Vector3 point,
             Vector3 normal,
-            Vector3 tangent,
-            float strength,
-            bool impact)
+            Vector3 tangent)
         {
             PegSparksSettings settings = Config.pegSparksSettings;
             if (_replayActive || settings?.recordInReplay != true)
@@ -709,9 +619,7 @@ namespace rowemod.Mods
                     pegIndex,
                     point,
                     normal,
-                    tangent,
-                    strength,
-                    impact));
+                    tangent));
                 if (!_loggedFirstReplaySample)
                 {
                     _loggedFirstReplaySample = true;
@@ -783,7 +691,6 @@ namespace rowemod.Mods
             StopAllEffects(true);
             Array.Clear(HasReplayLatestSample, 0, HasReplayLatestSample.Length);
             _replayCursor = 0;
-            float impactStart = playbackTime - ReplayImpactWindowSeconds;
             for (int i = 0; i < ReplaySamples.Count; i++)
             {
                 ReplaySample sample = ReplaySamples[i];
@@ -793,7 +700,7 @@ namespace rowemod.Mods
                     break;
                 }
 
-                ApplyReplaySample(sample, sample.Impact && sample.Time >= impactStart);
+                ApplyReplaySample(sample);
                 _replayCursor = i + 1;
             }
         }
@@ -803,30 +710,18 @@ namespace rowemod.Mods
             while (_replayCursor < ReplaySamples.Count &&
                    ReplaySamples[_replayCursor].Time <= playbackTime + 0.006f)
             {
-                ApplyReplaySample(ReplaySamples[_replayCursor], true);
+                ApplyReplaySample(ReplaySamples[_replayCursor]);
                 _replayCursor++;
             }
         }
 
-        private static void ApplyReplaySample(ReplaySample sample, bool playImpact)
+        private static void ApplyReplaySample(ReplaySample sample)
         {
             if (sample.PegIndex < 0 || sample.PegIndex >= PegCount)
                 return;
 
             ReplayLatestSamples[sample.PegIndex] = sample;
             HasReplayLatestSample[sample.PegIndex] = true;
-            if (playImpact && sample.Impact && Config.pegSparksSettings.impactBursts &&
-                EnsureRig(Runtimes[sample.PegIndex]))
-            {
-                Runtimes[sample.PegIndex].PlayImpact(
-                    sample.Position,
-                    sample.Normal,
-                    sample.Tangent,
-                    Config.pegSparksSettings);
-                Runtimes[sample.PegIndex].PlayChing(
-                    Config.pegSparksSettings,
-                    sample.Strength);
-            }
         }
 
         private static void ResetReplayPlayback()
@@ -846,11 +741,7 @@ namespace rowemod.Mods
         private static void StopAllEffects(bool immediate = false)
         {
             foreach (PegRuntime runtime in Runtimes)
-            {
                 runtime.StopContinuous(immediate);
-                if (immediate)
-                    runtime.StopImpact();
-            }
         }
 
         private readonly struct ReplaySample
@@ -860,25 +751,19 @@ namespace rowemod.Mods
             public readonly Vector3 Position;
             public readonly Vector3 Normal;
             public readonly Vector3 Tangent;
-            public readonly float Strength;
-            public readonly bool Impact;
 
             public ReplaySample(
                 float time,
                 int pegIndex,
                 Vector3 position,
                 Vector3 normal,
-                Vector3 tangent,
-                float strength,
-                bool impact)
+                Vector3 tangent)
             {
                 Time = time;
                 PegIndex = pegIndex;
                 Position = position;
                 Normal = normal;
                 Tangent = tangent;
-                Strength = strength;
-                Impact = impact;
             }
         }
 
@@ -887,13 +772,8 @@ namespace rowemod.Mods
             public readonly string Name;
             public GameObject Rig;
             public VisualEffect Continuous;
-            public VisualEffect Impact;
-            public AudioSource Ching;
             public float NextUpdateTime;
-            public float NextImpactTime;
             public float TrailEndTime;
-            public float ImpactEndTime;
-            public bool WasGrinding;
             private bool _continuousPlaying;
 
             public PegRuntime(string name)
@@ -909,26 +789,16 @@ namespace rowemod.Mods
                 Transform continuous = Rig.transform.Find("Continuous");
                 Transform impact = Rig.transform.Find("Impact");
                 Continuous = continuous != null ? continuous.GetComponent<VisualEffect>() : null;
-                Impact = impact != null ? impact.GetComponent<VisualEffect>() : null;
                 SetSparkColor(Continuous);
-                SetSparkColor(Impact);
-                Ching = Impact != null
-                    ? Impact.gameObject.GetComponent<AudioSource>() ??
-                      Impact.gameObject.AddComponent<AudioSource>()
-                    : null;
-                if (Ching != null)
-                {
-                    Ching.spatialBlend = 1f;
-                    Ching.rolloffMode = AudioRolloffMode.Linear;
-                    Ching.minDistance = 1f;
-                    Ching.maxDistance = 18f;
-                    Ching.playOnAwake = false;
-                }
                 StopContinuous(true);
-                if (Impact != null)
+                if (impact != null)
                 {
-                    Impact.Stop();
-                    Impact.enabled = false;
+                    VisualEffect impactEffect = impact.GetComponent<VisualEffect>();
+                    if (impactEffect != null)
+                    {
+                        impactEffect.Stop();
+                        impactEffect.enabled = false;
+                    }
                 }
             }
 
@@ -942,7 +812,7 @@ namespace rowemod.Mods
                     return;
 
                 SetTransform(Continuous.transform, position, normal, tangent);
-                SetVisualSettings(Continuous, settings, false);
+                SetVisualSettings(Continuous, settings);
                 if (!_continuousPlaying)
                 {
                     Continuous.enabled = true;
@@ -954,46 +824,9 @@ namespace rowemod.Mods
                 TrailEndTime = 0f;
             }
 
-            public void PlayImpact(
-                Vector3 position,
-                Vector3 normal,
-                Vector3 tangent,
-                PegSparksSettings settings)
-            {
-                if (Impact == null)
-                    return;
-
-                SetTransform(Impact.transform, position, normal, tangent);
-                SetVisualSettings(Impact, settings, true);
-                Impact.enabled = true;
-                Impact.Reinit();
-                Impact.Play();
-                ImpactEndTime = Time.unscaledTime +
-                                Mathf.Max(0.25f, settings.sparkLifetime + 0.12f);
-            }
-
-            public void PlayChing(PegSparksSettings settings, float strength)
-            {
-                if (!settings.chingEnabled || Ching == null)
-                    return;
-
-                AudioClip clip = EnsureChingClip();
-                if (clip == null)
-                    return;
-
-                Ching.pitch = settings.chingPitch * Mathf.Lerp(0.9f, 1.12f, strength);
-                Ching.PlayOneShot(clip, settings.chingVolume * Mathf.Lerp(0.45f, 1f, strength));
-                if (!_loggedFirstChing)
-                {
-                    _loggedFirstChing = true;
-                    Log.Msg("[PegSparks] Local metal ching triggered.");
-                }
-            }
-
             public void StopContinuous(bool immediate)
             {
                 NextUpdateTime = 0f;
-                WasGrinding = false;
                 if (Continuous == null || !_continuousPlaying)
                     return;
 
@@ -1019,26 +852,6 @@ namespace rowemod.Mods
                     TrailEndTime = 0f;
                 }
 
-                if (ImpactEndTime > 0f && now >= ImpactEndTime)
-                {
-                    if (Impact != null)
-                    {
-                        Impact.Stop();
-                        Impact.enabled = false;
-                    }
-                    ImpactEndTime = 0f;
-                }
-            }
-
-            public void StopImpact()
-            {
-                if (Impact != null)
-                {
-                    Impact.Stop();
-                    Impact.enabled = false;
-                }
-
-                ImpactEndTime = 0f;
             }
 
             public void DestroyRig()
@@ -1047,13 +860,8 @@ namespace rowemod.Mods
                     Object.Destroy(Rig);
                 Rig = null;
                 Continuous = null;
-                Impact = null;
-                Ching = null;
                 NextUpdateTime = 0f;
-                NextImpactTime = 0f;
                 TrailEndTime = 0f;
-                ImpactEndTime = 0f;
-                WasGrinding = false;
                 _continuousPlaying = false;
             }
 
@@ -1113,10 +921,7 @@ namespace rowemod.Mods
                 return _hotOrangeGradient;
             }
 
-            private static void SetVisualSettings(
-                VisualEffect effect,
-                PegSparksSettings settings,
-                bool impact)
+            private static void SetVisualSettings(VisualEffect effect, PegSparksSettings settings)
             {
                 if (effect.HasFloat("Sparks Particle Spawn Rate"))
                     effect.SetFloat("Sparks Particle Spawn Rate", 180f * settings.intensity);
@@ -1136,10 +941,6 @@ namespace rowemod.Mods
                     effect.SetVector3(
                         "Spark Initial Velocity",
                         new Vector3(0.35f, 1.15f, -3f) * settings.sparkSpeed);
-                if (impact && effect.HasVector2("Spark Particle Burst Count Min/Max"))
-                    effect.SetVector2(
-                        "Spark Particle Burst Count Min/Max",
-                        new Vector2(12f, 250f) * settings.impactAmount);
             }
         }
     }

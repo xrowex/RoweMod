@@ -246,7 +246,6 @@ namespace rowemod
             
             DisableMeshCombiners();
             Log.Msg($"Scene Loaded: {sceneName} (Index: {buildIndex})");
-            RoweGutFaceUnityAudioDiagnostics.OnSceneInitialized(sceneName);
 
             cachedHDRCameras = UnityEngine.Camera.allCameras
                 .Select(cam => cam.GetComponent<UnityEngine.Rendering.HighDefinition.HDAdditionalCameraData>())

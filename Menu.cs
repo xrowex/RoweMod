@@ -1979,7 +1979,7 @@ namespace rowemod
             ReplayCameraLight.DrawKeyframeControls();
             EndPane();
 
-            BeginPane("Lens Presets", "Save lens, DoF, shake, and framing values. Light and collision settings remain separate.");
+            BeginPane("Replay Camera Presets", "Save lens, DoF, shake, framing, and the Rowe camera light. Collision remains a live safety setting.");
             ReplayCameraLight.DrawPresetControls();
             EndPane();
         }

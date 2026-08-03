@@ -213,15 +213,10 @@ namespace rowemod
         public float minimumSlideSpeed { get; set; } = 1.5f;
         public float intensity { get; set; } = 1f;
         public float updateRate { get; set; } = 30f;
-        public bool impactBursts { get; set; } = true;
-        public float impactAmount { get; set; } = 1f;
         public float sparkSize { get; set; } = 1f;
         public float sparkLifetime { get; set; } = 1f;
         public float sparkSpeed { get; set; } = 1f;
         public float trailSeconds { get; set; } = 0.3f;
-        public bool chingEnabled { get; set; } = true;
-        public float chingVolume { get; set; } = 0.45f;
-        public float chingPitch { get; set; } = 1f;
         public bool recordInReplay { get; set; } = true;
     }
 
@@ -888,13 +883,10 @@ namespace rowemod
             settings.minimumSlideSpeed = ClampFinite(settings.minimumSlideSpeed, 0.1f, 20f, 1.5f);
             settings.intensity = ClampFinite(settings.intensity, 0f, 3f, 1f);
             settings.updateRate = ClampFinite(settings.updateRate, 10f, 60f, 30f);
-            settings.impactAmount = ClampFinite(settings.impactAmount, 0f, 3f, 1f);
             settings.sparkSize = ClampFinite(settings.sparkSize, 0.25f, 3f, 1f);
             settings.sparkLifetime = ClampFinite(settings.sparkLifetime, 0.25f, 2f, 1f);
             settings.sparkSpeed = ClampFinite(settings.sparkSpeed, 0.25f, 3f, 1f);
             settings.trailSeconds = ClampFinite(settings.trailSeconds, 0.05f, 1f, 0.3f);
-            settings.chingVolume = ClampFinite(settings.chingVolume, 0f, 1f, 0.45f);
-            settings.chingPitch = ClampFinite(settings.chingPitch, 0.5f, 1.75f, 1f);
         }
 
         private static float ClampFinite(float value, float min, float max, float defaultValue)

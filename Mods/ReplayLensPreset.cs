@@ -10,7 +10,8 @@ namespace rowemod.Mods
     [Serializable]
     public sealed class ReplayLensPreset
     {
-        public int version = 1;
+        // Version 1 stored the lens only. Version 2 also stores the local Rowe camera light.
+        public int version = 2;
         public string name = string.Empty;
         public float fov = 60f;
         public float tilt;
@@ -25,6 +26,27 @@ namespace rowemod.Mods
         public float farFocusEnd = 20f;
         public int framingMode;
         public float matteOpacity = 1f;
+        public bool lightEnabled;
+        public int lightType;
+        public float lightIntensity = 20f;
+        public float lightRange = 14f;
+        public float lightSpotAngle = 75f;
+        public float lightColorR = 1f;
+        public float lightColorG = 0.95f;
+        public float lightColorB = 0.88f;
+        public float lightOffsetX;
+        public float lightOffsetY;
+        public float lightOffsetZ = 0.03f;
+        public float lightPitch;
+        public float lightYaw;
+        public float lightRoll;
+        public bool lightShadows = true;
+        public bool lightSoftShadows = true;
+        public int lightShadowResolution = 3;
+        public float lightShadowStrength = 1f;
+        public float lightShadowBias = 0.05f;
+        public float lightShadowNormalBias = 0.4f;
+        public float lightShadowNearPlane = 0.2f;
 
         public static string PresetDirectory =>
             Path.Combine(MelonEnvironment.ModsDirectory, "RoweMod", "ReplayLensPresets");
@@ -47,7 +69,28 @@ namespace rowemod.Mods
                 farFocusStart = settings.replayFarFocusStart,
                 farFocusEnd = settings.replayFarFocusEnd,
                 framingMode = settings.replayFramingMode,
-                matteOpacity = settings.replayMatteOpacity
+                matteOpacity = settings.replayMatteOpacity,
+                lightEnabled = settings.cameraLightEnabled,
+                lightType = settings.cameraLightType,
+                lightIntensity = settings.cameraLightIntensity,
+                lightRange = settings.cameraLightRange,
+                lightSpotAngle = settings.cameraLightSpotAngle,
+                lightColorR = settings.cameraLightColorR,
+                lightColorG = settings.cameraLightColorG,
+                lightColorB = settings.cameraLightColorB,
+                lightOffsetX = settings.cameraLightOffsetX,
+                lightOffsetY = settings.cameraLightOffsetY,
+                lightOffsetZ = settings.cameraLightOffsetZ,
+                lightPitch = settings.cameraLightPitch,
+                lightYaw = settings.cameraLightYaw,
+                lightRoll = settings.cameraLightRoll,
+                lightShadows = settings.cameraLightShadows,
+                lightSoftShadows = settings.cameraLightSoftShadows,
+                lightShadowResolution = settings.cameraLightShadowResolution,
+                lightShadowStrength = settings.cameraLightShadowStrength,
+                lightShadowBias = settings.cameraLightShadowBias,
+                lightShadowNormalBias = settings.cameraLightShadowNormalBias,
+                lightShadowNearPlane = settings.cameraLightShadowNearPlane
             };
         }
 
@@ -66,6 +109,31 @@ namespace rowemod.Mods
             settings.replayFarFocusEnd = farFocusEnd;
             settings.replayFramingMode = framingMode;
             settings.replayMatteOpacity = matteOpacity;
+            // Preserve the historical lens-only preset behavior for existing files.
+            if (version >= 2)
+            {
+                settings.cameraLightEnabled = lightEnabled;
+                settings.cameraLightType = lightType;
+                settings.cameraLightIntensity = lightIntensity;
+                settings.cameraLightRange = lightRange;
+                settings.cameraLightSpotAngle = lightSpotAngle;
+                settings.cameraLightColorR = lightColorR;
+                settings.cameraLightColorG = lightColorG;
+                settings.cameraLightColorB = lightColorB;
+                settings.cameraLightOffsetX = lightOffsetX;
+                settings.cameraLightOffsetY = lightOffsetY;
+                settings.cameraLightOffsetZ = lightOffsetZ;
+                settings.cameraLightPitch = lightPitch;
+                settings.cameraLightYaw = lightYaw;
+                settings.cameraLightRoll = lightRoll;
+                settings.cameraLightShadows = lightShadows;
+                settings.cameraLightSoftShadows = lightSoftShadows;
+                settings.cameraLightShadowResolution = lightShadowResolution;
+                settings.cameraLightShadowStrength = lightShadowStrength;
+                settings.cameraLightShadowBias = lightShadowBias;
+                settings.cameraLightShadowNormalBias = lightShadowNormalBias;
+                settings.cameraLightShadowNearPlane = lightShadowNearPlane;
+            }
             settings.activeReplayLensPreset = name ?? string.Empty;
             Config.NormalizeReplaySettings(settings);
         }
@@ -107,9 +175,12 @@ namespace rowemod.Mods
                     return null;
 
                 preset.name = normalized;
+                int sourceVersion = preset.version;
                 ReplaySettings validation = new ReplaySettings();
                 preset.ApplyTo(validation);
-                return FromSettings(normalized, validation);
+                ReplayLensPreset validated = FromSettings(normalized, validation);
+                validated.version = sourceVersion;
+                return validated;
             }
             catch (Exception ex)
             {
