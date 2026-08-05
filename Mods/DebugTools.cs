@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Il2CppMashBox.Addons.GameLoop;
 using Il2CppMashBox.Core.Runtime.Physics;
 using Il2CppMashBox.Core.Runtime.SceneManagement;
+using Il2CppMashBox.Netorking;
 using rowemod.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -30,8 +31,11 @@ namespace rowemod.Mods
         private static Vector2 menuMapScroll;
         private static string mapLoaderStatus = "Refresh the registered map list while the main menu is open.";
         private static bool testSparksAfterMapLoad;
+        private static bool pendingOfflineStart;
+        private static float pendingOfflineStartDeadline;
+        private static string pendingOfflineMapName = string.Empty;
 
-        public static bool RequiresUpdate => showCenterOfMassMarker;
+        public static bool RequiresUpdate => showCenterOfMassMarker || pendingOfflineStart;
 
         public static void DrawDebugTab()
         {
@@ -69,6 +73,8 @@ namespace rowemod.Mods
 
         public static void Update()
         {
+            TryStartOfflineAfterMapLoad();
+
             if (!showCenterOfMassMarker)
             {
                 if (centerOfMassMarker != null && centerOfMassMarker.activeSelf)
@@ -100,6 +106,9 @@ namespace rowemod.Mods
             menuMapNames.Clear();
             menuMapScroll = Vector2.zero;
             testSparksAfterMapLoad = false;
+            pendingOfflineStart = false;
+            pendingOfflineStartDeadline = 0f;
+            pendingOfflineMapName = string.Empty;
         }
 
         private static void DrawMenuMapLoader()
@@ -156,7 +165,7 @@ namespace rowemod.Mods
                 menuMapNames.Sort(StringComparer.OrdinalIgnoreCase);
                 mapLoaderStatus = menuMapNames.Count == 0
                     ? "No registered maps are ready yet. Wait for the main-menu map cards, then refresh."
-                    : $"Found {menuMapNames.Count} registered maps. Loading uses GameLoopFlow.LoadMap.";
+                    : $"Found {menuMapNames.Count} registered maps. Loading uses the native map flow and offline runner.";
             }
             catch (Exception ex)
             {
@@ -178,6 +187,9 @@ namespace rowemod.Mods
                     PegSparks.QueuePreviewOnNextLocalSpawn();
                 Main.CloseRoweModMenu();
                 GameLoopFlow.LoadMap(mapName, true);
+                pendingOfflineMapName = mapName;
+                pendingOfflineStartDeadline = Time.realtimeSinceStartup + 20f;
+                pendingOfflineStart = true;
             }
             catch (Exception ex)
             {
@@ -185,6 +197,34 @@ namespace rowemod.Mods
                 mapLoaderStatus = $"Could not load {mapName}: {ex.Message}";
                 Log.Warning($"[Debug] Map load failed: {ex}");
             }
+        }
+
+        private static void TryStartOfflineAfterMapLoad()
+        {
+            if (!pendingOfflineStart)
+                return;
+
+            if (Time.realtimeSinceStartup > pendingOfflineStartDeadline)
+            {
+                pendingOfflineStart = false;
+                mapLoaderStatus = $"{pendingOfflineMapName} loaded, but the native offline runner was not ready within 20 seconds.";
+                Log.Warning($"[Debug] Timed out waiting to start the offline runner for {pendingOfflineMapName}.");
+                return;
+            }
+
+            if (GameLoopFlow.IsTransitioning || string.Equals(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, "MainMenu", StringComparison.Ordinal))
+                return;
+
+            FusionBootstrap bootstrap = FusionBootstrap.Instance;
+            if (bootstrap == null)
+                return;
+
+            string mapName = pendingOfflineMapName;
+            pendingOfflineStart = false;
+            pendingOfflineMapName = string.Empty;
+            bootstrap.StartOffline();
+            mapLoaderStatus = $"{mapName} loaded; starting the native offline rider.";
+            Log.Msg($"[Debug] Started native offline runner after loading {mapName}.");
         }
 
         private static void SetCenterOfMassMarkerVisible(bool visible)

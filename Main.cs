@@ -18,13 +18,13 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.2.5", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.2.6", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.2.5";
+        public const string ModVersion = "3.2.6";
         private static readonly bool EnablePieMenu = false;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -209,6 +209,7 @@ namespace rowemod
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
             _unityExplorerCursorCompatibilityEnabled = false;
+            RuntimeVehicleTuneResetSupport.ResetCapturedDefaults();
             bool isGameplayScene =
                 !string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase);
@@ -362,6 +363,11 @@ namespace rowemod
                 Cursor.lockState = CursorLockMode.None;
             }
 
+            // Replay camera settings can update their HDRP Volume during gameplay Update. Apply
+            // the cached fisheye shape afterward so its lightweight native parameters remain
+            // authoritative without adding any rendering work.
+            ReplayCameraLight.LateUpdate();
+
             if (playableSceneLoaded && rMbCharacter)
             {
                 if (RiderStyleEditor.RuntimeEnabled)
@@ -478,6 +484,7 @@ namespace rowemod
 
             if (RemoteKillSwitched.isModEnabled)
             {
+                RuntimeVehicleTuneResetSupport.DrawOverlay();
                 ReplayCameraLight.DrawReplaySettingsOverlay();
                 if (Config.challengeRuntimeSettings.enabled)
                     rowemod.Challenges.MultiplayerChallengeManager.DrawWindow();

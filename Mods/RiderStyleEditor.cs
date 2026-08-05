@@ -171,20 +171,22 @@ namespace rowemod.Mods
             }
 
             bool holdToSwitch = settings.holdLeftStickToSwitchStance;
-            if (Menu.ModernToggle(
-                    "Hold LS 0.5s to Switch Bike Stance",
-                    ref holdToSwitch,
-                    "bike_stance_hold_left_stick"))
+            Menu.ModernToggle(
+                "Hold LS 0.5s to Switch Bike Stance",
+                ref holdToSwitch,
+                "bike_stance_hold_left_stick");
+            if (holdToSwitch != settings.holdLeftStickToSwitchStance)
             {
                 settings.holdLeftStickToSwitchStance = holdToSwitch;
                 Config.RequestSave();
             }
 
             bool oppoTrickCompatibility = settings.useOppoTrickCompatibility;
-            if (Menu.ModernToggle(
-                    "Enable Opposite-Stance Tricks (3.2.3 mode)",
-                    ref oppoTrickCompatibility,
-                    "bike_stance_oppo_tricks"))
+            Menu.ModernToggle(
+                "Enable Opposite-Stance Tricks (3.2.3 mode)",
+                ref oppoTrickCompatibility,
+                "bike_stance_oppo_tricks");
+            if (oppoTrickCompatibility != settings.useOppoTrickCompatibility)
             {
                 settings.useOppoTrickCompatibility = oppoTrickCompatibility;
                 BikeOnlyStance.NotifySettingsChanged();
