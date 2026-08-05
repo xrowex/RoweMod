@@ -277,11 +277,12 @@ namespace rowemod.Mods
             string currentName = string.Empty;
             try
             {
-                currentName = CleanTrickName(_pickerSet._dataList[(Index)_pickerSlot] as UnityEngine.Object);
+                UnityEngine.Object currentTrick = _pickerSet._dataList[(Index)_pickerSlot] as UnityEngine.Object;
+                currentName = IsBmxTrickObject(currentTrick) ? CleanTrickName(currentTrick) : "Unassigned";
             }
             catch
             {
-                currentName = "Current trick";
+                currentName = "Unassigned";
             }
             GUILayout.Label($"{_selectedTrickDirection}: {currentName}", _cardHeader);
             GUILayout.Label("Choose the trick assigned to this controller direction.", _rowLabelRight);
@@ -784,32 +785,39 @@ namespace rowemod.Mods
                 if (newFold)
                 {
                     var flags = _trickEnabled[setKey];
-                    int itemCount = Mathf.Min(set._dataList.Count, flags.Length);
+                    int itemCount = Mathf.Min(DefaultDirectionLabels.Length, Mathf.Min(set._dataList.Count, flags.Length));
 
                     for (int i = 0; i < itemCount; i++)
                     {
                         var obj = GetSlotReference(set, i);
-                        if (!IsBmxTrickObject(obj)) continue;
-
                         string dir = (i < DefaultDirectionLabels.Length) ? DefaultDirectionLabels[i] : $"Index {i}";
-                        string trickName = CleanTrickName(obj);
+                        bool hasMappedTrick = IsBmxTrickObject(obj);
+                        string trickName = hasMappedTrick ? CleanTrickName(obj) : "Bind trick";
                         if (!RowMatchesSearch(dir, trickName)) continue;
 
                         bool isSelected = IsSelectedTrick(setKey, i);
                         GUILayout.BeginHorizontal(isSelected ? _rowStripSelected : _rowStrip, GUILayout.Height(30));
                         DrawDirectionCell(dir, isSelected);
 
-                        using (new GUIContentColor(flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
+                        using (new GUIContentColor(hasMappedTrick && flags[i] ? Color.white : new Color(1f, 1f, 1f, 0.5f)))
                         {
                             if (GUILayout.Button(trickName, isSelected ? _rowButtonSelected : _rowButton, GUILayout.MinWidth(150), GUILayout.Height(24)))
-                                SelectTrick(set, i, dir, trickName);
+                            {
+                                if (hasMappedTrick)
+                                    SelectTrick(set, i, dir, trickName);
+                                else
+                                    OpenTrickPicker(set, i, dir);
+                            }
                         }
 
-                        var newFlag = GUILayout.Toggle(flags[i], GUIContent.none, GUILayout.Width(22), GUILayout.Height(22));
+                        bool previousGuiEnabled = GUI.enabled;
+                        GUI.enabled = previousGuiEnabled && hasMappedTrick;
+                        var newFlag = GUILayout.Toggle(hasMappedTrick && flags[i], GUIContent.none, GUILayout.Width(22), GUILayout.Height(22));
+                        GUI.enabled = previousGuiEnabled;
 
                         GUILayout.EndHorizontal();
 
-                        if (newFlag != flags[i])
+                        if (hasMappedTrick && newFlag != flags[i])
                         {
                             flags[i] = newFlag;
                             ApplyToggle(set, i, newFlag);
@@ -984,8 +992,18 @@ namespace rowemod.Mods
             return false;
         }
 
-        private static void OpenTrickPicker(TrickSetData set, int slot)
+        private static void OpenTrickPicker(TrickSetData set, int slot, string direction = null)
         {
+            if (!string.IsNullOrEmpty(direction))
+            {
+                _selectedTrickSet = set;
+                _selectedTrickSetKey = set?.name ?? string.Empty;
+                _selectedTrickSlot = slot;
+                _selectedTrickDirection = direction;
+                _selectedTrickName = "Unassigned";
+                _needsAutoSelectTrick = false;
+            }
+
             _pickerRect = new Rect(
                 Mathf.Max(10f, (Screen.width - 500f) * 0.5f),
                 Mathf.Max(10f, (Screen.height - 480f) * 0.5f),
@@ -2031,13 +2049,13 @@ namespace rowemod.Mods
 
             // else scan rows until we find one that matches
             if (set?._dataList == null) return false;
-            int n = set._dataList.Count;
+            int n = Mathf.Min(DefaultDirectionLabels.Length, set._dataList.Count);
             for (int i = 0; i < n; i++)
             {
                 var obj = GetSlotReference(set, i);
-                if (!IsBmxTrickObject(obj)) continue;
+                string trickName = IsBmxTrickObject(obj) ? CleanTrickName(obj) : "Bind trick";
                 if (RowMatchesSearch(i < DefaultDirectionLabels.Length ? DefaultDirectionLabels[i] : $"Index {i}",
-                                     CleanTrickName(obj)))
+                                     trickName))
                     return true;
             }
             return false;
@@ -2048,14 +2066,12 @@ namespace rowemod.Mods
             enabled = 0; total = 0;
             if (set?._dataList == null) return;
             var flags = _trickEnabled[setKey];
-            int count = Mathf.Min(set._dataList.Count, flags.Length);
+            int count = Mathf.Min(DefaultDirectionLabels.Length, Mathf.Min(set._dataList.Count, flags.Length));
+            total = count;
             for (int i = 0; i < count; i++)
             {
                 var obj = GetSlotReference(set, i);
-                if (!IsBmxTrickObject(obj)) continue;
-
-                total++;
-                if (flags[i]) enabled++;
+                if (IsBmxTrickObject(obj) && flags[i]) enabled++;
             }
         }
 

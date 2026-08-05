@@ -694,6 +694,21 @@ namespace rowemod.Utils
 
             foreach (string bundlePath in bundleFiles)
             {
+                // PegSparks owns this versioned bundle so it can verify the exact visual hash
+                // before loading it. Loading it here first allowed a stale bundle with the same
+                // prefab name to win for the entire session.
+                if (string.Equals(
+                        Path.GetFileName(bundlePath),
+                        "rowemod_peg_sparks",
+                        StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Unity's bundle build output includes text manifests beside the binary bundles.
+                // Probe the small binary signature instead of sending every file in the folder
+                // to AssetBundle.LoadFromFile and logging expected manifest failures.
+                if (!HasUnityBundleSignature(bundlePath))
+                    continue;
+
                 string fileName = Path.GetFileNameWithoutExtension(bundlePath).ToLower();
                 //Log.Msg($"Attempting to load AssetBundle from: {bundlePath}");
 
@@ -777,6 +792,31 @@ namespace rowemod.Utils
             }
 
             assetBundlesLoaded = true;
+        }
+
+        private static bool HasUnityBundleSignature(string path)
+        {
+            try
+            {
+                byte[] signature = new byte[8];
+                using FileStream stream = File.OpenRead(path);
+                int read = stream.Read(signature, 0, signature.Length);
+                if (read < 7)
+                    return false;
+
+                return signature[0] == (byte)'U' &&
+                       signature[1] == (byte)'n' &&
+                       signature[2] == (byte)'i' &&
+                       signature[3] == (byte)'t' &&
+                       signature[4] == (byte)'y' &&
+                       ((signature[5] == (byte)'F' && signature[6] == (byte)'S') ||
+                        (signature[5] == (byte)'R' && signature[6] == (byte)'a') ||
+                        (signature[5] == (byte)'W' && signature[6] == (byte)'e'));
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static void ReloadAssetsFromCachedBundles()

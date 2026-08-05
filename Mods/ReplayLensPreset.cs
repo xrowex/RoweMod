@@ -10,13 +10,27 @@ namespace rowemod.Mods
     [Serializable]
     public sealed class ReplayLensPreset
     {
-        // Version 1 stored the lens only. Version 2 also stores the local Rowe camera light.
-        public int version = 2;
+        // Version 1 stored the lens only. Version 2 added the local camera light.
+        // Version 3 adds the lightweight native-HDRP fisheye optics profile.
+        // Version 4 stores native vignette units as a percentage.
+        // Version 5 adds the native HDRP MK1 death-lens character stack.
+        public int version = 5;
         public string name = string.Empty;
         public float fov = 60f;
         public float tilt;
         public float fisheye;
-        public float vignette = 0.05f;
+        public bool fisheyeOpticsEnabled = true;
+        public float fisheyeXMultiplier = 1f;
+        public float fisheyeYMultiplier = 1f;
+        public float fisheyeCenterX;
+        public float fisheyeCenterY;
+        public float fisheyeScale = 1f;
+        public bool mk1Enabled;
+        public float mk1PaniniDistance = 0.25f;
+        public float mk1PaniniCrop = 0.65f;
+        public float mk1ChromaticAberration = 0.07f;
+        public float mk1FilmGrain = 0.06f;
+        public float vignette = 5f;
         public int shakeMode;
         public bool dofEnabled;
         public bool dofPhysicallyBased;
@@ -60,6 +74,17 @@ namespace rowemod.Mods
                 fov = settings.replayFov,
                 tilt = settings.replayTilt,
                 fisheye = settings.replayFisheye,
+                fisheyeOpticsEnabled = settings.replayFisheyeOpticsEnabled,
+                fisheyeXMultiplier = settings.replayFisheyeXMultiplier,
+                fisheyeYMultiplier = settings.replayFisheyeYMultiplier,
+                fisheyeCenterX = settings.replayFisheyeCenterX,
+                fisheyeCenterY = settings.replayFisheyeCenterY,
+                fisheyeScale = settings.replayFisheyeScale,
+                mk1Enabled = settings.replayMk1Enabled,
+                mk1PaniniDistance = settings.replayMk1PaniniDistance,
+                mk1PaniniCrop = settings.replayMk1PaniniCrop,
+                mk1ChromaticAberration = settings.replayMk1ChromaticAberration,
+                mk1FilmGrain = settings.replayMk1FilmGrain,
                 vignette = settings.replayVignette,
                 shakeMode = settings.replayShakeMode,
                 dofEnabled = settings.replayDofEnabled,
@@ -99,6 +124,24 @@ namespace rowemod.Mods
             settings.replayFov = fov;
             settings.replayTilt = tilt;
             settings.replayFisheye = fisheye;
+            // Older preset files intentionally leave the user's current optics shape alone.
+            if (version >= 3)
+            {
+                settings.replayFisheyeOpticsEnabled = fisheyeOpticsEnabled;
+                settings.replayFisheyeXMultiplier = fisheyeXMultiplier;
+                settings.replayFisheyeYMultiplier = fisheyeYMultiplier;
+                settings.replayFisheyeCenterX = fisheyeCenterX;
+                settings.replayFisheyeCenterY = fisheyeCenterY;
+                settings.replayFisheyeScale = fisheyeScale;
+            }
+            if (version >= 5)
+            {
+                settings.replayMk1Enabled = mk1Enabled;
+                settings.replayMk1PaniniDistance = mk1PaniniDistance;
+                settings.replayMk1PaniniCrop = mk1PaniniCrop;
+                settings.replayMk1ChromaticAberration = mk1ChromaticAberration;
+                settings.replayMk1FilmGrain = mk1FilmGrain;
+            }
             settings.replayVignette = vignette;
             settings.replayShakeMode = shakeMode;
             settings.replayDofEnabled = dofEnabled;
@@ -176,7 +219,12 @@ namespace rowemod.Mods
 
                 preset.name = normalized;
                 int sourceVersion = preset.version;
-                ReplaySettings validation = new ReplaySettings();
+                // Preset files already store percentage-based fisheye units. V1-V3 vignette
+                // values still need the V4 conversion from normalized units to native percent.
+                ReplaySettings validation = new ReplaySettings
+                {
+                    cameraLabVersion = sourceVersion >= 5 ? 5 : sourceVersion >= 4 ? 4 : 3
+                };
                 preset.ApplyTo(validation);
                 ReplayLensPreset validated = FromSettings(normalized, validation);
                 validated.version = sourceVersion;

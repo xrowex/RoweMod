@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using Il2CppMashBox.Addons.ContentManagment;
 using MelonLoader;
 using GameReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
 using Il2CppMashBox.BMX_Physics_Development;
@@ -26,13 +27,19 @@ namespace rowemod.Mods
         private const string BundleDownloadUrl =
             "https://raw.githubusercontent.com/xrowex/RoweMod/master/Bundles/rowemod_peg_sparks";
         private const string BundleSha256 =
-            "DD2C7AB0D16125F807D911A2EB07E5695A9555E12D2F611C323C38904C7C640F";
+            "DA95596135A030121B066C2AB0F95071A5CEFD3DB0EB0CAC3E62603BAFDDA74E";
         private const int BundleDownloadTimeoutSeconds = 30;
         private const long MaxBundleDownloadBytes = 12L * 1024L * 1024L;
+        private const float ImpactCooldownSeconds = 0.12f;
         private const float ReplaySampleExpirySeconds = 0.12f;
         private const float ReplaySeekResetSeconds = 0.35f;
+        private const float ReplayImpactWindowSeconds = 0.055f;
         private const int MaxReplaySamples = 2400;
         private const int PegCount = 4;
+        // Native contact points occasionally describe a stale/world-space hit that is nowhere
+        // near the local BMX.  Keep the effect physically attached to the matching local peg
+        // in that case instead of trusting a point that leaves sparks on the rail or map.
+        private const float MaxNativePointDistanceFromPeg = 1.25f;
         private static readonly string[] SparkColorProperties =
         {
             "Spark Color",
@@ -60,6 +67,8 @@ namespace rowemod.Mods
             new PegRuntime("Rear Left"),
             new PegRuntime("Rear Right")
         };
+        private static readonly Transform[] PegAnchors = new Transform[PegCount];
+        private static readonly bool[] LoggedBadNativePoint = new bool[PegCount];
 
         private static GameObject _localRoot;
         private static BMXCollisionHandler _collisionHandler;
@@ -67,6 +76,7 @@ namespace rowemod.Mods
         private static bool _ownsBundle;
         private static bool _bundleDownloadInProgress;
         private static GameObject _rigPrefab;
+        private static AudioClip _chingClip;
         private static readonly List<ReplaySample> ReplaySamples =
             new List<ReplaySample>(MaxReplaySamples);
         private static readonly ReplaySample[] ReplayLatestSamples =
@@ -74,10 +84,14 @@ namespace rowemod.Mods
         private static readonly bool[] HasReplayLatestSample = new bool[PegCount];
         private static bool _replayActive;
         private static bool _loggedFirstReplaySample;
+        private static bool _loggedFirstChing;
         private static int _replayCursor;
         private static float _lastReplayPlaybackTime = float.NegativeInfinity;
         private static float _previewUntil;
         private static bool _previewOnNextLocalSpawn;
+        // The Debug map-loader path gets a longer preview because a scene transition can
+        // otherwise consume most of the normal three-second visual check.
+        private static float _queuedPreviewDurationSeconds;
         private static string _status = "Waiting for the local rider.";
 
         public static string Status => _status;
@@ -125,6 +139,8 @@ namespace rowemod.Mods
                 return;
             }
 
+            CacheLocalPegAnchors();
+
             bool rigsReady = Config.pegSparksSettings?.enabled != true || EnsureRigs();
             if (rigsReady)
                 _status = "Native peg contact monitor ready (4 local peg states).";
@@ -133,7 +149,9 @@ namespace rowemod.Mods
             if (_previewOnNextLocalSpawn)
             {
                 _previewOnNextLocalSpawn = false;
-                TriggerPreview();
+                float queuedDuration = Mathf.Max(3f, _queuedPreviewDurationSeconds);
+                _queuedPreviewDurationSeconds = 0f;
+                TriggerPreview(queuedDuration);
             }
         }
 
@@ -204,6 +222,24 @@ namespace rowemod.Mods
             changed |= !Mathf.Approximately(trail, settings.trailSeconds);
             settings.trailSeconds = trail;
 
+            bool ching = settings.chingEnabled;
+            Menu.ModernToggle("Metal Ching", ref ching, "peg_sparks_ching");
+            changed |= ching != settings.chingEnabled;
+            settings.chingEnabled = ching;
+
+            if (settings.chingEnabled)
+            {
+                float volume = settings.chingVolume;
+                Menu.ModernSlider("Ching Volume", ref volume, 0f, 1f, "peg_sparks_ching_volume");
+                changed |= !Mathf.Approximately(volume, settings.chingVolume);
+                settings.chingVolume = volume;
+
+                float pitch = settings.chingPitch;
+                Menu.ModernSlider("Ching Pitch", ref pitch, 0.5f, 1.75f, "peg_sparks_ching_pitch");
+                changed |= !Mathf.Approximately(pitch, settings.chingPitch);
+                settings.chingPitch = pitch;
+            }
+
             bool recordReplay = settings.recordInReplay;
             Menu.ModernToggle("Record for Replay", ref recordReplay, "peg_sparks_replay");
             changed |= recordReplay != settings.recordInReplay;
@@ -214,7 +250,7 @@ namespace rowemod.Mods
 
             GUILayout.Label("Status: " + Status, Menu.UiBadgeStyle);
             GUILayout.Label(
-                "Hot-orange sparks spray backward and away from the contact surface. Native contact points choose the exact peg end when it is touching the rail.",
+                "Short hot-orange sparks emit only while a native peg is sliding. There are no detached entry bursts.",
                 Menu.UiMutedWrappedStyle);
 
             if (changed)
@@ -232,7 +268,10 @@ namespace rowemod.Mods
             _replayActive = false;
             _previewUntil = 0f;
             if (!preserveQueuedPreview)
+            {
                 _previewOnNextLocalSpawn = false;
+                _queuedPreviewDurationSeconds = 0f;
+            }
             ResetReplayPlayback();
 
             for (int i = 0; i < Runtimes.Length; i++)
@@ -241,10 +280,15 @@ namespace rowemod.Mods
             _rigPrefab = null;
             _localRoot = null;
             _collisionHandler = null;
+            Array.Clear(PegAnchors, 0, PegAnchors.Length);
+            Array.Clear(LoggedBadNativePoint, 0, LoggedBadNativePoint.Length);
             if (_bundle != null && _ownsBundle)
                 _bundle.Unload(false);
             _bundle = null;
             _ownsBundle = false;
+            if (_chingClip != null)
+                Object.Destroy(_chingClip);
+            _chingClip = null;
         }
 
         public static void Update()
@@ -281,6 +325,11 @@ namespace rowemod.Mods
 
         public static void TriggerPreview()
         {
+            TriggerPreview(3f);
+        }
+
+        private static void TriggerPreview(float durationSeconds)
+        {
             if (Config.pegSparksSettings?.enabled != true)
             {
                 _status = "Enable Peg Sparks before running the preview.";
@@ -295,21 +344,24 @@ namespace rowemod.Mods
             }
 
             StopAllEffects(true);
-            _previewUntil = Time.unscaledTime + 3f;
-            _status = "Playing a three-second spark preview.";
-            Log.Msg("[PegSparks] Manual three-second VFX preview started.");
+            durationSeconds = Mathf.Clamp(durationSeconds, 0.5f, 15f);
+            _previewUntil = Time.unscaledTime + durationSeconds;
+            _status = $"Playing a {durationSeconds:0}-second spark preview.";
+            Log.Msg($"[PegSparks] Manual {durationSeconds:0}-second VFX preview started.");
         }
 
         public static void QueuePreviewOnNextLocalSpawn()
         {
             _previewOnNextLocalSpawn = true;
-            _status = "Spark preview queued for the next local rider spawn.";
-            Log.Msg("[PegSparks] Three-second VFX preview queued for the next local rider spawn.");
+            _queuedPreviewDurationSeconds = 10f;
+            _status = "Ten-second spark preview queued for the next local rider spawn.";
+            Log.Msg("[PegSparks] Ten-second VFX preview queued for the next local rider spawn.");
         }
 
         public static void CancelQueuedPreview()
         {
             _previewOnNextLocalSpawn = false;
+            _queuedPreviewDurationSeconds = 0f;
         }
 
         private static void UpdatePreview()
@@ -334,10 +386,15 @@ namespace rowemod.Mods
             else
                 tangent.Normalize();
 
-            Vector3 position = bike.position + bike.right * 0.65f +
-                               Vector3.up * 0.2f - tangent * 0.25f;
+            // The preview should prove the same attachment path that a real grind uses.
+            // Prefer the rear-right local peg rather than placing a synthetic burst beside
+            // the bicycle root, which made the diagnostic look detached from the bike.
+            Vector3 position = PegAnchors[3] != null
+                ? PegAnchors[3].position
+                : bike.position + bike.right * 0.65f + Vector3.up * 0.2f - tangent * 0.25f;
             PegSparksSettings settings = Config.pegSparksSettings;
             runtime.UpdateContinuous(position, normal, tangent, settings);
+
         }
 
         private static void UpdateNativePeg(int pegIndex)
@@ -383,6 +440,7 @@ namespace rowemod.Mods
             PegRuntime runtime = Runtimes[pegIndex];
             if (!hasContact)
             {
+                runtime.WasGrinding = false;
                 runtime.StopContinuous(false);
                 return;
             }
@@ -400,21 +458,102 @@ namespace rowemod.Mods
             float slideSpeed = tangent.magnitude;
             if (slideSpeed < settings.minimumSlideSpeed)
             {
+                runtime.WasGrinding = false;
                 runtime.StopContinuous(false);
                 return;
             }
 
             float now = Time.unscaledTime;
             Vector3 normalizedTangent = tangent.normalized;
+            float strength = Mathf.Clamp01(slideSpeed / 10f) * settings.intensity;
+            point = ResolveEmissionPoint(pegIndex, point);
             if (now >= runtime.NextUpdateTime)
             {
                 runtime.NextUpdateTime = now + (1f / Config.pegSparksSettings.updateRate);
                 if (EnsureRig(runtime))
                     runtime.UpdateContinuous(point, normal, normalizedTangent, settings);
 
-                RecordReplaySample(pegIndex, point, normal, normalizedTangent);
+                RecordReplaySample(pegIndex, point, normal, normalizedTangent, strength, false);
             }
 
+            runtime.WasGrinding = true;
+        }
+
+        private static void CacheLocalPegAnchors()
+        {
+            Array.Clear(PegAnchors, 0, PegAnchors.Length);
+            Array.Clear(LoggedBadNativePoint, 0, LoggedBadNativePoint.Length);
+            if (_localRoot == null)
+                return;
+
+            EquipSlotVehicle[] slots = _localRoot.GetComponentsInChildren<EquipSlotVehicle>(true);
+            int found = 0;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                EquipSlotVehicle slot = slots[i];
+                if (slot == null)
+                    continue;
+
+                string name = slot.name ?? string.Empty;
+                Transform parent = slot.transform != null ? slot.transform.parent : null;
+                if (parent != null)
+                    name += " " + (parent.name ?? string.Empty);
+
+                int pegIndex = GetPegIndex(name);
+                if (pegIndex < 0 || PegAnchors[pegIndex] != null)
+                    continue;
+
+                // The slot itself is the stable local-bike anchor; its parent may be a shared
+                // axle transform, so never emit from the parent.
+                PegAnchors[pegIndex] = slot.transform;
+                found++;
+            }
+
+            Log.Msg($"[PegSparks] Cached {found}/4 local peg anchors.");
+        }
+
+        private static int GetPegIndex(string name)
+        {
+            if (name.IndexOf("FrontRight", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 0;
+            if (name.IndexOf("FrontLeft", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 1;
+            if (name.IndexOf("RearLeft", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("BackLeft", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 2;
+            if (name.IndexOf("RearRight", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("BackRight", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 3;
+            return -1;
+        }
+
+        private static Vector3 ResolveEmissionPoint(int pegIndex, Vector3 nativePoint)
+        {
+            Transform anchor = PegAnchors[pegIndex];
+            if (anchor == null)
+            {
+                // This only occurs when parts finished equipping after the player-spawn event.
+                // It is a bounded, local-rider-only lookup and never runs after an anchor exists.
+                CacheLocalPegAnchors();
+                anchor = PegAnchors[pegIndex];
+            }
+
+            if (anchor == null)
+                return nativePoint;
+
+            Vector3 anchorPoint = anchor.position;
+            float distance = Vector3.Distance(nativePoint, anchorPoint);
+            if (distance <= MaxNativePointDistanceFromPeg)
+                return nativePoint;
+
+            if (!LoggedBadNativePoint[pegIndex])
+            {
+                LoggedBadNativePoint[pegIndex] = true;
+                Log.Warning($"[PegSparks] Ignoring distant native {Runtimes[pegIndex].Name} contact " +
+                            $"({distance:F2}m from its local peg); using the peg anchor instead.");
+            }
+
+            return anchorPoint;
         }
 
         private static bool IsNativePegGrinding()
@@ -473,11 +612,22 @@ namespace rowemod.Mods
                 return true;
 
             string path = Path.Combine(Memory.bundlesFolderPath, BundleFileName);
-            _bundle = FindAlreadyLoadedBundle();
-            if (_bundle == null && File.Exists(path))
+            if (File.Exists(path))
             {
-                _bundle = AssetBundle.LoadFromFile(path);
-                _ownsBundle = _bundle != null;
+                string localHash = ComputeFileSha256(path);
+                if (string.Equals(localHash, BundleSha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    _bundle = AssetBundle.LoadFromFile(path);
+                    _ownsBundle = _bundle != null;
+                    if (_bundle != null)
+                        Log.Msg($"[PegSparks] Loaded verified current visual bundle ({localHash}).");
+                }
+                else
+                {
+                    Log.Warning(
+                        $"[PegSparks] Replacing stale visual bundle. expected={BundleSha256}, " +
+                        $"actual={localHash}");
+                }
             }
 
             if (_bundle == null)
@@ -506,6 +656,21 @@ namespace rowemod.Mods
             return true;
         }
 
+        private static string ComputeFileSha256(string path)
+        {
+            try
+            {
+                using FileStream stream = File.OpenRead(path);
+                using SHA256 sha256 = SHA256.Create();
+                return BitConverter.ToString(sha256.ComputeHash(stream)).Replace("-", string.Empty);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[PegSparks] Could not hash the local visual bundle: " + ex.Message);
+                return string.Empty;
+            }
+        }
+
         private static void BeginBundleDownload(string bundlePath)
         {
             if (_bundleDownloadInProgress)
@@ -521,6 +686,7 @@ namespace rowemod.Mods
             UnityWebRequest request = UnityWebRequest.Get(BundleDownloadUrl);
             request.timeout = BundleDownloadTimeoutSeconds;
             yield return request.SendWebRequest();
+            bool installed = false;
 
             try
             {
@@ -559,6 +725,7 @@ namespace rowemod.Mods
 
                 _status = "Peg Sparks visual bundle downloaded. Initializing...";
                 Log.Msg("[PegSparks] Visual bundle downloaded and verified.");
+                installed = true;
             }
             catch (Exception ex)
             {
@@ -570,30 +737,51 @@ namespace rowemod.Mods
                 _bundleDownloadInProgress = false;
                 request.Dispose();
             }
+
+            if (installed && EnsureRigs())
+            {
+                _status = "Native peg contact monitor ready (4 local peg states).";
+                Log.Msg("[PegSparks] Downloaded current visual bundle initialized.");
+            }
         }
 
-        private static AssetBundle FindAlreadyLoadedBundle()
+        private static AudioClip EnsureChingClip()
         {
-            foreach (AssetBundle bundle in Memory.loadedBundles)
-            {
-                if (bundle == null)
-                    continue;
+            if (_chingClip != null)
+                return _chingClip;
 
-                foreach (string assetName in bundle.GetAllAssetNames())
-                {
-                    if (assetName.EndsWith(PrefabFileName, StringComparison.OrdinalIgnoreCase))
-                        return bundle;
-                }
+            const int sampleRate = 44100;
+            const float duration = 0.14f;
+            int sampleCount = Mathf.CeilToInt(sampleRate * duration);
+            float[] samples = new float[sampleCount];
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float time = i / (float)sampleRate;
+                float envelope = Mathf.Exp(-time * 30f);
+                float highRing = Mathf.Sin(2f * Mathf.PI * 4100f * time) * 0.54f;
+                float lowRing = Mathf.Sin(2f * Mathf.PI * 1850f * time) * 0.30f;
+                float grit = Mathf.Sin(2f * Mathf.PI * 7300f * time) *
+                             Mathf.Exp(-time * 58f) * 0.16f;
+                samples[i] = (highRing + lowRing + grit) * envelope;
             }
 
-            return null;
+            _chingClip = AudioClip.Create(
+                "RoweMod Peg Metal Ching",
+                sampleCount,
+                1,
+                sampleRate,
+                false);
+            _chingClip.SetData(samples, 0);
+            return _chingClip;
         }
 
         private static void RecordReplaySample(
             int pegIndex,
             Vector3 point,
             Vector3 normal,
-            Vector3 tangent)
+            Vector3 tangent,
+            float strength,
+            bool impact)
         {
             PegSparksSettings settings = Config.pegSparksSettings;
             if (_replayActive || settings?.recordInReplay != true)
@@ -619,7 +807,9 @@ namespace rowemod.Mods
                     pegIndex,
                     point,
                     normal,
-                    tangent));
+                    tangent,
+                    strength,
+                    impact));
                 if (!_loggedFirstReplaySample)
                 {
                     _loggedFirstReplaySample = true;
@@ -741,7 +931,11 @@ namespace rowemod.Mods
         private static void StopAllEffects(bool immediate = false)
         {
             foreach (PegRuntime runtime in Runtimes)
+            {
                 runtime.StopContinuous(immediate);
+                if (immediate)
+                    runtime.StopImpact();
+            }
         }
 
         private readonly struct ReplaySample
@@ -751,19 +945,25 @@ namespace rowemod.Mods
             public readonly Vector3 Position;
             public readonly Vector3 Normal;
             public readonly Vector3 Tangent;
+            public readonly float Strength;
+            public readonly bool Impact;
 
             public ReplaySample(
                 float time,
                 int pegIndex,
                 Vector3 position,
                 Vector3 normal,
-                Vector3 tangent)
+                Vector3 tangent,
+                float strength,
+                bool impact)
             {
                 Time = time;
                 PegIndex = pegIndex;
                 Position = position;
                 Normal = normal;
                 Tangent = tangent;
+                Strength = strength;
+                Impact = impact;
             }
         }
 
@@ -772,8 +972,13 @@ namespace rowemod.Mods
             public readonly string Name;
             public GameObject Rig;
             public VisualEffect Continuous;
+            public VisualEffect Impact;
+            public AudioSource Ching;
             public float NextUpdateTime;
+            public float NextImpactTime;
             public float TrailEndTime;
+            public float ImpactEndTime;
+            public bool WasGrinding;
             private bool _continuousPlaying;
 
             public PegRuntime(string name)
@@ -785,21 +990,50 @@ namespace rowemod.Mods
             {
                 Rig = Object.Instantiate(prefab);
                 Rig.name = "RoweMod Peg Sparks - " + Name;
-                Rig.SetActive(true);
+                // A Visual Effect Graph can process its first OnEnable event as soon as an
+                // active prefab is instantiated.  Do every VFX setup step while the rig is
+                // inactive so an authored auto-play child cannot emit once at world origin.
+                Rig.SetActive(false);
                 Transform continuous = Rig.transform.Find("Continuous");
                 Transform impact = Rig.transform.Find("Impact");
                 Continuous = continuous != null ? continuous.GetComponent<VisualEffect>() : null;
-                SetSparkColor(Continuous);
-                StopContinuous(true);
-                if (impact != null)
+                Impact = impact != null ? impact.GetComponent<VisualEffect>() : null;
+                if (Continuous != null)
                 {
-                    VisualEffect impactEffect = impact.GetComponent<VisualEffect>();
-                    if (impactEffect != null)
-                    {
-                        impactEffect.Stop();
-                        impactEffect.enabled = false;
-                    }
+                    // The graph renderer is a separate component from VisualEffect.  Keep it
+                    // enabled even while the graph itself is stopped; otherwise Play() runs
+                    // successfully but produces no visible particles.
+                    Renderer continuousRenderer = Continuous.GetComponent<Renderer>();
+                    if (continuousRenderer != null)
+                        continuousRenderer.enabled = true;
+                    Continuous.Stop();
+                    Continuous.enabled = false;
                 }
+
+                if (Impact != null)
+                {
+                    Impact.Stop();
+                    Impact.enabled = false;
+                }
+
+                SetSparkColor(Continuous);
+                SetSparkColor(Impact);
+                Ching = Impact != null
+                    ? Impact.gameObject.GetComponent<AudioSource>() ??
+                      Impact.gameObject.AddComponent<AudioSource>()
+                    : null;
+                if (Ching != null)
+                {
+                    Ching.spatialBlend = 1f;
+                    Ching.rolloffMode = AudioRolloffMode.Linear;
+                    Ching.minDistance = 1f;
+                    Ching.maxDistance = 18f;
+                    Ching.playOnAwake = false;
+                }
+
+                // Keep the rig alive for later local peg updates, but leave every effect
+                // explicitly disabled until UpdateContinuous or PlayImpact requests it.
+                Rig.SetActive(true);
             }
 
             public void UpdateContinuous(
@@ -812,7 +1046,10 @@ namespace rowemod.Mods
                     return;
 
                 SetTransform(Continuous.transform, position, normal, tangent);
-                SetVisualSettings(Continuous, settings);
+                SetVisualSettings(Continuous, settings, false);
+                Renderer continuousRenderer = Continuous.GetComponent<Renderer>();
+                if (continuousRenderer != null)
+                    continuousRenderer.enabled = true;
                 if (!_continuousPlaying)
                 {
                     Continuous.enabled = true;
@@ -824,11 +1061,60 @@ namespace rowemod.Mods
                 TrailEndTime = 0f;
             }
 
+            public void PlayImpact(
+                Vector3 position,
+                Vector3 normal,
+                Vector3 tangent,
+                PegSparksSettings settings)
+            {
+                if (Impact == null)
+                    return;
+
+                SetTransform(Impact.transform, position, normal, tangent);
+                SetVisualSettings(Impact, settings, true);
+                Impact.enabled = true;
+                Impact.Reinit();
+                Impact.Play();
+                ImpactEndTime = Time.unscaledTime +
+                                Mathf.Max(0.25f, settings.sparkLifetime + 0.12f);
+            }
+
+            public void PlayChing(PegSparksSettings settings, float strength)
+            {
+                if (!settings.chingEnabled || Ching == null)
+                    return;
+
+                AudioClip clip = EnsureChingClip();
+                if (clip == null)
+                    return;
+
+                Ching.pitch = settings.chingPitch * Mathf.Lerp(0.9f, 1.12f, strength);
+                Ching.PlayOneShot(clip, settings.chingVolume * Mathf.Lerp(0.45f, 1f, strength));
+                if (!_loggedFirstChing)
+                {
+                    _loggedFirstChing = true;
+                    Log.Msg("[PegSparks] Local metal ching triggered.");
+                }
+            }
+
             public void StopContinuous(bool immediate)
             {
                 NextUpdateTime = 0f;
-                if (Continuous == null || !_continuousPlaying)
+                WasGrinding = false;
+                if (Continuous == null)
                     return;
+
+                if (!_continuousPlaying)
+                {
+                    if (immediate)
+                    {
+                        Continuous.Stop();
+                        Continuous.enabled = false;
+                        TrailEndTime = 0f;
+                    }
+
+                    return;
+                }
 
                 Continuous.Stop();
                 _continuousPlaying = false;
@@ -852,6 +1138,26 @@ namespace rowemod.Mods
                     TrailEndTime = 0f;
                 }
 
+                if (ImpactEndTime > 0f && now >= ImpactEndTime)
+                {
+                    if (Impact != null)
+                    {
+                        Impact.Stop();
+                        Impact.enabled = false;
+                    }
+                    ImpactEndTime = 0f;
+                }
+            }
+
+            public void StopImpact()
+            {
+                if (Impact != null)
+                {
+                    Impact.Stop();
+                    Impact.enabled = false;
+                }
+
+                ImpactEndTime = 0f;
             }
 
             public void DestroyRig()
@@ -860,8 +1166,13 @@ namespace rowemod.Mods
                     Object.Destroy(Rig);
                 Rig = null;
                 Continuous = null;
+                Impact = null;
+                Ching = null;
                 NextUpdateTime = 0f;
+                NextImpactTime = 0f;
                 TrailEndTime = 0f;
+                ImpactEndTime = 0f;
+                WasGrinding = false;
                 _continuousPlaying = false;
             }
 
@@ -921,7 +1232,10 @@ namespace rowemod.Mods
                 return _hotOrangeGradient;
             }
 
-            private static void SetVisualSettings(VisualEffect effect, PegSparksSettings settings)
+            private static void SetVisualSettings(
+                VisualEffect effect,
+                PegSparksSettings settings,
+                bool impact)
             {
                 if (effect.HasFloat("Sparks Particle Spawn Rate"))
                     effect.SetFloat("Sparks Particle Spawn Rate", 180f * settings.intensity);
@@ -932,7 +1246,9 @@ namespace rowemod.Mods
                 if (effect.HasVector2("Spark Lifetime Min/Max"))
                     effect.SetVector2(
                         "Spark Lifetime Min/Max",
-                        new Vector2(0.3f, 1f) * settings.sparkLifetime);
+                        impact
+                            ? new Vector2(0.3f, 1f) * settings.sparkLifetime
+                            : new Vector2(0.07f, 0.16f) * settings.sparkLifetime);
                 if (effect.HasVector2("Smoke Lifetime Min/Max"))
                     effect.SetVector2(
                         "Smoke Lifetime Min/Max",
@@ -940,7 +1256,14 @@ namespace rowemod.Mods
                 if (effect.HasVector3("Spark Initial Velocity"))
                     effect.SetVector3(
                         "Spark Initial Velocity",
-                        new Vector3(0.35f, 1.15f, -3f) * settings.sparkSpeed);
+                        impact
+                            ? new Vector3(0.35f, 1.15f, -3f) * settings.sparkSpeed
+                            : new Vector3(0.06f, 0.22f, -0.85f) *
+                              Mathf.Min(settings.sparkSpeed, 1.5f));
+                if (impact && effect.HasVector2("Spark Particle Burst Count Min/Max"))
+                    effect.SetVector2(
+                        "Spark Particle Burst Count Min/Max",
+                        new Vector2(12f, 250f) * settings.impactAmount);
             }
         }
     }

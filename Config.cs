@@ -166,6 +166,21 @@ namespace rowemod
         public float replayFov { get; set; } = 60f;
         public float replayTilt { get; set; }
         public float replayFisheye { get; set; }
+        // Reuses HDRP's existing uber-post lens distortion. These controls only shape the
+        // native pass; RoweMod does not allocate another full-screen texture or shader pass.
+        public bool replayFisheyeOpticsEnabled { get; set; } = true;
+        public float replayFisheyeXMultiplier { get; set; } = 1f;
+        public float replayFisheyeYMultiplier { get; set; } = 1f;
+        public float replayFisheyeCenterX { get; set; }
+        public float replayFisheyeCenterY { get; set; }
+        public float replayFisheyeScale { get; set; } = 1f;
+        // Native HDRP approximation of the Century Optics MK1 / VX1000 death-lens stack.
+        // Panini is the only additional post-process pass; fringe and grain remain in UberPost.
+        public bool replayMk1Enabled { get; set; }
+        public float replayMk1PaniniDistance { get; set; } = 0.25f;
+        public float replayMk1PaniniCrop { get; set; } = 0.65f;
+        public float replayMk1ChromaticAberration { get; set; } = 0.07f;
+        public float replayMk1FilmGrain { get; set; } = 0.06f;
         public float replayVignette { get; set; } = 0.05f;
         public int replayShakeMode { get; set; }
         public bool replayDofEnabled { get; set; }
@@ -210,13 +225,18 @@ namespace rowemod
     public class PegSparksSettings
     {
         public bool enabled { get; set; } = true;
-        public float minimumSlideSpeed { get; set; } = 1.5f;
-        public float intensity { get; set; } = 1f;
-        public float updateRate { get; set; } = 30f;
-        public float sparkSize { get; set; } = 1f;
-        public float sparkLifetime { get; set; } = 1f;
-        public float sparkSpeed { get; set; } = 1f;
-        public float trailSeconds { get; set; } = 0.3f;
+        public float minimumSlideSpeed { get; set; } = 0.35f;
+        public float intensity { get; set; } = 2.07f;
+        public float updateRate { get; set; } = 41.61f;
+        public bool impactBursts { get; set; } = true;
+        public float impactAmount { get; set; } = 1f;
+        public float sparkSize { get; set; } = 3f;
+        public float sparkLifetime { get; set; } = 2f;
+        public float sparkSpeed { get; set; } = 3f;
+        public float trailSeconds { get; set; } = 0.57f;
+        public bool chingEnabled { get; set; } = true;
+        public float chingVolume { get; set; } = 0.45f;
+        public float chingPitch { get; set; } = 1f;
         public bool recordInReplay { get; set; } = true;
     }
 
@@ -835,12 +855,23 @@ namespace rowemod
 
             if (settings.cameraLabVersion < 2)
                 settings.replayFisheye *= 100f;
+            if (settings.cameraLabVersion < 4)
+                settings.replayVignette *= 100f;
 
-            settings.cameraLabVersion = 2;
-            settings.replayFov = ClampFinite(settings.replayFov, 5f, 120f, 60f);
+            settings.cameraLabVersion = 5;
+            settings.replayFov = ClampFinite(settings.replayFov, 5f, 140f, 60f);
             settings.replayTilt = ClampFinite(settings.replayTilt, -180f, 180f, 0f);
             settings.replayFisheye = ClampFinite(settings.replayFisheye, 0f, 100f, 0f);
-            settings.replayVignette = ClampFinite(settings.replayVignette, 0f, 1f, 0.05f);
+            settings.replayFisheyeXMultiplier = ClampFinite(settings.replayFisheyeXMultiplier, 0f, 1f, 1f);
+            settings.replayFisheyeYMultiplier = ClampFinite(settings.replayFisheyeYMultiplier, 0f, 1f, 1f);
+            settings.replayFisheyeCenterX = ClampFinite(settings.replayFisheyeCenterX, -0.5f, 0.5f, 0f);
+            settings.replayFisheyeCenterY = ClampFinite(settings.replayFisheyeCenterY, -0.5f, 0.5f, 0f);
+            settings.replayFisheyeScale = ClampFinite(settings.replayFisheyeScale, 0.5f, 2f, 1f);
+            settings.replayMk1PaniniDistance = ClampFinite(settings.replayMk1PaniniDistance, 0f, 1f, 0.25f);
+            settings.replayMk1PaniniCrop = ClampFinite(settings.replayMk1PaniniCrop, 0f, 1f, 0.65f);
+            settings.replayMk1ChromaticAberration = ClampFinite(settings.replayMk1ChromaticAberration, 0f, 1f, 0.07f);
+            settings.replayMk1FilmGrain = ClampFinite(settings.replayMk1FilmGrain, 0f, 1f, 0.06f);
+            settings.replayVignette = ClampFinite(settings.replayVignette, 0f, 100f, 5f);
             settings.replayShakeMode = Math.Max(0, Math.Min(3, settings.replayShakeMode));
             settings.replayNearFocusStart = ClampFinite(settings.replayNearFocusStart, 0f, 1000f, 0f);
             settings.replayNearFocusEnd = ClampFinite(settings.replayNearFocusEnd, 0f, 1000f, 2f);
@@ -880,13 +911,16 @@ namespace rowemod
             if (settings == null)
                 return;
 
-            settings.minimumSlideSpeed = ClampFinite(settings.minimumSlideSpeed, 0.1f, 20f, 1.5f);
-            settings.intensity = ClampFinite(settings.intensity, 0f, 3f, 1f);
-            settings.updateRate = ClampFinite(settings.updateRate, 10f, 60f, 30f);
-            settings.sparkSize = ClampFinite(settings.sparkSize, 0.25f, 3f, 1f);
-            settings.sparkLifetime = ClampFinite(settings.sparkLifetime, 0.25f, 2f, 1f);
-            settings.sparkSpeed = ClampFinite(settings.sparkSpeed, 0.25f, 3f, 1f);
-            settings.trailSeconds = ClampFinite(settings.trailSeconds, 0.05f, 1f, 0.3f);
+            settings.minimumSlideSpeed = ClampFinite(settings.minimumSlideSpeed, 0.1f, 20f, 0.35f);
+            settings.intensity = ClampFinite(settings.intensity, 0f, 3f, 2.07f);
+            settings.updateRate = ClampFinite(settings.updateRate, 10f, 60f, 41.61f);
+            settings.impactAmount = ClampFinite(settings.impactAmount, 0f, 3f, 1f);
+            settings.sparkSize = ClampFinite(settings.sparkSize, 0.25f, 3f, 3f);
+            settings.sparkLifetime = ClampFinite(settings.sparkLifetime, 0.25f, 2f, 2f);
+            settings.sparkSpeed = ClampFinite(settings.sparkSpeed, 0.25f, 3f, 3f);
+            settings.trailSeconds = ClampFinite(settings.trailSeconds, 0.05f, 1f, 0.57f);
+            settings.chingVolume = ClampFinite(settings.chingVolume, 0f, 1f, 0.45f);
+            settings.chingPitch = ClampFinite(settings.chingPitch, 0.5f, 1.75f, 1f);
         }
 
         private static float ClampFinite(float value, float min, float max, float defaultValue)

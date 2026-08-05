@@ -1,8 +1,8 @@
 {
-    "version":  "3.2.5",
+    "version":  "3.2.6",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "8B12CB230D8CC0953E10555FCA19AA688C829F4C6D36BDF8349101875E36E877",
+    "sha256":  "43b711524a9e95ddc5c13caab6f869778ce26f40d00211659f6897d672af9f97",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
-    "patchNotes":  "Fixed Peg Sparks delivery: missing visual bundles now download, verify, and load automatically. Fixed Replay Fisheye to use BMX Streets' native percentage scale. Added an opt-in 3.2.3-compatible opposite-stance trick mode while keeping feet-only stance available.",
+    "patchNotes":  "Added lightweight VX1000, MK1 Death Lens, and Clean Fisheye presets to Replay Camera Lab, with adjustable lens shape, optical crop, framing, vignette, and replay keyframes. Updated Peg Sparks to the current visuals and tuning, with reliable bundle verification and cleaner loading. Fixed empty trick-slot binding and bike-stance option saving, added Reset buttons to the runtime vehicle-tuning inspector, and improved the debug map loader's offline start.",
     "requiredGameVersion":  ""
 }

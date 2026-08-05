@@ -12,6 +12,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.UI;
 using UnityObject = UnityEngine.Object;
 using UnityCamera = UnityEngine.Camera;
@@ -53,6 +54,17 @@ namespace rowemod.Mods
             public float fov;
             public float tilt;
             public float fisheye;
+            public bool fisheyeOpticsEnabled;
+            public float fisheyeXMultiplier;
+            public float fisheyeYMultiplier;
+            public float fisheyeCenterX;
+            public float fisheyeCenterY;
+            public float fisheyeScale;
+            public bool mk1Enabled;
+            public float mk1PaniniDistance;
+            public float mk1PaniniCrop;
+            public float mk1ChromaticAberration;
+            public float mk1FilmGrain;
             public float vignette;
             public int shakeMode;
             public bool dofEnabled;
@@ -88,6 +100,7 @@ namespace rowemod.Mods
 
         private static GameObject lightObject;
         private static Light lightComponent;
+        private static HDAdditionalLightData hdLightData;
         private static RecordableCamera recordableCamera;
         private static FreeCam freeCam;
         private static PlayableKeyFrameDataReplayCameraTransformBehaviour keyframeCamera;
@@ -116,20 +129,81 @@ namespace rowemod.Mods
         private static bool replaySettingsVisible;
         private static int replayCameraLookupGeneration;
         private static int overlayTab;
-        private static Rect overlayRect = new Rect(24f, 120f, 440f, 650f);
+        private const float PreferredOverlayWidth = 580f;
+        private static Rect overlayRect = new Rect(24f, 120f, PreferredOverlayWidth, 650f);
         private static Vector2 overlayScroll;
         private static string status = "Off";
         private static string keyframeStatus = "Open Replay to audit camera tracks";
         private static GameObject matteObject;
         private static Image[] matteImages;
+        private static RawImage framedVignetteImage;
+        private static Texture2D framedVignetteTexture;
+        private static Texture2D mk1VignetteTexture;
         private static int matteScreenWidth;
         private static int matteScreenHeight;
         private static int matteMode = -1;
         private static float matteOpacity = -1f;
+        private static float matteVignette = -1f;
+        private static bool matteMk1Enabled;
         private static string presetName = string.Empty;
         private static string selectedPreset = string.Empty;
         private static readonly List<string> presetCache = new List<string>();
         private static bool presetCacheLoaded;
+        private static LensDistortion fisheyeLensDistortion;
+        private static ClampedFloatParameter fisheyeXParameter;
+        private static ClampedFloatParameter fisheyeYParameter;
+        private static Vector2Parameter fisheyeCenterParameter;
+        private static ClampedFloatParameter fisheyeScaleParameter;
+        private static bool fisheyeOriginalCaptured;
+        private static bool fisheyeOpticsApplied;
+        private static bool fisheyePerformanceLogged;
+        private static float nextFisheyeBindAttemptTime;
+        private static float originalFisheyeXMultiplier;
+        private static float originalFisheyeYMultiplier;
+        private static Vector2 originalFisheyeCenter;
+        private static float originalFisheyeScale;
+        private static bool originalFisheyeXOverride;
+        private static bool originalFisheyeYOverride;
+        private static bool originalFisheyeCenterOverride;
+        private static bool originalFisheyeScaleOverride;
+        private static UnityEngine.Rendering.HighDefinition.Vignette framedVignette;
+        private static ClampedFloatParameter framedVignetteIntensityParameter;
+        private static float originalFramedVignetteIntensity;
+        private static bool originalFramedVignetteIntensityOverride;
+        private static bool framedVignetteOriginalCaptured;
+        private static bool framedVignetteSuppressed;
+        private static VolumeProfile mk1VolumeProfile;
+        private static GameObject mk1VolumeObject;
+        private static Volume mk1RuntimeVolume;
+        private static PaniniProjection mk1PaniniProjection;
+        private static ChromaticAberration mk1ChromaticAberration;
+        private static FilmGrain mk1FilmGrain;
+        private static bool mk1PaniniAdded;
+        private static bool mk1ChromaticAdded;
+        private static bool mk1FilmGrainAdded;
+        private static bool mk1OriginalCaptured;
+        private static bool mk1OpticsApplied;
+        private static bool originalMk1PaniniActive;
+        private static bool originalMk1ChromaticActive;
+        private static bool originalMk1FilmGrainActive;
+        private static float originalMk1PaniniDistance;
+        private static float originalMk1PaniniCrop;
+        private static float originalMk1ChromaticAberration;
+        private static float originalMk1FilmGrain;
+        private static float originalMk1FilmGrainResponse;
+        private static bool originalMk1PaniniDistanceOverride;
+        private static bool originalMk1PaniniCropOverride;
+        private static bool originalMk1ChromaticOverride;
+        private static bool originalMk1FilmGrainOverride;
+        private static bool originalMk1FilmGrainResponseOverride;
+        private static HDAdditionalCameraData mk1CameraData;
+        private static FrameSettings originalMk1FrameSettings;
+        private static FrameSettingsOverrideMask originalMk1FrameSettingsOverrideMask;
+        private static bool originalMk1CustomRenderingSettings;
+        private static bool mk1FrameSettingsCaptured;
+        private static bool mk1FrameSettingsApplied;
+        private static bool mk1FrameSettingsWarningLogged;
+        private static bool mk1PerformanceLogged;
 
         public static string Status => status;
 
@@ -142,11 +216,7 @@ namespace rowemod.Mods
                 return keyframedTransform;
             }
 
-            if (cinematicsBrain == null)
-                cinematicsBrain = FindFirstLoaded<CinemachineBrain>();
-
-            if (replayOutputCamera == null && cinematicsBrain != null)
-                cinematicsBrain.gameObject.TryGetComponent(out replayOutputCamera);
+            ResolveReplayOutputCamera();
 
             if (replayOutputCamera != null && replayOutputCamera.isActiveAndEnabled)
             {
@@ -179,6 +249,7 @@ namespace rowemod.Mods
             lastReplayEditorStateHash = 0;
             previousReplaySettingsVisible = false;
             nextReplayModeCheckTime = 0f;
+            nextFisheyeBindAttemptTime = 0f;
             replayCameraLookupGeneration++;
             MelonCoroutines.Start(LocateReplayCameraFromOpenEvent(replayCameraLookupGeneration));
         }
@@ -277,18 +348,39 @@ namespace rowemod.Mods
             lensApplyPending = true;
             Config.RequestSave();
 
-            if (!replayActive)
-                return;
+            if (replayActive)
+            {
+                ApplyLensSettings(Config.replaySettings, false);
+                BindFisheyeOptics();
+                ApplyFisheyeOptics();
+                ApplyMk1Optics();
+                ApplyFramedVignette();
+                lastTimelineTime = CurrentTimelineTime();
+            }
 
-            ApplyLensSettings(Config.replaySettings, false);
-            lastTimelineTime = CurrentTimelineTime();
+            // Framing is a capture overlay, not a replay-camera property. Keep its preview live
+            // in gameplay too so the control has immediate, predictable feedback.
             UpdateMatteOverlay(true);
         }
 
         public static void Update()
         {
+            UpdateMatteOverlay(false);
+
             if (!replayActive)
                 return;
+
+            // The replay Volume is initialized asynchronously on some camera modes. Retry at a
+            // low fixed rate only until it binds; a fixed lens profile has no steady-state poll.
+            if ((!fisheyeOriginalCaptured || !framedVignetteOriginalCaptured) &&
+                Time.unscaledTime >= nextFisheyeBindAttemptTime)
+            {
+                nextFisheyeBindAttemptTime = Time.unscaledTime + 0.25f;
+                BindFisheyeOptics();
+                ApplyFisheyeOptics();
+                ApplyMk1Optics();
+                ApplyFramedVignette();
+            }
 
             if (replayEditor != null && replayEditor._settingsMenu != null)
                 replaySettingsVisible = replayEditor._settingsMenu.activeInHierarchy;
@@ -359,6 +451,10 @@ namespace rowemod.Mods
         {
             if (!replaySettingsVisible || !replayActive)
                 return;
+
+            float availableWidth = Mathf.Max(320f, Screen.width - 24f);
+            overlayRect.width = Mathf.Min(PreferredOverlayWidth, availableWidth);
+            overlayRect.x = Mathf.Clamp(overlayRect.x, 8f, Mathf.Max(8f, Screen.width - overlayRect.width - 8f));
 
             overlayRect = GUI.Window(
                 OverlayWindowId,
@@ -475,13 +571,62 @@ namespace rowemod.Mods
         {
             ReplaySettings settings = Config.replaySettings;
             bool changed = false;
-            settings.replayFov = DrawSlider("FOV / Long Lens", settings.replayFov, 5f, 120f, controlPrefix + "fov", ref changed);
+
+            GUILayout.Label("SKATE / BMX QUICK LENSES", Menu.UiMutedStyle);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("MK1 Death Lens", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+                ApplyMk1QuickLook();
+            if (GUILayout.Button("VX1000 4:3", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+                ApplyFisheyeQuickLook(true);
+            if (GUILayout.Button("Clean Fisheye", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+                ApplyFisheyeQuickLook(false);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Reset", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+                ResetFisheyeQuickLook();
+            GUILayout.EndHorizontal();
+            GUILayout.Label("MK1 recreates the Century Optics death lens: 125 degree horizontal-equivalent view, 4:3 crop, Panini shaping, MK1 edge mask, subtle fringe, and grain.", Menu.UiMutedWrappedStyle);
+
+            settings.replayFov = DrawSlider("FOV / Long Lens", settings.replayFov, 5f, 140f, controlPrefix + "fov", ref changed);
             DrawTrackLabel("FOV", LensTrack.Fov);
             settings.replayTilt = DrawSlider("Camera Tilt", settings.replayTilt, -180f, 180f, controlPrefix + "tilt", ref changed);
             DrawTrackLabel("Tilt", LensTrack.Tilt);
             settings.replayFisheye = DrawSlider("Fisheye (%)", settings.replayFisheye, 0f, 100f, controlPrefix + "fisheye", ref changed);
             DrawTrackLabel("Fisheye", LensTrack.Fisheye);
-            settings.replayVignette = DrawSlider("Vignette", settings.replayVignette, 0f, 1f, controlPrefix + "vignette", ref changed);
+
+            bool opticsEnabled = settings.replayFisheyeOpticsEnabled;
+            Menu.ModernToggle("Realistic Fisheye Optics", ref opticsEnabled, controlPrefix + "fisheye_optics");
+            changed |= opticsEnabled != settings.replayFisheyeOpticsEnabled;
+            settings.replayFisheyeOpticsEnabled = opticsEnabled;
+            if (opticsEnabled)
+            {
+                settings.replayFisheyeScale = DrawSlider("Edge Crop / Optical Zoom", settings.replayFisheyeScale, 1f, 1.6f, controlPrefix + "fisheye_scale", ref changed);
+                GUILayout.Label(
+                    $"Output FOV after crop: {CalculateOpticalZoomFov(settings.replayFov, settings.replayFisheyeScale):0.0} degrees",
+                    Menu.UiMutedStyle);
+                settings.replayFisheyeXMultiplier = DrawSlider("Horizontal Curve", settings.replayFisheyeXMultiplier, 0.75f, 1f, controlPrefix + "fisheye_x", ref changed);
+                settings.replayFisheyeYMultiplier = DrawSlider("Vertical Curve", settings.replayFisheyeYMultiplier, 0.75f, 1f, controlPrefix + "fisheye_y", ref changed);
+                settings.replayFisheyeCenterX = DrawSlider("Optical Center X", settings.replayFisheyeCenterX, -0.25f, 0.25f, controlPrefix + "fisheye_center_x", ref changed);
+                settings.replayFisheyeCenterY = DrawSlider("Optical Center Y", settings.replayFisheyeCenterY, -0.25f, 0.25f, controlPrefix + "fisheye_center_y", ref changed);
+                GUILayout.Label("Native HDRP lens distortion - no custom render pass", Menu.UiBadgeStyle);
+            }
+            else
+                GUILayout.Label("Optical shaping bypassed; Fisheye (%) remains available.", Menu.UiMutedWrappedStyle);
+
+            bool mk1Enabled = settings.replayMk1Enabled;
+            Menu.ModernToggle("MK1 Lens Character", ref mk1Enabled, controlPrefix + "mk1_enabled");
+            changed |= mk1Enabled != settings.replayMk1Enabled;
+            settings.replayMk1Enabled = mk1Enabled;
+            if (mk1Enabled)
+            {
+                settings.replayMk1PaniniDistance = DrawSlider("MK1 Projection", settings.replayMk1PaniniDistance, 0f, 0.6f, controlPrefix + "mk1_panini", ref changed);
+                settings.replayMk1PaniniCrop = DrawSlider("Projection Crop", settings.replayMk1PaniniCrop, 0f, 1f, controlPrefix + "mk1_crop", ref changed);
+                settings.replayMk1ChromaticAberration = DrawSlider("Edge Fringe", settings.replayMk1ChromaticAberration, 0f, 0.25f, controlPrefix + "mk1_fringe", ref changed);
+                settings.replayMk1FilmGrain = DrawSlider("VX Grain", settings.replayMk1FilmGrain, 0f, 0.25f, controlPrefix + "mk1_grain", ref changed);
+                GUILayout.Label("Native HDRP Panini: one projection pass; fringe and grain use the existing post stack.", Menu.UiMutedWrappedStyle);
+            }
+
+            settings.replayVignette = DrawSlider("Vignette (%)", settings.replayVignette, 0f, 100f, controlPrefix + "vignette", ref changed);
             DrawTrackLabel("Vignette", LensTrack.Vignette);
 
             if (GUILayout.Button("Shake: " + ShakeModeLabel(settings.replayShakeMode), Menu.UiButtonStyle))
@@ -493,6 +638,80 @@ namespace rowemod.Mods
 
             if (changed)
                 OnLensSettingsChanged();
+        }
+
+        private static void ApplyFisheyeQuickLook(bool vx1000)
+        {
+            ReplaySettings settings = Config.replaySettings;
+            settings.replayFisheyeOpticsEnabled = true;
+            settings.replayMk1Enabled = false;
+            // Cinemachine's FOV is vertical. The skate-video reference is horizontal, so a
+            // 125-degree VX view inside a 4:3 crop is 110.47 degrees in the native control.
+            settings.replayFov = vx1000 ? HorizontalToVerticalFov(125f, 4f / 3f) : 112f;
+            settings.replayFisheye = vx1000 ? 32f : 24f;
+            // HDRP clamps both axis multipliers to 0..1. Slightly reducing X gives the VX
+            // profile a little more vertical bend without asking the native parameter for an
+            // unsupported Y value above one.
+            settings.replayFisheyeXMultiplier = vx1000 ? 0.96f : 1f;
+            settings.replayFisheyeYMultiplier = 1f;
+            settings.replayFisheyeCenterX = 0f;
+            settings.replayFisheyeCenterY = vx1000 ? -0.015f : 0f;
+            settings.replayFisheyeScale = vx1000 ? 1.035f : 1.02f;
+            settings.replayVignette = vx1000 ? 18f : 8f;
+            settings.replayFramingMode = vx1000 ? 2 : 0;
+            settings.replayMatteOpacity = 1f;
+            settings.activeReplayLensPreset = string.Empty;
+            selectedPreset = string.Empty;
+            OnLensSettingsChanged();
+        }
+
+        private static void ApplyMk1QuickLook()
+        {
+            ReplaySettings settings = Config.replaySettings;
+            settings.replayFisheyeOpticsEnabled = true;
+            settings.replayMk1Enabled = true;
+            settings.replayFov = HorizontalToVerticalFov(125f, 4f / 3f);
+            settings.replayFisheye = 40f;
+            settings.replayFisheyeXMultiplier = 0.88f;
+            settings.replayFisheyeYMultiplier = 1f;
+            settings.replayFisheyeCenterX = 0f;
+            settings.replayFisheyeCenterY = -0.012f;
+            settings.replayFisheyeScale = 1.06f;
+            settings.replayMk1PaniniDistance = 0.25f;
+            settings.replayMk1PaniniCrop = 0.65f;
+            settings.replayMk1ChromaticAberration = 0.07f;
+            settings.replayMk1FilmGrain = 0.06f;
+            settings.replayVignette = 38f;
+            settings.replayFramingMode = 2;
+            settings.replayMatteOpacity = 1f;
+            settings.activeReplayLensPreset = string.Empty;
+            selectedPreset = string.Empty;
+            OnLensSettingsChanged();
+        }
+
+        private static float HorizontalToVerticalFov(float horizontalDegrees, float aspect)
+        {
+            float halfHorizontalRadians = horizontalDegrees * Mathf.Deg2Rad * 0.5f;
+            return 2f * Mathf.Atan(Mathf.Tan(halfHorizontalRadians) / aspect) * Mathf.Rad2Deg;
+        }
+
+        private static void ResetFisheyeQuickLook()
+        {
+            ReplaySettings settings = Config.replaySettings;
+            settings.replayFov = 60f;
+            settings.replayFisheye = 0f;
+            settings.replayFisheyeOpticsEnabled = true;
+            settings.replayMk1Enabled = false;
+            settings.replayFisheyeXMultiplier = 1f;
+            settings.replayFisheyeYMultiplier = 1f;
+            settings.replayFisheyeCenterX = 0f;
+            settings.replayFisheyeCenterY = 0f;
+            settings.replayFisheyeScale = 1f;
+            settings.replayVignette = 5f;
+            settings.replayFramingMode = 0;
+            settings.activeReplayLensPreset = string.Empty;
+            selectedPreset = string.Empty;
+            OnLensSettingsChanged();
         }
 
         public static void DrawDofControls(string controlPrefix)
@@ -638,7 +857,16 @@ namespace rowemod.Mods
             Menu.DrawStatusBadge(status, GUILayout.ExpandWidth(true));
             GUILayout.Space(6f);
 
-            overlayScroll = GUILayout.BeginScrollView(overlayScroll);
+            // The Camera Lab is a vertical tool. Give its contents an explicit width and use no
+            // horizontal scrollbar so long labels can never widen the window or create a bottom
+            // scroll track.
+            overlayScroll.x = 0f;
+            overlayScroll = GUILayout.BeginScrollView(
+                overlayScroll,
+                GUIStyle.none,
+                GUI.skin.verticalScrollbar,
+                GUILayout.ExpandWidth(true));
+            GUILayout.BeginVertical(GUILayout.Width(Mathf.Max(260f, overlayRect.width - 58f)));
             Menu.BeginAltPanel();
             if (overlayTab == 0)
                 DrawLensControls("replay_overlay_lens_");
@@ -658,7 +886,9 @@ namespace rowemod.Mods
             Menu.DrawSectionTitle("Keyframes", "Replay timeline controls");
             DrawKeyframeControls();
             Menu.EndPanel();
+            GUILayout.EndVertical();
             GUILayout.EndScrollView();
+            overlayScroll.x = 0f;
             Menu.EndPanel();
             GUI.DragWindow(new Rect(0f, 0f, 10000f, 32f));
         }
@@ -698,10 +928,14 @@ namespace rowemod.Mods
 
                 if (cameraSettingsControls != null)
                 {
+                    BindFisheyeOptics();
                     if (lensApplyPending)
                         ApplyLensSettings(Config.replaySettings, false);
                     else if (!nativeValuesCaptured)
                         CaptureNativeLensValues();
+
+                    ApplyFisheyeOptics();
+                    ApplyMk1Optics();
                 }
 
                 nativeValuesCaptured = true;
@@ -778,6 +1012,9 @@ namespace rowemod.Mods
                 catch { }
             }
 
+            RestoreFisheyeOptics(true);
+            RestoreFramedVignette(true);
+            RestoreMk1Optics(true);
             keyFrameGroup = null;
             cameraSettingsControls = null;
             replayEditor = null;
@@ -793,6 +1030,766 @@ namespace rowemod.Mods
             previousReplaySettingsVisible = false;
             nextReplayModeCheckTime = 0f;
             keyframeStatus = "Open Replay to audit camera tracks";
+        }
+
+        private static void BindFisheyeOptics()
+        {
+            LensDistortion candidate = null;
+            bool resolvedFromProfile = false;
+            // Prefer the component in the Volume profile that is active right now. The native
+            // CameraSettingsControls cache can point at the previous replay mode's profile.
+            VolumeProfile profile = cameraSettingsControls?.postProcessVolume?.profile;
+            if (profile?.components != null)
+            {
+                for (int i = 0; i < profile.components.Count; i++)
+                {
+                    candidate = profile.components[i]?.TryCast<LensDistortion>();
+                    if (candidate != null)
+                    {
+                        resolvedFromProfile = true;
+                        break;
+                    }
+                }
+            }
+
+            BindFramedVignette(profile);
+            BindMk1Optics(profile);
+
+            candidate ??= cameraSettingsControls?.lensDistortion;
+
+            if (candidate == null)
+                return;
+
+            if (fisheyeLensDistortion == candidate && fisheyeOriginalCaptured)
+                return;
+
+            RestoreFisheyeOptics(true);
+            fisheyeLensDistortion = candidate;
+            try
+            {
+                // Cache the four native parameter wrappers once. Fixed lens profiles then do no
+                // per-frame RoweMod work; animated profiles touch only these cached parameters.
+                fisheyeXParameter = candidate.xMultiplier;
+                fisheyeYParameter = candidate.yMultiplier;
+                fisheyeCenterParameter = candidate.center;
+                fisheyeScaleParameter = candidate.scale;
+                originalFisheyeXMultiplier = fisheyeXParameter.value;
+                originalFisheyeYMultiplier = fisheyeYParameter.value;
+                originalFisheyeCenter = fisheyeCenterParameter.value;
+                originalFisheyeScale = fisheyeScaleParameter.value;
+                originalFisheyeXOverride = fisheyeXParameter.overrideState;
+                originalFisheyeYOverride = fisheyeYParameter.overrideState;
+                originalFisheyeCenterOverride = fisheyeCenterParameter.overrideState;
+                originalFisheyeScaleOverride = fisheyeScaleParameter.overrideState;
+                fisheyeOriginalCaptured = true;
+                fisheyeOpticsApplied = false;
+                if (resolvedFromProfile)
+                    Log.Msg("[ReplayFisheye] Resolved native LensDistortion from the replay Volume profile.");
+            }
+            catch (Exception ex)
+            {
+                fisheyeLensDistortion = null;
+                fisheyeXParameter = null;
+                fisheyeYParameter = null;
+                fisheyeCenterParameter = null;
+                fisheyeScaleParameter = null;
+                fisheyeOriginalCaptured = false;
+                Log.Warning("[ReplayFisheye] Could not capture native HDRP optics: " + ex.Message);
+            }
+        }
+
+        private static void BindFramedVignette(VolumeProfile profile)
+        {
+            UnityEngine.Rendering.HighDefinition.Vignette candidate = null;
+            if (profile?.components != null)
+            {
+                for (int i = 0; i < profile.components.Count; i++)
+                {
+                    candidate = profile.components[i]
+                        ?.TryCast<UnityEngine.Rendering.HighDefinition.Vignette>();
+                    if (candidate != null)
+                        break;
+                }
+            }
+
+            if (candidate == null ||
+                (framedVignette == candidate && framedVignetteOriginalCaptured))
+                return;
+
+            RestoreFramedVignette(true);
+            framedVignette = candidate;
+            try
+            {
+                framedVignetteIntensityParameter = candidate.intensity;
+                originalFramedVignetteIntensity = framedVignetteIntensityParameter.value;
+                originalFramedVignetteIntensityOverride =
+                    framedVignetteIntensityParameter.overrideState;
+                framedVignetteOriginalCaptured = true;
+                framedVignetteSuppressed = false;
+                Log.Msg("[ReplayVignette] Bound to the active replay HDRP Vignette.");
+            }
+            catch (Exception ex)
+            {
+                framedVignette = null;
+                framedVignetteIntensityParameter = null;
+                framedVignetteOriginalCaptured = false;
+                Log.Warning("[ReplayVignette] Could not capture native HDRP vignette: " + ex.Message);
+            }
+        }
+
+        private static void BindMk1Optics(VolumeProfile profile)
+        {
+            ReplaySettings settings = Config.replaySettings;
+            if (!settings.replayMk1Enabled)
+            {
+                if (mk1OriginalCaptured)
+                    RestoreMk1Optics(true);
+                return;
+            }
+            if (mk1RuntimeVolume != null && mk1VolumeProfile != null &&
+                mk1OriginalCaptured &&
+                mk1PaniniProjection != null && mk1ChromaticAberration != null &&
+                mk1FilmGrain != null)
+                return;
+
+            RestoreMk1Optics(true);
+            try
+            {
+                UnityCamera outputCamera = ResolveReplayOutputCamera();
+                HDAdditionalCameraData cameraData =
+                    outputCamera?.GetComponent<HDAdditionalCameraData>();
+                if (outputCamera == null || cameraData == null)
+                    throw new InvalidOperationException(
+                        "the HDRP replay output camera was unavailable");
+
+                int volumeLayer = FirstLayerInMask(cameraData.volumeLayerMask.value);
+                if (volumeLayer < 0)
+                    throw new InvalidOperationException(
+                        "the replay output camera has an empty Volume Layer Mask");
+
+                mk1VolumeObject = new GameObject("RoweMod MK1 Replay Volume")
+                {
+                    hideFlags = HideFlags.HideAndDontSave,
+                    layer = volumeLayer
+                };
+                mk1VolumeProfile = ScriptableObject.CreateInstance<VolumeProfile>();
+                mk1VolumeProfile.name = "RoweMod MK1 Replay Profile";
+                mk1VolumeProfile.hideFlags = HideFlags.HideAndDontSave;
+                mk1RuntimeVolume = mk1VolumeObject.AddComponent<Volume>();
+                mk1RuntimeVolume.isGlobal = true;
+                mk1RuntimeVolume.priority = 10000f;
+                mk1RuntimeVolume.weight = 1f;
+                mk1RuntimeVolume.sharedProfile = mk1VolumeProfile;
+
+                mk1PaniniProjection = mk1VolumeProfile
+                    .Add(Il2CppType.Of<PaniniProjection>(), true)
+                    ?.TryCast<PaniniProjection>();
+                mk1ChromaticAberration = mk1VolumeProfile
+                    .Add(Il2CppType.Of<ChromaticAberration>(), true)
+                    ?.TryCast<ChromaticAberration>();
+                mk1FilmGrain = mk1VolumeProfile
+                    .Add(Il2CppType.Of<FilmGrain>(), true)
+                    ?.TryCast<FilmGrain>();
+                mk1PaniniAdded = mk1PaniniProjection != null;
+                mk1ChromaticAdded = mk1ChromaticAberration != null;
+                mk1FilmGrainAdded = mk1FilmGrain != null;
+
+                if (mk1PaniniProjection == null || mk1ChromaticAberration == null ||
+                    mk1FilmGrain == null)
+                    throw new InvalidOperationException("one or more HDRP MK1 components were unavailable");
+
+                originalMk1PaniniActive = mk1PaniniProjection.active;
+                originalMk1ChromaticActive = mk1ChromaticAberration.active;
+                originalMk1FilmGrainActive = mk1FilmGrain.active;
+                originalMk1PaniniDistance = mk1PaniniProjection.distance.value;
+                originalMk1PaniniCrop = mk1PaniniProjection.cropToFit.value;
+                originalMk1ChromaticAberration = mk1ChromaticAberration.intensity.value;
+                originalMk1FilmGrain = mk1FilmGrain.intensity.value;
+                originalMk1FilmGrainResponse = mk1FilmGrain.response.value;
+                originalMk1PaniniDistanceOverride = mk1PaniniProjection.distance.overrideState;
+                originalMk1PaniniCropOverride = mk1PaniniProjection.cropToFit.overrideState;
+                originalMk1ChromaticOverride = mk1ChromaticAberration.intensity.overrideState;
+                originalMk1FilmGrainOverride = mk1FilmGrain.intensity.overrideState;
+                originalMk1FilmGrainResponseOverride = mk1FilmGrain.response.overrideState;
+                mk1OriginalCaptured = true;
+                mk1OpticsApplied = false;
+                bool renderedByCamera = VolumeManager.instance != null &&
+                    VolumeManager.IsVolumeRenderedByCamera(
+                        mk1RuntimeVolume,
+                        outputCamera);
+                Log.Msg(
+                    "[ReplayMK1] Dedicated native HDRP replay Volume bound " +
+                    $"(layer={volumeLayer}, renderedByCamera={renderedByCamera}, " +
+                    $"added={mk1PaniniAdded}/{mk1ChromaticAdded}/{mk1FilmGrainAdded}).");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[ReplayMK1] Could not bind the native HDRP character stack: " + ex.Message);
+                RestoreMk1Optics(true);
+            }
+        }
+
+        private static int FirstLayerInMask(int mask)
+        {
+            for (int layer = 0; layer < 32; layer++)
+                if ((mask & (1 << layer)) != 0)
+                    return layer;
+            return -1;
+        }
+
+        private static T FindVolumeComponent<T>(VolumeProfile profile) where T : VolumeComponent
+        {
+            if (profile?.components == null)
+                return null;
+            for (int i = 0; i < profile.components.Count; i++)
+            {
+                T candidate = profile.components[i]?.TryCast<T>();
+                if (candidate != null)
+                    return candidate;
+            }
+            return null;
+        }
+
+        private static void ApplyMk1Optics()
+        {
+            ReplaySettings settings = Config.replaySettings;
+            if (!replayActive || !settings.replayMk1Enabled)
+            {
+                if (mk1OpticsApplied || mk1FrameSettingsApplied)
+                    RestoreMk1Optics(false);
+                return;
+            }
+
+            bool frameSettingsReady = ApplyMk1FrameSettings();
+
+            if (!mk1OriginalCaptured)
+                BindMk1Optics(cameraSettingsControls?.postProcessVolume?.profile);
+            if (!mk1OriginalCaptured || mk1PaniniProjection == null ||
+                mk1ChromaticAberration == null || mk1FilmGrain == null)
+                return;
+
+            try
+            {
+                if (mk1RuntimeVolume != null)
+                {
+                    mk1RuntimeVolume.enabled = true;
+                    mk1RuntimeVolume.weight = 1f;
+                }
+                if (!mk1PaniniProjection.active)
+                    mk1PaniniProjection.active = true;
+                if (!mk1ChromaticAberration.active)
+                    mk1ChromaticAberration.active = true;
+                if (!mk1FilmGrain.active)
+                    mk1FilmGrain.active = true;
+                SetLensFloat(mk1PaniniProjection.distance, settings.replayMk1PaniniDistance);
+                SetLensFloat(mk1PaniniProjection.cropToFit, settings.replayMk1PaniniCrop);
+                SetLensFloat(
+                    mk1ChromaticAberration.intensity,
+                    settings.replayMk1ChromaticAberration);
+                SetLensFloat(mk1FilmGrain.intensity, settings.replayMk1FilmGrain);
+                SetLensFloat(mk1FilmGrain.response, 0.82f);
+                mk1OpticsApplied = true;
+
+                bool volumeRendered = mk1RuntimeVolume != null &&
+                    VolumeManager.instance != null &&
+                    VolumeManager.IsVolumeRenderedByCamera(
+                        mk1RuntimeVolume,
+                        ResolveReplayOutputCamera());
+                if (frameSettingsReady && volumeRendered && !mk1PerformanceLogged)
+                {
+                    mk1PerformanceLogged = true;
+                    Log.Msg(
+                        "[ReplayMK1] Verified on output camera '" + mk1CameraData.gameObject.name +
+                        "': Postprocess=on, Panini=on, ChromaticAberration=on, FilmGrain=on; " +
+                        $"distance={mk1PaniniProjection.distance.value:0.###}, " +
+                        $"crop={mk1PaniniProjection.cropToFit.value:0.###}, " +
+                        $"fringe={mk1ChromaticAberration.intensity.value:0.###}, " +
+                        $"grain={mk1FilmGrain.intensity.value:0.###}. One native projection pass, " +
+                        "one 256px UI mask, dedicated replay Volume visible to camera, no " +
+                        "RoweMod materials or render textures.");
+                }
+                else if (!volumeRendered)
+                {
+                    LogMk1FrameSettingsWarning(
+                        "the dedicated MK1 Volume is not visible to the output camera");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[ReplayMK1] Could not apply the native HDRP character stack: " + ex.Message);
+                RestoreMk1Optics(true);
+            }
+        }
+
+        private static bool ApplyMk1FrameSettings()
+        {
+            UnityCamera outputCamera = ResolveReplayOutputCamera();
+            if (outputCamera == null || !outputCamera.isActiveAndEnabled)
+            {
+                LogMk1FrameSettingsWarning("the active Cinemachine output camera is unavailable");
+                return false;
+            }
+
+            HDAdditionalCameraData outputCameraData =
+                mk1FrameSettingsCaptured && mk1CameraData != null &&
+                mk1CameraData.gameObject == outputCamera.gameObject
+                    ? mk1CameraData
+                    : outputCamera.GetComponent<HDAdditionalCameraData>();
+            if (outputCameraData == null)
+            {
+                LogMk1FrameSettingsWarning(
+                    $"output camera '{outputCamera.gameObject.name}' has no HDAdditionalCameraData");
+                return false;
+            }
+
+            if (mk1FrameSettingsCaptured && mk1CameraData != outputCameraData)
+                RestoreMk1CameraFrameSettings(true);
+
+            if (!mk1FrameSettingsCaptured)
+            {
+                mk1CameraData = outputCameraData;
+                originalMk1CustomRenderingSettings = outputCameraData.customRenderingSettings;
+                originalMk1FrameSettings = outputCameraData.m_RenderingPathCustomFrameSettings;
+                originalMk1FrameSettingsOverrideMask =
+                    outputCameraData.renderingPathCustomFrameSettingsOverrideMask;
+                mk1FrameSettingsCaptured = true;
+            }
+
+            // LateUpdate calls this every frame because the replay controller can replace camera
+            // values after its playable runs. The normal path is read-only: only repair the four
+            // flags if HDRP or the game actually changed one.
+            if (AreMk1FrameSettingsEnabled(outputCameraData))
+            {
+                mk1FrameSettingsApplied = true;
+                return true;
+            }
+
+            FrameSettings frameSettings = outputCameraData.m_RenderingPathCustomFrameSettings;
+            FrameSettingsOverrideMask overrideMask =
+                outputCameraData.renderingPathCustomFrameSettingsOverrideMask;
+            SetMk1FrameSetting(
+                ref frameSettings,
+                ref overrideMask,
+                FrameSettingsField.Postprocess);
+            SetMk1FrameSetting(
+                ref frameSettings,
+                ref overrideMask,
+                FrameSettingsField.PaniniProjection);
+            SetMk1FrameSetting(
+                ref frameSettings,
+                ref overrideMask,
+                FrameSettingsField.ChromaticAberration);
+            SetMk1FrameSetting(
+                ref frameSettings,
+                ref overrideMask,
+                FrameSettingsField.FilmGrain);
+
+            outputCameraData.m_RenderingPathCustomFrameSettings = frameSettings;
+            outputCameraData.renderingPathCustomFrameSettingsOverrideMask = overrideMask;
+            outputCameraData.customRenderingSettings = true;
+            mk1FrameSettingsApplied = true;
+
+            bool verified = AreMk1FrameSettingsEnabled(outputCameraData);
+            if (!verified)
+                LogMk1FrameSettingsWarning(
+                    $"HDRP did not retain all requested overrides on '{outputCamera.gameObject.name}'");
+            return verified;
+        }
+
+        private static bool AreMk1FrameSettingsEnabled(HDAdditionalCameraData cameraData)
+        {
+            if (cameraData == null || !cameraData.customRenderingSettings)
+                return false;
+            FrameSettings settings = cameraData.m_RenderingPathCustomFrameSettings;
+            FrameSettingsOverrideMask mask =
+                cameraData.renderingPathCustomFrameSettingsOverrideMask;
+            return IsMk1FrameSettingEnabled(settings, mask, FrameSettingsField.Postprocess) &&
+                IsMk1FrameSettingEnabled(settings, mask, FrameSettingsField.PaniniProjection) &&
+                IsMk1FrameSettingEnabled(settings, mask, FrameSettingsField.ChromaticAberration) &&
+                IsMk1FrameSettingEnabled(settings, mask, FrameSettingsField.FilmGrain);
+        }
+
+        private static void SetMk1FrameSetting(
+            ref FrameSettings settings,
+            ref FrameSettingsOverrideMask overrideMask,
+            FrameSettingsField field)
+        {
+            settings.SetEnabled(field, true);
+            BitArray128 mask = overrideMask.mask;
+            mask[(uint)field] = true;
+            overrideMask.mask = mask;
+        }
+
+        private static bool IsMk1FrameSettingEnabled(
+            FrameSettings settings,
+            FrameSettingsOverrideMask overrideMask,
+            FrameSettingsField field) =>
+            settings.IsEnabled(field) && overrideMask.mask[(uint)field];
+
+        private static void LogMk1FrameSettingsWarning(string reason)
+        {
+            if (mk1FrameSettingsWarningLogged)
+                return;
+            mk1FrameSettingsWarningLogged = true;
+            Log.Warning("[ReplayMK1] Camera frame settings are not verified: " + reason + ".");
+        }
+
+        private static void RestoreMk1CameraFrameSettings(bool clearBinding)
+        {
+            if (mk1FrameSettingsCaptured && mk1CameraData != null)
+            {
+                try
+                {
+                    mk1CameraData.m_RenderingPathCustomFrameSettings = originalMk1FrameSettings;
+                    mk1CameraData.renderingPathCustomFrameSettingsOverrideMask =
+                        originalMk1FrameSettingsOverrideMask;
+                    mk1CameraData.customRenderingSettings =
+                        originalMk1CustomRenderingSettings;
+                }
+                catch
+                {
+                    // The output camera can be destroyed before replay teardown completes.
+                }
+            }
+
+            mk1FrameSettingsApplied = false;
+            if (!clearBinding)
+                return;
+
+            mk1CameraData = null;
+            mk1FrameSettingsCaptured = false;
+            mk1FrameSettingsWarningLogged = false;
+        }
+
+        private static void RestoreMk1Optics(bool clearBinding)
+        {
+            RestoreMk1CameraFrameSettings(clearBinding);
+            if (mk1OriginalCaptured)
+            {
+                try
+                {
+                    if (mk1RuntimeVolume != null && !clearBinding)
+                    {
+                        mk1RuntimeVolume.weight = 0f;
+                        mk1RuntimeVolume.enabled = false;
+                    }
+                    if (mk1PaniniProjection != null)
+                    {
+                        if (mk1PaniniAdded && !clearBinding)
+                            mk1PaniniProjection.active = false;
+                        else if (!mk1PaniniAdded)
+                        {
+                            mk1PaniniProjection.active = originalMk1PaniniActive;
+                            RestoreLensFloat(mk1PaniniProjection.distance, originalMk1PaniniDistance, originalMk1PaniniDistanceOverride);
+                            RestoreLensFloat(mk1PaniniProjection.cropToFit, originalMk1PaniniCrop, originalMk1PaniniCropOverride);
+                        }
+                    }
+                    if (mk1ChromaticAberration != null)
+                    {
+                        if (mk1ChromaticAdded && !clearBinding)
+                            mk1ChromaticAberration.active = false;
+                        else if (!mk1ChromaticAdded)
+                        {
+                            mk1ChromaticAberration.active = originalMk1ChromaticActive;
+                            RestoreLensFloat(mk1ChromaticAberration.intensity, originalMk1ChromaticAberration, originalMk1ChromaticOverride);
+                        }
+                    }
+                    if (mk1FilmGrain != null)
+                    {
+                        if (mk1FilmGrainAdded && !clearBinding)
+                            mk1FilmGrain.active = false;
+                        else if (!mk1FilmGrainAdded)
+                        {
+                            mk1FilmGrain.active = originalMk1FilmGrainActive;
+                            RestoreLensFloat(mk1FilmGrain.intensity, originalMk1FilmGrain, originalMk1FilmGrainOverride);
+                            RestoreLensFloat(mk1FilmGrain.response, originalMk1FilmGrainResponse, originalMk1FilmGrainResponseOverride);
+                        }
+                    }
+                }
+                catch
+                {
+                    // The active replay Volume may be destroyed before the close event arrives.
+                }
+            }
+
+            if (clearBinding && mk1VolumeProfile != null)
+            {
+                try
+                {
+                    // Remove only overrides RoweMod created. Existing game overrides were restored
+                    // above and remain owned by the replay Volume profile.
+                    if (mk1PaniniAdded)
+                        mk1VolumeProfile.Remove(Il2CppType.Of<PaniniProjection>());
+                    if (mk1ChromaticAdded)
+                        mk1VolumeProfile.Remove(Il2CppType.Of<ChromaticAberration>());
+                    if (mk1FilmGrainAdded)
+                        mk1VolumeProfile.Remove(Il2CppType.Of<FilmGrain>());
+                }
+                catch
+                {
+                    // The replay profile can already be gone during scene teardown.
+                }
+            }
+
+            if (clearBinding)
+            {
+                try
+                {
+                    if (mk1VolumeObject != null)
+                        UnityObject.Destroy(mk1VolumeObject);
+                    if (mk1VolumeProfile != null)
+                        UnityObject.Destroy(mk1VolumeProfile);
+                }
+                catch
+                {
+                    // Replay scene teardown may already have destroyed runtime-only objects.
+                }
+            }
+
+            mk1OpticsApplied = false;
+            if (!clearBinding)
+                return;
+
+            mk1VolumeProfile = null;
+            mk1VolumeObject = null;
+            mk1RuntimeVolume = null;
+            mk1PaniniProjection = null;
+            mk1ChromaticAberration = null;
+            mk1FilmGrain = null;
+            mk1PaniniAdded = false;
+            mk1ChromaticAdded = false;
+            mk1FilmGrainAdded = false;
+            mk1OriginalCaptured = false;
+            mk1FrameSettingsWarningLogged = false;
+            mk1PerformanceLogged = false;
+        }
+
+        private static void ApplyFisheyeOptics()
+        {
+            if (!replayActive || !fisheyeOriginalCaptured || fisheyeLensDistortion == null)
+                return;
+
+            ReplaySettings settings = Config.replaySettings;
+            if (!settings.replayFisheyeOpticsEnabled)
+            {
+                if (fisheyeOpticsApplied)
+                    RestoreFisheyeOptics(false);
+                return;
+            }
+
+            try
+            {
+                SetLensFloat(fisheyeXParameter, settings.replayFisheyeXMultiplier);
+                SetLensFloat(fisheyeYParameter, settings.replayFisheyeYMultiplier);
+                // HDRP stores the lens center in absolute screen UVs: (0.5, 0.5) is centered.
+                // RoweMod exposes friendlier signed offsets, so convert them before touching the
+                // native parameter. Writing (0, 0) directly puts the origin at a corner and
+                // creates the large diagonal black arc visible in playback.
+                Vector2 nativeCenter = new Vector2(
+                    0.5f + settings.replayFisheyeCenterX,
+                    0.5f + settings.replayFisheyeCenterY);
+                SetLensVector(fisheyeCenterParameter, nativeCenter);
+                // LensDistortion.scale is not honored consistently by the replay camera's
+                // blended Volume stack. Keep the shader scale neutral and implement the crop on
+                // the output camera projection below, where it is deterministic.
+                SetLensFloat(fisheyeScaleParameter, 1f);
+                fisheyeOpticsApplied = true;
+
+                if (!fisheyePerformanceLogged)
+                {
+                    fisheyePerformanceLogged = true;
+                    Log.Msg(
+                        "[ReplayFisheye] Native HDRP UberPost optics active; " +
+                        $"center=({nativeCenter.x:0.###}, {nativeCenter.y:0.###}), " +
+                        $"optical zoom={settings.replayFisheyeScale:0.###}; " +
+                        "RoweMod render passes=0, render textures=0, materials=0.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[ReplayFisheye] Could not apply native HDRP optics: " + ex.Message);
+                RestoreFisheyeOptics(true);
+            }
+        }
+
+        /// <summary>
+        /// Runs after the replay controller has updated its Volume values. This performs four
+        /// cached comparisons only while optics are enabled; it adds no render pass, texture, or
+        /// material and writes only when the native game changed one of our requested values.
+        /// </summary>
+        public static void LateUpdate()
+        {
+            if (!replayActive)
+                return;
+
+            ReplaySettings settings = Config.replaySettings;
+            ApplyCurrentLightSettings(settings);
+            ApplyOpticalZoom(settings, settings.replayFisheyeOpticsEnabled);
+            ApplyMk1Optics();
+            ApplyFramedVignette();
+
+            // Projection zoom is independent from HDRP binding. The curve controls below simply
+            // skip this frame if the replay Volume is temporarily unavailable.
+            if (!fisheyeOriginalCaptured || fisheyeLensDistortion == null)
+                return;
+
+            if (settings.replayFisheyeOpticsEnabled)
+                ApplyFisheyeOptics();
+            else
+            {
+                if (fisheyeOpticsApplied)
+                    RestoreFisheyeOptics(false);
+            }
+        }
+
+        private static void ApplyFramedVignette()
+        {
+            if (!framedVignetteOriginalCaptured || framedVignetteIntensityParameter == null)
+                return;
+
+            ReplaySettings settings = Config.replaySettings;
+            bool useFramedVignette = replayActive && settings.replayFramingMode != 0;
+            try
+            {
+                if (useFramedVignette)
+                {
+                    // The stock HDRP vignette is evaluated against the entire ultrawide output.
+                    // Suppress it while a frame is active; the single UI quad below draws the same
+                    // requested strength against the actual 16:9 or 4:3 content rectangle.
+                    SetLensFloat(framedVignetteIntensityParameter, 0f);
+                    framedVignetteSuppressed = true;
+                }
+                else if (framedVignetteSuppressed)
+                {
+                    SetLensFloat(
+                        framedVignetteIntensityParameter,
+                        Mathf.Clamp01(settings.replayVignette * 0.01f));
+                    framedVignetteSuppressed = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[ReplayVignette] Could not apply framed vignette: " + ex.Message);
+                RestoreFramedVignette(true);
+            }
+        }
+
+        private static void RestoreFramedVignette(bool clearBinding)
+        {
+            if (framedVignetteOriginalCaptured && framedVignetteIntensityParameter != null)
+            {
+                try
+                {
+                    RestoreLensFloat(
+                        framedVignetteIntensityParameter,
+                        originalFramedVignetteIntensity,
+                        originalFramedVignetteIntensityOverride);
+                }
+                catch
+                {
+                    // Replay teardown can destroy the Volume before the close event reaches us.
+                }
+            }
+
+            framedVignetteSuppressed = false;
+            if (!clearBinding)
+                return;
+
+            framedVignette = null;
+            framedVignetteIntensityParameter = null;
+            framedVignetteOriginalCaptured = false;
+        }
+
+        private static void ApplyOpticalZoom(ReplaySettings settings, bool enabled)
+        {
+            UnityCamera outputCamera = ResolveReplayOutputCamera();
+            if (outputCamera == null || !outputCamera.isActiveAndEnabled)
+                return;
+
+            float nativeFov = ReadSmart(cameraSettingsControls?._fovSmartData, settings.replayFov);
+            float outputFov = enabled
+                ? CalculateOpticalZoomFov(nativeFov, settings.replayFisheyeScale)
+                : Mathf.Clamp(nativeFov, 5f, 179f);
+
+            if (!Mathf.Approximately(outputCamera.fieldOfView, outputFov))
+                outputCamera.fieldOfView = outputFov;
+        }
+
+        private static float CalculateOpticalZoomFov(float verticalFov, float zoom)
+        {
+            float safeFov = Mathf.Clamp(verticalFov, 5f, 179f);
+            float safeZoom = Mathf.Clamp(zoom, 1f, 2f);
+            float halfRadians = safeFov * Mathf.Deg2Rad * 0.5f;
+            return Mathf.Clamp(
+                2f * Mathf.Atan(Mathf.Tan(halfRadians) / safeZoom) * Mathf.Rad2Deg,
+                5f,
+                179f);
+        }
+
+        private static void RestoreFisheyeOptics(bool clearBinding)
+        {
+            if (fisheyeOriginalCaptured && fisheyeLensDistortion != null)
+            {
+                try
+                {
+                    RestoreLensFloat(fisheyeXParameter, originalFisheyeXMultiplier, originalFisheyeXOverride);
+                    RestoreLensFloat(fisheyeYParameter, originalFisheyeYMultiplier, originalFisheyeYOverride);
+                    RestoreLensVector(fisheyeCenterParameter, originalFisheyeCenter, originalFisheyeCenterOverride);
+                    RestoreLensFloat(fisheyeScaleParameter, originalFisheyeScale, originalFisheyeScaleOverride);
+                }
+                catch
+                {
+                    // Replay teardown can destroy the Volume before the close event reaches us.
+                }
+            }
+
+            fisheyeOpticsApplied = false;
+            if (!clearBinding)
+                return;
+
+            fisheyeLensDistortion = null;
+            fisheyeXParameter = null;
+            fisheyeYParameter = null;
+            fisheyeCenterParameter = null;
+            fisheyeScaleParameter = null;
+            fisheyeOriginalCaptured = false;
+            fisheyePerformanceLogged = false;
+        }
+
+        private static void SetLensFloat(ClampedFloatParameter parameter, float value)
+        {
+            if (parameter == null)
+                return;
+            if (!parameter.overrideState)
+                parameter.overrideState = true;
+            if (!Mathf.Approximately(parameter.value, value))
+                parameter.value = value;
+        }
+
+        private static void SetLensVector(Vector2Parameter parameter, Vector2 value)
+        {
+            if (parameter == null)
+                return;
+            if (!parameter.overrideState)
+                parameter.overrideState = true;
+            if ((parameter.value - value).sqrMagnitude > 0.0000001f)
+                parameter.value = value;
+        }
+
+        private static void RestoreLensFloat(ClampedFloatParameter parameter, float value, bool overrideState)
+        {
+            if (parameter == null)
+                return;
+            parameter.value = value;
+            parameter.overrideState = overrideState;
+        }
+
+        private static void RestoreLensVector(Vector2Parameter parameter, Vector2 value, bool overrideState)
+        {
+            if (parameter == null)
+                return;
+            parameter.value = value;
+            parameter.overrideState = overrideState;
         }
 
         private static void SubscribeKeyframeEvents()
@@ -1004,6 +2001,17 @@ namespace rowemod.Mods
                 fov = s.replayFov,
                 tilt = s.replayTilt,
                 fisheye = s.replayFisheye,
+                fisheyeOpticsEnabled = s.replayFisheyeOpticsEnabled,
+                fisheyeXMultiplier = s.replayFisheyeXMultiplier,
+                fisheyeYMultiplier = s.replayFisheyeYMultiplier,
+                fisheyeCenterX = s.replayFisheyeCenterX,
+                fisheyeCenterY = s.replayFisheyeCenterY,
+                fisheyeScale = s.replayFisheyeScale,
+                mk1Enabled = s.replayMk1Enabled,
+                mk1PaniniDistance = s.replayMk1PaniniDistance,
+                mk1PaniniCrop = s.replayMk1PaniniCrop,
+                mk1ChromaticAberration = s.replayMk1ChromaticAberration,
+                mk1FilmGrain = s.replayMk1FilmGrain,
                 vignette = s.replayVignette,
                 shakeMode = s.replayShakeMode,
                 dofEnabled = s.replayDofEnabled,
@@ -1094,6 +2102,15 @@ namespace rowemod.Mods
             value.fov = Mathf.Lerp(a.fov, b.fov, t);
             value.tilt = Mathf.LerpAngle(a.tilt, b.tilt, t);
             value.fisheye = Mathf.Lerp(a.fisheye, b.fisheye, t);
+            value.fisheyeXMultiplier = Mathf.Lerp(a.fisheyeXMultiplier, b.fisheyeXMultiplier, t);
+            value.fisheyeYMultiplier = Mathf.Lerp(a.fisheyeYMultiplier, b.fisheyeYMultiplier, t);
+            value.fisheyeCenterX = Mathf.Lerp(a.fisheyeCenterX, b.fisheyeCenterX, t);
+            value.fisheyeCenterY = Mathf.Lerp(a.fisheyeCenterY, b.fisheyeCenterY, t);
+            value.fisheyeScale = Mathf.Lerp(a.fisheyeScale, b.fisheyeScale, t);
+            value.mk1PaniniDistance = Mathf.Lerp(a.mk1PaniniDistance, b.mk1PaniniDistance, t);
+            value.mk1PaniniCrop = Mathf.Lerp(a.mk1PaniniCrop, b.mk1PaniniCrop, t);
+            value.mk1ChromaticAberration = Mathf.Lerp(a.mk1ChromaticAberration, b.mk1ChromaticAberration, t);
+            value.mk1FilmGrain = Mathf.Lerp(a.mk1FilmGrain, b.mk1FilmGrain, t);
             value.vignette = Mathf.Lerp(a.vignette, b.vignette, t);
             value.nearStart = Mathf.Lerp(a.nearStart, b.nearStart, t);
             value.nearEnd = Mathf.Lerp(a.nearEnd, b.nearEnd, t);
@@ -1125,6 +2142,17 @@ namespace rowemod.Mods
             if (!IsNativeTrack(LensTrack.Fov)) s.replayFov = value.fov;
             if (!IsNativeTrack(LensTrack.Tilt)) s.replayTilt = value.tilt;
             if (!IsNativeTrack(LensTrack.Fisheye)) s.replayFisheye = value.fisheye;
+            s.replayFisheyeOpticsEnabled = value.fisheyeOpticsEnabled;
+            s.replayFisheyeXMultiplier = value.fisheyeXMultiplier;
+            s.replayFisheyeYMultiplier = value.fisheyeYMultiplier;
+            s.replayFisheyeCenterX = value.fisheyeCenterX;
+            s.replayFisheyeCenterY = value.fisheyeCenterY;
+            s.replayFisheyeScale = value.fisheyeScale;
+            s.replayMk1Enabled = value.mk1Enabled;
+            s.replayMk1PaniniDistance = value.mk1PaniniDistance;
+            s.replayMk1PaniniCrop = value.mk1PaniniCrop;
+            s.replayMk1ChromaticAberration = value.mk1ChromaticAberration;
+            s.replayMk1FilmGrain = value.mk1FilmGrain;
             if (!IsNativeTrack(LensTrack.Vignette)) s.replayVignette = value.vignette;
             if (!IsNativeTrack(LensTrack.Shake)) s.replayShakeMode = value.shakeMode;
             if (!IsNativeTrack(LensTrack.DofState)) s.replayDofEnabled = value.dofEnabled;
@@ -1158,6 +2186,8 @@ namespace rowemod.Mods
             s.cameraLightShadowNearPlane = value.lightShadowNearPlane;
             Config.NormalizeReplaySettings(s);
             ApplyLensSettings(s, true);
+            ApplyFisheyeOptics();
+            ApplyMk1Optics();
             ApplySettings();
             UpdateMatteOverlay(false);
         }
@@ -1181,7 +2211,12 @@ namespace rowemod.Mods
             if (currentHash == 0)
                 return;
             if (lastReplayEditorStateHash != 0 && currentHash != lastReplayEditorStateHash)
+            {
                 InheritPreviousKeyForEditing(timelineTime, "replay editor mode changed");
+                BindFisheyeOptics();
+                ApplyFisheyeOptics();
+                ApplyMk1Optics();
+            }
             lastReplayEditorStateHash = currentHash;
         }
 
@@ -1213,6 +2248,12 @@ namespace rowemod.Mods
             s.replayFov = value.fov;
             s.replayTilt = value.tilt;
             s.replayFisheye = value.fisheye;
+            s.replayFisheyeOpticsEnabled = value.fisheyeOpticsEnabled;
+            s.replayFisheyeXMultiplier = value.fisheyeXMultiplier;
+            s.replayFisheyeYMultiplier = value.fisheyeYMultiplier;
+            s.replayFisheyeCenterX = value.fisheyeCenterX;
+            s.replayFisheyeCenterY = value.fisheyeCenterY;
+            s.replayFisheyeScale = value.fisheyeScale;
             s.replayVignette = value.vignette;
             s.replayShakeMode = value.shakeMode;
             s.replayDofEnabled = value.dofEnabled;
@@ -1223,6 +2264,8 @@ namespace rowemod.Mods
             s.replayFarFocusEnd = value.farEnd;
             Config.NormalizeReplaySettings(s);
             ApplyLensSettings(s, false);
+            ApplyFisheyeOptics();
+            ApplyMk1Optics();
             lastTimelineTime = timelineTime;
             Log.Msg($"[ReplayCameraLab] Inherited key at {value.time:0.###}s for {reason} at {timelineTime:0.###}s.");
         }
@@ -1320,7 +2363,9 @@ namespace rowemod.Mods
         private static void UpdateMatteOverlay(bool force)
         {
             ReplaySettings s = Config.replaySettings;
-            bool visible = replayActive && s.replayFramingMode != 0 && s.replayMatteOpacity > 0.001f;
+            bool frameSelected = s.replayFramingMode != 0;
+            bool vignetteVisible = replayActive && frameSelected && s.replayVignette > 0.001f;
+            bool visible = frameSelected && (s.replayMatteOpacity > 0.001f || vignetteVisible);
             if (!visible)
             {
                 if (matteObject != null)
@@ -1334,13 +2379,18 @@ namespace rowemod.Mods
             matteObject.SetActive(true);
 
             if (!force && matteScreenWidth == Screen.width && matteScreenHeight == Screen.height &&
-                matteMode == s.replayFramingMode && Mathf.Approximately(matteOpacity, s.replayMatteOpacity))
+                matteMode == s.replayFramingMode &&
+                Mathf.Approximately(matteOpacity, s.replayMatteOpacity) &&
+                Mathf.Approximately(matteVignette, s.replayVignette) &&
+                matteMk1Enabled == s.replayMk1Enabled)
                 return;
 
             matteScreenWidth = Screen.width;
             matteScreenHeight = Screen.height;
             matteMode = s.replayFramingMode;
             matteOpacity = s.replayMatteOpacity;
+            matteVignette = s.replayVignette;
+            matteMk1Enabled = s.replayMk1Enabled;
             float targetAspect = s.replayFramingMode == 2 ? 4f / 3f : 16f / 9f;
             float screenAspect = Screen.height <= 0 ? targetAspect : Screen.width / (float)Screen.height;
             float xMin = 0f, xMax = 1f, yMin = 0f, yMax = 1f;
@@ -1362,6 +2412,24 @@ namespace rowemod.Mods
             SetMatte(matteImages[1], xMax, 0f, 1f, 1f, color);
             SetMatte(matteImages[2], xMin, 0f, xMax, yMin, color);
             SetMatte(matteImages[3], xMin, yMax, xMax, 1f, color);
+
+            if (framedVignetteImage != null)
+            {
+                framedVignetteImage.enabled = vignetteVisible;
+                framedVignetteImage.texture = s.replayMk1Enabled
+                    ? mk1VignetteTexture
+                    : framedVignetteTexture;
+                framedVignetteImage.color = new Color(
+                    0f,
+                    0f,
+                    0f,
+                    Mathf.Clamp01(s.replayVignette * 0.01f));
+                RectTransform vignetteRect = framedVignetteImage.rectTransform;
+                vignetteRect.anchorMin = new Vector2(xMin, yMin);
+                vignetteRect.anchorMax = new Vector2(xMax, yMax);
+                vignetteRect.offsetMin = Vector2.zero;
+                vignetteRect.offsetMax = Vector2.zero;
+            }
         }
 
         private static void EnsureMatteOverlay()
@@ -1373,6 +2441,21 @@ namespace rowemod.Mods
             Canvas canvas = matteObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = -100;
+
+            GameObject vignette = new GameObject("Framed Vignette")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            vignette.transform.SetParent(matteObject.transform, false);
+            framedVignetteImage = vignette.AddComponent<RawImage>();
+            framedVignetteImage.raycastTarget = false;
+            framedVignetteTexture = CreateFramedVignetteTexture(false);
+            mk1VignetteTexture = CreateFramedVignetteTexture(true);
+            framedVignetteImage.texture = framedVignetteTexture;
+            framedVignetteImage.enabled = false;
+
+            // Create the matte bars after the vignette so they remain the topmost children and
+            // cleanly cover everything outside the selected capture rectangle.
             matteImages = new Image[4];
             for (int i = 0; i < matteImages.Length; i++)
             {
@@ -1383,8 +2466,59 @@ namespace rowemod.Mods
             }
         }
 
+        private static Texture2D CreateFramedVignetteTexture(bool mk1)
+        {
+            const int size = 256;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = mk1 ? "RoweMod MK1 Lens Mask" : "RoweMod Framed Vignette",
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                float ny = ((y + 0.5f) / size - 0.5f) * 2f;
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = ((x + 0.5f) / size - 0.5f) * 2f;
+                    float radius;
+                    float fade;
+                    if (mk1)
+                    {
+                        // The MK1's huge front element produces a wider, side-heavy death-lens
+                        // falloff instead of a perfectly circular software vignette. A tiny upward
+                        // optical offset and darker lower corners keep the mask from looking like
+                        // a generic centered oval while remaining resolution independent.
+                        float shiftedY = ny + 0.035f;
+                        radius = Mathf.Sqrt(
+                            nx * nx / (0.94f * 0.94f) +
+                            shiftedY * shiftedY / (1.12f * 1.12f));
+                        float radial = Mathf.SmoothStep(
+                            0f,
+                            1f,
+                            Mathf.InverseLerp(0.62f, 1.12f, radius));
+                        float side = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.72f, 1f, Mathf.Abs(nx)));
+                        float lowerCorner = Mathf.Clamp01(-ny) * side * 0.16f;
+                        fade = Mathf.Clamp01(Mathf.Max(radial, side * 0.58f) + lowerCorner);
+                    }
+                    else
+                    {
+                        radius = Mathf.Sqrt(nx * nx + ny * ny);
+                        fade = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.45f, 1.18f, radius));
+                    }
+                    pixels[y * size + x] = new Color32(0, 0, 0, (byte)Mathf.RoundToInt(fade * 255f));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
         private static void SetMatte(Image image, float xMin, float yMin, float xMax, float yMax, Color color)
         {
+            image.enabled = color.a > 0.001f && xMax - xMin > 0.0001f && yMax - yMin > 0.0001f;
             image.color = color;
             RectTransform rect = image.rectTransform;
             rect.anchorMin = new Vector2(xMin, yMin);
@@ -1397,12 +2531,21 @@ namespace rowemod.Mods
         {
             if (matteObject != null)
                 UnityObject.Destroy(matteObject);
+            if (framedVignetteTexture != null)
+                UnityObject.Destroy(framedVignetteTexture);
+            if (mk1VignetteTexture != null)
+                UnityObject.Destroy(mk1VignetteTexture);
             matteObject = null;
             matteImages = null;
+            framedVignetteImage = null;
+            framedVignetteTexture = null;
+            mk1VignetteTexture = null;
             matteScreenWidth = 0;
             matteScreenHeight = 0;
             matteMode = -1;
             matteOpacity = -1f;
+            matteVignette = -1f;
+            matteMk1Enabled = false;
         }
 
         private static void DrawTrackLabel(string label, LensTrack track)
@@ -1480,11 +2623,47 @@ namespace rowemod.Mods
                 keyframeCamera = FindFirstLoaded<PlayableKeyFrameDataReplayCameraTransformBehaviour>();
             if (cinematicsBrain == null)
                 cinematicsBrain = FindFirstLoaded<CinemachineBrain>();
-            if (replayOutputCamera == null && cinematicsBrain != null)
-                cinematicsBrain.gameObject.TryGetComponent(out replayOutputCamera);
+            ResolveReplayOutputCamera();
 
             freeCamCollider = freeCam == null ? null : freeCam._thisCollider;
             RebindTargetTransform();
+        }
+
+        private static UnityCamera ResolveReplayOutputCamera()
+        {
+            if (recordableCamera != null)
+            {
+                CinemachineBrain recordableBrain = recordableCamera.cinemachineBrain;
+                if (recordableBrain != null)
+                {
+                    cinematicsBrain = recordableBrain;
+                    UnityCamera brainOutput = recordableBrain.OutputCamera;
+                    if (brainOutput != null && brainOutput.isActiveAndEnabled)
+                    {
+                        replayOutputCamera = brainOutput;
+                        return replayOutputCamera;
+                    }
+                }
+
+                UnityCamera recordedCamera = recordableCamera.cam;
+                if (recordedCamera != null && recordedCamera.isActiveAndEnabled)
+                {
+                    replayOutputCamera = recordedCamera;
+                    return replayOutputCamera;
+                }
+            }
+
+            if (cinematicsBrain != null)
+            {
+                UnityCamera brainOutput = cinematicsBrain.OutputCamera;
+                if (brainOutput != null && brainOutput.isActiveAndEnabled)
+                {
+                    replayOutputCamera = brainOutput;
+                    return replayOutputCamera;
+                }
+            }
+
+            return replayOutputCamera;
         }
 
         private static void RebindTargetTransform()
@@ -1515,7 +2694,11 @@ namespace rowemod.Mods
             ReplaySettings settings = Config.replaySettings;
             Config.NormalizeReplaySettings(settings);
             ApplyCollisionSettings();
+            ApplyCurrentLightSettings(settings);
+        }
 
+        private static void ApplyCurrentLightSettings(ReplaySettings settings)
+        {
             if (!settings.cameraLightEnabled)
             {
                 SetLightEnabled(false);
@@ -1535,40 +2718,87 @@ namespace rowemod.Mods
                 return;
             }
 
-            lightObject.transform.SetParent(targetTransform, false);
-            lightObject.transform.localPosition = new Vector3(
+            Transform lightTransform = lightObject.transform;
+            if (lightTransform.parent != targetTransform)
+                lightTransform.SetParent(targetTransform, false);
+
+            Vector3 desiredPosition = new Vector3(
                 settings.cameraLightOffsetX,
                 settings.cameraLightOffsetY,
                 settings.cameraLightOffsetZ);
-            lightObject.transform.localRotation = Quaternion.Euler(
+            if ((lightTransform.localPosition - desiredPosition).sqrMagnitude > 0.0000001f)
+                lightTransform.localPosition = desiredPosition;
+
+            Quaternion desiredRotation = Quaternion.Euler(
                 settings.cameraLightPitch,
                 settings.cameraLightYaw,
                 settings.cameraLightRoll);
+            if (Quaternion.Angle(lightTransform.localRotation, desiredRotation) > 0.001f)
+                lightTransform.localRotation = desiredRotation;
 
-            lightComponent.type = settings.cameraLightType == 1 ? LightType.Point : LightType.Spot;
-            lightComponent.enabled = true;
-            lightComponent.renderMode = LightRenderMode.ForcePixel;
-            lightComponent.intensity = settings.cameraLightIntensity;
-            lightComponent.range = settings.cameraLightRange;
-            lightComponent.spotAngle = settings.cameraLightSpotAngle;
-            lightComponent.color = new Color(
+            LightType desiredType = settings.cameraLightType == 1 ? LightType.Point : LightType.Spot;
+            if (lightComponent.type != desiredType)
+                lightComponent.type = desiredType;
+            if (!lightComponent.enabled)
+                lightComponent.enabled = true;
+            if (lightComponent.renderMode != LightRenderMode.ForcePixel)
+                lightComponent.renderMode = LightRenderMode.ForcePixel;
+
+            // HDRP owns punctual-light intensity through HDAdditionalLightData. Writing only the
+            // legacy Light component lets HDRP's default (typically hundreds of lumens) replace
+            // the small value displayed by Camera Lab. Candela keeps the slider direct and stable.
+            if (hdLightData != null &&
+                (hdLightData.lightUnit != LightUnit.Candela ||
+                 !Mathf.Approximately(hdLightData.intensity, settings.cameraLightIntensity)))
+                hdLightData.SetIntensity(settings.cameraLightIntensity, LightUnit.Candela);
+            if (!Mathf.Approximately(lightComponent.intensity, settings.cameraLightIntensity))
+                lightComponent.intensity = settings.cameraLightIntensity;
+
+            if (!Mathf.Approximately(lightComponent.range, settings.cameraLightRange))
+                lightComponent.range = settings.cameraLightRange;
+            if (hdLightData != null && !Mathf.Approximately(hdLightData.range, settings.cameraLightRange))
+                hdLightData.range = settings.cameraLightRange;
+            if (!Mathf.Approximately(lightComponent.spotAngle, settings.cameraLightSpotAngle))
+                lightComponent.spotAngle = settings.cameraLightSpotAngle;
+
+            Color desiredColor = new Color(
                 settings.cameraLightColorR,
                 settings.cameraLightColorG,
                 settings.cameraLightColorB,
                 1f);
-            lightComponent.shadows = !settings.cameraLightShadows
+            if (!ApproximatelyColor(lightComponent.color, desiredColor))
+                lightComponent.color = desiredColor;
+
+            LightShadows desiredShadows = !settings.cameraLightShadows
                 ? LightShadows.None
                 : settings.cameraLightSoftShadows ? LightShadows.Soft : LightShadows.Hard;
-            lightComponent.shadowResolution = ToShadowResolution(settings.cameraLightShadowResolution);
-            lightComponent.shadowStrength = settings.cameraLightShadowStrength;
-            lightComponent.shadowBias = settings.cameraLightShadowBias;
-            lightComponent.shadowNormalBias = settings.cameraLightShadowNormalBias;
-            lightComponent.shadowNearPlane = settings.cameraLightShadowNearPlane;
-            lightComponent.bounceIntensity = 0f;
-            status = "Attached to " + (targetTransform == replayOutputCamera?.transform
-                ? "Cinemachine replay camera"
-                : "keyframed replay camera");
+            if (lightComponent.shadows != desiredShadows)
+                lightComponent.shadows = desiredShadows;
+            LightShadowResolution desiredResolution = ToShadowResolution(settings.cameraLightShadowResolution);
+            if (lightComponent.shadowResolution != desiredResolution)
+                lightComponent.shadowResolution = desiredResolution;
+            if (!Mathf.Approximately(lightComponent.shadowStrength, settings.cameraLightShadowStrength))
+                lightComponent.shadowStrength = settings.cameraLightShadowStrength;
+            if (!Mathf.Approximately(lightComponent.shadowBias, settings.cameraLightShadowBias))
+                lightComponent.shadowBias = settings.cameraLightShadowBias;
+            if (!Mathf.Approximately(lightComponent.shadowNormalBias, settings.cameraLightShadowNormalBias))
+                lightComponent.shadowNormalBias = settings.cameraLightShadowNormalBias;
+            if (!Mathf.Approximately(lightComponent.shadowNearPlane, settings.cameraLightShadowNearPlane))
+                lightComponent.shadowNearPlane = settings.cameraLightShadowNearPlane;
+            if (!Mathf.Approximately(lightComponent.bounceIntensity, 0f))
+                lightComponent.bounceIntensity = 0f;
+            string desiredStatus = targetTransform == replayOutputCamera?.transform
+                ? "Attached to Cinemachine replay camera"
+                : "Attached to keyframed replay camera";
+            if (!string.Equals(status, desiredStatus, StringComparison.Ordinal))
+                status = desiredStatus;
         }
+
+        private static bool ApproximatelyColor(Color a, Color b) =>
+            Mathf.Approximately(a.r, b.r) &&
+            Mathf.Approximately(a.g, b.g) &&
+            Mathf.Approximately(a.b, b.b) &&
+            Mathf.Approximately(a.a, b.a);
 
         private static void ApplyCollisionSettings()
         {
@@ -1611,12 +2841,17 @@ namespace rowemod.Mods
                     hideFlags = HideFlags.HideAndDontSave
                 };
                 lightComponent = lightObject.AddComponent<Light>();
+                hdLightData = lightObject.AddComponent<HDAdditionalLightData>();
             }
 
             if (lightComponent == null)
                 lightComponent = lightObject.GetComponent<Light>();
+            if (hdLightData == null)
+                hdLightData = lightObject.GetComponent<HDAdditionalLightData>();
+            if (hdLightData == null)
+                hdLightData = lightObject.AddComponent<HDAdditionalLightData>();
 
-            return lightComponent != null;
+            return lightComponent != null && hdLightData != null;
         }
 
         private static void DestroyLight()
@@ -1626,6 +2861,7 @@ namespace rowemod.Mods
 
             lightObject = null;
             lightComponent = null;
+            hdLightData = null;
         }
 
         private static void SetLightEnabled(bool enabled)
