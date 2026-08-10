@@ -7,8 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.0.0.0</FileVersion>
+		<Version>3.3.0</Version>
+		<AssemblyVersion>3.3.0.0</AssemblyVersion>
+		<FileVersion>3.3.0.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -480,6 +481,8 @@
 		<Compile Include="Config.cs" />
 		<Compile Include="JsonData.cs" />
 		<Compile Include="Menu.cs" />
+		<Compile Include="MenuControllerNavigation.cs" />
+		<Compile Include="MenuNavigation.cs" />
 		<Compile Include="Main.cs" />
 		<Compile Include="Mods\AudioPatchie.cs" />
 		<Compile Include="Mods\AutoUpdater.cs" />
@@ -494,6 +497,7 @@
 		<Compile Include="Mods\DebugTools.cs" />
 		<Compile Include="Mods\DroneEvents.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
+		<Compile Include="Mods\GraphicsEnvironmentController.cs" />
 		<Compile Include="Mods\GrindPoseEditor.cs" />
 		<Compile Include="Mods\GrindPosePreset.cs" />
 		<Compile Include="Mods\LeftStickGestureRouter.cs" />
@@ -501,6 +505,7 @@
 		<Compile Include="Mods\MainMenuCharacterPreview.cs" />
 		<Compile Include="Mods\MotorVehicleUtils.cs" />
 		<Compile Include="Mods\ObjectDropper.cs" />
+		<Compile Include="Mods\OnePointOhLandingAssist.cs" />
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\PegSparks.cs" />
 		<Compile Include="Mods\Physics.cs" />
@@ -509,8 +514,10 @@
 		<Compile Include="Mods\ReplayCameraLight.cs" />
 		<Compile Include="Mods\ReplayLensPreset.cs" />
 		<Compile Include="Mods\RemoteKillSwitch.cs" />
+		<Compile Include="Mods\RoweModCursor.cs" />
 		<Compile Include="Mods\RiderStyleEditor.cs" />
 		<Compile Include="Mods\RuntimeVehicleTuneResetPatch.cs" />
+		<Compile Include="Mods\RuntimeVehicleTunePreset.cs" />
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
 		<Compile Include="Mods\TrickAnimationEditor.cs" />

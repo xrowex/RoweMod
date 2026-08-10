@@ -18,14 +18,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.2.6", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.0", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.2.6";
-        private static readonly bool EnablePieMenu = false;
+        public const string ModVersion = "3.3.0";
+        private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
         public static bool IsGameplayInputActive = false;
@@ -41,11 +41,13 @@ namespace rowemod
         private static bool _showPrivacyDisclaimer = false;
         private static bool _showPrivacyDisclaimerConfirmation = false;
         private static bool _runtimeContributionsReleased = true;
+        private static global::HarmonyLib.Harmony _roweModHarmony;
 
 
         public override void OnEarlyInitializeMelon()
         {
             CreateModDirectories();
+            _roweModHarmony = HarmonyInstance;
             HarmonyInstance.PatchAll();
         }
         
@@ -178,6 +180,7 @@ namespace rowemod
             }
 
             LeftStickGestureRouter.Initialize();
+            ReplayInputPatch.InitializeDpadReservation();
             AutoUpdater.Initialize();
             LogRuntimeDiagnosticsSettings();
 
@@ -212,12 +215,18 @@ namespace rowemod
             RuntimeVehicleTuneResetSupport.ResetCapturedDefaults();
             bool isGameplayScene =
                 !string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(sceneName, "MainMenu", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase);
             Mods.Physics.ReleaseNoseManualTuning();
             RiderStyleEditor.OnSceneInitialized(isGameplayScene);
             BikeOnlyStance.OnSceneInitialized(isGameplayScene);
             MainMenuCharacterPreview.OnSceneInitialized(sceneName);
             ReplayCameraLight.OnSceneInitialized();
+            GraphicsEnvironmentController.OnSceneInitialized();
+            Menu.NotifySceneInitialized();
+            ControllerMenuInput.OnSceneInitialized();
+            if (EnablePieMenu)
+                PieMenu.OnSceneInitialized();
             PegSparks.OnSceneInitialized(isGameplayScene);
             _runtimeContributionsReleased = true;
             LeftStickGestureRouter.OnSceneInitialized();
@@ -231,6 +240,9 @@ namespace rowemod
             if (!RemoteKillSwitched.isModEnabled)
                 return;
 
+            ReplayInputPatch.OnSceneInitialized(isGameplayScene);
+            ObjectDropper.OnSceneInitialized();
+
             if (Config.challengeRuntimeSettings.enabled)
                 rowemod.Challenges.MultiplayerChallengeManager.OnSceneInitialized();
             GameEventListener.OnSceneInitialized(sceneName);
@@ -238,6 +250,7 @@ namespace rowemod
             TrickAnimationEditor.OnSceneInitialized(isGameplayScene);
 
             if (string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(sceneName, "MainMenu", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(sceneName, "TitleScreen", StringComparison.OrdinalIgnoreCase))
             {
                 IsGameMainMenuActive = true;
@@ -303,9 +316,18 @@ namespace rowemod
 
             if (!RemoteKillSwitched.isModEnabled)
             {
+                if (isOpen)
+                    SetRoweModMenuOpen(false);
                 ReleaseRuntimeContributions();
                 return;
             }
+
+            // Keep RoweMod's dedicated pie action scoped to live gameplay and resolve
+            // GameLoopManager's exact legacy OpenReplay listener once when needed.
+            ReplayInputPatch.TickDpadReservation();
+
+            if (isOpen || RuntimeVehicleTuneResetSupport.IsOpen)
+                ControllerMenuInput.Update();
 
             if (DebugTools.RequiresUpdate)
                 DebugTools.Update();
@@ -313,6 +335,8 @@ namespace rowemod
             MainMenuCharacterPreview.Update();
             PegSparks.Update();
             ReplayCameraLight.Update();
+            if (GraphicsEnvironmentController.RequiresUpdate)
+                GraphicsEnvironmentController.Update();
 
             if (playableSceneLoaded && rMbCharacter)
             {
@@ -355,9 +379,15 @@ namespace rowemod
                 return;
             }
 
+            // RoweMod draws its own stable pointer. Reassert this after gameplay Update because
+            // BMX Streets changes the operating-system cursor during camera and input transitions.
+            if (isOpen)
+            {
+                RoweModCursor.EnforceNativeCursorHidden();
+            }
             // Run after gameplay Update so a map's cursor lock cannot steal the pointer from
             // UnityExplorer during an explicitly enabled diagnostic session.
-            if (_unityExplorerCursorCompatibilityEnabled)
+            else if (_unityExplorerCursorCompatibilityEnabled)
             {
                 Cursor.visible = true;
                 Cursor.lockState = CursorLockMode.None;
@@ -392,7 +422,12 @@ namespace rowemod
             }
 
             _runtimeContributionsReleased = false;
-            Mods.Physics.UpdateNoseManualTuning();
+            //Mods.Physics.UpdateNoseManualTuning();
+            // One Point Oh bypasses VehicleController.HandleSpinSystem entirely and is
+            // guided at its QuaternionPDDrive target by OnePointOhLandingAssist.
+            if (Config.physics.spinCompletionAssist &&
+                !Il2CppMashBox.BMX_Physics_Development.VehicleController.UseOnePointOhSpinSystem)
+                Mods.Physics.UpdateSpinCompletionAssist();
             PegSparks.FixedUpdate();
         }
 
@@ -403,10 +438,16 @@ namespace rowemod
 
         private static void ReleaseRuntimeContributions()
         {
+            if (!RemoteKillSwitched.isModEnabled)
+                ReplayInputPatch.Cleanup();
+
+            ObjectDropper.CancelPlacementMode();
+
             if (_runtimeContributionsReleased)
                 return;
 
             Mods.Physics.ReleaseNoseManualTuning();
+            Mods.Physics.ReleaseSpinCompletionAssist();
             RiderStyleEditor.Cleanup();
             BikeOnlyStance.Cleanup();
             _runtimeContributionsReleased = true;
@@ -437,6 +478,9 @@ namespace rowemod
             if (!_startupAccessGranted)
                 return;
 
+            if (isOpen)
+                RoweModCursor.EnforceNativeCursorHidden();
+
             if (_showDisabledMessage)
             {
                 if (Time.unscaledTime > _disabledMessageEndTime)
@@ -462,11 +506,8 @@ namespace rowemod
             }
 
             
-            if (!stylesInitialized)
-            {
+            if (Menu.StylesNeedRefresh)
                 InitializeStyles();
-                stylesInitialized = true;
-            }
 
             DrawMainMenuLauncher();
             
@@ -474,11 +515,21 @@ namespace rowemod
             {
                 if (RemoteKillSwitched.isModEnabled)
                 {
-                    Menu.HandleWindowDrag();
-                    Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu, $"RoweMod v. {ModVersion}", Menu.windowStyle);
-                    TrickMods.DrawTrickPickerPopup();
-                    TrickAnimationEditor.DrawAnimationSourcePickerPopup();
-                    ObjectDropper.DrawNotPlaceableWarning();
+                    if (ObjectDropper.IsPlacementMode)
+                    {
+                        ObjectDropper.DrawPlacementOverlay();
+                    }
+                    else
+                    {
+                        Menu.HandleWindowDrag();
+                        // The sidebar owns the RoweMod identity and version. Keep the title strip
+                        // visually quiet so the same version is not shown twice.
+                        Menu.windowRect = GUI.Window(0, Menu.windowRect, (GUI.WindowFunction)Menu.DrawMenu,
+                            string.Empty, Menu.windowStyle);
+                        TrickMods.DrawTrickPickerPopup();
+                        TrickAnimationEditor.DrawAnimationSourcePickerPopup();
+                        ObjectDropper.DrawNotPlaceableWarning();
+                    }
                 }
             }
 
@@ -493,6 +544,9 @@ namespace rowemod
 
                 AutoUpdater.DrawUpdatePrompt(isOpen);
             }
+
+            if (isOpen && !ObjectDropper.IsPlacementMode)
+                RoweModCursor.Draw();
         }
 
         private static void DrawMainMenuLauncher()
@@ -788,7 +842,11 @@ namespace rowemod
             TrickAnimationEditor.Cleanup();
             LeftStickGestureRouter.Cleanup();
             ReplayCameraLight.Cleanup();
+            ReplayInputPatch.Cleanup();
             PegSparks.Cleanup();
+            ObjectDropper.Shutdown();
+            ControllerMenuInput.Shutdown();
+            RoweModCursor.Cleanup();
             Config.FlushPendingSave();
             DebugTools.Cleanup();
             rowemod.Challenges.MultiplayerChallengeManager.Shutdown();
@@ -815,14 +873,12 @@ namespace rowemod
         private void HandleMenuToggle()
         {
             var kb = Keyboard.current;
-            if (kb == null) return;
-
-            bool controlHeld = kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
+            bool controlHeld = kb != null && (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed);
 
             // Ctrl+Shift+U is deliberately independent of the RoweMod menu. It lets
             // UnityExplorer receive mouse input in a loaded map without leaving the cursor
             // unlocked during normal play. Scene initialization resets this transient mode.
-            if (controlHeld && (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed) &&
+            if (kb != null && controlHeld && (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed) &&
                 kb.uKey.wasPressedThisFrame)
             {
                 _unityExplorerCursorCompatibilityEnabled = !_unityExplorerCursorCompatibilityEnabled;
@@ -830,7 +886,7 @@ namespace rowemod
                         (_unityExplorerCursorCompatibilityEnabled ? "enabled (Ctrl+Shift+U to disable)." : "disabled."));
             }
 
-            if (_unityExplorerCursorCompatibilityEnabled)
+            if (_unityExplorerCursorCompatibilityEnabled && !isOpen)
             {
                 Cursor.visible = true;
                 Cursor.lockState = CursorLockMode.None;
@@ -840,8 +896,8 @@ namespace rowemod
             if (Time.unscaledTime < _nextToggleTime)
                 return;
 
-            if (controlHeld &&
-                kb.nKey.isPressed)
+            bool keyboardTogglePressed = kb != null && controlHeld && kb.nKey.isPressed;
+            if (keyboardTogglePressed)
             {
                 if (!RemoteKillSwitched.isModEnabled)
                 {
@@ -859,7 +915,7 @@ namespace rowemod
 
 
                     
-                _nextToggleTime = Time.unscaledTime + 1f; // 1 second cooldown
+                _nextToggleTime = Time.unscaledTime + 1f;
                 ToggleRoweModMenu();
             }
         }
@@ -884,7 +940,10 @@ namespace rowemod
             if (isOpen == open)
             {
                 if (!open)
+                {
                     Menu.ReleaseInputCapture();
+                    ControllerMenuInput.SetGameplayInputBlocked(false);
+                }
                 return;
             }
 
@@ -896,15 +955,17 @@ namespace rowemod
                 if (isOpen)
                 {
                     Log.Msg("Menu toggled on.");
+                    Menu.NotifyMenuOpened();
+                    ControllerMenuInput.SetGameplayInputBlocked(true);
                     Mods.Physics.Update();
                     Mods.Misc.Update();
-                    Cursor.visible = true;
-                    Cursor.lockState = CursorLockMode.None;
+                    RoweModCursor.EnforceNativeCursorHidden();
                     if (Menu.currentTab == Menu.Tab.Tricks)
                         TrickMods.OnTricksTabEntered();
                 }
                 else
                 {
+                    ControllerMenuInput.SetGameplayInputBlocked(false);
                     Menu.ReleaseInputCapture();
                     GrindPoseEditor.OnGrindsTabExited();
                     RiderStyleEditor.OnTabExited();
@@ -917,6 +978,7 @@ namespace rowemod
             catch (Exception e)
             {
                 Log.Error(e);
+                ControllerMenuInput.SetGameplayInputBlocked(isOpen);
             }
         }
 

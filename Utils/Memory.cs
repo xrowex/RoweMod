@@ -697,9 +697,13 @@ namespace rowemod.Utils
                 // PegSparks owns this versioned bundle so it can verify the exact visual hash
                 // before loading it. Loading it here first allowed a stale bundle with the same
                 // prefab name to win for the entire session.
+                string ownedBundleName = Path.GetFileName(bundlePath);
                 if (string.Equals(
-                        Path.GetFileName(bundlePath),
+                        ownedBundleName,
                         "rowemod_peg_sparks",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    ownedBundleName.StartsWith(
+                        "rowemod_hdri_",
                         StringComparison.OrdinalIgnoreCase))
                     continue;
 

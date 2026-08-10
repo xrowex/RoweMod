@@ -70,10 +70,41 @@ namespace rowemod.Mods
             new List<string>();
         private static string cachedPrefabSearch = null;
         private static int cachedPrefabSourceCount = -1;
-        private static string dropperStatus = "Select an object, then click in the world to place it.";
+        private static string dropperStatus = "Select an object to open the placement camera.";
         private static float nextAssetLoadAttemptTime = 0f;
 
+        // Dedicated placement camera state. The game's render camera is retained so HDRP and
+        // post-processing remain intact; RoweMod temporarily owns its transform while the
+        // Cinemachine brain is paused, then restores the original camera on exit.
+        private static bool placementMode;
+        private static GameObject placementCameraRig;
+        private static Il2CppCinemachine.CinemachineBrain placementCameraBrain;
+        private static bool placementCameraBrainWasEnabled;
+        private static Vector3 placementCameraSavedPosition;
+        private static Quaternion placementCameraSavedRotation;
+        private static float placementCameraYaw;
+        private static float placementCameraPitch;
+        private static Vector2 placementMoveInput;
+        private static Vector2 placementLookInput;
+        private static float placementLiftInput;
+        private static bool placementRequested;
+        private static bool placementExitRequested;
+        private static bool placementConfirmHeld;
+        private static bool placementLeftRotateHeld;
+        private static bool placementRightRotateHeld;
+
+        private const float PlacementCameraMoveSpeed = 8f;
+        private const float PlacementCameraBoostMultiplier = 2.5f;
+        private const float PlacementControllerLookSpeed = 115f;
+        private const float PlacementMouseLookSpeed = 0.12f;
+        private const float PlacementPitchLimit = 85f;
+        private const float DropperRowHeight = 36f;
+        private const float DropperRowSpacing = 4f;
+
+        public static bool IsPlacementMode => placementMode;
+
         public static bool RequiresUpdate =>
+            placementMode ||
             (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper) ||
             wasMenuOpen != Menu.isOpen ||
             (previewObject != null && previewObject.activeSelf);
@@ -155,8 +186,16 @@ namespace rowemod.Mods
         public static void Update()
         {
             var mouse = Mouse.current;
-            if (mouse == null) return;
             RefreshActiveCamera();
+
+            if (placementMode)
+            {
+                UpdatePlacementMode(mouse);
+                return;
+            }
+
+            if (mouse == null)
+                return;
 
             // Handle object spawning
             if (Menu.isOpen && Menu.currentTab == Menu.Tab.Dropper && mouse.leftButton.wasPressedThisFrame)
@@ -230,7 +269,7 @@ namespace rowemod.Mods
 
                 // Use mouse raycast for placement
                 Ray ray = activeCamera.ScreenPointToRay(mouse.position.ReadValue());
-                if (TryRaycastIgnoringSpawned(ray, out RaycastHit hit))
+                if (TryRaycastPlacementSurface(ray, out RaycastHit hit))
                 {
                     Vector3 groundNormal = hit.normal.normalized;
                     Quaternion rotation;
@@ -336,6 +375,299 @@ namespace rowemod.Mods
             }
         }
 
+        public static void UpdatePlacementController(Gamepad gamepad)
+        {
+            if (!placementMode || gamepad == null)
+                return;
+
+            if (gamepad.buttonEast.wasPressedThisFrame)
+            {
+                placementExitRequested = true;
+                return;
+            }
+
+            placementMoveInput = gamepad.leftStick.ReadValue();
+            placementLookInput = gamepad.rightStick.ReadValue();
+            placementLiftInput = gamepad.rightTrigger.ReadValue() - gamepad.leftTrigger.ReadValue();
+
+            if (ReadPlacementButtonPress(gamepad.buttonSouth.ReadValue(), ref placementConfirmHeld))
+                placementRequested = true;
+
+            if (ReadPlacementButtonPress(gamepad.leftShoulder.ReadValue(), ref placementLeftRotateHeld))
+                previewYRotation = Mathf.Repeat(previewYRotation - 15f, 360f);
+            if (ReadPlacementButtonPress(gamepad.rightShoulder.ReadValue(), ref placementRightRotateHeld))
+                previewYRotation = Mathf.Repeat(previewYRotation + 15f, 360f);
+        }
+
+        private static bool ReadPlacementButtonPress(float value, ref bool held)
+        {
+            if (held)
+            {
+                if (value <= 0.25f)
+                    held = false;
+                return false;
+            }
+
+            if (value < 0.65f)
+                return false;
+
+            held = true;
+            return true;
+        }
+
+        private static void UpdatePlacementMode(Mouse mouse)
+        {
+            if (!Menu.isOpen || Menu.currentTab != Menu.Tab.Dropper || string.IsNullOrEmpty(selectedPrefabName))
+            {
+                ExitPlacementMode(false);
+                return;
+            }
+
+            if (placementExitRequested)
+            {
+                ExitPlacementMode(true);
+                return;
+            }
+
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            {
+                ExitPlacementMode(true);
+                return;
+            }
+
+            if (activeCamera == null || placementCameraRig == null)
+            {
+                SetDropperStatus("Placement camera was lost. Returned to the object library.", true);
+                ExitPlacementMode(false);
+                return;
+            }
+
+            float deltaTime = Mathf.Max(0f, Time.unscaledDeltaTime);
+            Vector2 move = placementMoveInput;
+            float lift = placementLiftInput;
+            bool boost = false;
+
+            if (keyboard != null)
+            {
+                if (keyboard.aKey.isPressed) move.x -= 1f;
+                if (keyboard.dKey.isPressed) move.x += 1f;
+                if (keyboard.sKey.isPressed) move.y -= 1f;
+                if (keyboard.wKey.isPressed) move.y += 1f;
+                if (keyboard.qKey.isPressed) lift -= 1f;
+                if (keyboard.eKey.isPressed) lift += 1f;
+                boost = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+
+                if (keyboard.zKey.wasPressedThisFrame)
+                    previewYRotation = Mathf.Repeat(previewYRotation - 15f, 360f);
+                if (keyboard.xKey.wasPressedThisFrame)
+                    previewYRotation = Mathf.Repeat(previewYRotation + 15f, 360f);
+            }
+
+            if (move.sqrMagnitude > 1f)
+                move.Normalize();
+            lift = Mathf.Clamp(lift, -1f, 1f);
+
+            float speed = PlacementCameraMoveSpeed * (boost ? PlacementCameraBoostMultiplier : 1f);
+            Transform rigTransform = placementCameraRig.transform;
+            Vector3 cameraMove = (rigTransform.right * move.x) + (rigTransform.forward * move.y) +
+                                 (Vector3.up * lift);
+            rigTransform.position += cameraMove * speed * deltaTime;
+
+            Vector2 lookDelta = placementLookInput * (PlacementControllerLookSpeed * deltaTime);
+            if (mouse != null && mouse.rightButton.isPressed)
+                lookDelta += mouse.delta.ReadValue() * PlacementMouseLookSpeed;
+
+            placementCameraYaw += lookDelta.x;
+            placementCameraPitch = Mathf.Clamp(placementCameraPitch - lookDelta.y,
+                -PlacementPitchLimit, PlacementPitchLimit);
+            rigTransform.rotation = Quaternion.Euler(placementCameraPitch, placementCameraYaw, 0f);
+
+            activeCamera.transform.SetPositionAndRotation(rigTransform.position, rigTransform.rotation);
+
+            if (mouse != null)
+            {
+                float wheel = mouse.scroll.ReadValue().y / 120f;
+                if (Mathf.Abs(wheel) > 0.01f)
+                    previewYRotation = Mathf.Repeat(previewYRotation + (wheel * 5f), 360f);
+                if (mouse.leftButton.wasPressedThisFrame)
+                    placementRequested = true;
+            }
+
+            if (previewObject != null && !previewObject.activeSelf)
+                previewObject.SetActive(true);
+
+            if (previewObject != null)
+                UpdatePreviewTransform(activeCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f)));
+
+            if (placementRequested)
+                TryPlacePreview();
+
+            placementMoveInput = Vector2.zero;
+            placementLookInput = Vector2.zero;
+            placementLiftInput = 0f;
+            placementRequested = false;
+            placementExitRequested = false;
+        }
+
+        private static bool EnterPlacementMode()
+        {
+            if (placementMode)
+                return true;
+
+            RefreshActiveCamera();
+            if (activeCamera == null)
+            {
+                SetDropperStatus("Could not start placement: no active camera was found.", true);
+                return false;
+            }
+
+            placementCameraSavedPosition = activeCamera.transform.position;
+            placementCameraSavedRotation = activeCamera.transform.rotation;
+            Vector3 euler = placementCameraSavedRotation.eulerAngles;
+            placementCameraYaw = euler.y;
+            placementCameraPitch = NormalizePitch(euler.x);
+
+            placementCameraRig = new GameObject("[RoweMod] Object Dropper Camera");
+            placementCameraRig.hideFlags = HideFlags.HideAndDontSave;
+            placementCameraRig.transform.SetPositionAndRotation(
+                placementCameraSavedPosition,
+                placementCameraSavedRotation);
+
+            placementCameraBrain = activeCamera.GetComponent<Il2CppCinemachine.CinemachineBrain>();
+            if (placementCameraBrain == null)
+            {
+                Il2CppCinemachine.CinemachineBrain foundBrain =
+                    UnityEngine.Object.FindObjectOfType<Il2CppCinemachine.CinemachineBrain>();
+                if (foundBrain != null && foundBrain.gameObject == activeCamera.gameObject)
+                    placementCameraBrain = foundBrain;
+            }
+
+            placementCameraBrainWasEnabled = placementCameraBrain != null && placementCameraBrain.enabled;
+            if (placementCameraBrain != null)
+                placementCameraBrain.enabled = false;
+
+            placementMode = true;
+            placementRequested = false;
+            placementExitRequested = false;
+            // Selecting a library row and placing both use A. Carry the live button state into
+            // placement mode so the selection press must be released before A can place.
+            Gamepad currentGamepad = Gamepad.current;
+            placementConfirmHeld = currentGamepad != null && currentGamepad.buttonSouth.ReadValue() > 0.25f;
+            placementLeftRotateHeld = currentGamepad != null && currentGamepad.leftShoulder.ReadValue() > 0.25f;
+            placementRightRotateHeld = currentGamepad != null && currentGamepad.rightShoulder.ReadValue() > 0.25f;
+            Config.misc.disableDroneCollider = true;
+            Menu.ReleaseInputCapture();
+            SetDropperStatus($"Placing {selectedPrefabName}. A/left click places; B/Esc returns.", false);
+            Log.Msg($"[Dropper] Dedicated placement camera started for '{selectedPrefabName}'.");
+            return true;
+        }
+
+        private static void ExitPlacementMode(bool returningToLibrary)
+        {
+            if (!placementMode && placementCameraRig == null)
+                return;
+
+            placementMode = false;
+            placementRequested = false;
+            placementExitRequested = false;
+            placementConfirmHeld = false;
+            placementLeftRotateHeld = false;
+            placementRightRotateHeld = false;
+            placementMoveInput = Vector2.zero;
+            placementLookInput = Vector2.zero;
+            placementLiftInput = 0f;
+
+            if (activeCamera != null)
+                activeCamera.transform.SetPositionAndRotation(placementCameraSavedPosition, placementCameraSavedRotation);
+
+            if (placementCameraBrain != null)
+                placementCameraBrain.enabled = placementCameraBrainWasEnabled;
+
+            placementCameraBrain = null;
+            if (placementCameraRig != null)
+            {
+                UnityEngine.Object.Destroy(placementCameraRig);
+                placementCameraRig = null;
+            }
+
+            if (previewObject != null && previewObject.activeSelf)
+                previewObject.SetActive(false);
+
+            Config.misc.disableDroneCollider = false;
+            if (returningToLibrary && !string.IsNullOrEmpty(selectedPrefabName))
+                SetDropperStatus($"Selected {selectedPrefabName}. Select it again to place more.", false);
+
+            Log.Msg("[Dropper] Placement camera stopped and gameplay camera restored.");
+        }
+
+        private static float NormalizePitch(float angle)
+        {
+            return angle > 180f ? angle - 360f : angle;
+        }
+
+        private static bool TryPlacePreview()
+        {
+            if (string.IsNullOrEmpty(selectedPrefabName) || Memory.dropperPrefabNames == null ||
+                Memory.dropperPrefabs == null)
+            {
+                SetDropperStatus("Select an object before placing.", true);
+                return false;
+            }
+
+            int prefabIndex = Memory.dropperPrefabNames.IndexOf(selectedPrefabName);
+            if (prefabIndex < 0 || prefabIndex >= Memory.dropperPrefabs.Count)
+            {
+                SetDropperStatus($"Selected object '{selectedPrefabName}' is no longer available.", true);
+                return false;
+            }
+
+            if (previewObject == null || !previewObject.activeSelf || !canPlacePreview)
+            {
+                SetDropperStatus("Cannot place object here.", true);
+                return false;
+            }
+
+            while (spawnedObjects.Count >= MaxSpawnedObjects)
+            {
+                GameObject oldestObject = spawnedObjects[0];
+                if (oldestObject != null)
+                    UnityEngine.Object.Destroy(oldestObject);
+                spawnedObjects.RemoveAt(0);
+            }
+
+            GameObject spawned = Object.Instantiate(
+                Memory.dropperPrefabs[prefabIndex],
+                previewObject.transform.position,
+                previewObject.transform.rotation);
+            ConfigureSpawnedObject(spawned);
+            spawnedObjects.Add(spawned);
+            SetDropperStatus($"Placed {selectedPrefabName}.", false);
+            Log.Msg($"[Dropper] Placed '{selectedPrefabName}' at {previewObject.transform.position}.");
+            return true;
+        }
+
+        public static void OnSceneInitialized()
+        {
+            ExitPlacementMode(false);
+            activeCamera = null;
+            nextCameraResolveTime = 0f;
+            DestroyPreviewObject();
+            ClearSelection();
+        }
+
+        public static void Shutdown()
+        {
+            ExitPlacementMode(false);
+            DestroyPreviewObject();
+            activeCamera = null;
+        }
+
+        public static void CancelPlacementMode()
+        {
+            ExitPlacementMode(false);
+        }
+
         private static void RefreshActiveCamera()
         {
             if (activeCamera != null)
@@ -363,7 +695,7 @@ namespace rowemod.Mods
 
         private static void UpdatePreviewTransform(Ray ray)
         {
-            if (!TryRaycastIgnoringSpawned(ray, out RaycastHit hit))
+            if (!TryRaycastPlacementSurface(ray, out RaycastHit hit))
             {
                 canPlacePreview = false;
                 SetPreviewColor(false);
@@ -436,7 +768,7 @@ namespace rowemod.Mods
             }
         }
 
-        private static bool TryRaycastIgnoringSpawned(Ray ray, out RaycastHit validHit)
+        private static bool TryRaycastPlacementSurface(Ray ray, out RaycastHit validHit)
         {
             validHit = default;
 
@@ -453,17 +785,11 @@ namespace rowemod.Mods
                 if (previewObject != null && root == previewObject)
                     continue;
 
-                bool isSpawned = false;
-                foreach (var spawned in spawnedObjects)
-                {
-                    if (spawned != null && root == spawned)
-                    {
-                        isSpawned = true;
-                        break;
-                    }
-                }
-
-                if (isSpawned || hit.normal.y < MinGroundNormalY)
+                // Previously every RoweMod-spawned object was skipped here, so the ray passed
+                // through a pallet/ramp/box and placed the next preview on the map beneath it.
+                // Treat their upward-facing colliders exactly like map geometry. The preview's
+                // bottom offset then rests the new object on the hit surface, enabling stacking.
+                if (hit.normal.y < MinGroundNormalY)
                     continue;
 
                 validHit = hit;
@@ -715,7 +1041,7 @@ namespace rowemod.Mods
 
             Menu.BeginTwoPane(paneHeight);
 
-            Menu.BeginPane("Object Library", "Pick an object to preview, then click outside the menu to place it.", GUILayout.Width(leftWidth), GUILayout.Height(paneHeight));
+            Menu.BeginPane("Object Library", "Pick an object to enter the dedicated placement camera.", GUILayout.Width(leftWidth), GUILayout.Height(paneHeight));
             Menu.BeginToolbar();
             Menu.SearchRow(ref prefabSearch, Mathf.Max(160f, leftWidth - 115f), "Search");
             Menu.EndToolbar();
@@ -729,21 +1055,47 @@ namespace rowemod.Mods
             }
             else
             {
-                prefabListScroll = GUILayout.BeginScrollView(prefabListScroll, false, true, GUILayout.ExpandHeight(true));
-                foreach (string prefabName in filteredPrefabCache)
+                float rowHeight = DropperRowHeight * Menu.EffectiveUiScale;
+                float rowSpacing = DropperRowSpacing * Menu.EffectiveUiScale;
+                Rect listRect = GUILayoutUtility.GetRect(
+                    100f,
+                    10000f,
+                    120f,
+                    10000f,
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.ExpandHeight(true));
+                float contentHeight = Mathf.Max(
+                    listRect.height,
+                    (filteredPrefabCache.Count * (rowHeight + rowSpacing)) - rowSpacing);
+                float contentWidth = Mathf.Max(40f, listRect.width - (18f * Menu.EffectiveUiScale));
+                Rect contentRect = new Rect(0f, 0f, contentWidth, contentHeight);
+
+                prefabListScroll = GUI.BeginScrollView(listRect, prefabListScroll, contentRect, false, true);
+                Menu.BeginControllerScrollRegion(
+                    prefabListScroll.y,
+                    listRect.height,
+                    contentHeight,
+                    value => prefabListScroll = new Vector2(0f, value));
+
+                for (int i = 0; i < filteredPrefabCache.Count; i++)
                 {
+                    string prefabName = filteredPrefabCache[i];
+                    Rect rowRect = new Rect(0f, i * (rowHeight + rowSpacing), contentWidth, rowHeight);
                     bool isSelectedPrefab = string.Equals(selectedPrefabName, prefabName, StringComparison.Ordinal);
-                    if (GUILayout.Button(prefabName, isSelectedPrefab ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle, GUILayout.Height(26f)))
+                    if (Menu.ControllerButton(rowRect, $"dropper_prefab_{prefabName}", prefabName,
+                            isSelectedPrefab ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle))
                     {
                         SelectPrefab(prefabName);
                     }
                 }
-                GUILayout.EndScrollView();
+
+                Menu.EndControllerScrollRegion();
+                GUI.EndScrollView();
             }
 
             Menu.EndPane();
 
-            Menu.BeginPane("Placement", "Preview follows the cursor. Mouse wheel rotates the selected object.", GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
+            Menu.BeginPane("Placement", "The placement camera supports controller and mouse/keyboard controls.", GUILayout.ExpandWidth(true), GUILayout.Height(paneHeight));
 
             GUILayout.Label($"Selected: {(selectedPrefabName ?? "None")}", Menu.UiHeaderStyle);
             GUILayout.Label(dropperStatus, Menu.UiMutedWrappedStyle);
@@ -771,11 +1123,35 @@ namespace rowemod.Mods
             Menu.DrawSectionTitle($"Spawned Objects ({spawnedObjects.Count}/{MaxSpawnedObjects})", $"{selectedObjects.Count} selected.");
             if (spawnedObjects.Count == 0)
             {
-                Menu.DrawEmptyState("No objects spawned.", "Select an object, then click in the world to place it.");
+                Menu.DrawEmptyState("No objects spawned.", "Select an object, position the placement camera, then press A or click.");
             }
             else
             {
-                spawnedListScroll = GUILayout.BeginScrollView(spawnedListScroll, false, true, GUILayout.MinHeight(120f), GUILayout.MaxHeight(220f));
+                float rowHeight = DropperRowHeight * Menu.EffectiveUiScale;
+                float rowSpacing = DropperRowSpacing * Menu.EffectiveUiScale;
+                float visibleHeight = Mathf.Min(
+                    220f * Menu.EffectiveUiScale,
+                    Mathf.Max(120f * Menu.EffectiveUiScale,
+                        (spawnedObjects.Count * (rowHeight + rowSpacing)) - rowSpacing));
+                Rect listRect = GUILayoutUtility.GetRect(
+                    100f,
+                    10000f,
+                    visibleHeight,
+                    visibleHeight,
+                    GUILayout.ExpandWidth(true));
+                float contentHeight = Mathf.Max(
+                    listRect.height,
+                    (spawnedObjects.Count * (rowHeight + rowSpacing)) - rowSpacing);
+                float contentWidth = Mathf.Max(40f, listRect.width - (18f * Menu.EffectiveUiScale));
+                Rect contentRect = new Rect(0f, 0f, contentWidth, contentHeight);
+
+                spawnedListScroll = GUI.BeginScrollView(listRect, spawnedListScroll, contentRect, false, true);
+                Menu.BeginControllerScrollRegion(
+                    spawnedListScroll.y,
+                    listRect.height,
+                    contentHeight,
+                    value => spawnedListScroll = new Vector2(0f, value));
+
                 for (int i = 0; i < spawnedObjects.Count; i++)
                 {
                     GameObject obj = spawnedObjects[i];
@@ -794,12 +1170,16 @@ namespace rowemod.Mods
 
                     string label = $"Object {i + 1}: {displayName}";
                     bool isSelected = selectedObjects.Contains(obj);
-                    if (GUILayout.Button(label, isSelected ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle, GUILayout.Height(24f)))
+                    Rect rowRect = new Rect(0f, i * (rowHeight + rowSpacing), contentWidth, rowHeight);
+                    if (Menu.ControllerButton(rowRect, $"dropper_history_{i}", label,
+                            isSelected ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle))
                     {
                         ToggleObjectSelection(obj);
                     }
                 }
-                GUILayout.EndScrollView();
+
+                Menu.EndControllerScrollRegion();
+                GUI.EndScrollView();
             }
 
             if (selectedObjects.Count > 0)
@@ -953,7 +1333,8 @@ namespace rowemod.Mods
             }
 
             BuildPreviewObject(Memory.dropperPrefabs[index]);
-            SetDropperStatus($"Selected {selectedPrefabName}. Click outside the menu to place it.", false);
+            if (!EnterPlacementMode())
+                SetDropperStatus($"Selected {selectedPrefabName}, but the placement camera could not start.", true);
         }
 
         private static void SetDropperStatus(string message, bool warning)
@@ -978,12 +1359,13 @@ namespace rowemod.Mods
         // Reset the Dropper tab to default state
         public static void ResetTab()
         {
+            ExitPlacementMode(false);
             // Resetting selected prefab and clear selections
             selectedPrefabName = null;
             ClearSelection();
             DestroyPreviewObject();
             Config.misc.disableDroneCollider = false;
-            dropperStatus = "Select an object, then click in the world to place it.";
+            dropperStatus = "Select an object to open the placement camera.";
             Log.Msg("Object Dropper tab reset: Selected prefab and objects cleared.");
         }
 
@@ -1121,6 +1503,51 @@ namespace rowemod.Mods
             }
 
             SetPreviewColor(true);
+        }
+
+        public static void DrawPlacementOverlay()
+        {
+            if (!placementMode)
+                return;
+
+            float scale = Menu.EffectiveUiScale;
+            float panelWidth = Mathf.Min(Screen.width - (32f * scale), 620f * scale);
+            Rect panelRect = new Rect(
+                (Screen.width - panelWidth) * 0.5f,
+                20f * scale,
+                panelWidth,
+                76f * scale);
+            GUI.Box(panelRect, GUIContent.none, Menu.UiPanelStyle);
+
+            Rect titleRect = new Rect(panelRect.x + (16f * scale), panelRect.y + (9f * scale),
+                panelRect.width - (32f * scale), 24f * scale);
+            GUI.Label(titleRect, $"OBJECT PLACEMENT  •  {selectedPrefabName}", Menu.UiHeaderStyle);
+
+            Rect helpRect = new Rect(panelRect.x + (16f * scale), panelRect.y + (36f * scale),
+                panelRect.width - (32f * scale), 30f * scale);
+            GUI.Label(helpRect,
+                "Left Stick/WASD Move   Right Stick/RMB Look   LT/RT or Q/E Down/Up   LB/RB or Z/X Rotate   A/Click Place   B/Esc Back",
+                Menu.UiMutedWrappedStyle);
+
+            float centerX = Screen.width * 0.5f;
+            float centerY = Screen.height * 0.5f;
+            Color previousColor = GUI.color;
+            GUI.color = canPlacePreview
+                ? new Color(0.30f, 1f, 0.48f, 0.95f)
+                : new Color(1f, 0.28f, 0.24f, 0.95f);
+            GUI.DrawTexture(new Rect(centerX - 12f, centerY - 1f, 24f, 2f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(centerX - 1f, centerY - 12f, 2f, 24f), Texture2D.whiteTexture);
+            GUI.color = previousColor;
+
+            if (!canPlacePreview)
+            {
+                Rect warningRect = new Rect(
+                    centerX - (150f * scale),
+                    centerY + (26f * scale),
+                    300f * scale,
+                    34f * scale);
+                GUI.Box(warningRect, "Move the camera toward a valid surface", Menu.UiDangerButtonStyle);
+            }
         }
 
         public static void DrawNotPlaceableWarning()

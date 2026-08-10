@@ -27,7 +27,7 @@ using rowemod.Challenges;
 
 namespace rowemod
 {
-    public static class Menu
+    public static partial class Menu
     {
         // Defining the tabs available in the menu
         public enum Tab
@@ -64,21 +64,38 @@ namespace rowemod
         public static float scrollOffset = 0f;
         public static float scrollViewHeight = 10000f;
         public static float viewHeight = 0f;
+        private static string _lastScrollableContentError = string.Empty;
+        private static float _nextScrollableContentErrorLogTime;
 
-        private const float UiOuterPadding = 18f;
-        private const float UiInnerPadding = 14f;
-        private const float UiControlSpacing = 10f;
-        private const float UiSectionSpacing = 14f;
-        private const float UiTitleBarHeight = 30f;
-        private const float UiResetButtonWidth = 94f;
-        private const float UiTabSpacing = 6f;
-        private const float UiSidebarWidth = 172f;
-        private const float UiLogoAreaHeight = 86f;
-        private const float UiContentHeaderHeight = 64f;
-        private const float UiNavButtonHeight = 34f;
-        private const float UiFoldoutHeight = 30f;
-        private const float UiRowHeight = 26f;
-        private const float UiContentBottomPadding = 20f;
+        private static float UiScale
+        {
+            get
+            {
+                float configuredScale = misc.menuScale > 0f ? misc.menuScale : 1f;
+                float userScale = _appliedMenuScale > 0f ? _appliedMenuScale : configuredScale;
+                float automaticScale = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(1f, Screen.height) / 1080f), 0.90f, 1.25f);
+                return Mathf.Clamp(userScale * automaticScale, 0.80f, 1.55f);
+            }
+        }
+
+        public static float EffectiveUiScale => UiScale;
+        public static bool StylesNeedRefresh =>
+            !stylesInitialized || _initializedScreenHeight != Screen.height;
+
+        private static float UiOuterPadding => 20f * UiScale;
+        private static float UiInnerPadding => 16f * UiScale;
+        private static float UiControlSpacing => 8f * UiScale;
+        private static float UiSectionSpacing => 16f * UiScale;
+        private static float UiTitleBarHeight => 34f * UiScale;
+        private static float UiResetButtonWidth => 112f * UiScale;
+        private static float UiTabSpacing => 8f * UiScale;
+        private static float UiSidebarWidth => 190f * UiScale;
+        private static float UiLogoAreaHeight => 96f * UiScale;
+        private static float UiContentHeaderHeight => 76f * UiScale;
+        private static float UiNavButtonHeight => 40f * UiScale;
+        private static float UiFoldoutHeight => 38f * UiScale;
+        private static float UiRowHeight => 36f * UiScale;
+        private static float UiContentBottomPadding => 24f * UiScale;
 
         private static readonly (string label, Tab tab)[] _visibleTabs =
         {
@@ -146,6 +163,8 @@ namespace rowemod
         public static GUIStyle miniButtonStyle;
         public static GUIStyle badgeStyle;
         public static GUIStyle mutedWrappedLabelStyle;
+        private static GUIStyle subTabButtonStyle;
+        private static GUIStyle subTabActiveButtonStyle;
         // Texture caches for styles
         private static Texture2D backgroundTexture;
         private static Texture2D roundedButtonNormal;
@@ -156,11 +175,13 @@ namespace rowemod
         private static Texture2D tabIndicatorTexture;
         private static Texture2D toggleCapsuleMaskTexture;
         private static Texture2D toggleKnobTexture;
+        private static readonly List<Texture2D> generatedStyleTextures = new List<Texture2D>();
 
         private static Color uiAccentColor;
         private static Color uiAccentHoverColor;
         private static Color uiAccentSoftColor;
         private static Color uiBackgroundColor;
+        private static Color uiSidebarColor;
         private static Color uiPanelColor;
         private static Color uiPanelHoverColor;
         private static Color uiPanelAltColor;
@@ -176,6 +197,10 @@ namespace rowemod
         public static GUIStyle searchFieldStyle;
         public static bool stylesInitialized = false;
         public static int styleRevision = 0;
+        private static float _initializedUiScale = -1f;
+        private static float _appliedMenuScale = -1f;
+        private static int _initializedScreenHeight = -1;
+        private static Font _uiFont;
 
         public static GUIStyle UiPanelStyle => panelStyle ?? sectionCardStyle ?? GUI.skin.box;
         public static GUIStyle UiPanelAltStyle => panelAltStyle ?? UiPanelStyle;
@@ -251,6 +276,7 @@ namespace rowemod
 
         public static void DrawMenu(int windowID)
         {
+            BeginControllerNavigationFrame();
             try
             {
                 using (new MenuSkinScope())
@@ -269,6 +295,14 @@ namespace rowemod
             catch (Exception ex)
             {
                 Log.Error($"Error in DrawMenu: {ex.Message}");
+            }
+            finally
+            {
+                EndControllerNavigationFrame();
+                // GUI.Window is composited above normal screen-level IMGUI. Draw the same
+                // cached pointer once inside this window so it remains visible over controls;
+                // the screen-level copy supplies any portion extending beyond the window edge.
+                RoweModCursor.DrawInsideMenuWindow();
             }
         }
 
@@ -307,8 +341,8 @@ namespace rowemod
             if (eventType == EventType.MouseDrag)
             {
                 Vector2 delta = e.mousePosition - resizeStartMouse;
-                windowRect.width = Mathf.Max(600f, resizeStartSize.x + delta.x);
-                windowRect.height = Mathf.Max(420f, resizeStartSize.y + delta.y);
+                windowRect.width = Mathf.Max(640f * UiScale, resizeStartSize.x + delta.x);
+                windowRect.height = Mathf.Max(460f * UiScale, resizeStartSize.y + delta.y);
                 ClampWindowToScreen();
                 e.Use();
                 return;
@@ -409,7 +443,7 @@ namespace rowemod
             return new Rect(x, y, width, drawHeight);
         }
 
-        private static void DrawTabContent()
+        private static void DrawLegacyTabContent()
         {
             try
             {
@@ -632,7 +666,8 @@ namespace rowemod
                         foreach (GameObject marker in sessionMarkers.Where(m => m != null))
                         {
                             count++;
-                            if (GUILayout.Button(marker.name, UiRowButtonStyle, GUILayout.Height(26f)))
+                            if (ControllerButton($"legacy_marker_{marker.name}", marker.name, UiRowButtonStyle,
+                                    GUILayout.Height(36f * UiScale)))
                             {
                                 ReplaceSessionMarkerWithPrefab(marker);
                                 Config.misc.customSessionMarker = marker.name;
@@ -774,7 +809,7 @@ namespace rowemod
 
         private static float GetContentX()
         {
-            return UiSidebarWidth + UiOuterPadding;
+            return GetResponsiveSidebarWidth() + UiOuterPadding;
         }
 
         private static float GetContentWidth()
@@ -782,36 +817,37 @@ namespace rowemod
             return Mathf.Max(220f, windowRect.width - GetContentX() - UiOuterPadding);
         }
 
+        public static float ActiveContentWidth => GetContentWidth();
+
         private static Rect GetContentVisibleRect()
         {
-            float y = UiTitleBarHeight + UiOuterPadding + UiContentHeaderHeight + UiControlSpacing;
+            float y = UiTitleBarHeight + UiOuterPadding + GetNavigationHeaderHeight() + UiControlSpacing;
             float height = Mathf.Max(120f, windowRect.height - y - UiContentBottomPadding);
             return new Rect(GetContentX(), y, GetContentWidth(), height);
         }
 
         private static string GetCurrentTabLabel()
         {
-            for (int i = 0; i < _visibleTabs.Length; i++)
-            {
-                if (_visibleTabs[i].tab == currentTab)
-                    return _visibleTabs[i].label;
-            }
-
-            return currentTab.ToString();
+            return GetCurrentPageLabel();
         }
 
         public static void SelectNextVisibleTab()
         {
-            SelectVisibleTab(1);
+            SelectArea(1);
         }
 
         public static void SelectPreviousVisibleTab()
         {
-            SelectVisibleTab(-1);
+            SelectArea(-1);
         }
 
         public static void AdjustControllerScroll(float delta)
         {
+            if (AdjustControllerFocusedScroll(delta))
+                return;
+            if (AdjustControllerOverlayScroll(delta))
+                return;
+
             scrollOffset += delta;
             scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
         }
@@ -843,36 +879,16 @@ namespace rowemod
 
         private static void EnsureCurrentTabVisible()
         {
-            int currentIndex = GetVisibleTabIndex(currentTab);
-            if (currentIndex < 0)
-                return;
-
-            float navTop = UiTitleBarHeight + UiLogoAreaHeight + UiOuterPadding;
-            float navHeight = Mathf.Max(120f, windowRect.height - navTop - UiOuterPadding);
-            float totalTabsHeight = (_visibleTabs.Length * UiNavButtonHeight) + ((_visibleTabs.Length - 1) * UiTabSpacing);
-            float maxScroll = Mathf.Max(0f, totalTabsHeight - navHeight);
-
-            float tabTop = currentIndex * (UiNavButtonHeight + UiTabSpacing);
-            float tabBottom = tabTop + UiNavButtonHeight;
-
-            if (tabTop < _tabScrollPosition.y)
-            {
-                _tabScrollPosition.y = tabTop;
-            }
-            else if (tabBottom > _tabScrollPosition.y + navHeight)
-            {
-                _tabScrollPosition.y = tabBottom - navHeight;
-            }
-
-            _tabScrollPosition.y = Mathf.Clamp(_tabScrollPosition.y, 0f, maxScroll);
+            EnsureSelectedAreaVisible();
         }
 
         private static void DrawSidebar()
         {
-            Rect sidebarRect = new Rect(0f, 0f, UiSidebarWidth, windowRect.height);
-            DrawSolidColorRect(sidebarRect, new Color(0.055f, 0.06f, 0.078f, 0.98f));
+            float sidebarWidth = GetResponsiveSidebarWidth();
+            Rect sidebarRect = new Rect(0f, 0f, sidebarWidth, windowRect.height);
+            DrawSolidColorRect(sidebarRect, uiSidebarColor);
 
-            Rect dividerRect = new Rect(UiSidebarWidth - 1f, UiTitleBarHeight, 1f, windowRect.height - UiTitleBarHeight);
+            Rect dividerRect = new Rect(sidebarWidth - 1f, UiTitleBarHeight, 1f, windowRect.height - UiTitleBarHeight);
             DrawSolidColorRect(dividerRect, uiBorderColor);
 
             DrawLogoHeader();
@@ -880,9 +896,11 @@ namespace rowemod
 
         private static void DrawLogoHeader()
         {
+            float sidebarWidth = GetResponsiveSidebarWidth();
             // Keep the brand mark in the actual upper-left corner of the menu. The version stays
             // beneath it so the drag title bar remains clear and the logo never becomes a sidebar heading.
-            Rect logoAreaRect = new Rect(UiOuterPadding, 2f, UiSidebarWidth - (UiOuterPadding * 2f), UiTitleBarHeight - 4f);
+            Rect logoAreaRect = new Rect(UiOuterPadding, 3f * UiScale,
+                sidebarWidth - (UiOuterPadding * 2f), UiTitleBarHeight - (6f * UiScale));
             if (logoTexture != null && logoTexture.width > 0 && logoTexture.height > 0)
             {
                 float maxLogoWidth = logoAreaRect.width;
@@ -902,34 +920,21 @@ namespace rowemod
                 GUI.Label(logoAreaRect, "RoweMod", sectionHeaderStyle);
             }
 
-            Rect versionRect = new Rect(UiOuterPadding, UiTitleBarHeight + 6f, UiSidebarWidth - (UiOuterPadding * 2f), 18f);
+            Rect versionRect = new Rect(UiOuterPadding, UiTitleBarHeight + (8f * UiScale),
+                sidebarWidth - (UiOuterPadding * 2f), 20f * UiScale);
             GUI.Label(versionRect, $"v. {Main.ModVersion}", subtleLabelStyle);
         }
 
         private static void DrawContentHeader()
         {
-            Rect headerRect = new Rect(GetContentX(), UiTitleBarHeight + UiOuterPadding, GetContentWidth(), UiContentHeaderHeight);
-            GUI.Box(headerRect, GUIContent.none, tabBarStyle);
-
-            Rect eyebrowRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + 8f, headerRect.width - UiResetButtonWidth - (UiInnerPadding * 3f), 15f);
-            GUI.Label(eyebrowRect, "ROWEMOD TOOLS", pageEyebrowStyle);
-            Rect titleRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + 22f, headerRect.width - UiResetButtonWidth - (UiInnerPadding * 3f), 32f);
-            GUI.Label(titleRect, GetCurrentTabLabel(), pageTitleStyle ?? sectionHeaderStyle);
-
-            Rect resetButtonRect = new Rect(headerRect.xMax - UiInnerPadding - UiResetButtonWidth, headerRect.y + 17f,
-                UiResetButtonWidth, 30f);
-            if (GUI.Button(resetButtonRect, "Reset Tab", redButtonStyle ?? highQualityButtonStyle))
-            {
-                ResetCurrentTab();
-                ResetSliderUI();
-            }
+            DrawNavigationHeader();
         }
 
         private static void HandleScrolling()
         {
             try
             {
-                if (currentTab == Tab.Tricks)
+                if (IsTrickMappingContentActive())
                 {
                     scrollOffset = 0f;
                     return;
@@ -973,17 +978,40 @@ namespace rowemod
                 GUILayout.BeginVertical(GUILayout.Width(contentWidth));
                 beganVertical = true;
                 GUILayout.Space(2f);
+                SetControllerScrollableContext(true);
                 DrawTabContent();
+                SetControllerScrollableContext(false);
                 GUILayout.Space(UiContentBottomPadding);
+
+                // GUILayoutUtility.GetLastRect() is stripped from BMX Streets' IL2CPP player
+                // and throws after an otherwise successful menu draw. A zero-height layout rect
+                // gives us the same end-of-content Y position through the GetRect path already
+                // used by every RoweMod control.
+                Rect contentEndRect = GUILayoutUtility.GetRect(
+                    0f,
+                    0f,
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.Height(0f));
+
+                if (Event.current.type == EventType.Repaint)
+                    scrollViewHeight = Mathf.Max(visibleAreaHeight, contentEndRect.yMax + 2f);
 
                 scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
             }
             catch (Exception ex)
             {
-                Log.Error($"Error in DrawScrollableContent: {ex.Message}");
+                string fingerprint = $"{ex.GetType().FullName}: {ex.Message}";
+                if (!string.Equals(_lastScrollableContentError, fingerprint, StringComparison.Ordinal) ||
+                    Time.unscaledTime >= _nextScrollableContentErrorLogTime)
+                {
+                    _lastScrollableContentError = fingerprint;
+                    _nextScrollableContentErrorLogTime = Time.unscaledTime + 5f;
+                    Log.Error($"Error in DrawScrollableContent: {ex}");
+                }
             }
             finally
             {
+                SetControllerScrollableContext(false);
                 if (beganVertical)
                     GUILayout.EndVertical();
                 if (beganArea)
@@ -995,52 +1023,16 @@ namespace rowemod
 
         private static void DrawTabs()
         {
-            float navTop = UiTitleBarHeight + UiLogoAreaHeight + UiOuterPadding;
-            float navWidth = UiSidebarWidth - (UiOuterPadding * 2f);
-            float navHeight = Mathf.Max(120f, windowRect.height - navTop - UiOuterPadding);
-            Rect navRect = new Rect(UiOuterPadding, navTop, navWidth, navHeight);
-            float totalTabsHeight = (_visibleTabs.Length * UiNavButtonHeight) + ((_visibleTabs.Length - 1) * UiTabSpacing);
-            bool tabsOverflow = totalTabsHeight > navRect.height;
-            float tabWidth = tabsOverflow ? navWidth - 14f : navWidth;
-            Rect viewRect = new Rect(0f, 0f, tabWidth, Mathf.Max(totalTabsHeight, navRect.height));
-
-            if (Event.current.type == EventType.ScrollWheel && navRect.Contains(Event.current.mousePosition))
-            {
-                _tabScrollPosition.y += Event.current.delta.y * 22f;
-                Event.current.Use();
-            }
-
-            _tabScrollPosition = GUI.BeginScrollView(navRect, _tabScrollPosition, viewRect, false, tabsOverflow);
-            _tabScrollPosition.y = Mathf.Clamp(_tabScrollPosition.y, 0f, Mathf.Max(0f, viewRect.height - navRect.height));
-
-            float tabY = 0f;
-            for (int i = 0; i < _visibleTabs.Length; i++)
-            {
-                var (label, tab) = _visibleTabs[i];
-                Rect tabRect = new Rect(0f, tabY, tabWidth, UiNavButtonHeight);
-                bool isSelected = currentTab == tab;
-
-                GUIStyle selectedStyle = tab == Tab.Tricks ? tricksActiveTabButtonStyle : activeTabButtonStyle;
-                if (GUI.Button(tabRect, label, isSelected ? selectedStyle : tabButtonStyle))
-                {
-                    SetCurrentTab(tab);
-                }
-
-                if (isSelected)
-                {
-                    Rect indicatorRect = new Rect(tabRect.x + 1f, tabRect.y + 7f, 3f, tabRect.height - 14f);
-                    GUI.DrawTexture(indicatorRect, tab == Tab.Tricks ? tricksTabIndicatorTexture : tabIndicatorTexture);
-                }
-
-                tabY += UiNavButtonHeight + UiTabSpacing;
-            }
-
-            GUI.EndScrollView();
+            DrawAreaNavigation();
         }
 
         public static void NotifyMenuOpened()
         {
             _motorTuningNeedsRefresh = true;
+            EnsureNavigationInitialized();
+            ResetControllerNavigation(false, true);
+            if (_selectedPage == MenuPage.GraphicsSceneLights)
+                RefreshSceneLightCache();
         }
 
         private static void ResetCurrentTab()
@@ -1105,7 +1097,7 @@ namespace rowemod
                     break;
                 case Tab.Misc:
                     ResetMiscTab();
-                    stylesInitialized = false;
+                    ApplyConfiguredInterfaceScale();
                     Mods.Misc.Update();
                     break;
                 case Tab.Graphics:
@@ -1163,6 +1155,7 @@ namespace rowemod
 
         private static void ResetGraphicsTab()
         {
+            GraphicsEnvironmentController.ResetToGameDefaults();
             Light[] lights = UnityEngine.Object.FindObjectsOfType<Light>();
             if (lights != null)
             {
@@ -1316,45 +1309,87 @@ namespace rowemod
         // STYLES
         //-------------------------------------------------------------------
 
+        private static Color GetAccessibleTextColor(Color background)
+        {
+            Color light = new Color(0.957f, 0.965f, 0.973f, 1f);
+            Color dark = new Color(0.043f, 0.055f, 0.078f, 1f);
+            float backgroundLuminance = GetRelativeLuminance(background);
+            float lightContrast = (GetRelativeLuminance(light) + 0.05f) / (backgroundLuminance + 0.05f);
+            float darkContrast = (backgroundLuminance + 0.05f) / (GetRelativeLuminance(dark) + 0.05f);
+            return darkContrast >= lightContrast ? dark : light;
+        }
+
+        private static float GetRelativeLuminance(Color color)
+        {
+            return (0.2126f * LinearizeColorChannel(color.r)) +
+                   (0.7152f * LinearizeColorChannel(color.g)) +
+                   (0.0722f * LinearizeColorChannel(color.b));
+        }
+
+        private static float LinearizeColorChannel(float value)
+        {
+            value = Mathf.Clamp01(value);
+            return value <= 0.04045f
+                ? value / 12.92f
+                : Mathf.Pow((value + 0.055f) / 1.055f, 2.4f);
+        }
+
         public static void InitializeStyles()
         {
             try
             {
-                stylesInitialized = true;
-                styleRevision++;
+                stylesInitialized = false;
+                ReleaseGeneratedStyleTextures();
+
+                if (_uiFont == null)
+                {
+                    try
+                    {
+                        _uiFont = Font.CreateDynamicFontFromOSFont("Segoe UI", Mathf.RoundToInt(14f * UiScale));
+                    }
+                    catch
+                    {
+                        _uiFont = null;
+                    }
+                }
 
                 Color rawAccentColor = new Color(
                     Mathf.Clamp01(misc.menuAccentR),
                     Mathf.Clamp01(misc.menuAccentG),
                     Mathf.Clamp01(misc.menuAccentB),
                     1f);
-                float accentLuma = (rawAccentColor.r * 0.299f) + (rawAccentColor.g * 0.587f) + (rawAccentColor.b * 0.114f);
                 uiAccentColor = rawAccentColor;
-                uiAccentHoverColor = Color.Lerp(uiAccentColor, Color.white, 0.18f);
-                uiAccentSoftColor = new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.36f);
-                uiAccentTextColor = accentLuma < 0.45f
-                    ? Color.Lerp(uiAccentColor, Color.white, 0.68f)
-                    : Color.white;
-                uiBackgroundColor = new Color(0.038f, 0.043f, 0.055f, 0.995f);
-                uiPanelColor = new Color(0.09f, 0.105f, 0.14f, 0.99f);
-                uiPanelHoverColor = new Color(0.115f, 0.13f, 0.17f, 1f);
-                uiPanelAltColor = new Color(0.062f, 0.071f, 0.095f, 1f);
-                uiBorderColor = new Color(0.22f, 0.25f, 0.32f, 0.92f);
-                uiTextPrimaryColor = new Color(0.95f, 0.96f, 0.98f, 1f);
-                uiTextMutedColor = new Color(0.57f, 0.71f, 0.88f, 1f);
-                uiDangerColor = new Color(0.48f, 0.21f, 0.24f, 0.96f);
-                uiDangerHoverColor = new Color(0.58f, 0.25f, 0.28f, 0.98f);
-                uiDangerActiveColor = new Color(0.38f, 0.15f, 0.18f, 0.98f);
+                uiAccentHoverColor = Color.Lerp(uiAccentColor, Color.white, 0.12f);
+                uiAccentSoftColor = Color.Lerp(
+                    new Color(0.063f, 0.082f, 0.114f, 1f),
+                    uiAccentColor,
+                    0.18f);
+                uiAccentTextColor = GetAccessibleTextColor(uiAccentColor);
+                uiBackgroundColor = new Color(0.043f, 0.055f, 0.078f, 0.995f); // #0B0E14
+                uiSidebarColor = new Color(0.051f, 0.067f, 0.094f, 0.995f);    // #0D1118
+                uiPanelColor = new Color(0.078f, 0.102f, 0.137f, 0.995f);       // #141A23
+                uiPanelHoverColor = new Color(0.102f, 0.141f, 0.188f, 1f);
+                uiPanelAltColor = new Color(0.063f, 0.082f, 0.114f, 1f);        // #10151D
+                uiBorderColor = new Color(0.165f, 0.204f, 0.259f, 0.96f);       // #2A3442
+                uiTextPrimaryColor = new Color(0.957f, 0.965f, 0.973f, 1f);     // #F4F6F8
+                uiTextMutedColor = new Color(0.667f, 0.710f, 0.765f, 1f);       // #AAB5C3
+                uiDangerColor = new Color(0.345f, 0.102f, 0.137f, 0.98f);
+                uiDangerHoverColor = new Color(0.435f, 0.133f, 0.176f, 1f);
+                uiDangerActiveColor = new Color(0.275f, 0.075f, 0.106f, 1f);
 
-                backgroundTexture = MakeRoundedTex(64, 64, uiBackgroundColor, 14, 1, uiBorderColor);
-                roundedButtonNormal = MakeRoundedTex(40, 28, new Color(0.052f, 0.06f, 0.078f, 1f), 8, 1, uiBorderColor);
-                roundedButtonHover = MakeRoundedTex(40, 28, new Color(0.095f, 0.108f, 0.14f, 1f), 8, 1, new Color(0.32f, 0.36f, 0.45f, 1f));
-                activeTabBackground = MakeRoundedTex(40, 32, uiAccentColor, 8, 1, Color.Lerp(uiAccentColor, Color.white, 0.16f));
-                accentColorTexture = MakeTex(2, 2, uiAccentColor);
-                tabIndicatorTexture = MakeTex(2, 2, uiAccentColor);
-                tricksTabIndicatorTexture = MakeTex(2, 2, new Color(0.24f, 0.82f, 0.42f, 1f));
-                toggleCapsuleMaskTexture = MakeCapsuleTex(96, 52, Color.white, 0, Color.clear);
-                toggleKnobTexture = MakeCircleTex(64, new Color(0.96f, 0.97f, 1f, 1f), 1, new Color(0f, 0f, 0f, 0.45f));
+                backgroundTexture = MakeStyleRoundedTex(64, 64, uiBackgroundColor, 14, 1, uiBorderColor);
+                roundedButtonNormal = MakeStyleRoundedTex(48, 36, new Color(0.063f, 0.082f, 0.114f, 1f), 9, 1, uiBorderColor);
+                roundedButtonHover = MakeStyleRoundedTex(48, 36, new Color(0.102f, 0.141f, 0.188f, 1f), 9, 1, new Color(0.27f, 0.34f, 0.43f, 1f));
+                activeTabBackground = MakeStyleRoundedTex(48, 40,
+                    Color.Lerp(uiPanelColor, uiAccentColor, 0.16f),
+                    9,
+                    1,
+                    Color.Lerp(uiBorderColor, uiAccentColor, 0.48f));
+                accentColorTexture = MakeStyleTex(2, 2, uiAccentColor);
+                tabIndicatorTexture = MakeStyleTex(2, 2, uiAccentColor);
+                tricksTabIndicatorTexture = MakeStyleTex(2, 2, new Color(0.24f, 0.82f, 0.42f, 1f));
+                toggleCapsuleMaskTexture = MakeStyleCapsuleTex(96, 52, Color.white, 0, Color.clear);
+                toggleKnobTexture = MakeStyleCircleTex(64, new Color(0.96f, 0.97f, 1f, 1f), 1, new Color(0f, 0f, 0f, 0.45f));
                 _circleTex = toggleKnobTexture;
 
                 windowStyle = new GUIStyle(GUI.skin.window);
@@ -1365,35 +1400,37 @@ namespace rowemod
                 windowStyle.normal.textColor = uiTextPrimaryColor;
                 windowStyle.hover.textColor = uiTextPrimaryColor;
                 windowStyle.active.textColor = uiTextPrimaryColor;
-                windowStyle.fontSize = 15;
+                windowStyle.font = _uiFont;
+                windowStyle.fontSize = Mathf.RoundToInt(13f * UiScale);
                 windowStyle.fontStyle = FontStyle.Bold;
                 windowStyle.alignment = TextAnchor.UpperCenter;
                 windowStyle.padding = new RectOffset((int)UiOuterPadding, (int)UiOuterPadding, (int)(UiTitleBarHeight + UiOuterPadding),
                     (int)UiOuterPadding);
 
                 labelStyle = new GUIStyle(GUI.skin.label);
+                labelStyle.font = _uiFont;
                 labelStyle.normal.textColor = uiTextPrimaryColor;
                 labelStyle.hover.textColor = uiTextPrimaryColor;
-                labelStyle.fontSize = 13;
+                labelStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
                 labelStyle.fontStyle = FontStyle.Normal;
                 labelStyle.richText = true;
                 labelStyle.alignment = TextAnchor.MiddleLeft;
 
                 subtleLabelStyle = new GUIStyle(labelStyle);
                 subtleLabelStyle.normal.textColor = uiTextMutedColor;
-                subtleLabelStyle.fontSize = 12;
+                subtleLabelStyle.fontSize = Mathf.RoundToInt(12f * UiScale);
 
                 sectionHeaderStyle = new GUIStyle(labelStyle);
                 sectionHeaderStyle.fontStyle = FontStyle.Bold;
-                sectionHeaderStyle.fontSize = 13;
+                sectionHeaderStyle.fontSize = Mathf.RoundToInt(16f * UiScale);
 
                 pageTitleStyle = new GUIStyle(sectionHeaderStyle);
-                pageTitleStyle.fontSize = 23;
+                pageTitleStyle.fontSize = Mathf.RoundToInt(28f * UiScale);
                 pageTitleStyle.fontStyle = FontStyle.Bold;
                 pageTitleStyle.alignment = TextAnchor.MiddleLeft;
 
                 pageEyebrowStyle = new GUIStyle(labelStyle);
-                pageEyebrowStyle.fontSize = 10;
+                pageEyebrowStyle.fontSize = Mathf.RoundToInt(11f * UiScale);
                 pageEyebrowStyle.fontStyle = FontStyle.Bold;
                 pageEyebrowStyle.normal.textColor = uiAccentColor;
                 pageEyebrowStyle.alignment = TextAnchor.MiddleLeft;
@@ -1405,157 +1442,209 @@ namespace rowemod
 
                 rowMutedLabelStyle = new GUIStyle(rowLabelStyle);
                 rowMutedLabelStyle.normal.textColor = uiTextMutedColor;
-                rowMutedLabelStyle.fontSize = 12;
+                rowMutedLabelStyle.fontSize = Mathf.RoundToInt(12f * UiScale);
                 rowMutedLabelStyle.wordWrap = true;
 
                 mutedWrappedLabelStyle = new GUIStyle(subtleLabelStyle);
                 mutedWrappedLabelStyle.wordWrap = true;
 
                 toggleStyle = new GUIStyle(GUI.skin.toggle);
+                toggleStyle.font = _uiFont;
                 toggleStyle.normal.textColor = uiTextPrimaryColor;
-                toggleStyle.fontSize = 12;
+                toggleStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
 
                 horizontalSliderStyle = new GUIStyle(GUI.skin.horizontalSlider);
-                horizontalSliderStyle.normal.background = MakeTex(2, 2, uiPanelAltColor);
+                horizontalSliderStyle.normal.background = MakeStyleTex(2, 2, uiPanelAltColor);
                 horizontalSliderStyle.fixedHeight = 7f;
 
                 horizontalSliderThumbStyle = new GUIStyle(GUI.skin.horizontalSliderThumb);
                 horizontalSliderThumbStyle.normal.background = accentColorTexture;
-                horizontalSliderThumbStyle.hover.background = MakeTex(2, 2, uiAccentHoverColor);
+                horizontalSliderThumbStyle.hover.background = MakeStyleTex(2, 2, uiAccentHoverColor);
                 horizontalSliderThumbStyle.fixedWidth = 10f;
                 horizontalSliderThumbStyle.fixedHeight = 14f;
 
                 coloredBoxStyle = new GUIStyle(GUI.skin.box);
-                coloredBoxStyle.normal.background = MakeTex(2, 2, uiPanelAltColor);
+                coloredBoxStyle.normal.background = MakeStyleTex(2, 2, uiPanelAltColor);
                 coloredBoxStyle.normal.textColor = uiTextPrimaryColor;
-                coloredBoxStyle.fontSize = 13;
+                coloredBoxStyle.font = _uiFont;
+                coloredBoxStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
                 coloredBoxStyle.fixedHeight = UiFoldoutHeight;
 
                 highQualityButtonStyle = new GUIStyle(GUI.skin.button);
                 highQualityButtonStyle.normal.background = roundedButtonNormal;
                 highQualityButtonStyle.hover.background = roundedButtonHover;
-                highQualityButtonStyle.active.background = MakeRoundedTex(40, 28, new Color(0.04f, 0.047f, 0.062f, 1f), 8, 1, uiBorderColor);
+                highQualityButtonStyle.active.background = MakeStyleRoundedTex(48, 36, new Color(0.043f, 0.055f, 0.078f, 1f), 9, 1, uiBorderColor);
                 highQualityButtonStyle.normal.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.hover.textColor = uiTextPrimaryColor;
                 highQualityButtonStyle.active.textColor = uiTextPrimaryColor;
-                highQualityButtonStyle.fontSize = 12;
+                highQualityButtonStyle.font = _uiFont;
+                highQualityButtonStyle.fontSize = Mathf.RoundToInt(13f * UiScale);
                 highQualityButtonStyle.fontStyle = FontStyle.Normal;
                 highQualityButtonStyle.alignment = TextAnchor.MiddleCenter;
                 highQualityButtonStyle.border = new RectOffset(8, 8, 8, 8);
-                highQualityButtonStyle.padding = new RectOffset(12, 12, 6, 6);
+                highQualityButtonStyle.padding = new RectOffset(
+                    Mathf.RoundToInt(14f * UiScale),
+                    Mathf.RoundToInt(14f * UiScale),
+                    Mathf.RoundToInt(7f * UiScale),
+                    Mathf.RoundToInt(7f * UiScale));
                 highQualityButtonStyle.richText = true;
 
                 rowButtonStyle = new GUIStyle(highQualityButtonStyle);
                 rowButtonStyle.alignment = TextAnchor.MiddleLeft;
-                rowButtonStyle.padding = new RectOffset(10, 10, 4, 4);
+                rowButtonStyle.padding = new RectOffset(
+                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(5f * UiScale),
+                    Mathf.RoundToInt(5f * UiScale));
                 rowButtonStyle.margin = new RectOffset(2, 2, 1, 1);
 
                 rowButtonSelectedStyle = new GUIStyle(rowButtonStyle);
                 rowButtonSelectedStyle.normal.background = activeTabBackground;
                 rowButtonSelectedStyle.hover.background = activeTabBackground;
                 rowButtonSelectedStyle.active.background = activeTabBackground;
-                rowButtonSelectedStyle.normal.textColor = uiAccentTextColor;
-                rowButtonSelectedStyle.hover.textColor = uiAccentTextColor;
-                rowButtonSelectedStyle.active.textColor = uiAccentTextColor;
+                rowButtonSelectedStyle.normal.textColor = uiTextPrimaryColor;
+                rowButtonSelectedStyle.hover.textColor = Color.white;
+                rowButtonSelectedStyle.active.textColor = uiTextPrimaryColor;
                 rowButtonSelectedStyle.fontStyle = FontStyle.Bold;
 
                 pillButtonStyle = new GUIStyle(highQualityButtonStyle);
-                pillButtonStyle.fontSize = 11;
+                pillButtonStyle.fontSize = Mathf.RoundToInt(13f * UiScale);
                 pillButtonStyle.padding = new RectOffset(10, 10, 3, 3);
                 pillButtonStyle.margin = new RectOffset(4, 0, 0, 0);
                 pillButtonStyle.border = new RectOffset(7, 7, 7, 7);
 
                 pillActiveButtonStyle = new GUIStyle(pillButtonStyle);
-                pillActiveButtonStyle.normal.background = activeTabBackground;
-                pillActiveButtonStyle.hover.background = MakeRoundedTex(40, 28, uiAccentHoverColor, 8, 1, Color.white);
-                pillActiveButtonStyle.active.background = MakeRoundedTex(40, 28, Color.Lerp(uiAccentColor, Color.black, 0.18f), 8, 1, uiAccentColor);
-                pillActiveButtonStyle.normal.textColor = Color.white;
-                pillActiveButtonStyle.hover.textColor = Color.white;
-                pillActiveButtonStyle.active.textColor = Color.white;
+                pillActiveButtonStyle.normal.background = MakeStyleRoundedTex(48, 36, uiAccentColor, 9, 1,
+                    Color.Lerp(uiAccentColor, Color.white, 0.20f));
+                pillActiveButtonStyle.hover.background = MakeStyleRoundedTex(48, 36, uiAccentHoverColor, 9, 1,
+                    Color.Lerp(uiAccentColor, Color.white, 0.40f));
+                pillActiveButtonStyle.active.background = MakeStyleRoundedTex(48, 36,
+                    Color.Lerp(uiAccentColor, Color.black, 0.14f), 9, 1, uiAccentColor);
+                pillActiveButtonStyle.normal.textColor = uiAccentTextColor;
+                pillActiveButtonStyle.hover.textColor = GetAccessibleTextColor(uiAccentHoverColor);
+                pillActiveButtonStyle.active.textColor = uiAccentTextColor;
                 pillActiveButtonStyle.fontStyle = FontStyle.Bold;
 
                 miniButtonStyle = new GUIStyle(highQualityButtonStyle);
-                miniButtonStyle.fontSize = 11;
+                miniButtonStyle.fontSize = Mathf.RoundToInt(12f * UiScale);
                 miniButtonStyle.padding = new RectOffset(7, 7, 3, 3);
                 miniButtonStyle.margin = new RectOffset(2, 2, 0, 0);
 
                 tabButtonStyle = new GUIStyle(highQualityButtonStyle);
-                tabButtonStyle.normal.background = MakeRoundedTex(40, 32, new Color(0f, 0f, 0f, 0f), 8, 1, new Color(0f, 0f, 0f, 0f));
-                tabButtonStyle.hover.background = MakeRoundedTex(40, 32, new Color(1f, 1f, 1f, 0.04f), 8, 1, new Color(1f, 1f, 1f, 0.08f));
-                tabButtonStyle.active.background = MakeRoundedTex(40, 32, new Color(1f, 1f, 1f, 0.06f), 8, 1, new Color(1f, 1f, 1f, 0.1f));
+                Color sideTabBorder = Color.Lerp(uiBorderColor, uiSidebarColor, 0.42f);
+                tabButtonStyle.normal.background = MakeStyleRoundedTex(48, 40,
+                    Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.68f), 9, 1, sideTabBorder);
+                tabButtonStyle.hover.background = MakeStyleRoundedTex(48, 40,
+                    uiPanelHoverColor, 9, 1, Color.Lerp(uiBorderColor, uiTextMutedColor, 0.18f));
+                tabButtonStyle.active.background = MakeStyleRoundedTex(48, 40,
+                    Color.Lerp(uiPanelHoverColor, Color.black, 0.12f), 9, 1, uiBorderColor);
+                tabButtonStyle.normal.textColor = uiTextMutedColor;
+                tabButtonStyle.hover.textColor = uiTextPrimaryColor;
+                tabButtonStyle.active.textColor = uiTextPrimaryColor;
                 tabButtonStyle.padding = new RectOffset(16, 10, 6, 6);
-                tabButtonStyle.fontSize = 12;
+                tabButtonStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
                 tabButtonStyle.alignment = TextAnchor.MiddleLeft;
 
                 activeTabButtonStyle = new GUIStyle(tabButtonStyle);
                 activeTabButtonStyle.normal.background = activeTabBackground;
                 activeTabButtonStyle.hover.background = activeTabBackground;
                 activeTabButtonStyle.active.background = activeTabBackground;
-                activeTabButtonStyle.normal.textColor = uiAccentTextColor;
-                activeTabButtonStyle.hover.textColor = uiAccentTextColor;
-                activeTabButtonStyle.active.textColor = uiAccentTextColor;
+                activeTabButtonStyle.normal.textColor = uiTextPrimaryColor;
+                activeTabButtonStyle.hover.textColor = Color.white;
+                activeTabButtonStyle.active.textColor = uiTextPrimaryColor;
                 activeTabButtonStyle.fontStyle = FontStyle.Bold;
                 tricksActiveTabButtonStyle = new GUIStyle(tabButtonStyle);
-                Texture2D tricksActiveBackground = MakeRoundedTex(
-                    40,
-                    32,
-                    new Color(0.08f, 0.30f, 0.16f, 0.98f),
-                    8,
-                    1,
-                    new Color(0.28f, 1f, 0.48f, 0.62f));
-                tricksActiveTabButtonStyle.normal.background = tricksActiveBackground;
-                tricksActiveTabButtonStyle.hover.background = tricksActiveBackground;
-                tricksActiveTabButtonStyle.active.background = tricksActiveBackground;
-                tricksActiveTabButtonStyle.normal.textColor = new Color(0.90f, 1f, 0.93f, 1f);
+                tricksActiveTabButtonStyle.normal.background = activeTabBackground;
+                tricksActiveTabButtonStyle.hover.background = activeTabBackground;
+                tricksActiveTabButtonStyle.active.background = activeTabBackground;
+                tricksActiveTabButtonStyle.normal.textColor = uiTextPrimaryColor;
                 tricksActiveTabButtonStyle.hover.textColor = Color.white;
-                tricksActiveTabButtonStyle.active.textColor = Color.white;
+                tricksActiveTabButtonStyle.active.textColor = uiTextPrimaryColor;
                 tricksActiveTabButtonStyle.fontStyle = FontStyle.Bold;
 
+                subTabButtonStyle = new GUIStyle(tabButtonStyle);
+                subTabButtonStyle.alignment = TextAnchor.MiddleCenter;
+                subTabButtonStyle.padding = new RectOffset(12, 12, 8, 5);
+                subTabButtonStyle.border = new RectOffset(9, 9, 9, 1);
+                subTabButtonStyle.normal.background = MakeStyleTopRoundedTabTex(64, 42,
+                    Color.Lerp(uiPanelAltColor, uiPanelColor, 0.18f), 10, 1, uiBorderColor);
+                subTabButtonStyle.hover.background = MakeStyleTopRoundedTabTex(64, 42,
+                    uiPanelHoverColor, 10, 1, Color.Lerp(uiBorderColor, uiTextMutedColor, 0.18f));
+                subTabButtonStyle.active.background = MakeStyleTopRoundedTabTex(64, 42,
+                    Color.Lerp(uiPanelHoverColor, Color.black, 0.10f), 10, 1, uiBorderColor);
+                subTabButtonStyle.normal.textColor = uiTextMutedColor;
+                subTabButtonStyle.hover.textColor = uiTextPrimaryColor;
+                subTabButtonStyle.active.textColor = uiTextPrimaryColor;
+
+                subTabActiveButtonStyle = new GUIStyle(subTabButtonStyle);
+                Color activeSubTabColor = Color.Lerp(uiPanelColor, uiAccentColor, 0.13f);
+                Color activeSubTabBorder = Color.Lerp(uiBorderColor, uiAccentColor, 0.52f);
+                subTabActiveButtonStyle.normal.background = MakeStyleTopRoundedTabTex(64, 42,
+                    activeSubTabColor, 10, 1, activeSubTabBorder);
+                subTabActiveButtonStyle.hover.background = MakeStyleTopRoundedTabTex(64, 42,
+                    Color.Lerp(activeSubTabColor, Color.white, 0.05f), 10, 1, uiAccentColor);
+                subTabActiveButtonStyle.active.background = MakeStyleTopRoundedTabTex(64, 42,
+                    Color.Lerp(activeSubTabColor, Color.black, 0.10f), 10, 1, activeSubTabBorder);
+                subTabActiveButtonStyle.normal.textColor = uiTextPrimaryColor;
+                subTabActiveButtonStyle.hover.textColor = Color.white;
+                subTabActiveButtonStyle.active.textColor = uiTextPrimaryColor;
+                subTabActiveButtonStyle.fontStyle = FontStyle.Bold;
+
                 redButtonStyle = new GUIStyle(highQualityButtonStyle);
-                redButtonStyle.normal.background = MakeRoundedTex(40, 28, uiDangerColor, 7, 1, uiBorderColor);
-                redButtonStyle.hover.background = MakeRoundedTex(40, 28, uiDangerHoverColor, 7, 1, uiBorderColor);
-                redButtonStyle.active.background = MakeRoundedTex(40, 28, uiDangerActiveColor, 7, 1, uiBorderColor);
+                Color dangerBorder = new Color(0.65f, 0.24f, 0.29f, 1f);
+                redButtonStyle.normal.background = MakeStyleRoundedTex(48, 36, uiDangerColor, 9, 1, dangerBorder);
+                redButtonStyle.hover.background = MakeStyleRoundedTex(48, 36, uiDangerHoverColor, 9, 1, Color.Lerp(dangerBorder, Color.white, 0.16f));
+                redButtonStyle.active.background = MakeStyleRoundedTex(48, 36, uiDangerActiveColor, 9, 1, dangerBorder);
                 redButtonStyle.normal.textColor = uiTextPrimaryColor;
                 redButtonStyle.hover.textColor = uiTextPrimaryColor;
                 redButtonStyle.active.textColor = uiTextPrimaryColor;
 
                 sectionCardStyle = new GUIStyle(GUI.skin.box);
-                sectionCardStyle.normal.background = MakeRoundedTex(64, 64, uiPanelColor, 12, 1, uiBorderColor);
+                sectionCardStyle.normal.background = MakeStyleRoundedTex(64, 64, uiPanelColor, 12, 1, uiBorderColor);
                 sectionCardStyle.padding = new RectOffset((int)UiInnerPadding, (int)UiInnerPadding, (int)UiInnerPadding, (int)UiInnerPadding);
                 sectionCardStyle.margin = new RectOffset(0, 0, 0, 0);
                 sectionCardStyle.border = new RectOffset(12, 12, 12, 12);
 
                 panelStyle = new GUIStyle(sectionCardStyle);
-                panelStyle.padding = new RectOffset(16, 16, 14, 16);
-                panelStyle.margin = new RectOffset(0, 0, 4, 10);
+                panelStyle.padding = new RectOffset(
+                    Mathf.RoundToInt(18f * UiScale),
+                    Mathf.RoundToInt(18f * UiScale),
+                    Mathf.RoundToInt(16f * UiScale),
+                    Mathf.RoundToInt(18f * UiScale));
+                panelStyle.margin = new RectOffset(0, 0, Mathf.RoundToInt(4f * UiScale), Mathf.RoundToInt(12f * UiScale));
 
                 panelAltStyle = new GUIStyle(panelStyle);
-                panelAltStyle.normal.background = MakeRoundedTex(64, 64, uiPanelAltColor, 12, 1, uiBorderColor);
+                panelAltStyle.normal.background = MakeStyleRoundedTex(64, 64, uiPanelAltColor, 12, 1, uiBorderColor);
 
                 tabBarStyle = new GUIStyle(GUI.skin.box);
-                tabBarStyle.normal.background = MakeRoundedTex(64, 36, uiPanelColor, 12, 1, uiBorderColor);
+                tabBarStyle.normal.background = MakeStyleRoundedTex(64, 36, uiPanelColor, 12, 1, uiBorderColor);
                 tabBarStyle.border = new RectOffset(12, 12, 12, 12);
                 tabBarStyle.padding = new RectOffset((int)UiInnerPadding, (int)UiInnerPadding, 4, 4);
                 tabBarStyle.margin = new RectOffset(0, 0, 0, 0);
 
                 toolbarStyle = new GUIStyle(tabBarStyle);
-                toolbarStyle.padding = new RectOffset(10, 10, 7, 7);
-                toolbarStyle.margin = new RectOffset(0, 0, 0, 8);
+                toolbarStyle.padding = new RectOffset(
+                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(8f * UiScale),
+                    Mathf.RoundToInt(8f * UiScale));
+                toolbarStyle.margin = new RectOffset(0, 0, 0, Mathf.RoundToInt(8f * UiScale));
 
                 badgeStyle = new GUIStyle(GUI.skin.box);
-                badgeStyle.normal.background = MakeRoundedTex(32, 22, uiPanelAltColor, 7, 1, uiBorderColor);
+                badgeStyle.normal.background = MakeStyleRoundedTex(32, 22, uiPanelAltColor, 7, 1, uiBorderColor);
                 badgeStyle.normal.textColor = uiTextMutedColor;
                 badgeStyle.alignment = TextAnchor.MiddleCenter;
-                badgeStyle.fontSize = 11;
-                badgeStyle.fixedHeight = 21f;
+                badgeStyle.font = _uiFont;
+                badgeStyle.fontSize = Mathf.RoundToInt(12f * UiScale);
+                badgeStyle.fixedHeight = 26f * UiScale;
                 badgeStyle.padding = new RectOffset(7, 7, 2, 2);
                 badgeStyle.border = new RectOffset(7, 7, 7, 7);
 
-                Texture2D textFieldBackground = MakeRoundedTex(64, 24, new Color(0.04f, 0.047f, 0.062f, 1f), 7, 1, uiBorderColor);
+                Texture2D textFieldBackground = MakeStyleRoundedTex(64, 24, new Color(0.04f, 0.047f, 0.062f, 1f), 7, 1, uiBorderColor);
                 textFieldStyle = new GUIStyle(GUI.skin.textField);
                 textFieldStyle.alignment = TextAnchor.MiddleCenter;
-                textFieldStyle.fontSize = 12;
-                textFieldStyle.font = labelStyle.font;
+                textFieldStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
+                textFieldStyle.font = _uiFont ?? labelStyle.font;
                 textFieldStyle.normal.textColor = uiTextPrimaryColor;
                 textFieldStyle.focused.textColor = uiTextPrimaryColor;
                 textFieldStyle.hover.textColor = uiTextPrimaryColor;
@@ -1570,11 +1659,77 @@ namespace rowemod
                 searchFieldStyle.alignment = TextAnchor.MiddleLeft;
                 searchFieldStyle.padding = new RectOffset(10, 10, 4, 4);
                 searchFieldStyle.margin = new RectOffset(4, 4, 0, 0);
+
+                InitializeControllerNavigationStyles();
+                if (_appliedMenuScale <= 0f)
+                    _appliedMenuScale = Mathf.Clamp(misc.menuScale > 0f ? misc.menuScale : 1f, 0.8f, 1.35f);
+                _initializedUiScale = UiScale;
+                _initializedScreenHeight = Screen.height;
+                styleRevision++;
+                stylesInitialized = true;
             }
             catch (Exception ex)
             {
+                stylesInitialized = false;
                 Log.Error($"Error in InitializeStyles: {ex.Message}");
             }
+        }
+
+        private static Texture2D TrackGeneratedStyleTexture(Texture2D texture)
+        {
+            if (texture != null)
+                generatedStyleTextures.Add(texture);
+            return texture;
+        }
+
+        private static Texture2D MakeStyleTex(int width, int height, Color color)
+        {
+            return TrackGeneratedStyleTexture(MakeTex(width, height, color));
+        }
+
+        private static Texture2D MakeStyleRoundedTex(int width, int height, Color fillColor, int radius,
+            int borderThickness = 3, Color? borderColor = null)
+        {
+            return TrackGeneratedStyleTexture(
+                MakeRoundedTex(width, height, fillColor, radius, borderThickness, borderColor));
+        }
+
+        private static Texture2D MakeStyleTopRoundedTabTex(int width, int height, Color fillColor, int radius,
+            int borderThickness = 1, Color? borderColor = null)
+        {
+            return TrackGeneratedStyleTexture(
+                MakeTopRoundedTabTex(width, height, fillColor, radius, borderThickness, borderColor));
+        }
+
+        private static Texture2D MakeStyleCapsuleTex(int width, int height, Color fillColor,
+            int borderThickness = 2, Color? borderColor = null)
+        {
+            return TrackGeneratedStyleTexture(
+                MakeCapsuleTex(width, height, fillColor, borderThickness, borderColor));
+        }
+
+        private static Texture2D MakeStyleCircleTex(int size, Color fillColor, int borderThickness = 1,
+            Color? borderColor = null)
+        {
+            return TrackGeneratedStyleTexture(MakeCircleTex(size, fillColor, borderThickness, borderColor));
+        }
+
+        private static void ReleaseGeneratedStyleTextures()
+        {
+            for (int i = 0; i < generatedStyleTextures.Count; i++)
+            {
+                Texture2D texture = generatedStyleTextures[i];
+                if (texture != null)
+                    UnityEngine.Object.Destroy(texture);
+            }
+
+            generatedStyleTextures.Clear();
+        }
+
+        private static void ApplyConfiguredInterfaceScale()
+        {
+            _appliedMenuScale = Mathf.Clamp(misc.menuScale > 0f ? misc.menuScale : 1f, 0.8f, 1.35f);
+            stylesInitialized = false;
         }
 
         public static Texture2D MakeTex(int width, int height, Color col)
@@ -1988,6 +2143,7 @@ namespace rowemod
         {
             try
             {
+                GraphicsEnvironmentController.DrawControls();
                 DrawLightSettings();
                 
             }
@@ -2001,16 +2157,23 @@ namespace rowemod
 
         private static void DrawLightSettings()
         {
-            Light[] lights = UnityEngine.Object.FindObjectsOfType<Light>();
-            if (lights == null || lights.Length == 0)
+            Light[] lights = _sceneLightCache;
+            int liveLightCount = 0;
+            if (lights != null)
+            {
+                for (int i = 0; i < lights.Length; i++)
+                {
+                    if (lights[i] != null)
+                        liveLightCount++;
+                }
+            }
+            if (liveLightCount == 0)
             {
                 BeginPane("Light Settings", "Scene lights will appear here when the current scene exposes them.");
-                DrawEmptyState("No editable lights found.");
+                DrawEmptyState("No editable lights found.", "Load a map or use Refresh Lights to scan the current scene.");
                 EndPane();
                 return;
             }
-
-            CacheLightDefaults(lights);
 
             BeginPane("Light Settings", "Adjust intensity for lights exposed by the current scene.");
             foreach (var light in lights)
@@ -2127,12 +2290,59 @@ namespace rowemod
 
         public static bool MiniButton(string label, params GUILayoutOption[] options)
         {
-            return GUILayout.Button(label, UiMiniButtonStyle, options);
+            return ControllerButton(label, UiMiniButtonStyle, options);
+        }
+
+        private static Texture2D MakeTopRoundedTabTex(int width, int height, Color fillColor, int radius,
+            int borderThickness = 1, Color? borderColor = null)
+        {
+            try
+            {
+                Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                Color[] colors = new Color[width * height];
+                Color finalBorderColor = borderColor ?? Color.white;
+                Vector2 topLeftCenter = new Vector2(radius, radius);
+                Vector2 topRightCenter = new Vector2(width - radius - 1, radius);
+
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        float topLeftDistance = Vector2.Distance(new Vector2(x, y), topLeftCenter);
+                        float topRightDistance = Vector2.Distance(new Vector2(x, y), topRightCenter);
+                        bool outsideTopCorner =
+                            (x < radius && y < radius && topLeftDistance > radius) ||
+                            (x > width - radius - 1 && y < radius && topRightDistance > radius);
+                        bool roundedBorder =
+                            (x < radius && y < radius &&
+                             topLeftDistance > radius - borderThickness && topLeftDistance <= radius) ||
+                            (x > width - radius - 1 && y < radius &&
+                             topRightDistance > radius - borderThickness && topRightDistance <= radius);
+                        bool straightBorder = y < borderThickness || x < borderThickness ||
+                                              x >= width - borderThickness;
+
+                        colors[y * width + x] = outsideTopCorner
+                            ? Color.clear
+                            : roundedBorder || straightBorder
+                                ? finalBorderColor
+                                : fillColor;
+                    }
+                }
+
+                texture.SetPixels(colors);
+                texture.Apply();
+                return texture;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error in MakeTopRoundedTabTex: {ex.Message}");
+                return null;
+            }
         }
 
         public static bool PillButton(string label, bool active, params GUILayoutOption[] options)
         {
-            return GUILayout.Button(label, active ? UiPillActiveStyle : UiPillStyle, options);
+            return ControllerButton(label, active ? UiPillActiveStyle : UiPillStyle, options);
         }
 
         public static void DrawStatusBadge(string text, params GUILayoutOption[] options)
@@ -2200,17 +2410,17 @@ namespace rowemod
 
         public static bool PrimaryButton(string label, params GUILayoutOption[] options)
         {
-            return GUILayout.Button(label, UiPillActiveStyle, options);
+            return ControllerButton(label, UiPillActiveStyle, options);
         }
 
         public static bool SecondaryButton(string label, params GUILayoutOption[] options)
         {
-            return GUILayout.Button(label, UiButtonStyle, options);
+            return ControllerButton(label, UiButtonStyle, options);
         }
 
         public static bool DangerButton(string label, params GUILayoutOption[] options)
         {
-            return GUILayout.Button(label, UiDangerButtonStyle, options);
+            return ControllerButton(label, UiDangerButtonStyle, options);
         }
 
         public static void DrawEmptyState(string title, string detail = null)
@@ -2228,6 +2438,7 @@ namespace rowemod
             Rect rect = GUILayoutUtility.GetRect(0f, UiFoldoutHeight, GUILayout.ExpandWidth(true), GUILayout.Height(UiFoldoutHeight));
             Event currentEvent = Event.current;
             bool isHovering = rect.Contains(currentEvent.mousePosition);
+            string controllerId = RegisterControllerFoldout($"foldout_{label}", rect);
 
             Color baseColor = expanded ? uiPanelAltColor : uiPanelColor;
             Color backgroundColor = isHovering ? Color.Lerp(baseColor, uiPanelHoverColor, 0.6f) : baseColor;
@@ -2235,23 +2446,30 @@ namespace rowemod
 
             if (expanded)
             {
-                Rect accentRect = new Rect(rect.x + 1f, rect.y + 4f, 3f, rect.height - 8f);
+                Rect accentRect = new Rect(rect.x + 1f, rect.y + (6f * UiScale),
+                    4f * UiScale, rect.height - (12f * UiScale));
                 DrawSolidColorRect(accentRect, uiAccentColor);
             }
 
-            Rect dividerRect = new Rect(rect.x + 8f, rect.yMax - 1f, rect.width - 16f, 1f);
+            Rect dividerRect = new Rect(rect.x + (10f * UiScale), rect.yMax - 1f,
+                rect.width - (20f * UiScale), 1f);
             DrawSolidColorRect(dividerRect, new Color(1f, 1f, 1f, 0.07f));
 
-            Rect arrowRect = new Rect(rect.x + 10f, rect.y, 16f, rect.height);
-            Rect labelRect = new Rect(rect.x + 28f, rect.y, rect.width - 32f, rect.height);
+            Rect arrowRect = new Rect(rect.x + (12f * UiScale), rect.y, 18f * UiScale, rect.height);
+            Rect labelRect = new Rect(rect.x + (34f * UiScale), rect.y,
+                rect.width - (40f * UiScale), rect.height);
             GUI.Label(arrowRect, expanded ? "▾" : "▸", sectionHeaderStyle);
             GUI.Label(labelRect, label, sectionHeaderStyle);
 
-            if (currentEvent.type == EventType.MouseDown && rect.Contains(currentEvent.mousePosition))
+            if ((currentEvent.type == EventType.MouseDown && rect.Contains(currentEvent.mousePosition)) ||
+                ConsumeControllerActivation(controllerId))
             {
                 expanded = !expanded;
-                currentEvent.Use();
+                if (currentEvent.type == EventType.MouseDown)
+                    currentEvent.Use();
             }
+
+            DrawControllerFocusRing(controllerId, rect);
 
             return expanded;
         }
@@ -2264,16 +2482,25 @@ namespace rowemod
         private static void DrawSliderInternal(string label, ref float target, float min, float max, string sliderKey, bool showResetButton, float defaultValue)
         {
             float rowHeight = UiRowHeight;
-            float valueBoxWidth = 56f;
-            float resetButtonWidth = showResetButton ? 62f : 0f;
-            float spacing = 8f;
-            float valueBorderSize = 1.5f;
+            float valueBoxWidth = 68f * UiScale;
+            float resetButtonWidth = showResetButton ? 72f * UiScale : 0f;
+            float spacing = 8f * UiScale;
+            float valueBorderSize = Mathf.Max(1f, 1.5f * UiScale);
 
             Rect fullRect = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
+            string controllerId = RegisterControllerSlider($"slider_{sliderKey}", fullRect);
+            int controllerDirection = ConsumeControllerHorizontal(controllerId);
+            if (controllerDirection != 0)
+            {
+                float step = GetControllerSliderStep(min, max);
+                target = Mathf.Clamp(target + (controllerDirection * step), min, max);
+                target = Mathf.Round(target * 1000f) / 1000f;
+                _sliderTextInputs[sliderKey] = target.ToString("0.00");
+            }
 
-            float minSliderWidth = 70f;
-            float minLabelWidth = 94f;
-            float maxLabelWidth = 180f;
+            float minSliderWidth = 90f * UiScale;
+            float minLabelWidth = 110f * UiScale;
+            float maxLabelWidth = 220f * UiScale;
             float availableForLabel = fullRect.width - minSliderWidth - valueBoxWidth - (spacing * 3f) - resetButtonWidth;
             float labelWidth = Mathf.Clamp(availableForLabel * 0.6f, minLabelWidth, maxLabelWidth);
             labelWidth = Mathf.Min(labelWidth, Mathf.Max(minLabelWidth, availableForLabel));
@@ -2283,7 +2510,7 @@ namespace rowemod
             float sliderRight = valueX - spacing;
             float sliderWidth = Mathf.Max(minSliderWidth, sliderRight - sliderX);
 
-            float trackHeight = 6f;
+            float trackHeight = 6f * UiScale;
             float trackY = fullRect.y + ((rowHeight - trackHeight) * 0.5f);
             Rect labelRect = new Rect(fullRect.x, fullRect.y, labelWidth, rowHeight);
             Rect sliderRect = new Rect(sliderX, trackY, sliderWidth, trackHeight);
@@ -2298,7 +2525,7 @@ namespace rowemod
             Rect fillRect = new Rect(sliderRect.x, sliderRect.y, fillWidth, sliderRect.height);
             DrawSolidColorRect(fillRect, uiAccentColor);
 
-            float knobSize = 12f;
+            float knobSize = 18f * UiScale;
             float knobX = sliderRect.x + fillWidth - (knobSize * 0.5f);
             Rect knobRect = new Rect(knobX, fullRect.y + ((rowHeight - knobSize) * 0.5f), knobSize, knobSize);
             if (_circleTex != null)
@@ -2390,11 +2617,14 @@ namespace rowemod
                 }
             }
 
-            if (showResetButton && GUI.Button(resetRect, "Reset", highQualityButtonStyle))
+            bool differsFromDefault = showResetButton && !Mathf.Approximately(target, defaultValue);
+            if (differsFromDefault && ControllerButton(resetRect, $"slider_reset_{sliderKey}", "Reset", highQualityButtonStyle))
             {
                 target = defaultValue;
                 _sliderTextInputs[sliderKey] = target.ToString("0.00");
             }
+
+            DrawControllerFocusRing(controllerId, fullRect);
 
             GUILayout.Space(UiControlSpacing);
         }
@@ -2417,6 +2647,7 @@ namespace rowemod
             isDraggingWindow = false;
             dragControlId = 0;
             activeSliderControlId = 0;
+            ResetControllerNavigation(false, true);
         }
 
         public static bool Toggle(string text, ref bool value)
@@ -2424,7 +2655,8 @@ namespace rowemod
             try
             {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(value ? "✔" : " ", highQualityButtonStyle, GUILayout.Width(20)))
+                if (ControllerButton($"legacy_toggle_{text}", value ? "✔" : " ", highQualityButtonStyle,
+                        GUILayout.Width(32f * UiScale), GUILayout.Height(32f * UiScale)))
                 {
                     value = !value;
                 }
@@ -2445,12 +2677,13 @@ namespace rowemod
         {
             string toggleKey = string.IsNullOrEmpty(controlId) ? label : controlId;
 
-            float width = 48f;
-            float height = 24f;
-            float knobSize = 18f;
-            float padding = 3f;
+            float width = 52f * UiScale;
+            float height = 28f * UiScale;
+            float knobSize = 20f * UiScale;
+            float padding = 4f * UiScale;
             Rect fullRect = GUILayoutUtility.GetRect(0f, UiRowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(UiRowHeight));
-            Rect labelRect = new Rect(fullRect.x, fullRect.y, fullRect.width - width - 10f, fullRect.height);
+            string controllerTargetId = RegisterControllerToggle($"toggle_{toggleKey}", fullRect);
+            Rect labelRect = new Rect(fullRect.x, fullRect.y, fullRect.width - width - (12f * UiScale), fullRect.height);
             Rect toggleRect = new Rect(fullRect.x + fullRect.width - width,
                 fullRect.y + ((fullRect.height - height) * 0.5f), width, height);
 
@@ -2460,11 +2693,18 @@ namespace rowemod
             bool isHovering = fullRect.Contains(Event.current.mousePosition);
             bool clicked = Event.current.type == EventType.MouseDown &&
                            (toggleRect.Contains(Event.current.mousePosition) || labelRect.Contains(Event.current.mousePosition));
-            if (clicked)
+            bool controllerActivated = ConsumeControllerActivation(controllerTargetId);
+            int controllerDirection = ConsumeControllerHorizontal(controllerTargetId);
+            if (clicked || controllerActivated)
             {
                 value = !value;
-                Event.current.Use();
+                if (clicked)
+                    Event.current.Use();
             }
+            else if (controllerDirection < 0)
+                value = false;
+            else if (controllerDirection > 0)
+                value = true;
 
             float target = value ? 1f : 0f;
             toggleAnimationState[toggleKey] = Mathf.Lerp(toggleAnimationState[toggleKey], target, 0.24f);
@@ -2483,6 +2723,7 @@ namespace rowemod
             DrawTintedTexture(knobRect, toggleKnobTexture, Color.white);
 
             GUI.Label(labelRect, label, labelStyle);
+            DrawControllerFocusRing(controllerTargetId, fullRect);
             GUILayout.Space(UiControlSpacing);
 
             return value;
@@ -2545,8 +2786,9 @@ namespace rowemod
 
         public static bool ModernButton(string label, float width = 200f, float height = 30f)
         {
-            Rect buttonRect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(false), GUILayout.Height(height));
-            return GUI.Button(buttonRect, label, highQualityButtonStyle);
+            return ControllerButton(label, label, highQualityButtonStyle,
+                GUILayout.Width(width * UiScale), GUILayout.Height(Mathf.Max(36f * UiScale, height * UiScale)),
+                GUILayout.ExpandWidth(false));
         }
 
         public static IEnumerator LoadRoweLogo()

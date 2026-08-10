@@ -738,7 +738,8 @@ namespace rowemod.Mods
             for (int i = 0; i < names.Length; i++)
             {
                 GUIStyle rowStyle = i == selectedIndex ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle;
-                if (GUILayout.Button(names[i], rowStyle, GUILayout.Height(26f)))
+                if (Menu.ControllerButton($"bike_part_{label}_{names[i]}", names[i], rowStyle,
+                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     selectedIndex = i;
                     GameObject selected = prefabs[i];
