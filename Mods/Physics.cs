@@ -21,10 +21,25 @@ namespace rowemod.Mods
         private static Vector3 _originalDriverInertiaNoseyInput;
         private static Vector3 _originalDesiredChassisCom;
         private static Vector3 _originalDesiredDriverCom;
+        private static VehicleController _spinCompletionController;
+        private static bool _spinCompletionNativeStateCaptured;
+        private static bool _spinCompletionOriginalHoldAssistOff;
+        private static float _spinCompletionInput;
+        private static float _spinCompletionDirection;
+        private static bool _spinCompletionFailureLogged;
+
+        private const float SpinCompletionMinimumFlightTime = 0.08f;
+        private const float SpinCompletionMaximumFlightTime = 2.5f;
+        private const float SpinCompletionLandingWindow = 1.5f;
+        private const float SpinCompletionFullInputRate = 270f;
+        private const float SpinCompletionInputResponse = 5f;
 
         public static void Update()
         {
             UnityEngine.Physics.gravity = new Vector3(0f, -physics.gravity, 0f);
+
+            if (!physics.spinCompletionAssist)
+                ReleaseSpinCompletionAssist();
             
             if (rMbCharacter != null)
             {
@@ -135,6 +150,172 @@ namespace rowemod.Mods
                 }
             }
 
+        }
+
+        public static void UpdateSpinCompletionAssist()
+        {
+            if (!physics.spinCompletionAssist)
+            {
+                ReleaseSpinCompletionAssist();
+                return;
+            }
+
+            VehicleController controller = vehicleController;
+            var mashSpinSystem = spinSystem;
+            if (controller == null || mashSpinSystem == null)
+            {
+                ReleaseSpinCompletionAssist();
+                return;
+            }
+
+            if (_spinCompletionController != controller)
+            {
+                ReleaseSpinCompletionAssist();
+                _spinCompletionController = controller;
+            }
+
+            try
+            {
+                if (controller.Grounded())
+                {
+                    RestoreSpinCompletionNativeState();
+                    _spinCompletionInput = 0f;
+                    _spinCompletionDirection = 0f;
+                    return;
+                }
+
+                float timeLeft = controller.TimeLeftInAir();
+                if (!IsFinite(timeLeft) || timeLeft <= 0f || timeLeft > SpinCompletionMaximumFlightTime)
+                {
+                    RestoreSpinCompletionNativeState();
+                    _spinCompletionInput = 0f;
+                    return;
+                }
+
+                Vector3 landingUp = controller.BestLandingUp;
+                if (landingUp.sqrMagnitude < 0.0001f)
+                    landingUp = Vector3.up;
+                else
+                    landingUp.Normalize();
+
+                float predictedAngleError = controller.PredictedSignedAngleToLandingForward();
+                if (!IsFinite(predictedAngleError))
+                {
+                    RestoreSpinCompletionNativeState();
+                    _spinCompletionInput = 0f;
+                    _spinCompletionDirection = 0f;
+                    return;
+                }
+
+                // The game's signed landing error describes the shortest route to forward.
+                // Latch the rider's actual world-space yaw direction and unwrap that error so
+                // the assist can only continue the current spin, never reverse for a shortcut.
+                float signedYawRate = Vector3.Dot(controller.HumanAngularVelocity, landingUp);
+                if (Mathf.Abs(signedYawRate) > 0.12f)
+                    _spinCompletionDirection = Mathf.Sign(signedYawRate);
+
+                float manualInput = Mathf.Clamp(controller._spinInput, -1f, 1f);
+                if (Mathf.Approximately(_spinCompletionDirection, 0f) && Mathf.Abs(manualInput) > 0.12f)
+                    _spinCompletionDirection = Mathf.Sign(manualInput);
+
+                if (_spinCompletionDirection > 0f && predictedAngleError < 0f)
+                    predictedAngleError += 360f;
+                else if (_spinCompletionDirection < 0f && predictedAngleError > 0f)
+                    predictedAngleError -= 360f;
+
+                CaptureSpinCompletionNativeState(controller);
+                controller._holdSpinAssistOff = true;
+
+                float safeTimeLeft = Mathf.Max(SpinCompletionMinimumFlightTime, timeLeft);
+                float requiredRateCorrection = predictedAngleError / safeTimeLeft;
+                float requestedInput = Mathf.Clamp(
+                    requiredRateCorrection / SpinCompletionFullInputRate,
+                    -1f,
+                    1f);
+
+                float landingProgress = 1f - Mathf.Clamp01(
+                    (timeLeft - SpinCompletionMinimumFlightTime) /
+                    (SpinCompletionLandingWindow - SpinCompletionMinimumFlightTime));
+                landingProgress = Mathf.SmoothStep(0f, 1f, landingProgress);
+
+                bool descending = Vector3.Dot(controller.Velocity, landingUp) <= 0f;
+                if (!descending)
+                    landingProgress *= 0.25f;
+
+                if (Mathf.Abs(manualInput) > 0.12f && timeLeft > 0.45f)
+                    landingProgress *= 0.45f;
+
+                float responseStep = SpinCompletionInputResponse * Time.fixedDeltaTime;
+                _spinCompletionInput = Mathf.MoveTowards(
+                    _spinCompletionInput,
+                    requestedInput,
+                    responseStep);
+
+                float completedInput = Mathf.Lerp(
+                    manualInput,
+                    _spinCompletionInput,
+                    landingProgress);
+                completedInput = Mathf.Clamp(completedInput, -1f, 1f);
+
+                if (_spinCompletionDirection > 0f)
+                    completedInput = Mathf.Max(0f, completedInput);
+                else if (_spinCompletionDirection < 0f)
+                    completedInput = Mathf.Min(0f, completedInput);
+
+                controller._spinInput = completedInput;
+                mashSpinSystem.SetInput(completedInput, controller._flipInput);
+                _spinCompletionFailureLogged = false;
+            }
+            catch (Exception ex)
+            {
+                RestoreSpinCompletionNativeState();
+                _spinCompletionInput = 0f;
+                if (!_spinCompletionFailureLogged)
+                {
+                    _spinCompletionFailureLogged = true;
+                    Log.Warning($"[Physics][SpinCompletion] Disabled for the current state: {ex.Message}");
+                }
+            }
+        }
+
+        public static void ReleaseSpinCompletionAssist()
+        {
+            RestoreSpinCompletionNativeState();
+            OnePointOhLandingAssist.Reset();
+            _spinCompletionController = null;
+            _spinCompletionInput = 0f;
+            _spinCompletionDirection = 0f;
+            _spinCompletionFailureLogged = false;
+        }
+
+        private static void CaptureSpinCompletionNativeState(VehicleController controller)
+        {
+            if (_spinCompletionNativeStateCaptured || controller == null)
+                return;
+
+            _spinCompletionController = controller;
+            _spinCompletionOriginalHoldAssistOff = controller._holdSpinAssistOff;
+            _spinCompletionNativeStateCaptured = true;
+        }
+
+        private static void RestoreSpinCompletionNativeState()
+        {
+            try
+            {
+                if (_spinCompletionNativeStateCaptured && _spinCompletionController != null)
+                    _spinCompletionController._holdSpinAssistOff = _spinCompletionOriginalHoldAssistOff;
+            }
+            catch
+            {
+                // The cached IL2CPP controller may already have been destroyed during a respawn.
+            }
+
+            _spinCompletionNativeStateCaptured = false;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         public static void UpdateNoseManualTuning()

@@ -131,7 +131,11 @@ namespace rowemod.Mods
                         _categoryVisibility[category.Key] = true; // fallback default
 
 
-                    bool newVisible = GUILayout.Toggle(currentVisible, "", GUILayout.Width(20));
+                    bool newVisible = currentVisible;
+                    if (Menu.ControllerButton($"bike_material_visibility_{category.Key}",
+                            newVisible ? "●" : "○", Menu.UiMiniButtonStyle,
+                            GUILayout.Width(36f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
+                        newVisible = !newVisible;
                     if (newVisible != currentVisible)
                     {
                         _categoryVisibility[category.Key] = newVisible;
@@ -140,7 +144,9 @@ namespace rowemod.Mods
 
                     // Button
                     bool isSelected = string.Equals(_selectedCategory, category.Key, StringComparison.Ordinal);
-                    if (GUILayout.Button(category.Value.displayName, isSelected ? UiRowButtonSelectedStyle : UiRowButtonStyle))
+                    if (Menu.ControllerButton($"bike_material_category_{category.Key}", category.Value.displayName,
+                            isSelected ? UiRowButtonSelectedStyle : UiRowButtonStyle,
+                            GUILayout.Height(36f * Menu.EffectiveUiScale)))
                     {
                         _selectedCategory = category.Key;
                         _selectedFolder = Path.Combine(BikeRootPath, category.Value.displayName);
@@ -168,7 +174,7 @@ namespace rowemod.Mods
                         GUILayout.BeginHorizontal();
                         Rect buttonRect = GUILayoutUtility.GetRect(new GUIContent(materialName), UiRowButtonStyle);
 
-                        if (GUI.Button(buttonRect, materialName, UiRowButtonStyle))
+                        if (Menu.ControllerButton(buttonRect, $"bike_material_{materialFile}", materialName, UiRowButtonStyle))
                         {
                             Material loadedMaterial = LoadMaterialFromFile(materialFile);
 
@@ -229,7 +235,9 @@ namespace rowemod.Mods
                     _presetScroll = GUILayout.BeginScrollView(_presetScroll, false, true, GUILayout.MinWidth(180f), GUILayout.MaxHeight(150f));
                     for (int i = 0; i < availableBikePresets.Count; i++)
                     {
-                        if (GUILayout.Button(availableBikePresets[i], UiRowButtonStyle))
+                        if (Menu.ControllerButton($"bike_material_preset_{availableBikePresets[i]}",
+                                availableBikePresets[i], UiRowButtonStyle,
+                                GUILayout.Height(36f * Menu.EffectiveUiScale)))
                         {
                             _selectedPresetIndex = i;
                             LoadBikeMaterialPreset(availableBikePresets[_selectedPresetIndex]);

@@ -425,6 +425,7 @@ namespace rowemod.Mods
                 
                 
                 Memory.FindObjects(go);
+                ReplayInputPatch.OnLocalPlayerSpawned();
                 BikeOnlyStance.OnLocalPlayerSpawned();
                 Main.NotifyRuntimeContributionApplied();
                 TrickAnimationEditor.OnLocalPlayerSpawned();

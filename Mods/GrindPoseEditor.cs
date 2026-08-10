@@ -224,12 +224,14 @@ namespace rowemod.Mods
                 string presetName = availablePresets[i];
                 GUIStyle style = i == _selectedPresetIndex ? Menu.UiRowButtonSelectedStyle : Menu.UiRowButtonStyle;
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button(presetName, style, GUILayout.Height(24f), GUILayout.ExpandWidth(true)))
+                if (Menu.ControllerButton($"grind_preset_{presetName}", presetName, style,
+                        GUILayout.Height(34f * Menu.EffectiveUiScale), GUILayout.ExpandWidth(true)))
                 {
                     _selectedPresetIndex = i;
                     LoadPresetAndApply(presetName);
                 }
-                if (GUILayout.Button("X", Menu.redButtonStyle, GUILayout.Width(30f), GUILayout.Height(24f)))
+                if (Menu.ControllerButton($"delete_grind_preset_{presetName}", "X", Menu.redButtonStyle,
+                        GUILayout.Width(36f * Menu.EffectiveUiScale), GUILayout.Height(34f * Menu.EffectiveUiScale)))
                 {
                     if (GrindPosePreset.Delete(presetName))
                     {
@@ -883,7 +885,8 @@ namespace rowemod.Mods
         {
             GUILayout.BeginHorizontal();
             Menu.ModernSlider(label, ref value, min, max, controlId);
-            if (GUILayout.Button("RESET", Menu.highQualityButtonStyle, GUILayout.Width(64f), GUILayout.Height(25f)))
+            if (Menu.ControllerButton($"reset_grind_slider_{controlId}", "RESET", Menu.highQualityButtonStyle,
+                    GUILayout.Width(72f * Menu.EffectiveUiScale), GUILayout.Height(34f * Menu.EffectiveUiScale)))
             {
                 value = Mathf.Clamp(defaultValue, min, max);
             }
@@ -892,9 +895,21 @@ namespace rowemod.Mods
         
         private static void DrawPoseTabs()
         {
-            _poseTabsScroll = GUILayout.BeginScrollView(_poseTabsScroll, GUILayout.Height(120f));
-            float availableWidth = Mathf.Max(240f, Menu.windowRect.width - 70f);
-            int columns = Mathf.Max(1, Mathf.FloorToInt(availableWidth / 150f));
+            _poseTabsScroll = GUILayout.BeginScrollView(
+                _poseTabsScroll,
+                false,
+                true,
+                GUILayout.Height(120f));
+            float availableWidth = Mathf.Max(220f, Menu.ActiveContentWidth - 32f);
+            const float targetButtonWidth = 145f;
+            const float estimatedSpacing = 4f;
+            int columns = Mathf.Max(
+                1,
+                Mathf.FloorToInt((availableWidth + estimatedSpacing) /
+                    (targetButtonWidth + estimatedSpacing)));
+            float buttonWidth = Mathf.Max(
+                96f,
+                (availableWidth - ((columns - 1) * estimatedSpacing)) / columns);
             int index = 0;
 
             while (index < PoseCache.Count)
@@ -910,7 +925,8 @@ namespace rowemod.Mods
                     }
 
                     int capturedIndex = index;
-                    if (GUILayout.Button($"<b>{label}</b>", style, GUILayout.Width(145f), GUILayout.Height(28f)))
+                    if (Menu.ControllerButton($"grind_pose_{PoseKeys[capturedIndex]}", $"<b>{label}</b>", style,
+                            GUILayout.Width(buttonWidth), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                     {
                         _selectedPoseIndex = capturedIndex;
                         _forcedPoseAppliedThisOpen = ApplyForcedPoseFromSelection("selection");

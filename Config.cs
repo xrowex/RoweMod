@@ -15,6 +15,7 @@ namespace rowemod
         public bool disableLevelInAir;
         public bool manualMovement;
         public bool spinAssist;
+        public bool spinCompletionAssist;
         public bool spinFlipFix;
         public bool driftAbility;
         public int lastVehicle;
@@ -128,6 +129,8 @@ namespace rowemod
         public float menuAccentR;
         public float menuAccentG;
         public float menuAccentB;
+        public float menuScale;
+        public int menuDesignVersion;
         public bool disableEmoteOnBike;
         public bool disableFreeCamCollider;
         public bool disableDroneCollider;
@@ -158,6 +161,64 @@ namespace rowemod
     public class CameraSettings
     {
         public bool leftStickOffsetSwitch { get; set; } = true;
+    }
+
+    public class SceneExposureSettings
+    {
+        public string sceneName { get; set; } = string.Empty;
+        public bool exposureOverride { get; set; }
+        public bool forceFixedExposure { get; set; }
+        public float exposureCompensation { get; set; }
+        public float fixedExposure { get; set; }
+    }
+
+    /// <summary>
+    /// Graphics overrides are opt-in. Preset 0 leaves the map and the game's quality settings
+    /// untouched; GraphicsEnvironmentController snapshots live values before applying anything.
+    /// </summary>
+    public class GraphicsSettings
+    {
+        // 0 = Game, 1 = Balanced, 2 = Low, 3 = Potato, 4 = Custom.
+        public int performancePreset { get; set; }
+        public float renderScale { get; set; } = 1f;
+        public bool realtimeShadows { get; set; } = true;
+        public float shadowDistance { get; set; } = 80f;
+        public float lodBias { get; set; } = 1f;
+        public int textureMipmapLimit { get; set; }
+        // Mirrors HDAdditionalCameraData.AntialiasingMode: None, FXAA, TAA, SMAA.
+        public int antiAliasingMode { get; set; } = 2;
+        public float terrainDetailDensity { get; set; } = 1f;
+        public float terrainDetailDistance { get; set; } = 80f;
+
+        // "Allow" means restore/use the map's value. False forces the effect off.
+        public bool allowScreenSpaceReflections { get; set; } = true;
+        public bool allowAmbientOcclusion { get; set; } = true;
+        public bool allowGlobalIllumination { get; set; } = true;
+        public bool allowVolumetricClouds { get; set; } = true;
+        public bool allowVolumetricFog { get; set; } = true;
+        public bool allowContactShadows { get; set; } = true;
+        public bool allowMotionBlur { get; set; } = true;
+        public bool allowDepthOfField { get; set; } = true;
+        public bool allowBloom { get; set; } = true;
+        public bool allowRealtimeReflectionProbes { get; set; } = true;
+
+        // Empty/"Map" restores the HDRI assigned by the current map.
+        public string skySelection { get; set; } = "Map";
+        public bool skyTuningOverride { get; set; }
+        public float skyRotation { get; set; }
+        public float skyExposure { get; set; }
+
+        // Camera exposure is stored independently for each Unity scene containing an HDRP
+        // Exposure component. The dictionary key is the stable scene path, falling back to name.
+        public Dictionary<string, SceneExposureSettings> sceneExposureSettings { get; set; } =
+            new Dictionary<string, SceneExposureSettings>();
+
+        // Legacy single-scene values retained so an existing local config can be migrated into
+        // the first discovered scene by GraphicsEnvironmentController.
+        public bool exposureOverride { get; set; }
+        public bool forceFixedExposure { get; set; }
+        public float exposureCompensation { get; set; }
+        public float fixedExposure { get; set; }
     }
 
     public class ReplaySettings
@@ -251,24 +312,6 @@ namespace rowemod
         // Restores the pre-3.2.4 rider/bike motion mirror so the game can perform
         // opposite-stance tricks. Disabled keeps the strictly feet-only mode.
         public bool useOppoTrickCompatibility { get; set; }
-    }
-
-    public class RiderHeadTrackingSettings
-    {
-        public bool enabled { get; set; }
-        public float amount { get; set; } = 0.5f;
-        public float maximumYaw { get; set; } = 24f;
-        public float maximumPitch { get; set; } = 12f;
-        public float smoothing { get; set; } = 8f;
-        public float spineWeight { get; set; } = 0.1f;
-        public float chestWeight { get; set; } = 0.2f;
-        public float neckWeight { get; set; } = 0.25f;
-        public float headWeight { get; set; } = 0.45f;
-    }
-
-    public class RiderToolsSettings
-    {
-        public RiderHeadTrackingSettings headTracking { get; set; } = new RiderHeadTrackingSettings();
     }
 
     public class TrickAnimationDebugSettings
@@ -366,6 +409,7 @@ namespace rowemod
             disableLevelInAir = false,
             manualMovement = false,
             spinAssist = true,
+            spinCompletionAssist = false,
             spinFlipFix = false,
             driftAbility = true,
             lastVehicle = 0,
@@ -466,8 +510,10 @@ namespace rowemod
             droneEmitterToggle = true,
             showPlayerUserNameTargets = true,
             menuAccentR = 1f,
-            menuAccentG = 0.38f,
-            menuAccentB = 0.19f,
+            menuAccentG = 0.54f,
+            menuAccentB = 0.30f,
+            menuScale = 1f,
+            menuDesignVersion = 1,
             disableEmoteOnBike = false,
             disableFreeCamCollider = false,
             disableDroneCollider = false,
@@ -484,11 +530,10 @@ namespace rowemod
         public static ChallengeRuntimeSettings challengeRuntimeSettings = new ChallengeRuntimeSettings();
         public static ManualCatchSettings manualCatchSettings = new ManualCatchSettings();
         public static CameraSettings cameraSettings = new CameraSettings();
+        public static GraphicsSettings graphicsSettings = new GraphicsSettings();
         public static ReplaySettings replaySettings = new ReplaySettings();
         public static PegSparksSettings pegSparksSettings = new PegSparksSettings();
         public static BikeOnlyStanceSettings bikeOnlyStanceSettings = new BikeOnlyStanceSettings();
-        public static RiderToolsSettings riderToolsSettings =
-            new RiderToolsSettings();
         public static TrickAnimationDebugSettings trickAnimationDebugSettings = new TrickAnimationDebugSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
@@ -509,11 +554,10 @@ namespace rowemod
             public ChallengeRuntimeSettings challengeRuntimeSettingsData { get; set; }
             public ManualCatchSettings manualCatchSettingsData { get; set; }
             public CameraSettings cameraSettingsData { get; set; }
+            public GraphicsSettings graphicsSettingsData { get; set; }
             public ReplaySettings replaySettingsData { get; set; }
             public PegSparksSettings pegSparksSettingsData { get; set; }
             public BikeOnlyStanceSettings bikeOnlyStanceSettingsData { get; set; }
-            public RiderToolsSettings riderToolsSettingsData { get; set; }
-            public RiderToolsSettings riderStyleSettingsData { get; set; }
             public TrickAnimationDebugSettings trickAnimationDebugSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
@@ -632,10 +676,10 @@ namespace rowemod
                     challengeRuntimeSettingsData = challengeRuntimeSettings,
                     manualCatchSettingsData = manualCatchSettings,
                     cameraSettingsData = cameraSettings,
+                    graphicsSettingsData = graphicsSettings,
                     replaySettingsData = replaySettings,
                     pegSparksSettingsData = pegSparksSettings,
                     bikeOnlyStanceSettingsData = bikeOnlyStanceSettings,
-                    riderToolsSettingsData = riderToolsSettings,
                     trickAnimationDebugSettingsData = trickAnimationDebugSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
@@ -667,6 +711,10 @@ namespace rowemod
                 jsonContent.IndexOf("\"showPlayerUserNameTargets\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasBoneBreakingStrength =
                 jsonContent.IndexOf("\"boneBreakingStrength\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasMenuScale =
+                jsonContent.IndexOf("\"menuScale\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasMenuDesignVersion =
+                jsonContent.IndexOf("\"menuDesignVersion\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasNoseManualComTuning =
                 jsonContent.IndexOf("\"noseManualDriverInertiaMultiplier\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasAutoSkipIntro =
@@ -677,6 +725,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"manualCatchSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasCameraSettings =
                 jsonContent.IndexOf("\"cameraSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasGraphicsSettings =
+                jsonContent.IndexOf("\"graphicsSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasReplaySettings =
                 jsonContent.IndexOf("\"replaySettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasReplayCameraLabVersion =
@@ -687,8 +737,6 @@ namespace rowemod
                 jsonContent.IndexOf("\"bikeOnlyStanceSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasBikeOnlyStanceVersion =
                 jsonContent.IndexOf("\"bikeOnlyStanceVersion\"", StringComparison.OrdinalIgnoreCase) >= 0;
-            bool hasRiderToolsSettings =
-                jsonContent.IndexOf("\"riderToolsSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasTrickAnimationDebugSettings =
                 jsonContent.IndexOf("\"trickAnimationDebugSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
@@ -755,6 +803,26 @@ namespace rowemod
             {
                 misc.boneBreakingStrength = Math.Max(0.25f, Math.Min(5f, misc.boneBreakingStrength));
             }
+            if (!hasMenuScale || !float.IsFinite(misc.menuScale))
+                misc.menuScale = 1f;
+            else
+                misc.menuScale = Math.Max(0.8f, Math.Min(1.35f, misc.menuScale));
+
+            if (!hasMenuDesignVersion)
+            {
+                // Preserve custom accents, but migrate RoweMod's previous stock orange to the
+                // more readable warm orange used by the new interface system.
+                if (Math.Abs(misc.menuAccentR - 1f) < 0.001f &&
+                    Math.Abs(misc.menuAccentG - 0.38f) < 0.001f &&
+                    Math.Abs(misc.menuAccentB - 0.19f) < 0.001f)
+                {
+                    misc.menuAccentR = 1f;
+                    misc.menuAccentG = 0.54f;
+                    misc.menuAccentB = 0.30f;
+                }
+
+                misc.menuDesignVersion = 1;
+            }
             tricks = jsonData.customTricksData;
             if (tricks.trickSets == null)
             {
@@ -766,6 +834,8 @@ namespace rowemod
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
             manualCatchSettings = jsonData.manualCatchSettingsData ?? new ManualCatchSettings();
             cameraSettings = jsonData.cameraSettingsData ?? new CameraSettings();
+            graphicsSettings = jsonData.graphicsSettingsData ?? new GraphicsSettings();
+            NormalizeGraphicsSettings(graphicsSettings);
             replaySettings = jsonData.replaySettingsData ?? new ReplaySettings();
             if (!hasReplayCameraLabVersion)
             {
@@ -787,11 +857,6 @@ namespace rowemod
                 migratedBikeOnlyStanceEnabled = true;
                 Log.Msg("[BikeOnlyStance] Migrated bike-only stance to enabled; hold LS switching restored.");
             }
-            riderToolsSettings =
-                jsonData.riderToolsSettingsData ??
-                jsonData.riderStyleSettingsData ??
-                new RiderToolsSettings();
-            RiderStyleEditor.NormalizeSettings(riderToolsSettings);
             trickAnimationDebugSettings = jsonData.trickAnimationDebugSettingsData ?? new TrickAnimationDebugSettings();
             if (trickAnimationDebugSettings.overrides == null)
             {
@@ -835,12 +900,13 @@ namespace rowemod
             if (physics.grindPoseLerpSpeed <= 0f) physics.grindPoseLerpSpeed = 2f;
             if (motorTuning == null) motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
 
-            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasCameraSettings || !hasReplaySettings ||
+            if (!hasChallengeRuntimeSettings || !hasManualCatchSettings || !hasCameraSettings || !hasGraphicsSettings || !hasReplaySettings ||
                 !hasReplayCameraLabVersion ||
                 !hasPegSparksSettings ||
                 !hasBikeOnlyStanceSettings ||
                 migratedBikeOnlyStanceEnabled ||
-                !hasRiderToolsSettings || !hasTrickAnimationDebugSettings)
+                !hasTrickAnimationDebugSettings ||
+                !hasMenuScale || !hasMenuDesignVersion)
             {
                 Save();
             }
@@ -904,6 +970,58 @@ namespace rowemod
             settings.cameraLightShadowBias = ClampFinite(settings.cameraLightShadowBias, 0f, 2f, 0.05f);
             settings.cameraLightShadowNormalBias = ClampFinite(settings.cameraLightShadowNormalBias, 0f, 3f, 0.4f);
             settings.cameraLightShadowNearPlane = ClampFinite(settings.cameraLightShadowNearPlane, 0.01f, 10f, 0.2f);
+        }
+
+        public static void NormalizeGraphicsSettings(GraphicsSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            settings.performancePreset = Math.Max(0, Math.Min(4, settings.performancePreset));
+            settings.renderScale = ClampFinite(settings.renderScale, 0.5f, 1f, 1f);
+            settings.shadowDistance = ClampFinite(settings.shadowDistance, 0f, 500f, 80f);
+            settings.lodBias = ClampFinite(settings.lodBias, 0.25f, 2f, 1f);
+            settings.textureMipmapLimit = Math.Max(0, Math.Min(3, settings.textureMipmapLimit));
+            settings.antiAliasingMode = Math.Max(0, Math.Min(3, settings.antiAliasingMode));
+            settings.terrainDetailDensity = ClampFinite(settings.terrainDetailDensity, 0f, 1f, 1f);
+            settings.terrainDetailDistance = ClampFinite(settings.terrainDetailDistance, 0f, 500f, 80f);
+            settings.skySelection = string.IsNullOrWhiteSpace(settings.skySelection)
+                ? "Map"
+                : settings.skySelection.Trim();
+            if (!string.Equals(settings.skySelection, "Map", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(settings.skySelection, "Clear", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(settings.skySelection, "Sunset", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(settings.skySelection, "Night", StringComparison.OrdinalIgnoreCase))
+                settings.skySelection = "Map";
+            settings.skyRotation = ClampFinite(settings.skyRotation, 0f, 360f, 0f);
+            settings.skyExposure = ClampFinite(settings.skyExposure, -16f, 16f, 0f);
+            settings.exposureCompensation = ClampFinite(settings.exposureCompensation, -16f, 16f, 0f);
+            settings.fixedExposure = ClampFinite(settings.fixedExposure, -16f, 16f, 0f);
+
+            settings.sceneExposureSettings ??= new Dictionary<string, SceneExposureSettings>();
+            foreach (string key in settings.sceneExposureSettings.Keys.ToArray())
+            {
+                SceneExposureSettings sceneSettings = settings.sceneExposureSettings[key];
+                if (string.IsNullOrWhiteSpace(key) || sceneSettings == null)
+                {
+                    settings.sceneExposureSettings.Remove(key);
+                    continue;
+                }
+
+                sceneSettings.sceneName = string.IsNullOrWhiteSpace(sceneSettings.sceneName)
+                    ? key
+                    : sceneSettings.sceneName.Trim();
+                sceneSettings.exposureCompensation = ClampFinite(
+                    sceneSettings.exposureCompensation,
+                    -16f,
+                    16f,
+                    0f);
+                sceneSettings.fixedExposure = ClampFinite(
+                    sceneSettings.fixedExposure,
+                    -16f,
+                    16f,
+                    0f);
+            }
         }
 
         public static void NormalizePegSparksSettings(PegSparksSettings settings)
@@ -992,6 +1110,7 @@ namespace rowemod
                 disableLevelInAir = false,
                 manualMovement = false,
                 spinAssist = true,
+                spinCompletionAssist = false,
                 spinFlipFix = false,
                 driftAbility = true,
                 lastVehicle = 0,
@@ -1130,8 +1249,10 @@ namespace rowemod
                 droneEmitterToggle = true,
                 showPlayerUserNameTargets = showPlayerUserNameTargets,
                 menuAccentR = 1f,
-                menuAccentG = 0.38f,
-                menuAccentB = 0.19f,
+                menuAccentG = 0.54f,
+                menuAccentB = 0.30f,
+                menuScale = 1f,
+                menuDesignVersion = 1,
                 disableEmoteOnBike = false,
                 disableFreeCamCollider = false,
                 disableDroneCollider = false,
@@ -1166,6 +1287,11 @@ namespace rowemod
         public static void ResetCameraTab()
         {
             cameraSettings = new CameraSettings();
+        }
+
+        public static void ResetGraphicsSettings()
+        {
+            graphicsSettings = new GraphicsSettings();
         }
 
         public static void ResetReplayTab()

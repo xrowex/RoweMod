@@ -7,7 +7,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Networking;
 using rowemod.Utils;
-using GameReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
 
 namespace rowemod.Mods
 {
@@ -34,7 +33,7 @@ namespace rowemod.Mods
         private static readonly PieEntry[] Entries =
         {
             new PieEntry("RoweMod", "rowemod", new Vector2(0f, -1f)),
-            new PieEntry("Extra 2", "extra_2", new Vector2(0.707f, -0.707f)),
+            new PieEntry("Vehicle Tuning", "vehicle_tuning", new Vector2(0.707f, -0.707f)),
             new PieEntry("Replay", "extra_3", new Vector2(1f, 0f)),
             new PieEntry("Extra 4", "extra_4", new Vector2(0.707f, 0.707f)),
             new PieEntry("Extra 5", "extra_5", new Vector2(0f, 1f)),
@@ -50,7 +49,6 @@ namespace rowemod.Mods
         private const float HintWidth = 420f;
         private const float HintHeight = 28f;
         private const float HintOffsetBelowButtons = 54f;
-        private const float NativeReplaySuppressWindow = 1.5f;
         private const float OpenHoldSeconds = 0.18f;
         private const int WheelTextureSize = 256;
         private const float WheelOuterRadius = 119f;
@@ -74,6 +72,7 @@ namespace rowemod.Mods
         private static bool hasPieLogoLoadFailed;
         private static bool isRoweModEntryLogoLoading;
         private static bool hasRoweModEntryLogoLoadFailed;
+        private static bool ownsGameplayInputBlock;
         private static float rightDpadHeldSince;
         private static float openAnimationStartedAt;
         private static float closeAnimationStartedAt;
@@ -101,15 +100,14 @@ namespace rowemod.Mods
             EnsureRoweModEntryLogoLoading();
         }
 
+        public static void OnSceneInitialized()
+        {
+            ResetOpenState();
+        }
+
         public static void Cleanup()
         {
-            isOpen = false;
-            isClosingAnimation = false;
-            waitForRightDpadRelease = false;
-            selectedIndex = -1;
-            lastDiagnosticSelectedIndex = -2;
-            nextStickDiagnosticTime = 0f;
-            ReplayInputPatch.CancelReplayOpenAuthorization();
+            ResetOpenState();
             labelStyle = null;
             selectedLabelStyle = null;
             centerStyle = null;
@@ -132,13 +130,13 @@ namespace rowemod.Mods
             if (gamepad == null && keyboard == null)
                 return;
 
-            if (!rowemod.Main.IsGameplayInputActive)
+            if (!HasActiveGameplayContext())
             {
                 CloseForBlockedGameState();
                 return;
             }
 
-            bool rightDpadPressed = gamepad?.dpad.right.isPressed == true;
+            bool rightDpadPressed = ReplayInputPatch.IsPieMenuActionPressed;
             if (!rightDpadPressed)
             {
                 waitForRightDpadRelease = false;
@@ -153,10 +151,24 @@ namespace rowemod.Mods
                 return;
             }
 
+            // MenuService exposes the authoritative title and gameplay stacks. Read them only
+            // while the shortcut is actually held (or the pie is already open), avoiding a
+            // continuous native-property poll during ordinary riding.
+            if (!CanUseGameplayShortcut())
+            {
+                CloseForBlockedGameState();
+                return;
+            }
+
             consumedInputThisFrame = true;
 
             if (rightDpadHeldSince <= 0f)
+            {
                 rightDpadHeldSince = Time.unscaledTime;
+                // Recheck event-driven binding reservations in case the current gameplay
+                // asset was cloned after the local-player spawn event.
+                StartNativeReplaySuppression();
+            }
 
             if (waitForRightDpadRelease)
                 return;
@@ -167,7 +179,6 @@ namespace rowemod.Mods
                     return;
 
                 Log.Msg($"[PieMenuDiag] Right D-pad held. pieOpen={isOpen} time={Time.unscaledTime:F2}.");
-                StartNativeReplaySuppression();
                 Open();
             }
 
@@ -202,7 +213,7 @@ namespace rowemod.Mods
 
         public static void Draw()
         {
-            if (!rowemod.Main.IsGameplayInputActive)
+            if (!HasActiveGameplayContext())
                 return;
 
             if (!isOpen && !isClosingAnimation)
@@ -215,7 +226,8 @@ namespace rowemod.Mods
                 return;
 
             Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), darkTexture);
+            if (darkTexture != null)
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), darkTexture);
 
             Texture2D wheelTexture = GetWheelTexture();
 
@@ -228,10 +240,13 @@ namespace rowemod.Mods
                 wheelSize);
             Rect shadowRect = new Rect(wheelRect.x + 10f, wheelRect.y + 14f, wheelRect.width, wheelRect.height);
 
-            GUI.color = new Color(0f, 0f, 0f, 0.32f);
-            GUI.DrawTexture(shadowRect, wheelTexture);
-            GUI.color = Color.white;
-            GUI.DrawTexture(wheelRect, wheelTexture);
+            if (wheelTexture != null)
+            {
+                GUI.color = new Color(0f, 0f, 0f, 0.32f);
+                GUI.DrawTexture(shadowRect, wheelTexture);
+                GUI.color = Color.white;
+                GUI.DrawTexture(wheelRect, wheelTexture);
+            }
 
             float contentAlpha = Mathf.Clamp01(animationScale * 1.25f);
             Color previousColor = GUI.color;
@@ -549,6 +564,11 @@ namespace rowemod.Mods
             isOpen = true;
             isClosingAnimation = false;
             openAnimationStartedAt = Time.unscaledTime;
+            if (!global::rowemod.Menu.isOpen)
+            {
+                ControllerMenuInput.SetGameplayInputBlocked(true);
+                ownsGameplayInputBlock = true;
+            }
             Log.Msg("[PieMenu] Opened.");
         }
 
@@ -560,6 +580,7 @@ namespace rowemod.Mods
             isOpen = false;
             isClosingAnimation = true;
             closeAnimationStartedAt = Time.unscaledTime;
+            ReleaseOwnedGameplayInputBlock();
             Log.Msg("[PieMenu] Closed.");
         }
 
@@ -575,8 +596,45 @@ namespace rowemod.Mods
 
             isOpen = false;
             isClosingAnimation = false;
-            ReplayInputPatch.CancelReplayOpenAuthorization();
+            ReleaseOwnedGameplayInputBlock();
             Log.Msg("[PieMenu] Closed because gameplay input is not active.");
+        }
+
+        private static void ResetOpenState()
+        {
+            isOpen = false;
+            isClosingAnimation = false;
+            consumedInputThisFrame = false;
+            waitForRightDpadRelease = false;
+            rightDpadHeldSince = 0f;
+            selectedIndex = -1;
+            lastDiagnosticSelectedIndex = -2;
+            nextStickDiagnosticTime = 0f;
+            ReleaseOwnedGameplayInputBlock();
+        }
+
+        private static void ReleaseOwnedGameplayInputBlock()
+        {
+            if (!ownsGameplayInputBlock)
+                return;
+
+            ownsGameplayInputBlock = false;
+            if (!global::rowemod.Menu.isOpen && !RuntimeVehicleTuneResetSupport.IsOpen)
+                ControllerMenuInput.SetGameplayInputBlocked(false);
+        }
+
+        private static bool HasActiveGameplayContext()
+        {
+            return RemoteKillSwitched.isModEnabled &&
+                   !SteamUserManager.LastAccessDeniedByBan &&
+                   Memory.rMbCharacter != null &&
+                   !RuntimeVehicleTuneResetSupport.IsOpen &&
+                   ReplayInputPatch.CanUsePieMenuShortcut;
+        }
+
+        private static bool CanUseGameplayShortcut()
+        {
+            return HasActiveGameplayContext();
         }
 
         private static float GetAnimationScale()
@@ -688,8 +746,16 @@ namespace rowemod.Mods
             switch (entry.ActionId)
             {
                 case "rowemod":
+                    ControllerMenuInput.SuppressNavigationUntilDpadRightRelease();
                     Main.OpenRoweModMenu();
                     Log.Msg("[PieMenu] Opened RoweMod menu from pie menu.");
+                    break;
+                case "vehicle_tuning":
+                    ControllerMenuInput.SuppressNavigationUntilDpadRightRelease();
+                    if (RuntimeVehicleTuneResetSupport.OpenInspector("pie menu"))
+                        Log.Msg("[PieMenu] Opened Vehicle Tuning from pie menu.");
+                    else
+                        Log.Warning("[PieMenu] Vehicle Tuning is unavailable until a supported vehicle is loaded.");
                     break;
                 case "extra_3":
                     OpenReplayFromPieMenu();
@@ -703,31 +769,15 @@ namespace rowemod.Mods
 
         private static void OpenReplayFromPieMenu()
         {
-            try
-            {
-                GameReplaySystem replaySystem = GameReplaySystem.Instance;
-
-                if (replaySystem == null)
-                {
-                    Log.Warning("[PieMenu] Could not open replay because ReplaySystem.Instance is null.");
-                    return;
-                }
-
-                ReplayInputPatch.AuthorizeNextReplayOpen();
-                replaySystem.CommandOpenReplay();
-                ReplayInputPatch.MarkReplayOpenedFromPieMenu();
+            if (ReplayInputPatch.TryOpenReplayFromPieMenu())
                 Log.Msg("[PieMenu] Opened replay editor from pie menu.");
-            }
-            catch (System.Exception ex)
-            {
-                ReplayInputPatch.CancelReplayOpenAuthorization();
-                Log.Error($"[PieMenu] Failed to open replay editor from pie menu: {ex.Message}");
-            }
+            else
+                Log.Warning("[PieMenu] Replay editor did not open; see RoweModInput diagnostics.");
         }
 
         private static void StartNativeReplaySuppression()
         {
-            ReplayInputPatch.BlockNativeReplayForSeconds(NativeReplaySuppressWindow);
+            ReplayInputPatch.EnsureDpadReservation("D-pad Right gesture started");
         }
 
         private static void CloseUntilRightDpadRelease()
@@ -738,8 +788,17 @@ namespace rowemod.Mods
 
         private static void EnsureStyles()
         {
-            if (labelStyle == null)
+            // Runtime-created textures can be released during a map transition while
+            // the managed GUIStyle objects survive. Rebuild the complete set instead
+            // of passing a destroyed texture to IMGUI on the next pie-menu open.
+            if (labelStyle == null || darkTexture == null || centerTexture == null)
             {
+                DestroyTexture(ref darkTexture);
+                DestroyTexture(ref centerTexture);
+                labelStyle = null;
+                selectedLabelStyle = null;
+                centerStyle = null;
+                hintStyle = null;
                 BuildStyles();
                 return;
             }

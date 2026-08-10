@@ -358,8 +358,8 @@ namespace rowemod.Mods
                 lastTimelineTime = CurrentTimelineTime();
             }
 
-            // Framing is a capture overlay, not a replay-camera property. Keep its preview live
-            // in gameplay too so the control has immediate, predictable feedback.
+            // Framing is replay-only. Update the live overlay while Replay is open, but never
+            // recreate it in gameplay after the native replay-exit GameEvent removes it.
             UpdateMatteOverlay(true);
         }
 
@@ -485,7 +485,9 @@ namespace rowemod.Mods
             changed |= !Mathf.Approximately(range, settings.cameraLightRange);
             settings.cameraLightRange = range;
 
-            if (GUILayout.Button(settings.cameraLightType == 0 ? "Light Type: Spot" : "Light Type: Point", Menu.UiButtonStyle))
+            if (Menu.ControllerButton(controlPrefix + "light_type",
+                    settings.cameraLightType == 0 ? "Light Type: Spot" : "Light Type: Point", Menu.UiButtonStyle,
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 settings.cameraLightType = settings.cameraLightType == 0 ? 1 : 0;
                 changed = true;
@@ -527,7 +529,9 @@ namespace rowemod.Mods
                 changed |= softShadows != settings.cameraLightSoftShadows;
                 settings.cameraLightSoftShadows = softShadows;
 
-                if (GUILayout.Button("Shadow Resolution: " + ShadowResolutionLabel(settings.cameraLightShadowResolution), Menu.UiButtonStyle))
+                if (Menu.ControllerButton(controlPrefix + "shadow_resolution",
+                        "Shadow Resolution: " + ShadowResolutionLabel(settings.cameraLightShadowResolution),
+                        Menu.UiButtonStyle, GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     settings.cameraLightShadowResolution = (settings.cameraLightShadowResolution + 1) % 5;
                     changed = true;
@@ -574,15 +578,19 @@ namespace rowemod.Mods
 
             GUILayout.Label("SKATE / BMX QUICK LENSES", Menu.UiMutedStyle);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("MK1 Death Lens", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+            if (Menu.ControllerButton("lens_mk1", "MK1 Death Lens", Menu.UiButtonStyle,
+                    GUILayout.ExpandWidth(true), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 ApplyMk1QuickLook();
-            if (GUILayout.Button("VX1000 4:3", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+            if (Menu.ControllerButton("lens_vx1000", "VX1000 4:3", Menu.UiButtonStyle,
+                    GUILayout.ExpandWidth(true), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 ApplyFisheyeQuickLook(true);
-            if (GUILayout.Button("Clean Fisheye", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+            if (Menu.ControllerButton("lens_clean_fisheye", "Clean Fisheye", Menu.UiButtonStyle,
+                    GUILayout.ExpandWidth(true), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 ApplyFisheyeQuickLook(false);
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Reset", Menu.UiButtonStyle, GUILayout.ExpandWidth(true)))
+            if (Menu.ControllerButton("lens_reset", "Reset", Menu.UiButtonStyle,
+                    GUILayout.ExpandWidth(true), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 ResetFisheyeQuickLook();
             GUILayout.EndHorizontal();
             GUILayout.Label("MK1 recreates the Century Optics death lens: 125 degree horizontal-equivalent view, 4:3 crop, Panini shaping, MK1 edge mask, subtle fringe, and grain.", Menu.UiMutedWrappedStyle);
@@ -629,7 +637,9 @@ namespace rowemod.Mods
             settings.replayVignette = DrawSlider("Vignette (%)", settings.replayVignette, 0f, 100f, controlPrefix + "vignette", ref changed);
             DrawTrackLabel("Vignette", LensTrack.Vignette);
 
-            if (GUILayout.Button("Shake: " + ShakeModeLabel(settings.replayShakeMode), Menu.UiButtonStyle))
+            if (Menu.ControllerButton(controlPrefix + "shake_mode",
+                    "Shake: " + ShakeModeLabel(settings.replayShakeMode), Menu.UiButtonStyle,
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 settings.replayShakeMode = (settings.replayShakeMode + 1) % 4;
                 changed = true;
@@ -747,7 +757,9 @@ namespace rowemod.Mods
         {
             ReplaySettings settings = Config.replaySettings;
             bool changed = false;
-            if (GUILayout.Button("Framing: " + FramingModeLabel(settings.replayFramingMode), Menu.UiButtonStyle))
+            if (Menu.ControllerButton(controlPrefix + "framing_mode",
+                    "Framing: " + FramingModeLabel(settings.replayFramingMode), Menu.UiButtonStyle,
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 settings.replayFramingMode = (settings.replayFramingMode + 1) % 3;
                 changed = true;
@@ -762,11 +774,14 @@ namespace rowemod.Mods
         {
             GUILayout.Label(keyframeStatus, Menu.UiMutedWrappedStyle);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Add Camera Key", Menu.UiButtonStyle))
+            if (Menu.ControllerButton("keyframe_add", "Add Camera Key", Menu.UiButtonStyle,
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 AddKeyAtNeedle();
-            if (GUILayout.Button("Delete Key", Menu.UiButtonStyle))
+            if (Menu.ControllerButton("keyframe_delete", "Delete Key", Menu.UiButtonStyle,
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 DeleteKeyAtNeedle();
-            if (GUILayout.Button("Delete All", Menu.UiButtonStyle))
+            if (Menu.ControllerButton("keyframe_delete_all", "Delete All", Menu.UiButtonStyle,
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 DeleteAllKeys();
             GUILayout.EndHorizontal();
             GUILayout.Label($"RoweMod session keys: {customKeys.Count}/{MaximumCustomKeys}", Menu.UiBadgeStyle);
@@ -795,7 +810,9 @@ namespace rowemod.Mods
                 string name = presetCache[i];
                 GUILayout.BeginHorizontal();
                 bool selected = string.Equals(selectedPreset, name, StringComparison.OrdinalIgnoreCase);
-                if (GUILayout.Button((selected ? "● " : string.Empty) + name, Menu.UiButtonStyle))
+                if (Menu.ControllerButton($"replay_preset_{name}",
+                        (selected ? "● " : string.Empty) + name, Menu.UiButtonStyle,
+                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     ReplayLensPreset preset = ReplayLensPreset.Load(name);
                     if (preset != null)
@@ -807,7 +824,8 @@ namespace rowemod.Mods
                         OnSettingsChanged();
                     }
                 }
-                if (selected && GUILayout.Button("Rename", Menu.UiButtonStyle, GUILayout.Width(72f)))
+                if (selected && Menu.ControllerButton($"rename_replay_preset_{name}", "Rename", Menu.UiButtonStyle,
+                        GUILayout.Width(82f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     if (ReplayLensPreset.Rename(name, presetName))
                     {
@@ -819,7 +837,9 @@ namespace rowemod.Mods
                         break;
                     }
                 }
-                if (GUILayout.Button("Delete", Menu.UiButtonStyle, GUILayout.Width(68f)) && ReplayLensPreset.Delete(name))
+                if (Menu.ControllerButton($"delete_replay_preset_{name}", "Delete", Menu.UiButtonStyle,
+                        GUILayout.Width(78f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)) &&
+                    ReplayLensPreset.Delete(name))
                 {
                     if (selected)
                     {
@@ -2365,7 +2385,8 @@ namespace rowemod.Mods
             ReplaySettings s = Config.replaySettings;
             bool frameSelected = s.replayFramingMode != 0;
             bool vignetteVisible = replayActive && frameSelected && s.replayVignette > 0.001f;
-            bool visible = frameSelected && (s.replayMatteOpacity > 0.001f || vignetteVisible);
+            bool visible = replayActive && frameSelected &&
+                (s.replayMatteOpacity > 0.001f || vignetteVisible);
             if (!visible)
             {
                 if (matteObject != null)

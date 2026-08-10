@@ -76,6 +76,7 @@ namespace rowemod.Mods
         private const float AutoSaveDelay = 0.4f;
 
         private static bool animationSourcePickerOpen;
+        public static bool IsControllerPickerOpen => animationSourcePickerOpen;
         private static bool animationSourcePickerScooter;
         private static bool animationSourceCopyPlayer;
         private static bool animationSourceCopyVehicle;
@@ -289,14 +290,16 @@ namespace rowemod.Mods
             EnsureTrickCatalog(false);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Apply Saved Overrides", smallButtonStyle, GUILayout.Width(160)))
+            if (Menu.ControllerButton("apply_saved_animation_overrides", "Apply Saved Overrides", smallButtonStyle,
+                    GUILayout.Width(180f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 int applied = RefreshRuntimeDataCache(true, true, "manual override apply");
                 status = $"Applied saved animation overrides to {applied} loaded trick data objects.";
                 EnsureTrickCatalog(false);
             }
 
-            if (GUILayout.Button("Refresh Tricks", smallButtonStyle, GUILayout.Width(120)))
+            if (Menu.ControllerButton("refresh_animation_tricks", "Refresh Tricks", smallButtonStyle,
+                    GUILayout.Width(136f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 RefreshRuntimeDataCache(true, true, "manual trick refresh");
                 EnsureTrickCatalog(false);
@@ -304,7 +307,8 @@ namespace rowemod.Mods
             }
 
             GUI.enabled = currentData != null;
-            if (GUILayout.Button("Select Live Trick", smallButtonStyle, GUILayout.Width(130)))
+            if (Menu.ControllerButton("select_live_trick", "Select Live Trick", smallButtonStyle,
+                    GUILayout.Width(146f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 selectedTrickCatalogKey = currentKey;
                 selectedTrickCatalogIndex = FindCatalogIndexByKey(currentKey);
@@ -314,7 +318,8 @@ namespace rowemod.Mods
             }
             GUI.enabled = true;
 
-            if (GUILayout.Button("Forget Live Trick", smallButtonStyle, GUILayout.Width(135)))
+            if (Menu.ControllerButton("forget_live_trick", "Forget Live Trick", smallButtonStyle,
+                    GUILayout.Width(152f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 currentData = null;
                 currentKey = string.Empty;
@@ -411,10 +416,7 @@ namespace rowemod.Mods
             bool changed = false;
             changed |= DrawFloatSlider("Overall Speed", data._overallSpeedMult, 0.05f, 10f, v => data._overallSpeedMult = v);
 
-            showAdvancedControls = GUILayout.Toggle(
-                showAdvancedControls,
-                showAdvancedControls ? "v Advanced Timing & Flags" : "> Advanced Timing & Flags",
-                headerStyle);
+            showAdvancedControls = Menu.ModernFoldout("Advanced Timing & Flags", showAdvancedControls);
             if (showAdvancedControls)
             {
                 changed |= DrawFloatSlider("Enter Speed", data._enterSpeedMult, 0.05f, 5f, v => data._enterSpeedMult = v);
@@ -425,7 +427,8 @@ namespace rowemod.Mods
                 changed |= DrawFloatSlider("Tweak Blend At", data._tweakBeginBlendNormalizedTime, 0f, 1f, v => data._tweakBeginBlendNormalizedTime = v);
 
                 bool onlyAir = data._onlyFireIfInAir;
-                bool nextOnlyAir = GUILayout.Toggle(onlyAir, "Only Fire If In Air");
+                bool nextOnlyAir = onlyAir;
+                Menu.ModernToggle("Only Fire If In Air", ref nextOnlyAir, "trick_animation_only_air");
                 if (nextOnlyAir != onlyAir)
                 {
                     data._onlyFireIfInAir = nextOnlyAir;
@@ -433,7 +436,8 @@ namespace rowemod.Mods
                 }
 
                 bool allowLandingHold = data._allowLandingHolding;
-                bool nextAllowLandingHold = GUILayout.Toggle(allowLandingHold, "Allow Landing Holding");
+                bool nextAllowLandingHold = allowLandingHold;
+                Menu.ModernToggle("Allow Landing Holding", ref nextAllowLandingHold, "trick_animation_landing_hold");
                 if (nextAllowLandingHold != allowLandingHold)
                 {
                     data._allowLandingHolding = nextAllowLandingHold;
@@ -463,7 +467,7 @@ namespace rowemod.Mods
             DrawClipCopyTools(data);
 
             GUILayout.Space(8);
-            showClipDetails = GUILayout.Toggle(showClipDetails, showClipDetails ? "v Clip Details" : "> Clip Details", headerStyle);
+            showClipDetails = Menu.ModernFoldout("Clip Details", showClipDetails);
             if (showClipDetails)
             {
                 DrawClipInfo("Player Enter", SafeRead(() => data.PlayerEnterClip, null));
@@ -755,7 +759,8 @@ namespace rowemod.Mods
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search:", GUILayout.Width(55));
             trickCatalogSearch = GUILayout.TextField(trickCatalogSearch ?? string.Empty, searchFieldStyle, GUILayout.Width(145), GUILayout.Height(24));
-            if (GUILayout.Button("Refresh", smallButtonStyle, GUILayout.Width(68)))
+            if (Menu.ControllerButton("refresh_animation_catalog", "Refresh", smallButtonStyle,
+                    GUILayout.Width(78f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 EnsureTrickCatalog(true);
             GUILayout.EndHorizontal();
 
@@ -783,7 +788,9 @@ namespace rowemod.Mods
                 bool selected = i == selectedTrickCatalogIndex || string.Equals(key, selectedTrickCatalogKey, System.StringComparison.OrdinalIgnoreCase);
                 bool saved = Config.trickAnimationDebugSettings.overrides.ContainsKey(key);
                 string label = $"{(selected ? "> " : string.Empty)}{name}{(saved ? " *" : string.Empty)}";
-                if (GUILayout.Button(label, selected ? selectedRowButtonStyle : rowButtonStyle))
+                if (Menu.ControllerButton($"animation_trick_{key}", label,
+                        selected ? selectedRowButtonStyle : rowButtonStyle,
+                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     selectedTrickCatalogIndex = i;
                     selectedTrickCatalogKey = key;
@@ -1101,7 +1108,8 @@ namespace rowemod.Mods
                 OpenAnimationSourcePicker(target, true, false);
             if (Menu.SecondaryButton("Change Bike", GUILayout.Width(110f), GUILayout.Height(24f)))
                 OpenAnimationSourcePicker(target, false, true);
-            if (GUILayout.Button("Change Both", activePillStyle, GUILayout.Width(110f), GUILayout.Height(24f)))
+            if (Menu.ControllerButton("change_both_animation_sources", "Change Both", activePillStyle,
+                    GUILayout.Width(124f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 OpenAnimationSourcePicker(target, true, true);
             Menu.EndToolbar();
             GUILayout.Label("Selecting a source copies and saves the chosen clips immediately.", mutedStyle);
@@ -1123,11 +1131,37 @@ namespace rowemod.Mods
 
             animationSourcePickerRect.x = Mathf.Clamp(animationSourcePickerRect.x, 10f, Mathf.Max(10f, Screen.width - animationSourcePickerRect.width - 10f));
             animationSourcePickerRect.y = Mathf.Clamp(animationSourcePickerRect.y, 10f, Mathf.Max(10f, Screen.height - animationSourcePickerRect.height - 10f));
-            animationSourcePickerRect = GUI.Window(
-                AnimationSourcePickerWindowId,
-                animationSourcePickerRect,
-                (GUI.WindowFunction)DrawAnimationSourcePickerWindow,
-                "Animation Source");
+            Menu.BeginControllerOverlayFrame(
+                "animation_source_picker",
+                animationSourcePickerScroll.y,
+                330f,
+                SetControllerPickerScroll);
+            try
+            {
+                animationSourcePickerRect = GUI.Window(
+                    AnimationSourcePickerWindowId,
+                    animationSourcePickerRect,
+                    (GUI.WindowFunction)DrawAnimationSourcePickerWindow,
+                    "Animation Source");
+            }
+            finally
+            {
+                Menu.EndControllerOverlayFrame();
+            }
+        }
+
+        public static bool TryCloseControllerPicker()
+        {
+            if (!animationSourcePickerOpen)
+                return false;
+
+            animationSourcePickerOpen = false;
+            return true;
+        }
+
+        private static void SetControllerPickerScroll(float value)
+        {
+            animationSourcePickerScroll.y = Mathf.Max(0f, value);
         }
 
         private static void OpenAnimationSourcePicker(SyncTrickAnimationData target, bool copyPlayer, bool copyVehicle)
@@ -1167,13 +1201,19 @@ namespace rowemod.Mods
             Menu.EndToolbar();
 
             Menu.BeginToolbar();
-            if (GUILayout.Toggle(!animationSourcePickerScooter, "BMX", !animationSourcePickerScooter ? activePillStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
+            if (Menu.ControllerButton("animation_source_bmx", "BMX",
+                    !animationSourcePickerScooter ? activePillStyle : Menu.UiPillStyle,
+                    GUILayout.Width(100f * Menu.EffectiveUiScale),
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 if (animationSourcePickerScooter)
                     animationSourcePickerScroll = Vector2.zero;
                 animationSourcePickerScooter = false;
             }
-            if (GUILayout.Toggle(animationSourcePickerScooter, "Scooter", animationSourcePickerScooter ? activePillStyle : Menu.UiPillStyle, GUILayout.Width(100f), GUILayout.Height(24f)))
+            if (Menu.ControllerButton("animation_source_scooter", "Scooter",
+                    animationSourcePickerScooter ? activePillStyle : Menu.UiPillStyle,
+                    GUILayout.Width(100f * Menu.EffectiveUiScale),
+                    GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 if (!animationSourcePickerScooter)
                     animationSourcePickerScroll = Vector2.zero;
@@ -1184,6 +1224,7 @@ namespace rowemod.Mods
             string search = (clipSourceSearch ?? string.Empty).Trim();
             int matches = 0;
             animationSourcePickerScroll = GUILayout.BeginScrollView(animationSourcePickerScroll, GUILayout.Height(330f));
+            Menu.SetControllerScrollableContext(true);
             for (int i = 0; i < clipSources.Count; i++)
             {
                 SyncTrickAnimationData source = clipSources[i];
@@ -1195,7 +1236,8 @@ namespace rowemod.Mods
                     continue;
 
                 matches++;
-                if (GUILayout.Button(sourceName, clipSourceButtonStyle, GUILayout.Height(28f), GUILayout.ExpandWidth(true)))
+                if (Menu.ControllerButton($"animation_source_{GetDataKey(source)}", sourceName, clipSourceButtonStyle,
+                        GUILayout.Height(36f * Menu.EffectiveUiScale), GUILayout.ExpandWidth(true)))
                 {
                     CopyClipsFromSource(source, animationSourceTarget, animationSourceCopyPlayer, animationSourceCopyVehicle);
                     animationSourcePickerOpen = false;
@@ -1203,6 +1245,7 @@ namespace rowemod.Mods
             }
             if (matches == 0)
                 GUILayout.Label(search.Length > 0 ? "No source tricks match this search." : "No sources are available in this category.", mutedStyle);
+            Menu.SetControllerScrollableContext(false);
             GUILayout.EndScrollView();
 
             GUILayout.EndVertical();
@@ -1225,10 +1268,7 @@ namespace rowemod.Mods
 
         private static void DrawPoseOverlayTools(SyncTrickAnimationData target, string dataKey)
         {
-            showPoseOverlayTools = GUILayout.Toggle(
-                showPoseOverlayTools,
-                showPoseOverlayTools ? "v Pose Overlay / Bone Edits" : "> Pose Overlay / Bone Edits",
-                headerStyle);
+            showPoseOverlayTools = Menu.ModernFoldout("Pose Overlay / Bone Edits", showPoseOverlayTools);
 
             if (!showPoseOverlayTools)
                 return;
@@ -1241,21 +1281,24 @@ namespace rowemod.Mods
             values.poseOverrides ??= new List<TrickPoseOverride>();
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Add Bone Edit", smallButtonStyle, GUILayout.Width(125)))
+            if (Menu.ControllerButton("add_bone_edit", "Add Bone Edit", smallButtonStyle,
+                    GUILayout.Width(142f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 values.poseOverrides.Add(new TrickPoseOverride());
                 suppressAutoApplyUntil = Time.unscaledTime + 5f;
                 status = $"Added pose edit for {TrickName(target)}. Adjust it live, then save.";
             }
 
-            if (GUILayout.Button("Save Pose Edits", smallButtonStyle, GUILayout.Width(130)))
+            if (Menu.ControllerButton("save_pose_edits", "Save Pose Edits", smallButtonStyle,
+                    GUILayout.Width(146f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 Config.Save();
                 status = $"Saved pose edits for {TrickName(target)}.";
                 Log.Msg($"[TrickAnimEditor] Saved pose edits for {TrickName(target)} ({dataKey}).");
             }
 
-            if (GUILayout.Button("Clear Pose Edits", smallButtonStyle, GUILayout.Width(135)))
+            if (Menu.ControllerButton("clear_pose_edits", "Clear Pose Edits", smallButtonStyle,
+                    GUILayout.Width(152f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
             {
                 values.poseOverrides.Clear();
                 Config.Save();
@@ -1283,19 +1326,27 @@ namespace rowemod.Mods
 
                 GUILayout.BeginVertical(panelAltStyle);
                 GUILayout.BeginHorizontal();
-                pose.enabled = GUILayout.Toggle(pose.enabled, $"Edit {i + 1}", GUILayout.Width(90));
+                if (Menu.ControllerButton($"pose_edit_enabled_{dataKey}_{i}",
+                        pose.enabled ? $"Edit {i + 1}: On" : $"Edit {i + 1}: Off", smallButtonStyle,
+                        GUILayout.Width(112f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
+                    pose.enabled = !pose.enabled;
                 GUILayout.Label($"Phase: {NormalizePhaseName(pose.phase)}", mutedStyle, GUILayout.Width(115));
-                if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28)))
+                if (Menu.ControllerButton($"pose_phase_previous_{dataKey}_{i}", "<", smallButtonStyle,
+                        GUILayout.Width(36f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                     pose.phase = StepOption(NormalizePhaseName(pose.phase), PhaseOptions, -1);
-                if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28)))
+                if (Menu.ControllerButton($"pose_phase_next_{dataKey}_{i}", ">", smallButtonStyle,
+                        GUILayout.Width(36f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                     pose.phase = StepOption(NormalizePhaseName(pose.phase), PhaseOptions, 1);
 
                 GUILayout.Label($"Bone: {NormalizeBoneName(pose.bone)}", mutedStyle, GUILayout.Width(170));
-                if (GUILayout.Button("<", smallButtonStyle, GUILayout.Width(28)))
+                if (Menu.ControllerButton($"pose_bone_previous_{dataKey}_{i}", "<", smallButtonStyle,
+                        GUILayout.Width(36f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                     pose.bone = StepBone(NormalizeBoneName(pose.bone), -1);
-                if (GUILayout.Button(">", smallButtonStyle, GUILayout.Width(28)))
+                if (Menu.ControllerButton($"pose_bone_next_{dataKey}_{i}", ">", smallButtonStyle,
+                        GUILayout.Width(36f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                     pose.bone = StepBone(NormalizeBoneName(pose.bone), 1);
-                if (GUILayout.Button("Remove", smallButtonStyle, GUILayout.Width(78)))
+                if (Menu.ControllerButton($"remove_pose_edit_{dataKey}_{i}", "Remove", smallButtonStyle,
+                        GUILayout.Width(90f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     values.poseOverrides.RemoveAt(i);
                     i--;
@@ -1324,13 +1375,15 @@ namespace rowemod.Mods
                     v => pose.localPositionOffset = v);
 
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Zero Rotation", smallButtonStyle, GUILayout.Width(115)))
+                if (Menu.ControllerButton($"zero_pose_rotation_{dataKey}_{i}", "Zero Rotation", smallButtonStyle,
+                        GUILayout.Width(132f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     pose.localRotationEuler = new SerializableVector3(0f, 0f, 0f);
                     changed = true;
                 }
 
-                if (GUILayout.Button("Zero Position", smallButtonStyle, GUILayout.Width(115)))
+                if (Menu.ControllerButton($"zero_pose_position_{dataKey}_{i}", "Zero Position", smallButtonStyle,
+                        GUILayout.Width(132f * Menu.EffectiveUiScale), GUILayout.Height(36f * Menu.EffectiveUiScale)))
                 {
                     pose.localPositionOffset = new SerializableVector3(0f, 0f, 0f);
                     changed = true;
@@ -1685,12 +1738,8 @@ namespace rowemod.Mods
 
         private static bool DrawFloatSlider(string label, float value, float min, float max, System.Action<float> apply)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"{label}: {value:0.###}", GUILayout.Width(170));
-            float next = GUILayout.HorizontalSlider(value, min, max, sliderStyle, sliderThumbStyle, GUILayout.Width(260));
-            GUILayout.Label($"{min:0.##}", mutedStyle, GUILayout.Width(34));
-            GUILayout.Label($"{max:0.##}", mutedStyle, GUILayout.Width(34));
-            GUILayout.EndHorizontal();
+            float next = value;
+            Menu.ModernSlider(label, ref next, min, max, $"trick_animation_{label}");
 
             if (Mathf.Abs(next - value) <= 0.001f)
                 return false;
@@ -1720,11 +1769,8 @@ namespace rowemod.Mods
 
         private static bool DrawAxisSlider(string label, ref float value, float min, float max)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(label, GUILayout.Width(24));
-            float next = GUILayout.HorizontalSlider(value, min, max, sliderStyle, sliderThumbStyle, GUILayout.Width(260));
-            GUILayout.Label($"{next:0.###}", mutedStyle, GUILayout.Width(60));
-            GUILayout.EndHorizontal();
+            float next = value;
+            Menu.ModernSlider(label, ref next, min, max, $"trick_animation_axis_{label}");
 
             if (Mathf.Abs(next - value) <= 0.001f)
                 return false;
