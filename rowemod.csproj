@@ -498,8 +498,10 @@
 		<Compile Include="Mods\DroneEvents.cs" />
 		<Compile Include="Mods\GameEventListener.cs" />
 		<Compile Include="Mods\GraphicsEnvironmentController.cs" />
+		<Compile Include="Mods\GrindInputRemap.cs" />
 		<Compile Include="Mods\GrindPoseEditor.cs" />
 		<Compile Include="Mods\GrindPosePreset.cs" />
+		<Compile Include="Mods\HostPlayerLimit.cs" />
 		<Compile Include="Mods\LeftStickGestureRouter.cs" />
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\MainMenuCharacterPreview.cs" />
@@ -509,6 +511,7 @@
 		<Compile Include="Mods\PartTweaker.cs" />
 		<Compile Include="Mods\PegSparks.cs" />
 		<Compile Include="Mods\Physics.cs" />
+		<Compile Include="Mods\PhysicsPreset.cs" />
 		<Compile Include="Mods\PieMenu.cs" />
 		<Compile Include="Mods\ReplayInputPatch.cs" />
 		<Compile Include="Mods\ReplayCameraLight.cs" />

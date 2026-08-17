@@ -453,6 +453,8 @@ namespace rowemod
                         bool previousGuiChanged = GUI.changed;
                         GUI.changed = false;
 
+                        PhysicsPreset.DrawControls();
+
                         float physicsPaneHeight = GetContentPaneHeight(24f);
                         BeginTwoPane(physicsPaneHeight);
 

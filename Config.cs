@@ -135,6 +135,7 @@ namespace rowemod
         public bool disableFreeCamCollider;
         public bool disableDroneCollider;
         public string customSessionMarker;
+        public int hostPlayerLimit;
     }
 
     public class UpdaterSettings
@@ -395,6 +396,10 @@ namespace rowemod
     public class GrindPoseSettings
     {
         public Dictionary<string, GrindPoseConfigEntry> poses { get; set; } = new Dictionary<string, GrindPoseConfigEntry>();
+        // Index 1-8 matches the game's HookGrind enum. Zero is deliberately unused so
+        // a stored value of 0 can mean "Disabled" without a special nullable type.
+        public bool grindInputRemapEnabled { get; set; } = true;
+        public int[] grindInputMap { get; set; } = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
         public bool showCenterOfMassVisual { get; set; } = false;
         public bool showLiveCenterOfMassVisual { get; set; } = false;
         public float centerOfMassVisualScale { get; set; } = 0.18f;
@@ -517,7 +522,8 @@ namespace rowemod
             disableEmoteOnBike = false,
             disableFreeCamCollider = false,
             disableDroneCollider = false,
-            customSessionMarker = "None"
+            customSessionMarker = "None",
+            hostPlayerLimit = 4
         };
         public static CustomTricks tricks = new CustomTricks
         {
@@ -715,6 +721,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"menuScale\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasMenuDesignVersion =
                 jsonContent.IndexOf("\"menuDesignVersion\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasHostPlayerLimit =
+                jsonContent.IndexOf("\"hostPlayerLimit\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasNoseManualComTuning =
                 jsonContent.IndexOf("\"noseManualDriverInertiaMultiplier\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasAutoSkipIntro =
@@ -739,6 +747,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"bikeOnlyStanceVersion\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasTrickAnimationDebugSettings =
                 jsonContent.IndexOf("\"trickAnimationDebugSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasGrindInputMap =
+                jsonContent.IndexOf("\"grindInputMap\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
             disclaimerAccepted = jsonData.disclaimerAccepted;
             autoSkipIntro = !hasAutoSkipIntro || jsonData.autoSkipIntro;
@@ -823,12 +833,17 @@ namespace rowemod
 
                 misc.menuDesignVersion = 1;
             }
+            if (!hasHostPlayerLimit)
+                misc.hostPlayerLimit = 4;
+            else
+                misc.hostPlayerLimit = Math.Max(1, Math.Min(8, misc.hostPlayerLimit));
             tricks = jsonData.customTricksData;
             if (tricks.trickSets == null)
             {
                 tricks.trickSets = new Dictionary<string, List<TrickEntry>>();
             }
             grindPoseData = jsonData.grindPoseData ?? new GrindPoseSettings();
+            NormalizeGrindPoseSettings(grindPoseData);
             motorTuning = jsonData.motorTuningData ?? new Dictionary<string, MotorTuningConfigEntry>();
             updaterSettings = jsonData.updaterSettingsData ?? new UpdaterSettings();
             challengeRuntimeSettings = jsonData.challengeRuntimeSettingsData ?? new ChallengeRuntimeSettings();
@@ -884,16 +899,6 @@ namespace rowemod
                 updaterSettings.manifestUrl = new UpdaterSettings().manifestUrl;
             }
 
-            if (grindPoseData.poses == null)
-            {
-                grindPoseData.poses = new Dictionary<string, GrindPoseConfigEntry>();
-            }
-
-            if (grindPoseData.centerOfMassVisualScale <= 0f)
-            {
-                grindPoseData.centerOfMassVisualScale = 0.18f;
-            }
-
             //set new config variables to defaults if 0
             if (physics.bmxForceFactor <= 0f) physics.bmxForceFactor = 0.07f;
             if (physics.bmxMaxSpeed <= 0f) physics.bmxMaxSpeed = 7.5f;
@@ -906,7 +911,8 @@ namespace rowemod
                 !hasBikeOnlyStanceSettings ||
                 migratedBikeOnlyStanceEnabled ||
                 !hasTrickAnimationDebugSettings ||
-                !hasMenuScale || !hasMenuDesignVersion)
+                !hasGrindInputMap ||
+                !hasMenuScale || !hasMenuDesignVersion || !hasHostPlayerLimit)
             {
                 Save();
             }
@@ -952,7 +958,7 @@ namespace rowemod
             settings.replayFramingMode = Math.Max(0, Math.Min(2, settings.replayFramingMode));
             settings.replayMatteOpacity = Clamp01OrDefault(settings.replayMatteOpacity, 1f);
             settings.activeReplayLensPreset ??= string.Empty;
-            settings.cameraLightIntensity = ClampFinite(settings.cameraLightIntensity, 0f, 100f, 20f);
+            settings.cameraLightIntensity = ClampFinite(settings.cameraLightIntensity, 0f, 1000f, 20f);
             settings.cameraLightRange = ClampFinite(settings.cameraLightRange, 1f, 50f, 14f);
             settings.cameraLightSpotAngle = ClampFinite(settings.cameraLightSpotAngle, 10f, 179f, 75f);
             settings.cameraLightColorR = Clamp01OrDefault(settings.cameraLightColorR, 1f);
@@ -1237,6 +1243,7 @@ namespace rowemod
         {
             bool showPlayerUserNameTargets = misc.showPlayerUserNameTargets;
             string customSessionMarker = misc.customSessionMarker;
+            int hostPlayerLimit = Math.Max(1, Math.Min(8, misc.hostPlayerLimit));
             autoSkipIntro = true;
 
             misc = new Misc
@@ -1256,7 +1263,8 @@ namespace rowemod
                 disableEmoteOnBike = false,
                 disableFreeCamCollider = false,
                 disableDroneCollider = false,
-                customSessionMarker = customSessionMarker
+                customSessionMarker = customSessionMarker,
+                hostPlayerLimit = hostPlayerLimit
             };
         }
 
@@ -1265,12 +1273,34 @@ namespace rowemod
             grindPoseData = new GrindPoseSettings
             {
                 poses = new Dictionary<string, GrindPoseConfigEntry>(),
+                grindInputRemapEnabled = true,
+                grindInputMap = new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
                 showCenterOfMassVisual = false,
                 showLiveCenterOfMassVisual = false,
                 centerOfMassVisualScale = 0.18f,
                 debugPoseApplyLogging = false
             };
             physics.grindPoseLerpSpeed = 2f;
+        }
+
+        public static void NormalizeGrindPoseSettings(GrindPoseSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            settings.poses ??= new Dictionary<string, GrindPoseConfigEntry>();
+            if (settings.centerOfMassVisualScale <= 0f || !float.IsFinite(settings.centerOfMassVisualScale))
+                settings.centerOfMassVisualScale = 0.18f;
+
+            int[] normalized = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+            if (settings.grindInputMap != null)
+            {
+                int count = Math.Min(settings.grindInputMap.Length, normalized.Length);
+                for (int i = 1; i < count; i++)
+                    normalized[i] = Math.Max(0, Math.Min(8, settings.grindInputMap[i]));
+            }
+
+            settings.grindInputMap = normalized;
         }
 
         public static void ResetChallengeSettings()

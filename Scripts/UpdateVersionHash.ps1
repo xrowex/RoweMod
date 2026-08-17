@@ -16,7 +16,18 @@ if (-not (Test-Path -LiteralPath $DllPath)) {
     throw "DLL not found: $DllPath"
 }
 
-$hash = (Get-FileHash -LiteralPath $DllPath -Algorithm SHA256).Hash.ToLowerInvariant()
+# Build hosts can launch PowerShell with a reduced cmdlet set. Use the .NET crypto API
+# directly so release deployment does not depend on Get-FileHash being imported.
+$sha256 = [System.Security.Cryptography.SHA256]::Create()
+$stream = [System.IO.File]::OpenRead($DllPath)
+try {
+    $bytes = $sha256.ComputeHash($stream)
+    $hash = ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+}
+finally {
+    $stream.Dispose()
+    $sha256.Dispose()
+}
 $resolvedManifestPath = (Resolve-Path -LiteralPath $VersionJson).Path
 $jsonText = [System.IO.File]::ReadAllText($resolvedManifestPath)
 $manifest = $jsonText | ConvertFrom-Json

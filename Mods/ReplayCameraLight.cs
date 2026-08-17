@@ -476,7 +476,9 @@ namespace rowemod.Mods
             settings.cameraLightEnabled = enabled;
 
             float intensity = settings.cameraLightIntensity;
-            Menu.ModernSlider("Intensity", ref intensity, 0f, 100f, controlPrefix + "intensity");
+            // HDRP receives this as candela. Keep the normal default modest, but
+            // allow enough headroom for dark HDRI/night maps without editing config files.
+            Menu.ModernSlider("Intensity", ref intensity, 0f, 1000f, controlPrefix + "intensity");
             changed |= !Mathf.Approximately(intensity, settings.cameraLightIntensity);
             settings.cameraLightIntensity = intensity;
 

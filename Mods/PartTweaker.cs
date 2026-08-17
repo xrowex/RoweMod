@@ -6,6 +6,7 @@ using System.Linq;
 using Il2CppMashBox.Addons.ContentManagment;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.Development.RandD.PlayFabTesting;
+using MelonLoader;
 
 namespace rowemod.Mods
 {
@@ -72,8 +73,116 @@ namespace rowemod.Mods
         }
         
         private static List<PegData> pegData = new();
+
+        // Rear peg anchors can live below a frame bundle's hierarchy.  A custom frame can
+        // therefore rebuild their local pose while the visual peg itself remains equipped.
+        // Keep this state transient: it is captured from the current stock bike immediately
+        // before a frame replacement and restored once, after that replacement settles.
+        private readonly struct RearPegPose
+        {
+            public readonly string Key;
+            public readonly Vector3 LocalPosition;
+            public readonly Quaternion LocalRotation;
+            public readonly Vector3 LocalScale;
+
+            public RearPegPose(string key, Transform transform)
+            {
+                Key = key;
+                LocalPosition = transform.localPosition;
+                LocalRotation = transform.localRotation;
+                LocalScale = transform.localScale;
+            }
+        }
         
         private static TireTest[] tireTest;
+
+        private static List<RearPegPose> CaptureRearPegPoses()
+        {
+            var poses = new List<RearPegPose>();
+            if (Memory.rMbCharacter == null)
+            {
+                Log.Warning("[Frame/Pegs] Cannot capture rear peg anchors: player bike is unavailable.");
+                return poses;
+            }
+
+            foreach (var pegSlot in Memory.rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true))
+            {
+                string key = GetRearPegKey(pegSlot);
+                if (key == null || pegSlot.transform == null)
+                    continue;
+
+                poses.Add(new RearPegPose(key, pegSlot.transform));
+                Log.Msg(
+                    $"[Frame/Pegs] Captured {key}: pos={pegSlot.transform.localPosition}, " +
+                    $"rot={pegSlot.transform.localRotation.eulerAngles}, scale={pegSlot.transform.localScale}.");
+            }
+
+            if (poses.Count == 0)
+                Log.Warning("[Frame/Pegs] No rear peg anchors were found before the frame swap.");
+
+            return poses;
+        }
+
+        private static string GetRearPegKey(EquipSlotVehicle pegSlot)
+        {
+            if (pegSlot == null || pegSlot._subType != "peg")
+                return null;
+
+            string parentName = pegSlot.transform?.parent != null ? pegSlot.transform.parent.name : "";
+            string key = (pegSlot.name + " " + parentName);
+
+            if (key.Contains("RearLeft", StringComparison.OrdinalIgnoreCase) ||
+                key.Contains("BackLeft", StringComparison.OrdinalIgnoreCase))
+                return "RearLeft";
+
+            if (key.Contains("RearRight", StringComparison.OrdinalIgnoreCase) ||
+                key.Contains("BackRight", StringComparison.OrdinalIgnoreCase))
+                return "RearRight";
+
+            return null;
+        }
+
+        private static System.Collections.IEnumerator RestoreRearPegPosesAfterFrameSwap(
+            List<RearPegPose> poses,
+            string frameName)
+        {
+            if (poses == null || poses.Count == 0)
+                yield break;
+
+            // Equip() is immediate, but the frame's anchors can finish their own setup on the
+            // next update.  Waiting two frames keeps this repair event-scoped without a
+            // permanent transform override.
+            yield return null;
+            yield return null;
+
+            if (Memory.rMbCharacter == null)
+            {
+                Log.Warning($"[Frame/Pegs] Skipped restoring rear pegs for '{frameName}': player bike changed.");
+                yield break;
+            }
+
+            var currentSlots = Memory.rMbCharacter.GetComponentsInChildren<EquipSlotVehicle>(true);
+            int restored = 0;
+            foreach (var pose in poses)
+            {
+                var pegSlot = currentSlots.FirstOrDefault(slot => GetRearPegKey(slot) == pose.Key);
+                if (pegSlot == null || pegSlot.transform == null)
+                {
+                    Log.Warning($"[Frame/Pegs] Could not find the {pose.Key} anchor after equipping '{frameName}'.");
+                    continue;
+                }
+
+                pegSlot.transform.localPosition = pose.LocalPosition;
+                pegSlot.transform.localRotation = pose.LocalRotation;
+                pegSlot.transform.localScale = pose.LocalScale;
+                restored++;
+                Log.Msg(
+                    $"[Frame/Pegs] Restored {pose.Key} after '{frameName}': pos={pose.LocalPosition}, " +
+                    $"rot={pose.LocalRotation.eulerAngles}, scale={pose.LocalScale}.");
+            }
+
+            Log.Msg($"[Frame/Pegs] Restored {restored}/{poses.Count} rear peg anchor(s) after frame swap '{frameName}'.");
+        }
         
         private static void RefreshPegData()
         {
@@ -942,6 +1051,7 @@ namespace rowemod.Mods
             }
 
             Log.Msg($"[Frame] Instantiating: {prefab.name}");
+            var rearPegPoses = CaptureRearPegPoses();
             slot.Equip(prefab);
 
             Memory.lastEquippedFrame = prefab;
@@ -951,6 +1061,7 @@ namespace rowemod.Mods
 
             FindParts();
             UpdatePartTransforms();
+            MelonCoroutines.Start(RestoreRearPegPosesAfterFrameSwap(rearPegPoses, prefab.name));
         }
         public static void LoadSavedBars()
         {
