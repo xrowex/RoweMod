@@ -1,7 +1,7 @@
 {
-    "version":  "3.3.0",
+    "version":  "3.3.1",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "cbe1efff650e0fd9da285b43b84eaa3b86c979ea20cb873199ca7c20083358cb",
+    "sha256":  "46bb77f48986db1014b6030506815261a774a11eb15c41db70206bc517632894",
     "notesUrl":  "https://github.com/xrowex/RoweMod/commits/master",
     "patchNotes":  "New controller-first RoweMod menu with a stable custom cursor and clearer navigation. Added Graphics controls with HDRI skies, per-map exposure, and Balanced, Low, and Potato performance presets. Object Dropper now supports controller placement, its own camera, stacked objects, remembered selection, and automatic list scrolling. Vehicle Tuning is now available from the pie menu with presets, clearer controls, expanded flip, spin, tire-ride, grinding, and rotation tuning; the selected setting now stays visible while scrolling with a controller. Improved replay framing, camera-light cleanup, and grind-pose navigation. Removed the experimental rider IK, variant, foot-offset, and head-tracking controls because they were not reliable enough to ship.",
     "requiredGameVersion":  ""

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.3.1
+
+- Vehicle presets, physics presets, grind input remapping, host player limits, rear-peg frame support, and the expanded camera-light cap are now included in the released build.
+- Vehicle presets remain simple for players: choose, save, update, or delete a preset without exposing technical setting lists.
+
 ## 3.3.0
 
 - New controller-first RoweMod menu with a stable custom cursor and clearer navigation.
