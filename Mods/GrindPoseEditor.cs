@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.Core.Runtime.GrindPoseData;
 using rowemod.Utils;
 using UnityEngine;
@@ -103,11 +104,14 @@ namespace rowemod.Mods
             Menu.EndToolbar();
             GUILayout.Space(6f); 
 
+            GrindInputRemap.DrawControls();
+
             float grindPoseLerpSpeed = Config.physics.grindPoseLerpSpeed;
-            DrawResettableSlider("Pose Lerp Speed", ref grindPoseLerpSpeed, 0.1f, 500f, GrindSliderResetDefault, "grinds_pose_lerp_speed");
+            DrawResettableSlider("Pose Lerp Speed", ref grindPoseLerpSpeed, 0.05f, 10f, GrindSliderResetDefault, "grinds_pose_lerp_speed");
             if (!Mathf.Approximately(grindPoseLerpSpeed, Config.physics.grindPoseLerpSpeed))
             {
                 Config.physics.grindPoseLerpSpeed = grindPoseLerpSpeed;
+                ApplyLerpSpeedToRuntime();
                 Config.RequestSave();
             }
             GUILayout.Space(4f);
@@ -277,6 +281,7 @@ namespace rowemod.Mods
             }
 
             ApplyConfigToRuntime(true);
+            ApplyLerpSpeedToRuntime();
             _forcedPoseAppliedThisOpen = ApplyForcedPoseFromSelection("preset-load");
             Config.Save();
             Log.Msg($"Loaded grind pose preset '{presetName}'.");
@@ -287,6 +292,10 @@ namespace rowemod.Mods
             var clone = new GrindPoseSettings
             {
                 poses = new Dictionary<string, GrindPoseConfigEntry>(),
+                grindInputRemapEnabled = source?.grindInputRemapEnabled ?? true,
+                grindInputMap = source?.grindInputMap != null
+                    ? (int[])source.grindInputMap.Clone()
+                    : new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
                 showCenterOfMassVisual = source?.showCenterOfMassVisual ?? false,
                 showLiveCenterOfMassVisual = source?.showLiveCenterOfMassVisual ?? false,
                 centerOfMassVisualScale = source != null && source.centerOfMassVisualScale > 0f
@@ -420,6 +429,7 @@ namespace rowemod.Mods
             Memory.bikeGrindPoser._forcePose = true;
             Memory.bikeGrindPoser._forcedGrindPose = selectedPose;
             Memory.bikeGrindPoser._lerpSpeedAir = Config.physics.grindPoseLerpSpeed;
+            Memory.bikeGrindPoser._lerpSpeedConnected = Config.physics.grindPoseLerpSpeed;
             Memory.bikeGrindPoser._lerpSpeed = Config.physics.grindPoseLerpSpeed;
             _forcedPoseApplyCountThisOpen++;
 
@@ -604,6 +614,8 @@ namespace rowemod.Mods
                 RefreshPoseCache(true);
             }
 
+            ApplyLerpSpeedToRuntime();
+
             if (Config.grindPoseData?.poses == null || Config.grindPoseData.poses.Count == 0)
             {
                 return;
@@ -699,13 +711,15 @@ namespace rowemod.Mods
             Log.Msg($"Reset {resetCount} grind poses to captured defaults.");
         }
 
-        private static void ApplyLerpSpeedToRuntime()
+        internal static void ApplyLerpSpeedToRuntime(BikeGrindPoser poser = null)
         {
-            if (Memory.bikeGrindPoser == null)
+            poser ??= Memory.bikeGrindPoser;
+            if (poser == null)
                 return;
 
-            Memory.bikeGrindPoser._lerpSpeedAir = Config.physics.grindPoseLerpSpeed;
-            Memory.bikeGrindPoser._lerpSpeed = Config.physics.grindPoseLerpSpeed;
+            poser._lerpSpeedAir = Config.physics.grindPoseLerpSpeed;
+            poser._lerpSpeedConnected = Config.physics.grindPoseLerpSpeed;
+            poser._lerpSpeed = Config.physics.grindPoseLerpSpeed;
         }
 
         public static IEnumerator DelayedApplyConfigRoutine()

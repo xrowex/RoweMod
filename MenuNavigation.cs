@@ -770,6 +770,8 @@ namespace rowemod
             bool previousGuiChanged = GUI.changed;
             GUI.changed = false;
 
+            PhysicsPreset.DrawControls();
+
             BeginPane("Core Handling", "The most common riding assists and bike-response controls.");
             ModernToggle("Spin Assist", ref physics.spinAssist);
             ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
