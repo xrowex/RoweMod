@@ -65,6 +65,9 @@ namespace rowemod.Mods
             public float mk1PaniniCrop;
             public float mk1ChromaticAberration;
             public float mk1FilmGrain;
+            public bool vx1000Mode;
+            public float vx1000LensDirt;
+            public float vx1000LensScratches;
             public float vignette;
             public int shakeMode;
             public bool dofEnabled;
@@ -137,6 +140,8 @@ namespace rowemod.Mods
         private static GameObject matteObject;
         private static Image[] matteImages;
         private static RawImage framedVignetteImage;
+        private static RawImage vx1000DirtImage;
+        private static RawImage vx1000ScratchesImage;
         private static Texture2D framedVignetteTexture;
         private static Texture2D mk1VignetteTexture;
         private static int matteScreenWidth;
@@ -145,6 +150,9 @@ namespace rowemod.Mods
         private static float matteOpacity = -1f;
         private static float matteVignette = -1f;
         private static bool matteMk1Enabled;
+        private static bool matteVx1000Mode;
+        private static float matteVx1000Dirt = -1f;
+        private static float matteVx1000Scratches = -1f;
         private static string presetName = string.Empty;
         private static string selectedPreset = string.Empty;
         private static readonly List<string> presetCache = new List<string>();
@@ -624,16 +632,23 @@ namespace rowemod.Mods
                 GUILayout.Label("Optical shaping bypassed; Fisheye (%) remains available.", Menu.UiMutedWrappedStyle);
 
             bool mk1Enabled = settings.replayMk1Enabled;
-            Menu.ModernToggle("MK1 Lens Character", ref mk1Enabled, controlPrefix + "mk1_enabled");
+            Menu.ModernToggle("Analog Lens Character", ref mk1Enabled, controlPrefix + "mk1_enabled");
             changed |= mk1Enabled != settings.replayMk1Enabled;
             settings.replayMk1Enabled = mk1Enabled;
             if (mk1Enabled)
             {
-                settings.replayMk1PaniniDistance = DrawSlider("MK1 Projection", settings.replayMk1PaniniDistance, 0f, 0.6f, controlPrefix + "mk1_panini", ref changed);
+                settings.replayMk1PaniniDistance = DrawSlider("Projection", settings.replayMk1PaniniDistance, 0f, 0.6f, controlPrefix + "mk1_panini", ref changed);
                 settings.replayMk1PaniniCrop = DrawSlider("Projection Crop", settings.replayMk1PaniniCrop, 0f, 1f, controlPrefix + "mk1_crop", ref changed);
                 settings.replayMk1ChromaticAberration = DrawSlider("Edge Fringe", settings.replayMk1ChromaticAberration, 0f, 0.25f, controlPrefix + "mk1_fringe", ref changed);
-                settings.replayMk1FilmGrain = DrawSlider("VX Grain", settings.replayMk1FilmGrain, 0f, 0.25f, controlPrefix + "mk1_grain", ref changed);
-                GUILayout.Label("Native HDRP Panini: one projection pass; fringe and grain use the existing post stack.", Menu.UiMutedWrappedStyle);
+                settings.replayMk1FilmGrain = DrawSlider("Film Grain", settings.replayMk1FilmGrain, 0f, 0.25f, controlPrefix + "mk1_grain", ref changed);
+                if (settings.replayVx1000Mode)
+                {
+                    settings.replayVx1000LensDirt = DrawSlider("VX Lens Dirt", settings.replayVx1000LensDirt, 0f, 0.65f, controlPrefix + "vx_dirt", ref changed);
+                    settings.replayVx1000LensScratches = DrawSlider("VX Fine Scratches", settings.replayVx1000LensScratches, 0f, 0.5f, controlPrefix + "vx_scratches", ref changed);
+                    GUILayout.Label("VX wear is two cached overlay textures plus native HDRP grain; no extra camera render pass.", Menu.UiMutedWrappedStyle);
+                }
+                else
+                    GUILayout.Label("Native HDRP Panini: one projection pass; fringe and grain use the existing post stack.", Menu.UiMutedWrappedStyle);
             }
 
             settings.replayVignette = DrawSlider("Vignette (%)", settings.replayVignette, 0f, 100f, controlPrefix + "vignette", ref changed);
@@ -656,7 +671,8 @@ namespace rowemod.Mods
         {
             ReplaySettings settings = Config.replaySettings;
             settings.replayFisheyeOpticsEnabled = true;
-            settings.replayMk1Enabled = false;
+            settings.replayMk1Enabled = vx1000;
+            settings.replayVx1000Mode = vx1000;
             // Cinemachine's FOV is vertical. The skate-video reference is horizontal, so a
             // 125-degree VX view inside a 4:3 crop is 110.47 degrees in the native control.
             settings.replayFov = vx1000 ? HorizontalToVerticalFov(125f, 4f / 3f) : 112f;
@@ -669,6 +685,12 @@ namespace rowemod.Mods
             settings.replayFisheyeCenterX = 0f;
             settings.replayFisheyeCenterY = vx1000 ? -0.015f : 0f;
             settings.replayFisheyeScale = vx1000 ? 1.035f : 1.02f;
+            settings.replayMk1PaniniDistance = 0f;
+            settings.replayMk1PaniniCrop = 0f;
+            settings.replayMk1ChromaticAberration = vx1000 ? 0.018f : 0f;
+            settings.replayMk1FilmGrain = vx1000 ? 0.075f : 0f;
+            settings.replayVx1000LensDirt = vx1000 ? 0.18f : 0f;
+            settings.replayVx1000LensScratches = vx1000 ? 0.12f : 0f;
             settings.replayVignette = vx1000 ? 18f : 8f;
             settings.replayFramingMode = vx1000 ? 2 : 0;
             settings.replayMatteOpacity = 1f;
@@ -682,6 +704,7 @@ namespace rowemod.Mods
             ReplaySettings settings = Config.replaySettings;
             settings.replayFisheyeOpticsEnabled = true;
             settings.replayMk1Enabled = true;
+            settings.replayVx1000Mode = false;
             settings.replayFov = HorizontalToVerticalFov(125f, 4f / 3f);
             settings.replayFisheye = 40f;
             settings.replayFisheyeXMultiplier = 0.88f;
@@ -714,6 +737,9 @@ namespace rowemod.Mods
             settings.replayFisheye = 0f;
             settings.replayFisheyeOpticsEnabled = true;
             settings.replayMk1Enabled = false;
+            settings.replayVx1000Mode = false;
+            settings.replayVx1000LensDirt = 0f;
+            settings.replayVx1000LensScratches = 0f;
             settings.replayFisheyeXMultiplier = 1f;
             settings.replayFisheyeYMultiplier = 1f;
             settings.replayFisheyeCenterX = 0f;
@@ -2034,6 +2060,9 @@ namespace rowemod.Mods
                 mk1PaniniCrop = s.replayMk1PaniniCrop,
                 mk1ChromaticAberration = s.replayMk1ChromaticAberration,
                 mk1FilmGrain = s.replayMk1FilmGrain,
+                vx1000Mode = s.replayVx1000Mode,
+                vx1000LensDirt = s.replayVx1000LensDirt,
+                vx1000LensScratches = s.replayVx1000LensScratches,
                 vignette = s.replayVignette,
                 shakeMode = s.replayShakeMode,
                 dofEnabled = s.replayDofEnabled,
@@ -2133,6 +2162,8 @@ namespace rowemod.Mods
             value.mk1PaniniCrop = Mathf.Lerp(a.mk1PaniniCrop, b.mk1PaniniCrop, t);
             value.mk1ChromaticAberration = Mathf.Lerp(a.mk1ChromaticAberration, b.mk1ChromaticAberration, t);
             value.mk1FilmGrain = Mathf.Lerp(a.mk1FilmGrain, b.mk1FilmGrain, t);
+            value.vx1000LensDirt = Mathf.Lerp(a.vx1000LensDirt, b.vx1000LensDirt, t);
+            value.vx1000LensScratches = Mathf.Lerp(a.vx1000LensScratches, b.vx1000LensScratches, t);
             value.vignette = Mathf.Lerp(a.vignette, b.vignette, t);
             value.nearStart = Mathf.Lerp(a.nearStart, b.nearStart, t);
             value.nearEnd = Mathf.Lerp(a.nearEnd, b.nearEnd, t);
@@ -2175,6 +2206,9 @@ namespace rowemod.Mods
             s.replayMk1PaniniCrop = value.mk1PaniniCrop;
             s.replayMk1ChromaticAberration = value.mk1ChromaticAberration;
             s.replayMk1FilmGrain = value.mk1FilmGrain;
+            s.replayVx1000Mode = value.vx1000Mode;
+            s.replayVx1000LensDirt = value.vx1000LensDirt;
+            s.replayVx1000LensScratches = value.vx1000LensScratches;
             if (!IsNativeTrack(LensTrack.Vignette)) s.replayVignette = value.vignette;
             if (!IsNativeTrack(LensTrack.Shake)) s.replayShakeMode = value.shakeMode;
             if (!IsNativeTrack(LensTrack.DofState)) s.replayDofEnabled = value.dofEnabled;
@@ -2387,8 +2421,10 @@ namespace rowemod.Mods
             ReplaySettings s = Config.replaySettings;
             bool frameSelected = s.replayFramingMode != 0;
             bool vignetteVisible = replayActive && frameSelected && s.replayVignette > 0.001f;
-            bool visible = replayActive && frameSelected &&
-                (s.replayMatteOpacity > 0.001f || vignetteVisible);
+            bool vxWearVisible = replayActive && s.replayMk1Enabled && s.replayVx1000Mode &&
+                (s.replayVx1000LensDirt > 0.001f || s.replayVx1000LensScratches > 0.001f);
+            bool visible = replayActive &&
+                ((frameSelected && (s.replayMatteOpacity > 0.001f || vignetteVisible)) || vxWearVisible);
             if (!visible)
             {
                 if (matteObject != null)
@@ -2405,7 +2441,10 @@ namespace rowemod.Mods
                 matteMode == s.replayFramingMode &&
                 Mathf.Approximately(matteOpacity, s.replayMatteOpacity) &&
                 Mathf.Approximately(matteVignette, s.replayVignette) &&
-                matteMk1Enabled == s.replayMk1Enabled)
+                matteMk1Enabled == s.replayMk1Enabled &&
+                matteVx1000Mode == s.replayVx1000Mode &&
+                Mathf.Approximately(matteVx1000Dirt, s.replayVx1000LensDirt) &&
+                Mathf.Approximately(matteVx1000Scratches, s.replayVx1000LensScratches))
                 return;
 
             matteScreenWidth = Screen.width;
@@ -2414,6 +2453,9 @@ namespace rowemod.Mods
             matteOpacity = s.replayMatteOpacity;
             matteVignette = s.replayVignette;
             matteMk1Enabled = s.replayMk1Enabled;
+            matteVx1000Mode = s.replayVx1000Mode;
+            matteVx1000Dirt = s.replayVx1000LensDirt;
+            matteVx1000Scratches = s.replayVx1000LensScratches;
             float targetAspect = s.replayFramingMode == 2 ? 4f / 3f : 16f / 9f;
             float screenAspect = Screen.height <= 0 ? targetAspect : Screen.width / (float)Screen.height;
             float xMin = 0f, xMax = 1f, yMin = 0f, yMax = 1f;
@@ -2439,7 +2481,7 @@ namespace rowemod.Mods
             if (framedVignetteImage != null)
             {
                 framedVignetteImage.enabled = vignetteVisible;
-                framedVignetteImage.texture = s.replayMk1Enabled
+                framedVignetteImage.texture = s.replayMk1Enabled && !s.replayVx1000Mode
                     ? mk1VignetteTexture
                     : framedVignetteTexture;
                 framedVignetteImage.color = new Color(
@@ -2453,6 +2495,10 @@ namespace rowemod.Mods
                 vignetteRect.offsetMin = Vector2.zero;
                 vignetteRect.offsetMax = Vector2.zero;
             }
+
+            bool vxCharacterVisible = replayActive && s.replayMk1Enabled && s.replayVx1000Mode;
+            SetLensWearOverlay(vx1000DirtImage, s.replayVx1000LensDirt, vxCharacterVisible, xMin, yMin, xMax, yMax);
+            SetLensWearOverlay(vx1000ScratchesImage, s.replayVx1000LensScratches, vxCharacterVisible, xMin, yMin, xMax, yMax);
         }
 
         private static void EnsureMatteOverlay()
@@ -2477,6 +2523,16 @@ namespace rowemod.Mods
             framedVignetteImage.texture = framedVignetteTexture;
             framedVignetteImage.enabled = false;
 
+            // Dirt is intentionally subtle, but with these values it was hard to perceive.
+            // Increase base tint and keep a single slider for controllable strength.
+            vx1000DirtImage = CreateLensWearImage("VX1000 Lens Dirt", CreateVx1000DirtTexture(), new Color(0.65f, 0.55f, 0.42f, 1f));
+            vx1000DirtImage.transform.SetParent(matteObject.transform, false);
+            vx1000DirtImage.enabled = false;
+
+            vx1000ScratchesImage = CreateLensWearImage("VX1000 Fine Scratches", CreateVx1000ScratchTexture(), new Color(1f, 0.93f, 0.76f, 1f));
+            vx1000ScratchesImage.transform.SetParent(matteObject.transform, false);
+            vx1000ScratchesImage.enabled = false;
+
             // Create the matte bars after the vignette so they remain the topmost children and
             // cleanly cover everything outside the selected capture rectangle.
             matteImages = new Image[4];
@@ -2487,6 +2543,45 @@ namespace rowemod.Mods
                 matteImages[i] = bar.AddComponent<Image>();
                 matteImages[i].raycastTarget = false;
             }
+        }
+
+        private static RawImage CreateLensWearImage(string name, Texture2D texture, Color color)
+        {
+            GameObject item = new GameObject(name) { hideFlags = HideFlags.HideAndDontSave };
+            RawImage image = item.AddComponent<RawImage>();
+            image.raycastTarget = false;
+            image.texture = texture;
+            image.color = color;
+            return image;
+        }
+
+        private static void SetLensWearOverlay(
+            RawImage image,
+            float intensity,
+            bool characterVisible,
+            float xMin,
+            float yMin,
+            float xMax,
+            float yMax)
+        {
+            if (image == null)
+                return;
+
+            image.enabled = characterVisible && intensity > 0.001f;
+            if (!image.enabled)
+                return;
+
+            Color color = image.color;
+            if (image == vx1000DirtImage)
+                color.a = Mathf.Clamp01(intensity * 2.25f);
+            else
+                color.a = Mathf.Clamp01(intensity);
+            image.color = color;
+            RectTransform rect = image.rectTransform;
+            rect.anchorMin = new Vector2(xMin, yMin);
+            rect.anchorMax = new Vector2(xMax, yMax);
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
         }
 
         private static Texture2D CreateFramedVignetteTexture(bool mk1)
@@ -2537,6 +2632,114 @@ namespace rowemod.Mods
             texture.SetPixels32(pixels);
             texture.Apply(false, true);
             return texture;
+        }
+
+        // These textures are generated once, then uploaded as tiny immutable UI textures. They
+        // are intentionally restrained: fixed dust near the edge and hairline wear should read
+        // as a used VX front element, not as animated screen damage.
+        private static Texture2D CreateVx1000DirtTexture()
+        {
+            const int size = 256;
+            Color32[] pixels = new Color32[size * size];
+            uint state = 0x7A1E51u;
+            for (int spot = 0; spot < 62; spot++)
+            {
+                float angle = NextWear01(ref state) * Mathf.PI * 2f;
+                float radius = Mathf.Lerp(0.32f, 1.06f, NextWear01(ref state));
+                float centerX = Mathf.Cos(angle) * radius;
+                float centerY = Mathf.Sin(angle) * radius;
+                float sizePx = Mathf.Lerp(0.7f, 3.4f, NextWear01(ref state));
+                byte alpha = (byte)Mathf.RoundToInt(Mathf.Lerp(18f, 72f, NextWear01(ref state)));
+                DrawWearSpot(pixels, size, centerX, centerY, sizePx, alpha);
+            }
+            return CreateWearTexture("RoweMod VX1000 Lens Dirt", pixels, size);
+        }
+
+        private static Texture2D CreateVx1000ScratchTexture()
+        {
+            const int size = 256;
+            Color32[] pixels = new Color32[size * size];
+            uint state = 0xC0FFEEu;
+            for (int scratch = 0; scratch < 22; scratch++)
+            {
+                float edgeBias = Mathf.Lerp(0.38f, 1f, NextWear01(ref state));
+                float x0 = Mathf.Lerp(-1f, 1f, NextWear01(ref state)) * edgeBias;
+                float y0 = Mathf.Lerp(-1f, 1f, NextWear01(ref state)) * edgeBias;
+                float x1 = Mathf.Clamp(x0 + Mathf.Lerp(-0.38f, 0.38f, NextWear01(ref state)), -1.1f, 1.1f);
+                float y1 = Mathf.Clamp(y0 + Mathf.Lerp(-0.12f, 0.12f, NextWear01(ref state)), -1.1f, 1.1f);
+                DrawWearLine(pixels, size, x0, y0, x1, y1, 0.45f, (byte)Mathf.RoundToInt(Mathf.Lerp(12f, 34f, NextWear01(ref state))));
+            }
+            return CreateWearTexture("RoweMod VX1000 Fine Scratches", pixels, size);
+        }
+
+        private static Texture2D CreateWearTexture(string name, Color32[] pixels, int size)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = name,
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            return texture;
+        }
+
+        private static void DrawWearSpot(Color32[] pixels, int size, float x, float y, float radiusPixels, byte alpha)
+        {
+            float cx = (x * 0.5f + 0.5f) * (size - 1);
+            float cy = (y * 0.5f + 0.5f) * (size - 1);
+            int minX = Mathf.Max(0, Mathf.FloorToInt(cx - radiusPixels - 1f));
+            int maxX = Mathf.Min(size - 1, Mathf.CeilToInt(cx + radiusPixels + 1f));
+            int minY = Mathf.Max(0, Mathf.FloorToInt(cy - radiusPixels - 1f));
+            int maxY = Mathf.Min(size - 1, Mathf.CeilToInt(cy + radiusPixels + 1f));
+            for (int py = minY; py <= maxY; py++)
+            for (int px = minX; px <= maxX; px++)
+            {
+                float distance = Mathf.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+                if (distance > radiusPixels)
+                    continue;
+                byte value = (byte)Mathf.RoundToInt(alpha * (1f - distance / Mathf.Max(0.01f, radiusPixels)));
+                int index = py * size + px;
+                if (value > pixels[index].a)
+                    pixels[index] = new Color32(255, 255, 255, value);
+            }
+        }
+
+        private static void DrawWearLine(Color32[] pixels, int size, float x0, float y0, float x1, float y1, float widthPixels, byte alpha)
+        {
+            float ax = (x0 * 0.5f + 0.5f) * (size - 1);
+            float ay = (y0 * 0.5f + 0.5f) * (size - 1);
+            float bx = (x1 * 0.5f + 0.5f) * (size - 1);
+            float by = (y1 * 0.5f + 0.5f) * (size - 1);
+            int minX = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(ax, bx) - widthPixels - 1f));
+            int maxX = Mathf.Min(size - 1, Mathf.CeilToInt(Mathf.Max(ax, bx) + widthPixels + 1f));
+            int minY = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(ay, by) - widthPixels - 1f));
+            int maxY = Mathf.Min(size - 1, Mathf.CeilToInt(Mathf.Max(ay, by) + widthPixels + 1f));
+            float dx = bx - ax;
+            float dy = by - ay;
+            float lengthSq = Mathf.Max(0.001f, dx * dx + dy * dy);
+            for (int py = minY; py <= maxY; py++)
+            for (int px = minX; px <= maxX; px++)
+            {
+                float projection = Mathf.Clamp01(((px - ax) * dx + (py - ay) * dy) / lengthSq);
+                float nearX = ax + dx * projection;
+                float nearY = ay + dy * projection;
+                float distance = Mathf.Sqrt((px - nearX) * (px - nearX) + (py - nearY) * (py - nearY));
+                if (distance > widthPixels)
+                    continue;
+                byte value = (byte)Mathf.RoundToInt(alpha * (1f - distance / Mathf.Max(0.01f, widthPixels)));
+                int index = py * size + px;
+                if (value > pixels[index].a)
+                    pixels[index] = new Color32(255, 255, 255, value);
+            }
+        }
+
+        private static float NextWear01(ref uint state)
+        {
+            state = state * 1664525u + 1013904223u;
+            return (state & 0x00FFFFFFu) / 16777215f;
         }
 
         private static void SetMatte(Image image, float xMin, float yMin, float xMax, float yMax, Color color)

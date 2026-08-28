@@ -383,6 +383,8 @@ namespace rowemod.Challenges
                 if (target == null)
                     throw new MissingMethodException(typeof(TrickDetection).FullName, nameof(TrickDetection.RecordTrickToHistory));
 
+                rowemod.Mods.NativeHookSafety.Validate(target, 0x8544D0);
+
                 _trickCaptureHarmony = new HarmonyLib.Harmony(TrickCaptureHarmonyId);
                 _trickCaptureHarmony.Patch(
                     target,
@@ -426,6 +428,7 @@ namespace rowemod.Challenges
                 System.Reflection.MethodInfo spawned = AccessTools.Method(typeof(NetworkPlayer), nameof(NetworkPlayer.Spawned));
                 if (spawned != null)
                 {
+                    rowemod.Mods.NativeHookSafety.Validate(spawned, 0x9F47C0);
                     _networkPlayerLifecycleHarmony.Patch(
                         spawned,
                         postfix: new HarmonyMethod(
@@ -437,6 +440,7 @@ namespace rowemod.Challenges
                 System.Reflection.MethodInfo despawned = AccessTools.Method(typeof(NetworkPlayer), nameof(NetworkPlayer.Despawned));
                 if (despawned != null)
                 {
+                    rowemod.Mods.NativeHookSafety.Validate(despawned, 0x9F3220);
                     _networkPlayerLifecycleHarmony.Patch(
                         despawned,
                         postfix: new HarmonyMethod(

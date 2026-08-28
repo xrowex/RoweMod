@@ -14,7 +14,8 @@ namespace rowemod.Mods
         // Version 3 adds the lightweight native-HDRP fisheye optics profile.
         // Version 4 stores native vignette units as a percentage.
         // Version 5 adds the native HDRP MK1 death-lens character stack.
-        public int version = 5;
+        // Version 6 adds VX1000-specific lens dirt and fine scratches.
+        public int version = 6;
         public string name = string.Empty;
         public float fov = 60f;
         public float tilt;
@@ -30,6 +31,9 @@ namespace rowemod.Mods
         public float mk1PaniniCrop = 0.65f;
         public float mk1ChromaticAberration = 0.07f;
         public float mk1FilmGrain = 0.06f;
+        public bool vx1000Mode;
+        public float vx1000LensDirt = 0.18f;
+        public float vx1000LensScratches = 0.12f;
         public float vignette = 5f;
         public int shakeMode;
         public bool dofEnabled;
@@ -85,6 +89,9 @@ namespace rowemod.Mods
                 mk1PaniniCrop = settings.replayMk1PaniniCrop,
                 mk1ChromaticAberration = settings.replayMk1ChromaticAberration,
                 mk1FilmGrain = settings.replayMk1FilmGrain,
+                vx1000Mode = settings.replayVx1000Mode,
+                vx1000LensDirt = settings.replayVx1000LensDirt,
+                vx1000LensScratches = settings.replayVx1000LensScratches,
                 vignette = settings.replayVignette,
                 shakeMode = settings.replayShakeMode,
                 dofEnabled = settings.replayDofEnabled,
@@ -141,6 +148,12 @@ namespace rowemod.Mods
                 settings.replayMk1PaniniCrop = mk1PaniniCrop;
                 settings.replayMk1ChromaticAberration = mk1ChromaticAberration;
                 settings.replayMk1FilmGrain = mk1FilmGrain;
+            }
+            if (version >= 6)
+            {
+                settings.replayVx1000Mode = vx1000Mode;
+                settings.replayVx1000LensDirt = vx1000LensDirt;
+                settings.replayVx1000LensScratches = vx1000LensScratches;
             }
             settings.replayVignette = vignette;
             settings.replayShakeMode = shakeMode;

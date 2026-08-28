@@ -719,8 +719,10 @@ namespace rowemod
                     DrawInterfacePage();
                     break;
                 case MenuPage.AdvancedMultiplayer:
+                    DrawMultiplayerPage();
+                    break;
                 case MenuPage.AdvancedDeveloper:
-                    DrawLegacyTabContent();
+                    DebugTools.DrawDebugTab();
                     break;
             }
         }
@@ -778,8 +780,29 @@ namespace rowemod
             if (physics.grindAlignAssist)
                 Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 0.5f, 0f, 10f);
             ModernToggle("Drifting", ref physics.driftAbility);
+            bool disableTweaking = Config.trickAnimationDebugSettings.disableTweaking;
+            ModernToggle("Disable Trick Tweaking", ref disableTweaking, "ride_disable_trick_tweaking");
+            if (disableTweaking != Config.trickAnimationDebugSettings.disableTweaking)
+            {
+                Config.trickAnimationDebugSettings.disableTweaking = disableTweaking;
+                TrickTweakGuard.ApplySettingChange();
+                Config.RequestSave();
+            }
+            if (disableTweaking)
+                GUILayout.Label(TrickTweakGuard.HookStatus, UiMutedWrappedStyle);
             Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
             Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
+            ModernToggle("Custom Physics Update Rate", ref physics.useCustomPhysicsStepRate, "physics_custom_step_rate");
+            float gamePhysicsRate = Mods.Physics.GamePhysicsRate;
+            if (physics.useCustomPhysicsStepRate)
+            {
+                if (!float.IsFinite(physics.physicsStepRate) || physics.physicsStepRate <= 0f)
+                    physics.physicsStepRate = gamePhysicsRate;
+                Slider("Physics Update Rate (Hz)", ref physics.physicsStepRate, gamePhysicsRate, 30f, 250f);
+            }
+            GUILayout.Label(
+                $"Game default detected: {gamePhysicsRate:0.##} Hz. Lower uses less CPU but can reduce landing/contact stability; higher is smoother but costs more performance.",
+                UiMutedWrappedStyle);
             EndPane();
 
             BeginAltPane("Pump, Spin & Manuals", "Less commonly changed riding-response controls.");
@@ -788,6 +811,25 @@ namespace rowemod
             Slider("Steer Damping", ref physics.steerDamp, 5f, 0f, 5f);
             Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
             Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
+            GUILayout.Label("Nose Manual Variants (Hang 5)", UiMutedWrappedStyle);
+            int previousHangFiveMode = physics.hangFiveMode;
+            BeginToolbar();
+            if (PillButton("Game", physics.hangFiveMode == 0, GUILayout.ExpandWidth(true)))
+                physics.hangFiveMode = 0;
+            if (PillButton("Disabled", physics.hangFiveMode == 1, GUILayout.ExpandWidth(true)))
+                physics.hangFiveMode = 1;
+            if (PillButton("Swap Sides", physics.hangFiveMode == 2, GUILayout.ExpandWidth(true)))
+                physics.hangFiveMode = 2;
+            EndToolbar();
+            if (physics.hangFiveMode != previousHangFiveMode)
+            {
+                HangFiveControl.ApplySettingChange();
+                GUI.changed = true;
+            }
+            GUILayout.Label(
+                "Disabled blocks the Hang 5 animation variants and keeps a normal nose manual. Swap Sides reverses the bumper-selected variants. Other bumper actions are unchanged.",
+                UiMutedWrappedStyle);
+            GUILayout.Label(HangFiveControl.HookStatus, UiMutedWrappedStyle);
             ModernToggle("Nose Manual COM / Inertia Tuning", ref physics.noseManualTurnTuning);
             if (physics.noseManualTurnTuning)
             {
@@ -1019,6 +1061,38 @@ namespace rowemod
             ModernSlider("Blue", ref misc.menuAccentB, 0f, 1f, "interface_accent_b");
             if (PrimaryButton("Apply Menu Color", GUILayout.Width(170f), GUILayout.Height(30f)))
                 stylesInitialized = false;
+            EndPane();
+        }
+
+        private static void DrawMultiplayerPage()
+        {
+            BeginPane("Player Labels", "Name tag visibility and multiplayer challenge controls.");
+            bool previousShowPlayerUserNameTargets = misc.showPlayerUserNameTargets;
+            ModernToggle("Show PlayerUserNameTarget", ref misc.showPlayerUserNameTargets,
+                "mp_show_player_username_targets");
+            if (previousShowPlayerUserNameTargets != misc.showPlayerUserNameTargets)
+                ApplyPlayerUserNameTargetsVisibility(true);
+
+            BeginToolbar();
+            if (SecondaryButton("Refresh Player Name Targets", GUILayout.Width(205f), GUILayout.Height(26f)))
+                ApplyPlayerUserNameTargetsVisibility(true);
+
+            GUI.enabled = MultiplayerChallengeManager.FeatureEnabled;
+            if (PrimaryButton(
+                    MultiplayerChallengeManager.IsOpen ? "Close Challenge UI" : "Open Challenge UI",
+                    GUILayout.Width(160f), GUILayout.Height(26f)))
+            {
+                MultiplayerChallengeManager.ToggleWindow();
+            }
+            GUI.enabled = true;
+            EndToolbar();
+
+            if (!MultiplayerChallengeManager.FeatureEnabled)
+            {
+                GUILayout.Label(
+                    "MP BIKE challenge work is disabled for now. The code is still kept for later.",
+                    UiMutedWrappedStyle);
+            }
             EndPane();
         }
 

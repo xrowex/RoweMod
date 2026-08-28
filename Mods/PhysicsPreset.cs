@@ -115,6 +115,10 @@ namespace rowemod.Mods
                 Config.physics.lastVehicle = activeVehicle;
                 Config.physics.smallHopForce = Mathf.Clamp(Config.physics.smallHopForce, 0f, 25f);
                 Config.physics.gravity = Mathf.Clamp(Config.physics.gravity, 0f, 30f);
+                if (!float.IsFinite(Config.physics.physicsStepRate))
+                    Config.physics.physicsStepRate = 0f;
+                if (Config.physics.physicsStepRate > 0f)
+                    Config.physics.physicsStepRate = Mathf.Clamp(Config.physics.physicsStepRate, 30f, 250f);
                 Config.physics.grindPoseLerpSpeed = Mathf.Clamp(Config.physics.grindPoseLerpSpeed, 0.05f, 10f);
 
                 Physics.Update();

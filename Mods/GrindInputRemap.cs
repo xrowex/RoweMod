@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HarmonyLib;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBoxBridge.Common.Interfaces;
 using Il2CppMashBox.Core.Runtime.GrindPoseData;
@@ -264,19 +263,23 @@ namespace rowemod.Mods
         }
     }
 
-    [HarmonyPatch(typeof(BikeGrindPoser), nameof(BikeGrindPoser.SetInputData))]
     internal static class BikeGrindPoserInputRemapPatch
     {
-        [HarmonyPrefix]
-        private static void Prefix(ref HookGrind hookGrind)
+        private static bool IsLocal(BikeGrindPoser poser) =>
+            RemoteKillSwitched.isModEnabled && Main.playableSceneLoaded &&
+            poser != null && Memory.bikeGrindPoser != null && poser.Pointer == Memory.bikeGrindPoser.Pointer;
+
+        private static void Prefix(BikeGrindPoser __instance, ref HookGrind __1)
         {
-            hookGrind = GrindInputRemap.Route(hookGrind);
+            if (IsLocal(__instance))
+                __1 = GrindInputRemap.Route(__1);
         }
 
-        [HarmonyPostfix]
-        private static void Postfix(BikeGrindPoser __instance, HookGrind hookGrind)
+        private static void Postfix(BikeGrindPoser __instance, HookGrind __1)
         {
-            GrindInputRemap.LearnNativeResult(__instance, hookGrind);
+            if (!IsLocal(__instance))
+                return;
+            GrindInputRemap.LearnNativeResult(__instance, __1);
             // The native selection path can restore its own transition rates. Reapply once
             // after each selected grind instead of overriding it continuously every frame.
             GrindPoseEditor.ApplyLerpSpeedToRuntime(__instance);

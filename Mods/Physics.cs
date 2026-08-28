@@ -27,6 +27,8 @@ namespace rowemod.Mods
         private static float _spinCompletionInput;
         private static float _spinCompletionDirection;
         private static bool _spinCompletionFailureLogged;
+        private static bool _physicsStepBaselineCaptured;
+        private static float _originalFixedDeltaTime = 0.02f;
 
         private const float SpinCompletionMinimumFlightTime = 0.08f;
         private const float SpinCompletionMaximumFlightTime = 2.5f;
@@ -37,6 +39,7 @@ namespace rowemod.Mods
         public static void Update()
         {
             UnityEngine.Physics.gravity = new Vector3(0f, -physics.gravity, 0f);
+            ApplyPhysicsStepRate();
 
             if (!physics.spinCompletionAssist)
                 ReleaseSpinCompletionAssist();
@@ -467,6 +470,51 @@ namespace rowemod.Mods
             _noseTuningBaselineCaptured = false;
         }
 
+        public static float GamePhysicsRate =>
+            1f / Mathf.Max(
+                _physicsStepBaselineCaptured ? _originalFixedDeltaTime : Time.fixedDeltaTime,
+                0.0001f);
+
+        public static void ApplyPhysicsStepRate()
+        {
+            if (!_physicsStepBaselineCaptured)
+            {
+                _originalFixedDeltaTime = Time.fixedDeltaTime > 0f
+                    ? Time.fixedDeltaTime
+                    : 0.02f;
+                _physicsStepBaselineCaptured = true;
+                Log.Msg($"[Physics] Captured game fixed simulation rate: {GamePhysicsRate:0.##} Hz.");
+            }
+
+            if (!physics.useCustomPhysicsStepRate)
+            {
+                if (!Mathf.Approximately(Time.fixedDeltaTime, _originalFixedDeltaTime))
+                    Time.fixedDeltaTime = _originalFixedDeltaTime;
+                return;
+            }
+
+            float rate = float.IsFinite(physics.physicsStepRate) && physics.physicsStepRate > 0f
+                ? physics.physicsStepRate
+                : GamePhysicsRate;
+            rate = Mathf.Round(Mathf.Clamp(rate, 30f, 250f));
+            physics.physicsStepRate = rate;
+            float step = 1f / rate;
+            if (!Mathf.Approximately(Time.fixedDeltaTime, step))
+            {
+                Time.fixedDeltaTime = step;
+                Log.Msg($"[Physics] Custom fixed simulation rate set to {rate:0} Hz ({step:0.00000}s step).");
+            }
+        }
+
+        public static void ReleasePhysicsStepRate()
+        {
+            if (!_physicsStepBaselineCaptured)
+                return;
+
+            Time.fixedDeltaTime = _originalFixedDeltaTime;
+            _physicsStepBaselineCaptured = false;
+        }
+
         private static string FormatVector(Vector3 value)
         {
             return $"({value.x:0.000},{value.y:0.000},{value.z:0.000})";
@@ -488,4 +536,5 @@ namespace rowemod.Mods
             tune.enabledMigrated = true;
         }
     }
+
 }

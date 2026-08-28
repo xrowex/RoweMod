@@ -11,8 +11,6 @@ using UnityEngine.InputSystem;
 using rowemod.Mods;
 using UnityEngine.SceneManagement;
 using HarmonyLib;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.HighDefinition;
 using Il2CppMashBox.BMX_Physics_Development;
 using Il2CppMashBox.Character.Scripts;
 using Il2CppPlayFab.ClientModels;
@@ -42,13 +40,11 @@ namespace rowemod
             Tricks,
             Character,
             BikeMaterials,
-            MX,
             Misc,
             Graphics,
             Marker,
             Dropper,
             Multiplayer,
-            Challenge,
             Debug
         }
 
@@ -96,26 +92,6 @@ namespace rowemod
         private static float UiFoldoutHeight => 38f * UiScale;
         private static float UiRowHeight => 36f * UiScale;
         private static float UiContentBottomPadding => 24f * UiScale;
-
-        private static readonly (string label, Tab tab)[] _visibleTabs =
-        {
-            ("Physics", Tab.Physics),
-            ("Camera", Tab.Camera),
-            ("Replay", Tab.Replay),
-            ("Tricks", Tab.Tricks),
-            ("Bike", Tab.Bike),
-            ("Bike Poser", Tab.BikePoser),
-            ("Grinds", Tab.Grinds),
-            ("Rider Tools", Tab.RiderTools),
-            ("Materials", Tab.BikeMaterials),
-            ("Character", Tab.Character),
-            ("Misc", Tab.Misc),
-            ("Graphics", Tab.Graphics),
-            ("Debug", Tab.Debug),
-            ("Marker", Tab.Marker),
-            ("Dropper", Tab.Dropper),
-            ("MP", Tab.Multiplayer)
-        };
 
         private static Vector2 _tabScrollPosition = Vector2.zero;
         
@@ -227,34 +203,15 @@ namespace rowemod
         public static Texture2D logoTexture;
         public static bool HasLogoTexture => logoTexture != null;
         public static string LogoTextureDebugInfo => logoTexture == null ? "null" : $"{logoTexture.width}x{logoTexture.height}";
-        private static float mxTopSpeed = 100f;
-        private static float mxAcceleration = 10f;
-        private static bool hasInitializedMxSettings = false;
-        private static float mxChassisMass = 50f;
-        private static float mxAccelerationForce = 10f;
-        private static float mxTerminalVelocity = 80f;
         private const float DefaultComponentSliderMin = -15f;
         private const float DefaultComponentSliderMax = 15f;
-        private const float GraphicsDebugLogIntervalSeconds = 3f;
-        private static readonly Dictionary<string, float> _graphicsDebugLastLogTimes = new Dictionary<string, float>();
         private static readonly Dictionary<int, float> _cachedLightIntensityById = new Dictionary<int, float>();
-        private static readonly List<(Volume volume, VolumeProfile profile, VolumeComponent component, int componentIndex)> _cachedExposureProfiles =
-            new List<(Volume volume, VolumeProfile profile, VolumeComponent component, int componentIndex)>();
-        private static bool _usingExposureFallback = false;
-        private static float _nextExposureRescanTime = 0f;
         // Cache for circular knob texture
         private static Texture2D _circleTex;
-        
-        
-        private static string fovInput = "60";
-        private static float fovInputValue = 60f;
 
         public static bool isLogoLoaded = false;
         public static bool isLogoLoading = false;
         
-        // Foldout states for Physics tab
-        private static bool mxExpanded = true;
-        private static bool challengeSettingsExpanded = true;
         private static bool _motorTuningNeedsRefresh = true;
         private static string _motorTuningStatusText = "Open Motor Tuning to load values.";
         private static readonly List<MotorTuningEntry> _motorTuningEntries = new List<MotorTuningEntry>();
@@ -443,368 +400,6 @@ namespace rowemod
             return new Rect(x, y, width, drawHeight);
         }
 
-        private static void DrawLegacyTabContent()
-        {
-            try
-            {
-                switch (currentTab)
-                {
-                    case Tab.Physics:
-                        bool previousGuiChanged = GUI.changed;
-                        GUI.changed = false;
-
-                        PhysicsPreset.DrawControls();
-
-                        float physicsPaneHeight = GetContentPaneHeight(24f);
-                        BeginTwoPane(physicsPaneHeight);
-
-                        BeginPane("Physics", "Core riding helpers and bike force tuning.", GUILayout.Width(Mathf.Max(320f, windowRect.width * 0.42f)), GUILayout.Height(physicsPaneHeight));
-                        ModernToggle("Spin Assist", ref physics.spinAssist);
-                        ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
-                        if (physics.grindAlignAssist)
-                            Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 0.5f, 0f, 10f);
-                        ModernToggle("Drifting", ref physics.driftAbility);
-                        Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
-                        Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
-
-                        DrawSectionTitle("Global Speed");
-                        GUILayout.Label("Used by vehicles that do not have per-vehicle motor tuning enabled.", UiMutedWrappedStyle);
-                        Slider("Global Push Force", ref physics.bmxForceFactor, 0.07f, 0.05f, 2f);
-                        Slider("Global Max Speed", ref physics.bmxMaxSpeed, 7.5f, 2f, 15f);
-                        EndPane();
-
-                        GUILayout.Space(8f);
-
-                        BeginPane("Advanced", "Pump, spin, manuals, and runtime motor settings.", GUILayout.ExpandWidth(true), GUILayout.Height(physicsPaneHeight));
-                        DrawSectionTitle("Pump / Spin");
-                        Slider("Pump Force", ref physics.pumpForce, 1.5f, 1f, 5f);
-                        Slider("Spin Speed Multiplier", ref physics.spinMultiplier, 1.0f, 0f, 10f);
-                        Slider("Steer Damping", ref physics.steerDamp, 5f, 0f, 5f);
-
-                        DrawSectionTitle("Manuals");
-                        Slider("Max Nose Manual Angle", ref physics.noseManualAngle, 30f, 10f, 50f);
-                        Slider("Max Manual Angle", ref physics.manualAngle, 30f, 10f, 50f);
-                        ModernToggle("Nose Manual COM / Inertia Tuning", ref physics.noseManualTurnTuning);
-                        if (physics.noseManualTurnTuning)
-                        {
-                            DrawSectionTitle("Nose Manual Center Of Mass");
-                            GUILayout.Label("Offsets are local to the bike and restore after the physical nose pivot ends. Turn Lean shifts the rider sideways with steering input.", UiMutedWrappedStyle);
-                            Slider("Chassis COM Forward", ref physics.noseManualChassisComForwardOffset, 0f, -1f, 1f);
-                            Slider("Chassis COM Height", ref physics.noseManualChassisComVerticalOffset, 0f, -1f, 1f);
-                            Slider("Rider COM Forward", ref physics.noseManualDriverComForwardOffset, 0f, -1f, 1f);
-                            Slider("Rider COM Height", ref physics.noseManualDriverComVerticalOffset, 0f, -1f, 1f);
-                            Slider("Rider COM Turn Lean", ref physics.noseManualComTurnLean, 0f, -0.5f, 0.5f);
-                            Slider("Nose Rider Inertia", ref physics.noseManualDriverInertiaMultiplier, 1f, 0.25f, 3f);
-                            ModernToggle("Debug Nose Manual Logs", ref physics.noseManualDebugLogging);
-                        }
-
-                        DrawSectionTitle("Motor Tuning");
-                        GUILayout.Label("Per-vehicle tuning is opt-in. Disabled vehicles use the global speed settings on the left.", UiMutedWrappedStyle);
-                        if (_motorTuningNeedsRefresh)
-                            RefreshMotorTuningData();
-                        DrawMotorTuningData();
-                        EndPane();
-
-                        EndTwoPane();
-
-                        bool physicsSettingsChanged = GUI.changed;
-                        GUI.changed |= previousGuiChanged;
-                        if (physicsSettingsChanged)
-                            Mods.Physics.Update();
-
-                        break;
-                    case Tab.Camera:
-                        DrawCameraSettings();
-                        break;
-                    case Tab.Replay:
-                        DrawReplaySettings();
-                        break;
-                    case Tab.Bike:
-                        float bikePaneHeight = GetContentPaneHeight(24f);
-                        BeginTwoPane(bikePaneHeight);
-                        PartTweaker.DrawPartTweaker(GUILayout.Width(Mathf.Max(330f, windowRect.width * 0.46f)), GUILayout.Height(bikePaneHeight));
-                        GUILayout.Space(8f);
-                        PartTweaker.DrawPartSelectorUI(GUILayout.ExpandWidth(true), GUILayout.Height(bikePaneHeight));
-                        EndTwoPane();
-                        break;
-                    case Tab.BikePoser:
-                        BikePoseEditor.DrawTab();
-                        break;
-                    case Tab.Grinds:
-                        GrindPoseEditor.DrawGrindPoseTab();
-                        break;
-                    case Tab.RiderTools:
-                        RiderStyleEditor.DrawTab();
-                        break;
-                    case Tab.Tricks:
-                        TrickMods.DrawTrickMenuPro();
-                        break;
-
-                    case Tab.Character:
-                        Custom.DrawCharacterTab();
-                        break;
-
-                    case Tab.BikeMaterials:
-                        BikeMaterialsLoader.DrawBikeMaterialsTabUI();
-                        break;
-                    /*
-                    case Tab.MX:
-                        if (!hasInitializedMxSettings)
-                        {
-                            Log.Msg("Initializing MX Vehicle Settings...");
-                            MotorVehicleUtils.FindMxVehicleSettings();
-                            var mx = MotorVehicleUtils.mxVehicleSettings;
-                            if (mx != null)
-                            {
-                                mxTopSpeed = mx.TopSpeed;
-                                mxChassisMass = mx.ChassisMass;
-                                mxAccelerationForce = mx.AccelerationForce;
-                                mxTerminalVelocity = mx.TerminalVelocity;
-                                //Log.Msg($"MX Settings Found - Top Speed: {mxTopSpeed}, Acceleration: {mxAcceleration}");
-                            }
-                            else
-                            {
-                                Log.Error("No MX Vehicle Settings found during initialization.");
-                            }
-                            hasInitializedMxSettings = true;
-                        }
-
-                        if (MotorVehicleUtils.mxVehicleSettings != null)
-                        {
-                            mxExpanded = ModernFoldout("MX Vehicle Tuning", mxExpanded);
-                            if (mxExpanded)
-                            {
-                                GUILayout.Space(10);
-                                ModernSlider("Speed", ref mxTopSpeed, 5f, 30000f);
-                                ModernSlider("Chassis Mass", ref mxChassisMass, 1f, 500f);
-                                ModernSlider("Acceleration Force", ref mxAccelerationForce, 1f, 1000f);
-                                ModernSlider("Top speed", ref mxTerminalVelocity, 10f, 3000f);
-                            }
-
-                            var mx = MotorVehicleUtils.mxVehicleSettings;
-                            mx.TopSpeed = mxTopSpeed;
-                            mx.ChassisMass = mxChassisMass;
-                            mx.AccelerationForce = mxAccelerationForce;
-                            mx.TerminalVelocity = mxTerminalVelocity;
-
-                            //Log.Msg($"Updated MX Settings - Top Speed: {mxTopSpeed}, AccelerationForce: {mxAccelerationForce}");
-                        }
-                        else
-                        {
-                            GUILayout.Label("No MX vehicle found.", labelStyle);
-                            Log.Error("No MX Vehicle available to display settings.");
-                        }
-                        break;
-                        */
-
-
-                    case Tab.Misc:
-                        BeginPane("Drone", "Toggle drone visuals and physics settings.");
-                        ModernToggle("Toggle Drone Body", ref misc.droneBodyToggle);
-                        ModernToggle("Toggle Drone Sound", ref misc.droneEmitterToggle);
-                        ModernToggle("Toggle Drone Colliders", ref misc.disableDroneCollider);
-                        Slider("Drone Mass", ref misc.droneMass, 10f, 2f, 1000f);
-                        EndPane();
-
-                        BeginPane("General", "Gameplay helpers, cleanup actions, and menu accent color.");
-                        ModernToggle("Skip Main Intro", ref Config.autoSkipIntro);
-                        ModernToggle("No Bail", ref misc.neverBail);
-                        bool boneBreakingEnabled = !misc.disableBoneBreaking;
-                        ModernToggle("Bone Breaking", ref boneBreakingEnabled, "misc_bone_breaking");
-                        bool disableBoneBreaking = !boneBreakingEnabled;
-                        if (disableBoneBreaking != misc.disableBoneBreaking)
-                        {
-                            misc.disableBoneBreaking = disableBoneBreaking;
-                            Mods.Misc.ApplyBoneBreakingState(true);
-                        }
-                        if (boneBreakingEnabled)
-                        {
-                            float previousBoneBreakingStrength = misc.boneBreakingStrength;
-                            Slider("Bone Strength", ref misc.boneBreakingStrength, 1f, 0.25f, 5f);
-                            if (!Mathf.Approximately(previousBoneBreakingStrength, misc.boneBreakingStrength))
-                                Mods.Misc.ApplyBoneBreakingState(true);
-                        }
-                        ModernToggle("Disable Replay Cam Collider", ref misc.disableFreeCamCollider);
-
-                        BeginToolbar();
-                        if (DangerButton("Remove Skidmarks", GUILayout.Width(150f), GUILayout.Height(26f)))
-                        {
-                            Memory.RemoveSkidmarks();
-                        }
-                        if (SecondaryButton("Spawn Drift Car", GUILayout.Width(135f), GUILayout.Height(26f)))
-                        {
-                            SpawnDriftCarInFrontOfPlayer();
-                        }
-                        if (SecondaryButton("Spawn Drift Trike", GUILayout.Width(145f), GUILayout.Height(26f)))
-                        {
-                            SpawnDriftTrikeInFrontOfPlayer();
-                        }
-                        EndToolbar();
-
-                        DrawSectionTitle("Menu Accent");
-                        ModernSlider("Menu Color R", ref misc.menuAccentR, 0f, 1f);
-                        ModernSlider("Menu Color G", ref misc.menuAccentG, 0f, 1f);
-                        ModernSlider("Menu Color B", ref misc.menuAccentB, 0f, 1f);
-
-                        if (PrimaryButton("Apply Menu Color", GUILayout.Width(150f), GUILayout.Height(26f)))
-                        {
-                            stylesInitialized = false;
-                        }
-                        EndPane();
-
-                        break;
-
-                    case Tab.Graphics:
-                        DrawGraphicsSettings();
-                        break;
-
-                    case Tab.Debug:
-                        DebugTools.DrawDebugTab();
-                        break;
-
-                    case Tab.Marker:
-                        BeginPane("Session Markers", "Choose a marker prefab replacement for session markers.");
-                        int count = 0;
-                        foreach (GameObject marker in sessionMarkers.Where(m => m != null))
-                        {
-                            count++;
-                            if (ControllerButton($"legacy_marker_{marker.name}", marker.name, UiRowButtonStyle,
-                                    GUILayout.Height(36f * UiScale)))
-                            {
-                                ReplaceSessionMarkerWithPrefab(marker);
-                                Config.misc.customSessionMarker = marker.name;
-                            }
-                        }
-
-                        if (count == 0)
-                            DrawEmptyState("No session markers found", "Load into gameplay or refresh marker data, then reopen this tab.");
-
-                        GUILayout.Space(8f);
-                        GUILayout.Label("Current Selected Marker: " + (Config.misc.customSessionMarker ?? "None"), UiMutedWrappedStyle);
-                        EndPane();
-                        break;
-                    
-                    // Adding case for the new Dropper tab
-                    case Tab.Dropper:
-                        ObjectDropper.DrawDropperTab();
-                        break;
-                    
-                    case Tab.Multiplayer:
-                        BeginPane("Player Labels", "Name tag visibility and multiplayer challenge controls.");
-                        bool previousShowPlayerUserNameTargets = misc.showPlayerUserNameTargets;
-                        ModernToggle("Show PlayerUserNameTarget", ref misc.showPlayerUserNameTargets, "mp_show_player_username_targets");
-                        if (previousShowPlayerUserNameTargets != misc.showPlayerUserNameTargets)
-                        {
-                            ApplyPlayerUserNameTargetsVisibility(true);
-                        }
-
-                        BeginToolbar();
-                        if (SecondaryButton("Refresh Player Name Targets", GUILayout.Width(205f), GUILayout.Height(26f)))
-                        {
-                            ApplyPlayerUserNameTargetsVisibility(true);
-                        }
-
-                        GUI.enabled = MultiplayerChallengeManager.FeatureEnabled;
-                        if (PrimaryButton(MultiplayerChallengeManager.IsOpen ? "Close Challenge UI" : "Open Challenge UI", GUILayout.Width(160f), GUILayout.Height(26f)))
-                        {
-                            MultiplayerChallengeManager.ToggleWindow();
-                        }
-                        GUI.enabled = true;
-                        EndToolbar();
-                        if (!MultiplayerChallengeManager.FeatureEnabled)
-                            GUILayout.Label("MP BIKE challenge work is disabled for now. The code is still kept for later.", UiMutedWrappedStyle);
-                        EndPane();
-                        break;
-                    
-                    
-                    /*
-                    case Tab.Challenge:
-                        challengeSettingsExpanded = ModernFoldout("Challenge Settings", challengeSettingsExpanded);
-
-                        if (challengeSettingsExpanded)
-                        {
-                            if (ModernButton("Spawn Challenge Area", 250f))
-                            {
-                                Vector3 spawnPos = Vector3.zero;
-                                Quaternion spawnRot = Quaternion.identity;
-
-                                if (Utils.Memory.physicsDrivenCharacter != null)
-                                {
-                                    spawnPos = Utils.Memory.physicsDrivenCharacter.transform.position;
-                                    spawnRot = Utils.Memory.physicsDrivenCharacter.transform.rotation;
-                                }
-                                else if (UnityEngine.Camera.main != null)
-                                {
-                                    spawnPos = UnityEngine.Camera.main.transform.position + UnityEngine.Camera.main.transform.forward * 5f;
-                                    spawnRot = UnityEngine.Camera.main.transform.rotation;
-                                }
-
-                                Challenges.ChallengeAreaManager.Create(
-                                    spawnPos,
-                                    new Vector3(Config.challengeSettings.challengeSizeX, Config.challengeSettings.challengeSizeY, Config.challengeSettings.challengeSizeZ),
-                                    spawnRot
-                                );
-                                
-                                // Apply visibility immediately
-                                Challenges.ChallengeAreaManager.SetVisible(Config.challengeSettings.challengeVisible);
-                            }
-
-                            if (Challenges.ChallengeAreaManager.Active != null)
-                            {
-                                if (ModernButton("Destroy Challenge Area", 250f))
-                                {
-                                    Challenges.ChallengeAreaManager.DestroyActive();
-                                }
-
-                                if (ModernToggle("Visible", ref Config.challengeSettings.challengeVisible))
-                                {
-                                    Challenges.ChallengeAreaManager.SetVisible(Config.challengeSettings.challengeVisible);
-                                }
-
-                                GUILayout.Label("Size", labelStyle);
-                                
-                                float oldX = Config.challengeSettings.challengeSizeX;
-                                float oldY = Config.challengeSettings.challengeSizeY;
-                                float oldZ = Config.challengeSettings.challengeSizeZ;
-
-                                ModernSlider("Width", ref Config.challengeSettings.challengeSizeX, 1f, 50f);
-                                ModernSlider("Height", ref Config.challengeSettings.challengeSizeY, 1f, 50f);
-                                ModernSlider("Depth", ref Config.challengeSettings.challengeSizeZ, 1f, 50f);
-
-                                if (oldX != Config.challengeSettings.challengeSizeX || 
-                                    oldY != Config.challengeSettings.challengeSizeY || 
-                                    oldZ != Config.challengeSettings.challengeSizeZ)
-                                {
-                                    Challenges.ChallengeAreaManager.SetSize(new Vector3(
-                                        Config.challengeSettings.challengeSizeX, 
-                                        Config.challengeSettings.challengeSizeY, 
-                                        Config.challengeSettings.challengeSizeZ));
-                                }
-                                
-                                if (ModernButton("Teleport to Me", 200f))
-                                {
-                                    if (Utils.Memory.physicsDrivenCharacter != null)
-                                    {
-                                        Challenges.ChallengeAreaManager.SetPosition(Utils.Memory.physicsDrivenCharacter.transform.position);
-                                        Challenges.ChallengeAreaManager.SetRotation(Utils.Memory.physicsDrivenCharacter.transform.rotation);
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                GUILayout.Label("No active challenge area.", labelStyle);
-                            }
-                        }
-                        break;
-                        */
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in DrawTabContent: {ex.Message}");
-            }
-        }
-
         //-------------------------------------------------------------------
         // SCROLL & TABS
         //-------------------------------------------------------------------
@@ -852,31 +447,6 @@ namespace rowemod
 
             scrollOffset += delta;
             scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
-        }
-
-        private static void SelectVisibleTab(int direction)
-        {
-            if (_visibleTabs.Length == 0)
-                return;
-
-            int currentIndex = GetVisibleTabIndex(currentTab);
-            if (currentIndex < 0)
-                currentIndex = 0;
-
-            int nextIndex = (currentIndex + direction + _visibleTabs.Length) % _visibleTabs.Length;
-            SetCurrentTab(_visibleTabs[nextIndex].tab);
-            Log.Msg($"[ControllerMenu] Tab {currentIndex}->{nextIndex}: {_visibleTabs[nextIndex].label}.");
-        }
-
-        private static int GetVisibleTabIndex(Tab tab)
-        {
-            for (int i = 0; i < _visibleTabs.Length; i++)
-            {
-                if (_visibleTabs[i].tab == tab)
-                    return i;
-            }
-
-            return -1;
         }
 
         private static void EnsureCurrentTabVisible()
@@ -966,10 +536,12 @@ namespace rowemod
             bool beganGroup = false;
             bool beganArea = false;
             bool beganVertical = false;
+            Rect visibleArea = Rect.zero;
+            bool drawGrindPoseScrollbar = false;
             try
             {
                 HandleScrolling();
-                Rect visibleArea = GetContentVisibleRect();
+                visibleArea = GetContentVisibleRect();
                 float visibleAreaHeight = visibleArea.height;
                 float contentWidth = visibleArea.width;
                 viewHeight = visibleAreaHeight;
@@ -999,6 +571,9 @@ namespace rowemod
                     scrollViewHeight = Mathf.Max(visibleAreaHeight, contentEndRect.yMax + 2f);
 
                 scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
+                drawGrindPoseScrollbar = string.IsNullOrWhiteSpace(_menuSearch) &&
+                    _selectedPage == MenuPage.GrindPoses &&
+                    scrollViewHeight > viewHeight + 1f;
             }
             catch (Exception ex)
             {
@@ -1020,6 +595,23 @@ namespace rowemod
                     GUILayout.EndArea();
                 if (beganGroup)
                     GUI.EndGroup();
+            }
+
+            if (drawGrindPoseScrollbar)
+            {
+                float scrollbarWidth = Mathf.Max(14f, 14f * UiScale);
+                Rect scrollbarRect = new Rect(
+                    visibleArea.xMax - scrollbarWidth,
+                    visibleArea.y,
+                    scrollbarWidth,
+                    visibleArea.height);
+                scrollOffset = GUI.VerticalScrollbar(
+                    scrollbarRect,
+                    scrollOffset,
+                    viewHeight,
+                    0f,
+                    scrollViewHeight);
+                scrollOffset = Mathf.Clamp(scrollOffset, 0f, Mathf.Max(0f, scrollViewHeight - viewHeight));
             }
         }
 
@@ -1094,9 +686,6 @@ namespace rowemod
                     BikeMaterialsLoader.Initialize();
                     BikeMaterialsLoader.ResetTabState();
                     break;
-                case Tab.MX:
-                    hasInitializedMxSettings = false;
-                    break;
                 case Tab.Misc:
                     ResetMiscTab();
                     ApplyConfiguredInterfaceScale();
@@ -1120,9 +709,6 @@ namespace rowemod
                     ApplyPlayerUserNameTargetsVisibility(true);
                     ResetChallengeSettings(false);
                     MultiplayerChallengeManager.ResetWindowState();
-                    break;
-                case Tab.Challenge:
-                    ResetChallengeSettings(true);
                     break;
             }
 
@@ -2092,70 +1678,6 @@ namespace rowemod
 
             return vehicleSettings.name;
         }
-
-        public static void DrawCameraSettings()
-        {
-            BeginPane("Camera Controls", "Camera shortcuts that run during gameplay while the RoweMod menu is closed.");
-            bool leftStickOffsetSwitch = Config.cameraSettings.leftStickOffsetSwitch;
-            ModernToggle("Left Stick Tap Flips Camera Offset", ref leftStickOffsetSwitch, "camera_left_stick_offset_switch");
-            if (leftStickOffsetSwitch != Config.cameraSettings.leftStickOffsetSwitch)
-                Config.cameraSettings.leftStickOffsetSwitch = leftStickOffsetSwitch;
-            GUILayout.Space(6f);
-            GUILayout.Label(
-                "Release LS before 0.5 seconds to flip the camera. Holding LS for 0.5 seconds is reserved for Bike-Only Stance and will not flip the camera.",
-                UiMutedWrappedStyle);
-            EndPane();
-        }
-
-        public static void DrawReplaySettings()
-        {
-            BeginPane(
-                "Replay Camera",
-                "Camera Lab binds only while Replay is open. Native tracks stay authoritative and missing tracks use session-only RoweMod keys.");
-            ReplayCameraLight.DrawCameraControls("replay_tab_camera_");
-            EndPane();
-
-            BeginPane("Lens", "Long-lens zoom, tilt, fisheye, vignette, and shake controls.");
-            ReplayCameraLight.DrawLensControls("replay_tab_lens_");
-            EndPane();
-
-            BeginPane("Depth of Field", "Keyframe the complete native near/far focus model.");
-            ReplayCameraLight.DrawDofControls("replay_tab_dof_");
-            EndPane();
-
-            BeginPane("Framing", "Capture-safe aspect mattes that never change the game's output resolution.");
-            ReplayCameraLight.DrawFramingControls("replay_tab_frame_");
-            EndPane();
-
-            BeginPane("Camera Light", "A high-quality replay-only local light attached to the active replay camera.");
-            GUILayout.Space(8f);
-            ReplayCameraLight.DrawLightControls("replay_tab_light_");
-            EndPane();
-
-            BeginPane("Keyframes", "The native Add/Delete commands also update RoweMod-owned camera, framing, and light tracks.");
-            ReplayCameraLight.DrawKeyframeControls();
-            EndPane();
-
-            BeginPane("Replay Camera Presets", "Save lens, DoF, shake, framing, and the Rowe camera light. Collision remains a live safety setting.");
-            ReplayCameraLight.DrawPresetControls();
-            EndPane();
-        }
-
-        public static void DrawGraphicsSettings()
-        {
-            try
-            {
-                GraphicsEnvironmentController.DrawControls();
-                DrawLightSettings();
-                
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Error in DrawGraphicsSettings: {ex.Message}");
-            }
-        }
-        
-        
 
         private static void DrawLightSettings()
         {

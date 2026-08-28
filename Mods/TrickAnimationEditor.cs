@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Il2CppInterop.Runtime;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2;
 using Il2CppMashBox.Core.Runtime.TrickSystem;
 using rowemod.Utils;
@@ -59,6 +60,7 @@ namespace rowemod.Mods
         private static readonly Dictionary<int, SyncTrickAnimationData> runtimeDataCache = new Dictionary<int, SyncTrickAnimationData>();
         private static readonly List<SyncTrickAnimationData> trickCatalog = new List<SyncTrickAnimationData>();
         private static readonly List<SyncTrickAnimationData> clipSources = new List<SyncTrickAnimationData>();
+        private static readonly List<AnimationClip> customClips = new List<AnimationClip>();
         private static readonly Dictionary<string, AnimationClip> clipLookup = new Dictionary<string, AnimationClip>();
         private static readonly Dictionary<int, AppliedPoseState> appliedPoseStates = new Dictionary<int, AppliedPoseState>();
         private static readonly HashSet<int> poseTouchedThisFrame = new HashSet<int>();
@@ -68,6 +70,10 @@ namespace rowemod.Mods
         private static bool runtimeRefreshIncludeAllLoadedData;
         private static bool trickCatalogDirty = true;
         private static bool clipSourceCatalogDirty = true;
+        private static bool customClipCatalogDirty = true;
+        private static int selectedCustomClipIndex;
+        private static int selectedCustomClipPhase = 1;
+        private static bool applyCustomClipToMirror = true;
         private static string runtimeRefreshReason = "startup";
         private static SyncTrickAnimationData pendingAutoSaveData;
         private static string pendingAutoSaveKey = string.Empty;
@@ -233,9 +239,11 @@ namespace rowemod.Mods
             runtimeDataCache.Clear();
             trickCatalog.Clear();
             clipSources.Clear();
+            customClips.Clear();
             clipLookup.Clear();
             trickCatalogDirty = true;
             clipSourceCatalogDirty = true;
+            customClipCatalogDirty = true;
             runtimeRefreshRequested = false;
             runtimeRefreshIncludeAllLoadedData = false;
             runtimeRefreshReason = string.Empty;
@@ -260,6 +268,15 @@ namespace rowemod.Mods
             runtimeRefreshIncludeAllLoadedData |= includeAllLoadedData;
             if (!string.IsNullOrWhiteSpace(reason))
                 runtimeRefreshReason = reason;
+        }
+
+        public static void NotifyAssetBundlesReloaded()
+        {
+            customClips.Clear();
+            clipLookup.Clear();
+            customClipCatalogDirty = true;
+            clipSourceCatalogDirty = true;
+            RequestRuntimeRefresh("custom animation bundles loaded", true);
         }
 
         public static void DrawEditor()
@@ -465,6 +482,7 @@ namespace rowemod.Mods
             Menu.EndToolbar();
 
             DrawClipCopyTools(data);
+            DrawCustomClipTools(data);
 
             GUILayout.Space(8);
             showClipDetails = Menu.ModernFoldout("Clip Details", showClipDetails);
@@ -1116,6 +1134,126 @@ namespace rowemod.Mods
             Menu.EndPane();
         }
 
+        private static void DrawCustomClipTools(SyncTrickAnimationData target)
+        {
+            Menu.BeginAltPane(
+                "Custom Animation Clips",
+                "Load a true AnimationClip made in Unity and assign it to the rider side of this trick.");
+
+            EnsureCustomClipCatalog(false);
+            if (customClips.Count == 0)
+            {
+                GUILayout.Label(
+                    "No RoweMod custom clips are loaded. Build the animation bundle in Unity, then enter or reload a map.",
+                    mutedStyle);
+                if (Menu.SecondaryButton("Refresh Custom Clips", GUILayout.Width(150f), GUILayout.Height(24f)))
+                    EnsureCustomClipCatalog(true);
+                Menu.EndPane();
+                return;
+            }
+
+            selectedCustomClipIndex = Mathf.Clamp(selectedCustomClipIndex, 0, customClips.Count - 1);
+            AnimationClip selectedClip = customClips[selectedCustomClipIndex];
+
+            GUILayout.Label("Loaded clip", mutedStyle);
+            for (int i = 0; i < customClips.Count; i++)
+            {
+                int captured = i;
+                bool selected = captured == selectedCustomClipIndex;
+                if (Menu.PillButton(
+                        customClips[captured].name,
+                        selected,
+                        GUILayout.ExpandWidth(true),
+                        GUILayout.Height(26f)))
+                    selectedCustomClipIndex = captured;
+            }
+
+            GUILayout.Space(5f);
+            GUILayout.Label("Replace rider phase", mutedStyle);
+            Menu.BeginToolbar();
+            string[] phases = { "Enter", "Loop", "Tweak", "Exit", "Enter + Loop" };
+            for (int i = 0; i < phases.Length; i++)
+            {
+                int captured = i;
+                if (Menu.PillButton(phases[captured], selectedCustomClipPhase == captured, GUILayout.ExpandWidth(true)))
+                    selectedCustomClipPhase = captured;
+            }
+            Menu.EndToolbar();
+
+            Menu.ModernToggle(
+                "Use Same Clip For Mirrored Direction",
+                ref applyCustomClipToMirror,
+                "custom_trick_clip_mirror");
+
+            if (Menu.PrimaryButton(
+                    "Apply Custom Rider Clip",
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.Height(28f)))
+            {
+                ApplyCustomPlayerClip(target, selectedClip, selectedCustomClipPhase, applyCustomClipToMirror);
+            }
+
+            GUILayout.Label(
+                $"{selectedClip.name}: {selectedClip.length:0.###} seconds at {selectedClip.frameRate:0.##} fps, " +
+                $"humanoid={selectedClip.humanMotion}.",
+                mutedStyle);
+            Menu.EndPane();
+        }
+
+        private static void ApplyCustomPlayerClip(
+            SyncTrickAnimationData target,
+            AnimationClip clip,
+            int phase,
+            bool includeMirror)
+        {
+            TrickAnimationData player = SafeRead(() => target?._playerAnimationData, null);
+            if (player == null || clip == null)
+            {
+                status = "Custom clip could not be applied because rider animation data was unavailable.";
+                return;
+            }
+
+            switch (phase)
+            {
+                case 0:
+                    player._enterAnimationClip = clip;
+                    if (includeMirror) player._enterAnimationClipMirror = clip;
+                    break;
+                case 1:
+                    player._loopAnimationClip = clip;
+                    if (includeMirror) player._loopAnimationClipMirror = clip;
+                    break;
+                case 2:
+                    player._tweakAnimationClip = clip;
+                    if (includeMirror) player._tweakAnimationClipMirror = clip;
+                    break;
+                case 3:
+                    player._exitAnimationClip = clip;
+                    if (includeMirror) player._exitAnimationClipMirror = clip;
+                    break;
+                default:
+                    player._enterAnimationClip = clip;
+                    player._loopAnimationClip = clip;
+                    if (includeMirror)
+                    {
+                        player._enterAnimationClipMirror = clip;
+                        player._loopAnimationClipMirror = clip;
+                    }
+                    break;
+            }
+
+            suppressAutoApplyUntil = Time.unscaledTime + 5f;
+            string phaseLabel = phase == 0 ? "Enter" :
+                phase == 1 ? "Loop" :
+                phase == 2 ? "Tweak" :
+                phase == 3 ? "Exit" : "Enter + Loop";
+            SaveAnimationOverride(
+                target,
+                GetDataKey(target),
+                $"Applied and saved custom rider clip {clip.name} to {phaseLabel} on {TrickName(target)}.");
+            Log.Msg($"[TrickAnimEditor] Applied custom rider clip {clip.name} to {phaseLabel} on {TrickName(target)}.");
+        }
+
         public static void DrawAnimationSourcePickerPopup()
         {
             if (!animationSourcePickerOpen || animationSourceTarget == null)
@@ -1665,23 +1803,89 @@ namespace rowemod.Mods
 
         private static void BuildClipLookupIfNeeded()
         {
-            if (clipLookup.Count > 0)
-                return;
-
-            AnimationClip[] clips = Resources.FindObjectsOfTypeAll<AnimationClip>();
-            if (clips == null)
-                return;
-
-            for (int i = 0; i < clips.Length; i++)
+            if (clipLookup.Count == 0)
             {
-                AnimationClip clip = clips[i];
-                if (clip == null)
+                AnimationClip[] clips = Resources.FindObjectsOfTypeAll<AnimationClip>();
+                if (clips != null)
+                {
+                    for (int i = 0; i < clips.Length; i++)
+                    {
+                        AnimationClip clip = clips[i];
+                        if (clip == null)
+                            continue;
+
+                        string name = SafeRead(() => clip.name, null);
+                        if (!string.IsNullOrEmpty(name) && !clipLookup.ContainsKey(name))
+                            clipLookup[name] = clip;
+                    }
+                }
+            }
+
+            EnsureCustomClipCatalog(false);
+        }
+
+        private static void EnsureCustomClipCatalog(bool force)
+        {
+            if (!force && !customClipCatalogDirty)
+                return;
+
+            customClips.Clear();
+            HashSet<int> seen = new HashSet<int>();
+            for (int bundleIndex = 0; bundleIndex < Memory.loadedBundles.Count; bundleIndex++)
+            {
+                AssetBundle bundle = Memory.loadedBundles[bundleIndex];
+                if (bundle == null)
                     continue;
 
-                string name = SafeRead(() => clip.name, null);
-                if (!string.IsNullOrEmpty(name) && !clipLookup.ContainsKey(name))
-                    clipLookup[name] = clip;
+                try
+                {
+                    string[] assetNames = bundle.GetAllAssetNames();
+                    if (assetNames == null)
+                        continue;
+
+                    for (int clipIndex = 0; clipIndex < assetNames.Length; clipIndex++)
+                    {
+                        string assetName = assetNames[clipIndex];
+                        if (string.IsNullOrEmpty(assetName) ||
+                            !assetName.EndsWith(".anim", System.StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        // LoadAllAssets<T> is not preserved in this IL2CPP player and throws
+                        // "Method unstripping failed". Use the concrete non-generic overload
+                        // so custom clips can be loaded without reflection or per-frame polling.
+                        UnityEngine.Object loaded = bundle.LoadAsset(
+                            assetName,
+                            Il2CppType.Of<AnimationClip>());
+                        AnimationClip clip = loaded?.TryCast<AnimationClip>();
+                        if (clip == null || !seen.Add(clip.GetInstanceID()))
+                            continue;
+
+                        string clipName = SafeRead(() => clip.name, string.Empty);
+                        if (!clipName.StartsWith("RoweMod_Custom_", System.StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        customClips.Add(clip);
+                        clipLookup[clipName] = clip;
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Log.Warning($"[TrickAnimEditor] Could not inspect animation bundle: {ex.Message}");
+                }
             }
+
+            customClips.Sort((a, b) => string.Compare(
+                SafeRead(() => a.name, string.Empty),
+                SafeRead(() => b.name, string.Empty),
+                System.StringComparison.OrdinalIgnoreCase));
+            selectedCustomClipIndex = Mathf.Clamp(
+                selectedCustomClipIndex,
+                0,
+                Mathf.Max(0, customClips.Count - 1));
+            customClipCatalogDirty = false;
+
+            if (force || customClips.Count > 0)
+                Log.Msg($"[TrickAnimEditor] Loaded {customClips.Count} custom animation clip(s) from RoweMod bundles.");
         }
 
         private static void EnsureClipSourceCatalog(bool force)

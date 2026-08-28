@@ -4,7 +4,6 @@ using rowemod.Utils;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using HarmonyLib;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.Addons.PhysicsDrivenAnimation.BeyondMeat;
 using Il2CppMashBox.Addons.SessionMarker;
@@ -642,7 +641,6 @@ namespace rowemod.Mods
 
     }
 
-    [HarmonyPatch(typeof(NetworkPlayer), nameof(NetworkPlayer.Spawned))]
     internal static class PlayerUserNameTargetSpawnPatch
     {
         private static void Postfix(NetworkPlayer __instance)

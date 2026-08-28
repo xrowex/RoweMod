@@ -18,13 +18,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.1", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.2", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
+[assembly: HarmonyDontPatchAll]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.3.1";
+        public const string ModVersion = "3.3.2";
         private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -48,13 +49,17 @@ namespace rowemod
         {
             CreateModDirectories();
             _roweModHarmony = HarmonyInstance;
-            HarmonyInstance.PatchAll();
         }
         
         
         public override void OnLateInitializeMelon()
         {
+            // The IL2CPP patcher is registered by MelonLoader's support module after
+            // OnEarlyInitializeMelon. No native hook may cache a managed-only patcher.
+            TrickTweakGuard.InstallNativeHooks(HarmonyInstance);
+            HangFiveControl.InstallNativeHooks(HarmonyInstance);
             LoadStartupConfig();
+            LateNativeHooks.Install(HarmonyInstance);
             if (!Config.disclaimerAccepted)
             {
                 _showPrivacyDisclaimer = true;
@@ -248,6 +253,8 @@ namespace rowemod
             GameEventListener.OnSceneInitialized(sceneName);
 
             TrickAnimationEditor.OnSceneInitialized(isGameplayScene);
+            TrickTweakGuard.OnSceneInitialized(isGameplayScene);
+            HangFiveControl.OnSceneInitialized(isGameplayScene);
 
             if (string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(sceneName, "MainMenu", StringComparison.OrdinalIgnoreCase) ||
@@ -428,6 +435,8 @@ namespace rowemod
             if (Config.physics.spinCompletionAssist &&
                 !Il2CppMashBox.BMX_Physics_Development.VehicleController.UseOnePointOhSpinSystem)
                 Mods.Physics.UpdateSpinCompletionAssist();
+            if (RiderStyleEditor.RuntimeEnabled)
+                RiderStyleEditor.FixedUpdate();
             PegSparks.FixedUpdate();
         }
 
@@ -448,6 +457,7 @@ namespace rowemod
 
             Mods.Physics.ReleaseNoseManualTuning();
             Mods.Physics.ReleaseSpinCompletionAssist();
+            Mods.Physics.ReleasePhysicsStepRate();
             RiderStyleEditor.Cleanup();
             BikeOnlyStance.Cleanup();
             _runtimeContributionsReleased = true;
@@ -840,6 +850,8 @@ namespace rowemod
             _unityExplorerCursorCompatibilityEnabled = false;
             ReleaseRuntimeContributions();
             TrickAnimationEditor.Cleanup();
+            TrickTweakGuard.Cleanup();
+            HangFiveControl.Cleanup();
             LeftStickGestureRouter.Cleanup();
             ReplayCameraLight.Cleanup();
             ReplayInputPatch.Cleanup();

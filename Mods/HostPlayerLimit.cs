@@ -1,4 +1,3 @@
-using HarmonyLib;
 using Il2CppFusion;
 using Il2CppMashBox.Netorking;
 using rowemod.Utils;
@@ -73,20 +72,16 @@ namespace rowemod.Mods
         }
     }
 
-    [HarmonyPatch(typeof(Il2CppMashBox.Netorking.FusionBootstrap), "DrawServerBrowserHostMapControls")]
     internal static class HostPlayerLimitHostSetupPatch
     {
-        [HarmonyPrefix]
         private static void Prefix()
         {
             HostPlayerLimit.DrawHostSetupControl();
         }
     }
 
-    [HarmonyPatch(typeof(NetworkRunner), nameof(NetworkRunner.StartGame))]
     internal static class HostPlayerLimitStartGamePatch
     {
-        [HarmonyPrefix]
         private static void Prefix(ref StartGameArgs __0)
         {
             HostPlayerLimit.ApplyToHostStart(ref __0);

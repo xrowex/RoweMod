@@ -796,6 +796,7 @@ namespace rowemod.Utils
             }
 
             assetBundlesLoaded = true;
+            TrickAnimationEditor.NotifyAssetBundlesReloaded();
         }
 
         private static bool HasUnityBundleSignature(string path)

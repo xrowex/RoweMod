@@ -429,6 +429,8 @@ namespace rowemod.Mods
                 BikeOnlyStance.OnLocalPlayerSpawned();
                 Main.NotifyRuntimeContributionApplied();
                 TrickAnimationEditor.OnLocalPlayerSpawned();
+                TrickTweakGuard.OnLocalPlayerSpawned();
+                HangFiveControl.OnLocalPlayerSpawned();
                 Misc.ApplyBoneBreakingState(true);
                 rowemod.Challenges.MultiplayerChallengeManager.OnLocalPlayerSpawned(go);
                 Memory.LoadAllAssetBundles();

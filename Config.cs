@@ -20,11 +20,15 @@ namespace rowemod
         public bool driftAbility;
         public int lastVehicle;
         public float gravity;
+        public bool useCustomPhysicsStepRate;
+        public float physicsStepRate;
         public float smallHopForce;
         public float pumpForce;
         public float steerDamp;
         public float manualAngle;
         public float noseManualAngle;
+        // 0 = game behavior, 1 = disable Hang 5, 2 = swap the two bumper-selected foot poses.
+        public int hangFiveMode;
         public bool noseManualTurnTuning;
         public bool noseManualDebugLogging;
         public float noseManualChassisComForwardOffset;
@@ -243,6 +247,11 @@ namespace rowemod
         public float replayMk1PaniniCrop { get; set; } = 0.65f;
         public float replayMk1ChromaticAberration { get; set; } = 0.07f;
         public float replayMk1FilmGrain { get; set; } = 0.06f;
+        // VX1000 uses the same native HDRP character stack as MK1, but with its own
+        // low-key tape grain and cached lens-wear overlay.
+        public bool replayVx1000Mode { get; set; }
+        public float replayVx1000LensDirt { get; set; } = 0.18f;
+        public float replayVx1000LensScratches { get; set; } = 0.12f;
         public float replayVignette { get; set; } = 0.05f;
         public int replayShakeMode { get; set; }
         public bool replayDofEnabled { get; set; }
@@ -315,9 +324,38 @@ namespace rowemod
         public bool useOppoTrickCompatibility { get; set; }
     }
 
+    public class ManualIkPoseSettings
+    {
+        public bool enabled { get; set; }
+        public bool applyDuringManual { get; set; } = true;
+        public bool applyDuringNoseManual { get; set; }
+        public bool leftFootEnabled { get; set; } = true;
+        public bool rightFootEnabled { get; set; } = true;
+        public bool hipsEnabled { get; set; } = true;
+        public float leftFootX { get; set; } = -0.060790136f;
+        public float leftFootY { get; set; } = 0.11994608f;
+        public float leftFootZ { get; set; } = -0.111834325f;
+        public float leftFootPitch { get; set; }
+        public float leftFootYaw { get; set; }
+        public float leftFootRoll { get; set; }
+        public float rightFootX { get; set; } = 0.07215191f;
+        public float rightFootY { get; set; } = 0.094142355f;
+        public float rightFootZ { get; set; } = -0.103910625f;
+        public float rightFootPitch { get; set; }
+        public float rightFootYaw { get; set; }
+        public float rightFootRoll { get; set; }
+        public float hipsX { get; set; }
+        public float hipsY { get; set; } = 0.096681125f;
+        public float hipsZ { get; set; }
+        public float hipsPitch { get; set; }
+        public float hipsYaw { get; set; }
+        public float hipsRoll { get; set; }
+    }
+
     public class TrickAnimationDebugSettings
     {
         public bool editorEnabled { get; set; } = true;
+        public bool disableTweaking { get; set; }
         public Dictionary<string, TrickAnimationOverride> overrides { get; set; } = new Dictionary<string, TrickAnimationOverride>();
     }
 
@@ -419,11 +457,14 @@ namespace rowemod
             driftAbility = true,
             lastVehicle = 0,
             gravity = 12.5f,
+            useCustomPhysicsStepRate = false,
+            physicsStepRate = 0f,
             smallHopForce = 4.2f,
             pumpForce = 1.5f,
             steerDamp = 5.0f,
             manualAngle = 30f,
             noseManualAngle = 30f,
+            hangFiveMode = 0,
             noseManualTurnTuning = false,
             noseManualDebugLogging = false,
             noseManualChassisComForwardOffset = 0f,
@@ -540,6 +581,7 @@ namespace rowemod
         public static ReplaySettings replaySettings = new ReplaySettings();
         public static PegSparksSettings pegSparksSettings = new PegSparksSettings();
         public static BikeOnlyStanceSettings bikeOnlyStanceSettings = new BikeOnlyStanceSettings();
+        public static ManualIkPoseSettings manualIkPoseSettings = new ManualIkPoseSettings();
         public static TrickAnimationDebugSettings trickAnimationDebugSettings = new TrickAnimationDebugSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
@@ -564,6 +606,7 @@ namespace rowemod
             public ReplaySettings replaySettingsData { get; set; }
             public PegSparksSettings pegSparksSettingsData { get; set; }
             public BikeOnlyStanceSettings bikeOnlyStanceSettingsData { get; set; }
+            public ManualIkPoseSettings manualIkPoseSettingsData { get; set; }
             public TrickAnimationDebugSettings trickAnimationDebugSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
@@ -686,6 +729,7 @@ namespace rowemod
                     replaySettingsData = replaySettings,
                     pegSparksSettingsData = pegSparksSettings,
                     bikeOnlyStanceSettingsData = bikeOnlyStanceSettings,
+                    manualIkPoseSettingsData = manualIkPoseSettings,
                     trickAnimationDebugSettingsData = trickAnimationDebugSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
@@ -743,6 +787,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"pegSparksSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasBikeOnlyStanceSettings =
                 jsonContent.IndexOf("\"bikeOnlyStanceSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasManualIkPoseSettings =
+                jsonContent.IndexOf("\"manualIkPoseSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasBikeOnlyStanceVersion =
                 jsonContent.IndexOf("\"bikeOnlyStanceVersion\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasTrickAnimationDebugSettings =
@@ -755,6 +801,11 @@ namespace rowemod
 
             // Assign values from JSON, preserving defaults if fields are missing
             physics = jsonData.physicsData;
+            if (!float.IsFinite(physics.physicsStepRate))
+                physics.physicsStepRate = 0f;
+            if (physics.physicsStepRate > 0f)
+                physics.physicsStepRate = Mathf.Clamp(physics.physicsStepRate, 30f, 250f);
+            physics.hangFiveMode = Math.Max(0, Math.Min(2, physics.hangFiveMode));
             if (!hasNoseManualComTuning)
             {
                 physics.noseManualChassisComForwardOffset = 0f;
@@ -864,6 +915,9 @@ namespace rowemod
             NormalizePegSparksSettings(pegSparksSettings);
             bikeOnlyStanceSettings =
                 jsonData.bikeOnlyStanceSettingsData ?? new BikeOnlyStanceSettings();
+            manualIkPoseSettings =
+                jsonData.manualIkPoseSettingsData ?? new ManualIkPoseSettings();
+            NormalizeManualIkPoseSettings(manualIkPoseSettings);
             bool migratedBikeOnlyStanceEnabled = false;
             if (!hasBikeOnlyStanceVersion)
             {
@@ -909,6 +963,7 @@ namespace rowemod
                 !hasReplayCameraLabVersion ||
                 !hasPegSparksSettings ||
                 !hasBikeOnlyStanceSettings ||
+                !hasManualIkPoseSettings ||
                 migratedBikeOnlyStanceEnabled ||
                 !hasTrickAnimationDebugSettings ||
                 !hasGrindInputMap ||
@@ -943,6 +998,8 @@ namespace rowemod
             settings.replayMk1PaniniCrop = ClampFinite(settings.replayMk1PaniniCrop, 0f, 1f, 0.65f);
             settings.replayMk1ChromaticAberration = ClampFinite(settings.replayMk1ChromaticAberration, 0f, 1f, 0.07f);
             settings.replayMk1FilmGrain = ClampFinite(settings.replayMk1FilmGrain, 0f, 1f, 0.06f);
+            settings.replayVx1000LensDirt = ClampFinite(settings.replayVx1000LensDirt, 0f, 0.65f, 0.18f);
+            settings.replayVx1000LensScratches = ClampFinite(settings.replayVx1000LensScratches, 0f, 0.5f, 0.12f);
             settings.replayVignette = ClampFinite(settings.replayVignette, 0f, 100f, 5f);
             settings.replayShakeMode = Math.Max(0, Math.Min(3, settings.replayShakeMode));
             settings.replayNearFocusStart = ClampFinite(settings.replayNearFocusStart, 0f, 1000f, 0f);
@@ -976,6 +1033,32 @@ namespace rowemod
             settings.cameraLightShadowBias = ClampFinite(settings.cameraLightShadowBias, 0f, 2f, 0.05f);
             settings.cameraLightShadowNormalBias = ClampFinite(settings.cameraLightShadowNormalBias, 0f, 3f, 0.4f);
             settings.cameraLightShadowNearPlane = ClampFinite(settings.cameraLightShadowNearPlane, 0.01f, 10f, 0.2f);
+        }
+
+        private static void NormalizeManualIkPoseSettings(ManualIkPoseSettings settings)
+        {
+            if (settings == null)
+                return;
+
+            settings.leftFootX = ClampFinite(settings.leftFootX, -2f, 2f, -0.060790136f);
+            settings.leftFootY = ClampFinite(settings.leftFootY, -2f, 2f, 0.11994608f);
+            settings.leftFootZ = ClampFinite(settings.leftFootZ, -2f, 2f, -0.111834325f);
+            settings.rightFootX = ClampFinite(settings.rightFootX, -2f, 2f, 0.07215191f);
+            settings.rightFootY = ClampFinite(settings.rightFootY, -2f, 2f, 0.094142355f);
+            settings.rightFootZ = ClampFinite(settings.rightFootZ, -2f, 2f, -0.103910625f);
+            settings.hipsX = ClampFinite(settings.hipsX, -2f, 2f, 0f);
+            settings.hipsY = ClampFinite(settings.hipsY, -2f, 2f, 0.096681125f);
+            settings.hipsZ = ClampFinite(settings.hipsZ, -2f, 2f, 0f);
+
+            settings.leftFootPitch = ClampFinite(settings.leftFootPitch, -180f, 180f, 0f);
+            settings.leftFootYaw = ClampFinite(settings.leftFootYaw, -180f, 180f, 0f);
+            settings.leftFootRoll = ClampFinite(settings.leftFootRoll, -180f, 180f, 0f);
+            settings.rightFootPitch = ClampFinite(settings.rightFootPitch, -180f, 180f, 0f);
+            settings.rightFootYaw = ClampFinite(settings.rightFootYaw, -180f, 180f, 0f);
+            settings.rightFootRoll = ClampFinite(settings.rightFootRoll, -180f, 180f, 0f);
+            settings.hipsPitch = ClampFinite(settings.hipsPitch, -180f, 180f, 0f);
+            settings.hipsYaw = ClampFinite(settings.hipsYaw, -180f, 180f, 0f);
+            settings.hipsRoll = ClampFinite(settings.hipsRoll, -180f, 180f, 0f);
         }
 
         public static void NormalizeGraphicsSettings(GraphicsSettings settings)
@@ -1121,11 +1204,14 @@ namespace rowemod
                 driftAbility = true,
                 lastVehicle = 0,
                 gravity = 12.5f,
+                useCustomPhysicsStepRate = false,
+                physicsStepRate = 0f,
                 smallHopForce = 4.2f,
                 pumpForce = 1.5f,
                 steerDamp = 5.0f,
                 manualAngle = 30f,
                 noseManualAngle = 30f,
+                hangFiveMode = 0,
                 noseManualTurnTuning = false,
                 noseManualDebugLogging = false,
                 noseManualChassisComForwardOffset = 0f,

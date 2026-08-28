@@ -47,6 +47,7 @@ namespace rowemod.Mods
         private static OnePointOhFlipSystem _flipSystem;
         private static FlipSystemSnapshot _flipSystemDefaults;
         private static int _flipSystemInstanceId = int.MinValue;
+        private static bool _flipSystemMissingLogged;
         private static bool _customOpen;
         private static bool _loggedInspector;
         private static Rect _windowRect;
@@ -157,6 +158,7 @@ namespace rowemod.Mods
             _tireRideMagnet = null;
             _defaultTireRideMagnet = null;
             _flipSystemInstanceId = int.MinValue;
+            _flipSystemMissingLogged = false;
             _customOpen = false;
             _loggedInspector = false;
             _windowRect = default;
@@ -402,7 +404,7 @@ namespace rowemod.Mods
                 bool changed = false;
                 try
                 {
-                    DrawFlipSystemEditor();
+                    changed |= DrawFlipSystemEditor();
                     GUILayout.Space(8f);
                     changed |= DrawLiveVehicleSystems(menu);
                     GUILayout.Space(8f);
@@ -439,7 +441,13 @@ namespace rowemod.Mods
                 }
 
                 if (changed)
+                {
+                    if (_flipSystem != null)
+                        Log.Msg(
+                            $"[RuntimeVehicleReset] ApplyChanges triggered. One Point Oh snapshot: " +
+                            $"{DescribeOnePointOhState(_flipSystem)}");
                     ApplyChanges(menu);
+                }
             }
 
                 GUILayout.EndVertical();
@@ -2207,10 +2215,26 @@ namespace rowemod.Mods
             };
         }
 
-        private static void DrawFlipSystemEditor()
+        private static bool DrawFlipSystemEditor()
         {
             if (_flipSystem == null || _flipSystemDefaults == null)
                 RefreshFlipSystem();
+
+            if (_flipSystem == null || _flipSystemDefaults == null)
+            {
+                if (!_flipSystemMissingLogged)
+                {
+                    Log.Warning("[RuntimeVehicleReset] One Point Oh flip system not found for this vehicle.");
+                    _flipSystemMissingLogged = true;
+                }
+                return false;
+            }
+
+            if (_flipSystemMissingLogged)
+            {
+                Log.Msg("[RuntimeVehicleReset] One Point Oh flip system found and ready.");
+                _flipSystemMissingLogged = false;
+            }
 
             string title = _flipSystemExpanded
                 ? "One Point Oh Flip System  ▲"
@@ -2220,12 +2244,12 @@ namespace rowemod.Mods
                 _flipSystemExpanded = !_flipSystemExpanded;
 
             if (!_flipSystemExpanded)
-                return;
+                return false;
 
             if (_flipSystem == null || _flipSystemDefaults == null)
             {
                 GUILayout.Label("No active One Point Oh flip system was found on this vehicle.", _mutedStyle);
-                return;
+                return false;
             }
 
             GUILayout.BeginVertical(_rowStyle);
@@ -2236,7 +2260,8 @@ namespace rowemod.Mods
             GUILayout.Label("Only authored tuning values are shown; live trick state and internal transforms stay protected.", _mutedStyle);
             GUILayout.EndVertical();
 
-            DrawFlipToggle(
+            bool changed = false;
+            changed |= DrawFlipToggle(
                 "forward_only_landing",
                 "Forward-Only Landing Finish",
                 Config.physics.spinCompletionAssist,
@@ -2256,33 +2281,119 @@ namespace rowemod.Mods
                     GUILayout.ExpandWidth(true));
             }
 
-            DrawFlipVector("flip_axis", "Flip Axis", _flipSystem._flipAxisLocal, _flipSystemDefaults.FlipAxis,
+            changed |= DrawFlipVector(
+                "flip_axis",
+                "Flip Axis",
+                _flipSystem._flipAxisLocal,
+                _flipSystemDefaults.FlipAxis,
                 value => _flipSystem._flipAxisLocal = value);
-            DrawFlipVector("spin_axis", "Spin Axis", _flipSystem._spinAxisLocal, _flipSystemDefaults.SpinAxis,
+            changed |= DrawFlipVector(
+                "spin_axis",
+                "Spin Axis",
+                _flipSystem._spinAxisLocal,
+                _flipSystemDefaults.SpinAxis,
                 value => _flipSystem._spinAxisLocal = value);
-            DrawFlipToggle("spin_first", "Spin Before Flip", _flipSystem._spinFirst, _flipSystemDefaults.SpinFirst,
+            changed |= DrawFlipToggle(
+                "spin_first",
+                "Spin Before Flip",
+                _flipSystem._spinFirst,
+                _flipSystemDefaults.SpinFirst,
                 value => _flipSystem._spinFirst = value);
-            DrawFlipFloat("spin_mult", "Spin Multiplier", _flipSystem._spinMult, _flipSystemDefaults.SpinMultiplier,
-                -5f, 5f, value => _flipSystem._spinMult = value);
-            DrawFlipFloat("flip_mult", "Flip Multiplier", _flipSystem._flipMult, _flipSystemDefaults.FlipMultiplier,
-                -5f, 5f, value => _flipSystem._flipMult = value);
-            DrawFlipFloat("default_duration", "Default Trick Duration", _flipSystem._defaultTrickDuration,
-                _flipSystemDefaults.DefaultTrickDuration, 0.01f, 5f, value => _flipSystem._defaultTrickDuration = value);
-            DrawFlipFloat("minimum_duration", "Minimum Trick Duration", _flipSystem._minTrickDuration,
-                _flipSystemDefaults.MinimumTrickDuration, 0.01f, 5f, value => _flipSystem._minTrickDuration = value);
-            DrawFlipFloat("landing_safety", "Landing Safety Time", _flipSystem._landingSafetySeconds,
-                _flipSystemDefaults.LandingSafetySeconds, 0f, 3f, value => _flipSystem._landingSafetySeconds = value);
-            DrawFlipFloat("backflip_direction", "Backflip Direction Multiplier", _flipSystem._backflipDirMult,
-                _flipSystemDefaults.BackflipDirectionMultiplier, -5f, 5f, value => _flipSystem._backflipDirMult = value);
-            DrawFlipFloat("spin_direction", "Spin Direction Multiplier", _flipSystem._spinDirMult,
-                _flipSystemDefaults.SpinDirectionMultiplier, -5f, 5f, value => _flipSystem._spinDirMult = value);
+            changed |= DrawFlipFloat(
+                "spin_mult",
+                "Spin Multiplier",
+                _flipSystem._spinMult,
+                _flipSystemDefaults.SpinMultiplier,
+                -5f,
+                5f,
+                value => _flipSystem._spinMult = value);
+            changed |= DrawFlipFloat(
+                "flip_mult",
+                "Flip Multiplier",
+                _flipSystem._flipMult,
+                _flipSystemDefaults.FlipMultiplier,
+                -5f,
+                5f,
+                value => _flipSystem._flipMult = value);
+            changed |= DrawFlipFloat(
+                "default_duration",
+                "Default Trick Duration",
+                _flipSystem._defaultTrickDuration,
+                _flipSystemDefaults.DefaultTrickDuration,
+                0.01f,
+                5f,
+                value => _flipSystem._defaultTrickDuration = value);
+            changed |= DrawFlipFloat(
+                "minimum_duration",
+                "Minimum Trick Duration",
+                _flipSystem._minTrickDuration,
+                _flipSystemDefaults.MinimumTrickDuration,
+                0.01f,
+                5f,
+                value => _flipSystem._minTrickDuration = value);
+            changed |= DrawFlipFloat(
+                "landing_safety",
+                "Landing Safety Time",
+                _flipSystem._landingSafetySeconds,
+                _flipSystemDefaults.LandingSafetySeconds,
+                0f,
+                3f,
+                value => _flipSystem._landingSafetySeconds = value);
+            changed |= DrawFlipFloat(
+                "backflip_direction",
+                "Backflip Direction Multiplier",
+                _flipSystem._backflipDirMult,
+                _flipSystemDefaults.BackflipDirectionMultiplier,
+                -5f,
+                5f,
+                value => _flipSystem._backflipDirMult = value);
+            changed |= DrawFlipFloat(
+                "spin_direction",
+                "Spin Direction Multiplier",
+                _flipSystem._spinDirMult,
+                _flipSystemDefaults.SpinDirectionMultiplier,
+                -5f,
+                5f,
+                value => _flipSystem._spinDirMult = value);
 
-            DrawAngularEditor("flip", "Flip Dynamics", _flipSystem._flip, _flipSystemDefaults.Flip, ref _flipDynamicsExpanded);
-            DrawAngularEditor("spin", "Spin Dynamics", _flipSystem._spin, _flipSystemDefaults.Spin, ref _spinDynamicsExpanded);
-            DrawDriveEditor(_flipSystem._drive, _flipSystemDefaults.Drive);
+            changed |= DrawAngularEditor(
+                "flip",
+                "Flip Dynamics",
+                _flipSystem._flip,
+                _flipSystemDefaults.Flip,
+                ref _flipDynamicsExpanded);
+            changed |= DrawAngularEditor(
+                "spin",
+                "Spin Dynamics",
+                _flipSystem._spin,
+                _flipSystemDefaults.Spin,
+                ref _spinDynamicsExpanded);
+            changed |= DrawDriveEditor(_flipSystem._drive, _flipSystemDefaults.Drive);
+
+            return changed;
         }
 
-        private static void DrawAngularEditor(
+        private static string DescribeOnePointOhState(OnePointOhFlipSystem system)
+        {
+            if (system == null)
+                return "OnePointOh=<missing>";
+
+            Angular1D flip = system._flip;
+            Angular1D spin = system._spin;
+            QuaternionPDDrive drive = system._drive;
+            return
+                $"flipAxis={system._flipAxisLocal.x:0.###},{system._flipAxisLocal.y:0.###},{system._flipAxisLocal.z:0.###} " +
+                $"spinAxis={system._spinAxisLocal.x:0.###},{system._spinAxisLocal.y:0.###},{system._spinAxisLocal.z:0.###} " +
+                $"spinFirst={system._spinFirst} spinMult={system._spinMult:0.###} flipMult={system._flipMult:0.###} " +
+                $"duration={system._defaultTrickDuration:0.###}/{system._minTrickDuration:0.###} " +
+                $"landingSafety={system._landingSafetySeconds:0.###} " +
+                $"spinDir={system._spinDirMult:0.###} backflipDir={system._backflipDirMult:0.###} " +
+                $"flipUseDrive={flip?.useDrive} spinUseDrive={spin?.useDrive} " +
+                $"driveKp={(drive != null ? drive.kp : 0f):0.###} driveKd={(drive != null ? drive.kd : 0f):0.###} " +
+                $"assist={Config.physics.spinCompletionAssist}";
+        }
+
+        private static bool DrawAngularEditor(
             string id,
             string label,
             Angular1D angular,
@@ -2297,31 +2408,34 @@ namespace rowemod.Mods
             expanded = nextExpanded;
 
             if (!expanded || angular == null || defaults == null)
-                return;
+                return false;
 
-            DrawFlipFloat($"{id}_inertia", "Inertia", angular.inertia, defaults.Inertia, 0f, 100f,
+            bool changed = false;
+            changed |= DrawFlipFloat($"{id}_inertia", "Inertia", angular.inertia, defaults.Inertia, 0f, 100f,
                 value => angular.inertia = value);
-            DrawFlipFloat($"{id}_drag", "Angular Drag", angular.angularDrag, defaults.AngularDrag, 0f, 100f,
+            changed |= DrawFlipFloat($"{id}_drag", "Angular Drag", angular.angularDrag, defaults.AngularDrag, 0f, 100f,
                 value => angular.angularDrag = value);
-            DrawFlipFloat($"{id}_max_velocity", "Maximum Angular Velocity", angular.maxAbsAngularVelocityDeg,
+            changed |= DrawFlipFloat($"{id}_max_velocity", "Maximum Angular Velocity", angular.maxAbsAngularVelocityDeg,
                 defaults.MaximumAngularVelocity, 0f, 3000f, value => angular.maxAbsAngularVelocityDeg = value);
-            DrawFlipToggle($"{id}_use_drive", "Use Angle Drive", angular.useDrive, defaults.UseDrive,
+            changed |= DrawFlipToggle($"{id}_use_drive", "Use Angle Drive", angular.useDrive, defaults.UseDrive,
                 value => angular.useDrive = value);
-            DrawFlipFloat($"{id}_target", "Target Angle", angular.targetAngleDeg, defaults.TargetAngle,
+            changed |= DrawFlipFloat($"{id}_target", "Target Angle", angular.targetAngleDeg, defaults.TargetAngle,
                 -1440f, 1440f, value => angular.targetAngleDeg = value);
-            DrawFlipFloat($"{id}_stiffness", "Stiffness", angular.stiffness, defaults.Stiffness,
+            changed |= DrawFlipFloat($"{id}_stiffness", "Stiffness", angular.stiffness, defaults.Stiffness,
                 0f, 5000f, value => angular.stiffness = value);
-            DrawFlipFloat($"{id}_damping", "Damping", angular.damping, defaults.Damping,
+            changed |= DrawFlipFloat($"{id}_damping", "Damping", angular.damping, defaults.Damping,
                 0f, 1000f, value => angular.damping = value);
-            DrawFlipToggle($"{id}_use_limits", "Use Angle Limits", angular.useLimits, defaults.UseLimits,
+            changed |= DrawFlipToggle($"{id}_use_limits", "Use Angle Limits", angular.useLimits, defaults.UseLimits,
                 value => angular.useLimits = value);
-            DrawFlipFloat($"{id}_minimum", "Minimum Angle", angular.minAngleDeg, defaults.MinimumAngle,
+            changed |= DrawFlipFloat($"{id}_minimum", "Minimum Angle", angular.minAngleDeg, defaults.MinimumAngle,
                 -1440f, 1440f, value => angular.minAngleDeg = value);
-            DrawFlipFloat($"{id}_maximum", "Maximum Angle", angular.maxAngleDeg, defaults.MaximumAngle,
+            changed |= DrawFlipFloat($"{id}_maximum", "Maximum Angle", angular.maxAngleDeg, defaults.MaximumAngle,
                 -1440f, 1440f, value => angular.maxAngleDeg = value);
+
+            return changed;
         }
 
-        private static void DrawDriveEditor(QuaternionPDDrive drive, DriveSnapshot defaults)
+        private static bool DrawDriveEditor(QuaternionPDDrive drive, DriveSnapshot defaults)
         {
             if (Menu.ControllerButton("vehicle_rotation_drive_foldout",
                     _rotationDriveExpanded ? "Rotation Drive  ▲" : "Rotation Drive  ▼", Menu.UiButtonStyle,
@@ -2329,37 +2443,61 @@ namespace rowemod.Mods
                 _rotationDriveExpanded = !_rotationDriveExpanded;
 
             if (!_rotationDriveExpanded || drive == null || defaults == null)
-                return;
+                return false;
 
-            DrawFlipFloat("drive_kp", "Proportional Gain", drive.kp, defaults.ProportionalGain,
+            bool changed = false;
+            changed |= DrawFlipFloat("drive_kp", "Proportional Gain", drive.kp, defaults.ProportionalGain,
                 0f, 5000f, value => drive.kp = value);
-            DrawFlipFloat("drive_kd", "Derivative Gain", drive.kd, defaults.DerivativeGain,
+            changed |= DrawFlipFloat("drive_kd", "Derivative Gain", drive.kd, defaults.DerivativeGain,
                 0f, 1000f, value => drive.kd = value);
-            DrawFlipFloat("drive_max_accel", "Maximum Angular Acceleration", drive.maxAngularAccel,
+            changed |= DrawFlipFloat("drive_max_accel", "Maximum Angular Acceleration", drive.maxAngularAccel,
                 defaults.MaximumAngularAcceleration, 0f, 10000f, value => drive.maxAngularAccel = value);
-            DrawFlipFloat("drive_max_velocity", "Maximum Angular Velocity", drive.maxAngularVelocity,
+            changed |= DrawFlipFloat("drive_max_velocity", "Maximum Angular Velocity", drive.maxAngularVelocity,
                 defaults.MaximumAngularVelocity, 0f, 3000f, value => drive.maxAngularVelocity = value);
-            DrawFlipToggle("drive_inertia", "Inertia Compensation", drive.inertiaCompensation,
+            changed |= DrawFlipToggle("drive_inertia", "Inertia Compensation", drive.inertiaCompensation,
                 defaults.InertiaCompensation, value => drive.inertiaCompensation = value);
+
+            return changed;
         }
 
-        private static void DrawFlipVector(
+        private static bool DrawFlipVector(
             string id,
             string label,
             Vector3 value,
             Vector3 defaults,
             Action<Vector3> apply)
         {
+            bool changed = false;
             GUILayout.Label(label, _labelStyle);
-            DrawFlipFloat($"{id}_x", "X", value.x, defaults.x, -1f, 1f,
+            changed |= DrawFlipFloat(
+                $"{id}_x",
+                "X",
+                value.x,
+                defaults.x,
+                -1f,
+                1f,
                 next => { Vector3 changed = value; changed.x = next; apply(changed); });
-            DrawFlipFloat($"{id}_y", "Y", value.y, defaults.y, -1f, 1f,
+            changed |= DrawFlipFloat(
+                $"{id}_y",
+                "Y",
+                value.y,
+                defaults.y,
+                -1f,
+                1f,
                 next => { Vector3 changed = value; changed.y = next; apply(changed); });
-            DrawFlipFloat($"{id}_z", "Z", value.z, defaults.z, -1f, 1f,
+            changed |= DrawFlipFloat(
+                $"{id}_z",
+                "Z",
+                value.z,
+                defaults.z,
+                -1f,
+                1f,
                 next => { Vector3 changed = value; changed.z = next; apply(changed); });
+
+            return changed;
         }
 
-        private static void DrawFlipFloat(
+        private static bool DrawFlipFloat(
             string id,
             string label,
             float value,
@@ -2381,11 +2519,17 @@ namespace rowemod.Mods
                 next = defaultValue;
             GUILayout.EndHorizontal();
 
-            if (!Mathf.Approximately(next, value))
-                apply(next);
+            if (Mathf.Approximately(next, value))
+                return false;
+
+            Log.Msg(
+                $"[RuntimeVehicleReset] One Point Oh '{label}' changed: " +
+                $"{value.ToString("0.###", CultureInfo.InvariantCulture)} -> {next.ToString("0.###", CultureInfo.InvariantCulture)}.");
+            apply(next);
+            return true;
         }
 
-        private static void DrawFlipToggle(
+        private static bool DrawFlipToggle(
             string id,
             string label,
             bool value,
@@ -2401,8 +2545,12 @@ namespace rowemod.Mods
                 next = defaultValue;
             GUILayout.EndHorizontal();
 
-            if (next != value)
-                apply(next);
+            if (next == value)
+                return false;
+
+            Log.Msg($"[RuntimeVehicleReset] One Point Oh '{label}' changed: {value} -> {next}.");
+            apply(next);
+            return true;
         }
 
         private static void RefreshVehicle(RuntimeVehicleTuneMenu menu, bool log)

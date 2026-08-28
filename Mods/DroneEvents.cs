@@ -1,4 +1,3 @@
-using HarmonyLib;
 using Il2CppMashBox.Addons.ProtoDrone;
 using System;
 using UnityEngine;
@@ -18,17 +17,14 @@ namespace rowemod.Mods
         }
     }
 
-    [HarmonyPatch(typeof(DroneController), nameof(DroneController.LocalSpawnBullet))]
     internal static class DroneControllerLocalSpawnBulletPatch
     {
-        [HarmonyPrefix]
         private static bool Prefix()
         {
             return !ObjectDropper.ShouldBlockDroneShot();
         }
 
-        [HarmonyPostfix]
-        private static void Postfix(bool __runOriginal, DroneController __instance, Vector3 pos, Quaternion rot, Vector3 velocity)
+        private static void Postfix(bool __runOriginal, DroneController __instance, Vector3 __0, Quaternion __1, Vector3 __2)
         {
             // CRITICAL: If Prefix returned false, __runOriginal will be false. 
             // We exit early because the drone didn't actually shoot.
@@ -39,20 +35,12 @@ namespace rowemod.Mods
             if (!RemoteKillSwitched.isModEnabled)
                 return;
 
-            DroneEvents.OnBallShot(__instance, pos, rot, velocity);
+            DroneEvents.OnBallShot(__instance, __0, __1, __2);
         }
     }
 
-    [HarmonyPatch(typeof(DroneController), "RPC_FireBullet")]
     internal static class DroneControllerRpcFireBulletPatch
     {
-        [HarmonyPrepare]
-        private static bool Prepare()
-        {
-            return AccessTools.Method(typeof(DroneController), "RPC_FireBullet") != null;
-        }
-
-        [HarmonyPrefix]
         private static bool Prefix()
         {
             return !ObjectDropper.ShouldBlockDroneShot();
