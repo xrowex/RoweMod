@@ -7,9 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<Version>3.3.2</Version>
-		<AssemblyVersion>3.3.2.0</AssemblyVersion>
-		<FileVersion>3.3.2.0</FileVersion>
+		<Version>3.3.3</Version>
+		<AssemblyVersion>3.3.3.0</AssemblyVersion>
+		<FileVersion>3.3.3.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -506,6 +506,7 @@
 		<Compile Include="Mods\Misc.cs" />
 		<Compile Include="Mods\MainMenuCharacterPreview.cs" />
 		<Compile Include="Mods\ManualIkPoseEditor.cs" />
+		<Compile Include="Mods\LiveFootDiagnostics.cs" />
 		<Compile Include="Mods\MotorVehicleUtils.cs" />
 		<Compile Include="Mods\ObjectDropper.cs" />
 		<Compile Include="Mods\OnePointOhLandingAssist.cs" />
@@ -525,6 +526,8 @@
 		<Compile Include="Mods\roweCustomCharacter.cs" />
 		<Compile Include="Mods\SteamUserManager.cs" />
 		<Compile Include="Mods\TrickAnimationEditor.cs" />
+		<Compile Include="Mods\TrickAnimationPackages.cs" />
+		<Compile Include="AnimationStudio\RoweAnimationPackage.cs" />
 		<Compile Include="Mods\TrickTweakGuard.cs" />
 		<Compile Include="Mods\HangFiveControl.cs" />
 		<Compile Include="Mods\NativeHookSafety.cs" />

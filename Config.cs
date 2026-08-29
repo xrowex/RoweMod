@@ -371,6 +371,9 @@ namespace rowemod
         public bool onlyFireIfInAir { get; set; }
         public bool allowLandingHolding { get; set; }
         public bool hasClipOverride { get; set; }
+        public bool explicitClipClears { get; set; }
+        public bool isolateAnimationTracks { get; set; }
+        public bool studioMirrorRouting { get; set; }
         public string playerEnterClip { get; set; }
         public string playerLoopClip { get; set; }
         public string playerTweakClip { get; set; }

@@ -526,13 +526,18 @@ namespace rowemod.Mods
         private static bool _previewSpringBodyOriginalIsKinematic;
         private static bool _previewJumpInvoked;
         private static float _nextPreviewFireTime;
+        private static bool _previewTrickInFlight;
+        private static float _previewTrickStartedAt;
+        private static TrickControllerV2 _activePreviewController;
         private static string _lastPreviewSelectionKey = string.Empty;
         private static string _lastPreviewLogKey = string.Empty;
         private static bool _tricksNoBailOverrideActive;
         private static bool _tricksNoBailUserValue;
         private static float _tricksNoBailRestoreTime = -1f;
         private static readonly Vector3 TrickPreviewPlayerOffset = new Vector3(0f, 1.25f, 0f);
-        private const float TrickPreviewFireInterval = 2f;
+        private const float TrickPreviewRestartDelay = 0.35f;
+        private const float TrickPreviewBusyGraceSeconds = 0.15f;
+        private const float TrickPreviewSafetyTimeout = 15f;
         private const float TrickNoBailExitGraceSeconds = 1f;
 
         public static bool RequiresUpdate =>
@@ -544,14 +549,34 @@ namespace rowemod.Mods
         public static void DrawTrickMenuPro()
         {
             InitStylesIfNeeded();
+            bool compactLayout = Menu.windowRect.width < 1120f;
 
             if (Config.trickAnimationDebugSettings == null)
                 Config.trickAnimationDebugSettings = new TrickAnimationDebugSettings();
 
             Menu.BeginToolbar();
-            GUILayout.Label("Find a mapping", _toolbarLabel, GUILayout.Width(92));
+            if (compactLayout)
+            {
+                if (Menu.ControllerButton("compact_input_map", "Input Map",
+                        !_compactShowEditor ? _pillOn : _pill,
+                        GUILayout.Width(102f * Menu.EffectiveUiScale),
+                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
+                    _compactShowEditor = false;
+                if (Menu.ControllerButton("compact_trick_editor", "Trick Editor",
+                        _compactShowEditor ? _pillOn : _pill,
+                        GUILayout.Width(108f * Menu.EffectiveUiScale),
+                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
+                    _compactShowEditor = true;
+                GUILayout.Space(8f);
+            }
+
+            GUILayout.Label("Find mapping", _toolbarLabel, GUILayout.Width(compactLayout ? 78f : 92f));
             GUI.SetNextControlName("trickSearch");
-            var newSearch = GUILayout.TextField(_uiSearch, _searchField, GUILayout.Width(240), GUILayout.Height(24));
+            var newSearch = GUILayout.TextField(
+                _uiSearch,
+                _searchField,
+                GUILayout.Width(compactLayout ? 170f : 240f),
+                GUILayout.Height(24));
             if (newSearch != _uiSearch) _uiSearch = newSearch;
 
             string presetLabel = string.IsNullOrWhiteSpace(_selectedPresetName)
@@ -559,7 +584,7 @@ namespace rowemod.Mods
                 : $"Preset: {_selectedPresetName}";
             if (Menu.SecondaryButton(
                     _presetsExpanded ? "Hide Presets" : presetLabel,
-                    GUILayout.Width(160f),
+                    GUILayout.Width(compactLayout ? 118f : 160f),
                     GUILayout.Height(24f)))
             {
                 _presetsExpanded = !_presetsExpanded;
@@ -586,22 +611,8 @@ namespace rowemod.Mods
                 DrawTrickPresetManager();
 
             float paneHeight = GetTricksTwoPaneHeight(presetManagerHeight);
-            bool compactLayout = Menu.windowRect.width < 1120f;
             if (compactLayout)
             {
-                Menu.BeginToolbar();
-                if (Menu.ControllerButton("compact_input_map", "Input Map",
-                        !_compactShowEditor ? _pillOn : _pill,
-                        GUILayout.Width(110f * Menu.EffectiveUiScale),
-                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
-                    _compactShowEditor = false;
-                if (Menu.ControllerButton("compact_trick_editor", "Trick Editor",
-                        _compactShowEditor ? _pillOn : _pill,
-                        GUILayout.Width(110f * Menu.EffectiveUiScale),
-                        GUILayout.Height(36f * Menu.EffectiveUiScale)))
-                    _compactShowEditor = true;
-                Menu.EndToolbar();
-
                 if (_compactShowEditor)
                     DrawSelectedTrickPane(paneHeight);
                 else
@@ -941,8 +952,8 @@ namespace rowemod.Mods
             GUILayout.EndHorizontal();
             GUILayout.Label(
                 _previewEnabled
-                    ? "Preview is active and repeats every 2 seconds."
-                    : "Preview lifts and freezes the player while this trick repeats.",
+                    ? "Preview holds through the complete trick, then repeats."
+                    : "Preview lifts and freezes the player while the complete trick plays.",
                 _rowLabelRight);
             GUILayout.Space(8);
 
@@ -976,6 +987,7 @@ namespace rowemod.Mods
                 _compactShowEditor = true;
             _previewEnabled = true;
             _nextPreviewFireTime = 0f;
+            ResetPreviewCycle(false);
 
             string selectionKey = $"{_selectedTrickSetKey}:{_selectedTrickSlot}";
             if (!string.Equals(selectionKey, _lastPreviewSelectionKey, StringComparison.Ordinal))
@@ -1095,11 +1107,30 @@ namespace rowemod.Mods
 
             EnsurePreviewState();
 
+            if (_previewTrickInFlight)
+            {
+                float elapsed = Time.unscaledTime - _previewTrickStartedAt;
+                bool isBusy = SafePreviewControllerBusy();
+                if ((isBusy || elapsed < TrickPreviewBusyGraceSeconds) && elapsed < TrickPreviewSafetyTimeout)
+                    return;
+
+                if (elapsed >= TrickPreviewSafetyTimeout && isBusy)
+                {
+                    Log.Warning($"[TricksPreview] {_selectedTrickName} exceeded {TrickPreviewSafetyTimeout:0}s; ending the preview cycle safely.");
+                    TryCancelActivePreviewController();
+                }
+
+                _previewTrickInFlight = false;
+                _activePreviewController = null;
+                TrickAnimationEditor.NotifyPreviewEnded();
+                _nextPreviewFireTime = Time.unscaledTime + TrickPreviewRestartDelay;
+                return;
+            }
+
             if (Time.unscaledTime >= _nextPreviewFireTime)
             {
-                TrickAnimationEditor.NotifyPreviewEnded();
-                _nextPreviewFireTime = Time.unscaledTime + TrickPreviewFireInterval;
-                FirePreviewTrick(data);
+                if (!FirePreviewTrick(data))
+                    _nextPreviewFireTime = Time.unscaledTime + TrickPreviewRestartDelay;
             }
         }
 
@@ -1194,6 +1225,7 @@ namespace rowemod.Mods
         private static void RestorePreviewState()
         {
             TrickAnimationEditor.NotifyPreviewEnded();
+            ResetPreviewCycle(true);
 
             if (!_previewStateApplied)
                 return;
@@ -1211,6 +1243,41 @@ namespace rowemod.Mods
             _previewSpringBody = null;
             _previewJumpInvoked = false;
             _lastPreviewLogKey = string.Empty;
+        }
+
+        private static void ResetPreviewCycle(bool cancelController)
+        {
+            if (cancelController)
+                TryCancelActivePreviewController();
+
+            _previewTrickInFlight = false;
+            _previewTrickStartedAt = 0f;
+            _activePreviewController = null;
+        }
+
+        private static bool SafePreviewControllerBusy()
+        {
+            try
+            {
+                return _activePreviewController != null && _activePreviewController.IsBusy;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void TryCancelActivePreviewController()
+        {
+            try
+            {
+                if (_previewTrickInFlight && _activePreviewController != null && _activePreviewController.IsBusy)
+                    _activePreviewController.Cancel();
+            }
+            catch (System.Exception ex)
+            {
+                Log.Warning($"[TricksPreview] Failed to stop the active preview trick: {ex.Message}");
+            }
         }
 
         private static void InvokePreviewJump()
@@ -1234,13 +1301,13 @@ namespace rowemod.Mods
             }
         }
 
-        private static void FirePreviewTrick(SyncTrickAnimationData data)
+        private static bool FirePreviewTrick(SyncTrickAnimationData data)
         {
             TrickControllerV2 controller = FindPreviewController();
             if (controller == null)
             {
                 Log.Warning("[TricksPreview] Cannot preview trick because no TrickControllerV2 is loaded.");
-                return;
+                return false;
             }
 
             int setId = FindSetIndex(_selectedTrickSet);
@@ -1254,17 +1321,25 @@ namespace rowemod.Mods
                 if (!fired)
                     fired = controller.TryBlendTo(data, setId, slotId);
                 if (fired)
+                {
                     TrickAnimationEditor.NotifyPreviewTrick(data);
+                    _activePreviewController = controller;
+                    _previewTrickInFlight = true;
+                    _previewTrickStartedAt = Time.unscaledTime;
+                }
 
                 if (!string.Equals(logKey, _lastPreviewLogKey, StringComparison.Ordinal))
                 {
                     _lastPreviewLogKey = logKey;
                     Log.Msg($"[TricksPreview] Preview fired={fired} trick='{_selectedTrickName}' set={setId}, slot={slotId}.");
                 }
+
+                return fired;
             }
             catch (System.Exception ex)
             {
                 Log.Warning($"[TricksPreview] Failed to fire {_selectedTrickName}: {ex.Message}");
+                return false;
             }
         }
 
@@ -1811,15 +1886,24 @@ namespace rowemod.Mods
                 padding = new RectOffset(8, 8, 2, 2),
                 margin = new RectOffset(2, 2, 0, 0)
             };
+            Texture2D rowButtonHover = Menu.MakeRoundedTex(
+                64,
+                24,
+                new Color(0.10f, 0.12f, 0.15f, 0.82f),
+                6,
+                1,
+                new Color(1f, 1f, 1f, 0.10f));
+            _rowButton.normal.background = null;
+            _rowButton.hover.background = rowButtonHover;
+            _rowButton.active.background = rowButtonHover;
             _rowButtonSelected = new GUIStyle(_rowButton)
             {
                 fontStyle = FontStyle.Bold
             };
-            Texture2D selectedButtonBg = Menu.MakeRoundedTex(64, 24, new Color(0.10f, 0.34f, 0.18f, 0.96f), 6, 1, new Color(0.24f, 0.86f, 0.44f, 0.68f));
             Texture2D selectedButtonHoverBg = Menu.MakeRoundedTex(64, 24, new Color(0.13f, 0.42f, 0.22f, 0.98f), 6, 1, new Color(0.34f, 1f, 0.56f, 0.78f));
-            _rowButtonSelected.normal.background = selectedButtonBg;
+            _rowButtonSelected.normal.background = null;
             _rowButtonSelected.hover.background = selectedButtonHoverBg;
-            _rowButtonSelected.active.background = selectedButtonBg;
+            _rowButtonSelected.active.background = selectedButtonHoverBg;
             _rowButtonSelected.normal.textColor = new Color(0.88f, 1f, 0.91f, 1f);
             _rowButtonSelected.hover.textColor = Color.white;
             _rowButtonSelected.active.textColor = Color.white;
@@ -1864,7 +1948,13 @@ namespace rowemod.Mods
                 padding = new RectOffset(8, 8, 8, 9),
                 margin = new RectOffset(0, 0, 0, 8)
             };
-            _setBlock.normal.background = Menu.MakeRoundedTex(64, 32, new Color(1f, 1f, 1f, 0.018f), 7, 1, new Color(1f, 1f, 1f, 0.045f));
+            _setBlock.normal.background = Menu.MakeRoundedTex(
+                64,
+                32,
+                new Color(0.055f, 0.065f, 0.082f, 0.68f),
+                7,
+                1,
+                new Color(1f, 1f, 1f, 0.07f));
 
             _setHeaderButton = new GUIStyle(Menu.UiHeaderStyle)
             {
@@ -1910,10 +2000,16 @@ namespace rowemod.Mods
                 padding = new RectOffset(5, 5, 3, 3),
                 margin = new RectOffset(0, 0, 1, 1)
             };
-            _rowStrip.normal.background = Menu.MakeRoundedTex(64, 26, new Color(0.048f, 0.05f, 0.057f, 0.72f), 5, 1, new Color(1f, 1f, 1f, 0.045f));
+            _rowStrip.normal.background = Menu.MakeRoundedTex(
+                64,
+                26,
+                new Color(0.065f, 0.075f, 0.095f, 0.94f),
+                5,
+                1,
+                new Color(1f, 1f, 1f, 0.075f));
 
             _rowStripSelected = new GUIStyle(_rowStrip);
-            _rowStripSelected.normal.background = Menu.MakeRoundedTex(64, 30, new Color(0.06f, 0.22f, 0.12f, 0.72f), 6, 1, new Color(0.22f, 0.95f, 0.42f, 0.58f));
+            _rowStripSelected.normal.background = Menu.MakeRoundedTex(64, 30, new Color(0.07f, 0.26f, 0.14f, 0.92f), 6, 1, new Color(0.22f, 0.95f, 0.42f, 0.58f));
 
             _directionBadge = new GUIStyle(Menu.UiBadgeStyle)
             {

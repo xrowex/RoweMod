@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using GameEvent = Il2CppMashBox.Core.Runtime.Events.GameEvent;
 using NativeGameLoopManager = Il2CppMashBox.Addons.GameLoop.GameLoopManager;
+using NativeCommandManager = Il2CppMashBox.Core.Runtime.CommandSystem.CommandManager;
 using NativeReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
 using NativeGameState = Il2CppMashBoxBridge.Common.Sys.GameState;
 using NativeMenuService = Il2CppMashBoxBridge.Common.Sys.MenuService;
@@ -25,6 +26,8 @@ namespace rowemod.Mods
         private const string OpenReplayEventName =
             "GameEvent_TitleLoop_TransitionTrigger_OpenReplay";
         private const float DiscoveryRetrySeconds = 0.5f;
+        private const float ReplayRecoveryHoldSeconds = 2f;
+        private const float ReplayRecoveryGraceSeconds = 0.75f;
 
         private static InputAction pieMenuAction;
         private static NativeGameLoopManager cachedGameLoopManager;
@@ -39,6 +42,19 @@ namespace rowemod.Mods
         private static bool discoveryFailureLogged;
         private static bool gameplayGateFailureLogged;
         private static float nextDiscoveryTime;
+        private static float replayBackHoldStartedAt = -1f;
+        private static float replayRecoveryDeadline;
+        private static bool replayWasObserved;
+        private static bool replayRecoveryTriggeredForHold;
+        private static ReplayRecoveryStage replayRecoveryStage;
+
+        private enum ReplayRecoveryStage
+        {
+            None,
+            NativeCloseRequested,
+            CommandCloseRequested,
+            ForcedGameplay
+        }
 
         public static bool IsPieMenuActionPressed
         {
@@ -158,6 +174,7 @@ namespace rowemod.Mods
             if (!initialized)
                 return;
 
+            TickReplayRecovery();
             UpdatePieMenuActionState();
 
             if (!HasLoadedMapContext())
@@ -207,6 +224,231 @@ namespace rowemod.Mods
             discoveryFailureLogged = false;
             gameplayGateFailureLogged = false;
             nextDiscoveryTime = 0f;
+            ResetReplayRecoveryState();
+        }
+
+        /// <summary>
+        /// Leaves the game's normal Replay Back action untouched. If that action fails, holding
+        /// Back/Escape for two seconds records the native replay/menu state and walks the game's
+        /// own close APIs before using GameLoopManager's Gameplay transition as a last resort.
+        /// </summary>
+        private static void TickReplayRecovery()
+        {
+            bool replayActive = IsNativeReplayActive();
+            if (replayActive && !replayWasObserved)
+            {
+                replayWasObserved = true;
+                LogReplayRecoverySnapshot("Replay state entered");
+            }
+            else if (!replayActive && replayWasObserved)
+            {
+                if (replayRecoveryStage != ReplayRecoveryStage.None)
+                {
+                    Log.Msg(
+                        $"[ReplayRecovery] Replay exited after {replayRecoveryStage}; " +
+                        "the game returned to Gameplay.");
+                }
+
+                ResetReplayRecoveryState();
+                return;
+            }
+
+            if (!replayActive)
+            {
+                replayBackHoldStartedAt = -1f;
+                replayRecoveryTriggeredForHold = false;
+                return;
+            }
+
+            bool backPressed = IsReplayBackPressedThisFrame();
+            bool backHeld = IsReplayBackHeld();
+            if (backPressed)
+            {
+                replayBackHoldStartedAt = Time.realtimeSinceStartup;
+                replayRecoveryTriggeredForHold = false;
+                LogReplayRecoverySnapshot("Back input pressed");
+            }
+
+            if (!backHeld)
+            {
+                replayBackHoldStartedAt = -1f;
+                replayRecoveryTriggeredForHold = false;
+            }
+            else if (replayBackHoldStartedAt >= 0f &&
+                     !replayRecoveryTriggeredForHold &&
+                     Time.realtimeSinceStartup - replayBackHoldStartedAt >= ReplayRecoveryHoldSeconds)
+            {
+                replayRecoveryTriggeredForHold = true;
+                BeginReplayRecovery();
+            }
+
+            AdvanceReplayRecovery();
+        }
+
+        private static bool IsNativeReplayActive()
+        {
+            try
+            {
+                NativeGameLoopManager manager = NativeGameLoopManager.Instance;
+                return manager != null && manager.State == NativeGameState.Replay;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsReplayBackPressedThisFrame()
+        {
+            try
+            {
+                return Gamepad.current?.buttonEast.wasPressedThisFrame == true ||
+                       Keyboard.current?.escapeKey.wasPressedThisFrame == true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsReplayBackHeld()
+        {
+            try
+            {
+                return Gamepad.current?.buttonEast.isPressed == true ||
+                       Keyboard.current?.escapeKey.isPressed == true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void BeginReplayRecovery()
+        {
+            if (replayRecoveryStage != ReplayRecoveryStage.None)
+                return;
+
+            LogReplayRecoverySnapshot("Back held for recovery");
+            replayRecoveryStage = ReplayRecoveryStage.NativeCloseRequested;
+            replayRecoveryDeadline = Time.realtimeSinceStartup + ReplayRecoveryGraceSeconds;
+
+            try
+            {
+                NativeReplaySystem replaySystem = NativeReplaySystem.Instance;
+                if (replaySystem == null)
+                {
+                    Log.Warning("[ReplayRecovery] ReplaySystem.Instance is null; advancing recovery.");
+                    replayRecoveryDeadline = 0f;
+                    return;
+                }
+
+                replaySystem.CloseReplayRequest();
+                Log.Msg("[ReplayRecovery] Requested ReplaySystem.CloseReplayRequest().");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[ReplayRecovery] CloseReplayRequest failed: {ex.Message}");
+                replayRecoveryDeadline = 0f;
+            }
+        }
+
+        private static void AdvanceReplayRecovery()
+        {
+            if (replayRecoveryStage == ReplayRecoveryStage.None ||
+                !IsNativeReplayActive() ||
+                Time.realtimeSinceStartup < replayRecoveryDeadline)
+            {
+                return;
+            }
+
+            if (replayRecoveryStage == ReplayRecoveryStage.NativeCloseRequested)
+            {
+                replayRecoveryStage = ReplayRecoveryStage.CommandCloseRequested;
+                replayRecoveryDeadline = Time.realtimeSinceStartup + ReplayRecoveryGraceSeconds;
+
+                try
+                {
+                    NativeReplaySystem replaySystem = NativeReplaySystem.Instance;
+                    if (replaySystem == null)
+                    {
+                        Log.Warning("[ReplayRecovery] ReplaySystem disappeared; advancing recovery.");
+                        replayRecoveryDeadline = 0f;
+                        return;
+                    }
+
+                    replaySystem.CommandClose();
+                    Log.Msg("[ReplayRecovery] Requested ReplaySystem.CommandClose().");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[ReplayRecovery] CommandClose failed: {ex.Message}");
+                    replayRecoveryDeadline = 0f;
+                }
+
+                return;
+            }
+
+            if (replayRecoveryStage == ReplayRecoveryStage.CommandCloseRequested)
+            {
+                replayRecoveryStage = ReplayRecoveryStage.ForcedGameplay;
+                replayRecoveryDeadline = float.PositiveInfinity;
+                LogReplayRecoverySnapshot("Native close requests timed out");
+
+                try
+                {
+                    NativeGameLoopManager manager = NativeGameLoopManager.Instance;
+                    if (manager == null)
+                    {
+                        Log.Warning("[ReplayRecovery] GameLoopManager.Instance is null; force exit unavailable.");
+                        return;
+                    }
+
+                    manager.SetGameStateToGameplay();
+                    Log.Msg("[ReplayRecovery] Forced the native GameLoopManager transition to Gameplay.");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[ReplayRecovery] Gameplay transition failed: {ex.Message}");
+                }
+            }
+        }
+
+        private static void LogReplayRecoverySnapshot(string reason)
+        {
+            try
+            {
+                NativeGameLoopManager manager = NativeGameLoopManager.Instance;
+                NativeReplaySystem replaySystem = NativeReplaySystem.Instance;
+                NativeCommandManager commandManager = NativeCommandManager.Instance;
+
+                int commandCount = commandManager?.CurrentStack?.Count ?? -1;
+                int undoCount = commandManager?.CurrentUndoStack?.Count ?? -1;
+                string gameState = manager == null ? "null" : manager.State.ToString();
+                string replayState = replaySystem == null ? "null" : replaySystem.State.ToString();
+                string codeFlow = manager?.CodeFlowStatus ?? "null";
+                float recordTime = replaySystem?.CurrentRecordTime ?? -1f;
+                float playbackTime = replaySystem?.CurrentPlaybackTime ?? -1f;
+
+                Log.Msg(
+                    $"[ReplayRecovery] Snapshot ({reason}): gameState={gameState}, " +
+                    $"replayState={replayState}, gameplayMenus={NativeMenuService.CurrentGameplayMenuStackSize}, " +
+                    $"blockUndo={NativeMenuService.BlockUndo}, commands={commandCount}, undos={undoCount}, " +
+                    $"recordTime={recordTime:F3}, playbackTime={playbackTime:F3}, codeFlow='{codeFlow}'.");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[ReplayRecovery] Could not capture snapshot ({reason}): {ex.Message}");
+            }
+        }
+
+        private static void ResetReplayRecoveryState()
+        {
+            replayBackHoldStartedAt = -1f;
+            replayRecoveryDeadline = 0f;
+            replayWasObserved = false;
+            replayRecoveryTriggeredForHold = false;
+            replayRecoveryStage = ReplayRecoveryStage.None;
         }
 
         private static void CreatePieMenuAction()

@@ -1,8 +1,8 @@
 {
-    "version":  "3.3.2",
+    "version":  "3.3.3",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "76a30011182bc007c73c8f6031f64b842040eb3f7757bec49d1805fc61049e1d",
-    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.2",
-    "patchNotes":  "Reworked Disable Trick Tweaking to block manual and automatic bike tweaks. Added Game, Disabled, and Swap Sides controls for nose-manual Hang 5 variants. Added optional manual and nose-manual pose editing: move and rotate each foot and the hips with larger in-game handles and wider adjustment ranges. Load custom rider animation clips from Unity bundles and assign them in the trick editor. Added a 30-250 Hz physics update setting that keeps the game\u0027s own rate by default; higher rates use more CPU. Added VX1000 film grain, lens dirt, and fine scratches for replays. Improved landing-assist controls, vehicle-tuning toggles, and grind-pose scrolling. Reworked startup safety to avoid the earlier tweak-related map-spawn failure and keep unsupported controls inactive on unverified game builds. Removed the custom-frame rear-peg workaround because that issue belongs to the base game. Testing note: the newest nose-manual, pose, and startup changes still need broader in-game testing.",
+    "sha256":  "56d8d6fa5bb4032c9628f47c3bdf44984b8ede56de0dcb3dcab1791e6c2ea8a6",
+    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.3",
+    "patchNotes":  "Improved Trick Mapping layout and made previews wait for the complete trick before repeating. Added one-click Studio packages that apply coordinated rider and bike animations, including phase and mirror routing. Manual IK now follows Mash\u0027s tracked manual state so ordinary hop landings do not trigger custom poses, while real and fakie manuals retain foot ownership. Added a staged Replay exit recovery when the game\u0027s normal Back action gets stuck. Restored native peg-contact sparks with entry bursts, replay samples, and simpler controls. Reorganized Grind Poses into responsive Bike, Rider, Balance, and Transform sections with cached presets. Fixed the host player-capacity nullable conversion that could throw when starting a session. Tested in game with a clean MelonLoader log; build, native-hook audits, and focused animation checks passed.",
     "requiredGameVersion":  ""
 }

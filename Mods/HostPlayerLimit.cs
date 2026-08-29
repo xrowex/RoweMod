@@ -62,7 +62,7 @@ namespace rowemod.Mods
                 return;
 
             int capacity = Capacity;
-            startArgs.PlayerCount = (Il2CppSystem.Nullable<int>)capacity;
+            startArgs.PlayerCount = new Il2CppSystem.Nullable<int>(capacity);
 
             if (_lastLoggedCapacity != capacity)
             {

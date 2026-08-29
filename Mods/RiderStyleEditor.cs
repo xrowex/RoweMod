@@ -106,6 +106,11 @@ namespace rowemod.Mods
             if (editClicked)
                 ManualIkPoseEditor.SetEditing(!ManualIkPoseEditor.IsEditing);
 
+            if (Menu.SecondaryButton("Capture Live Feet While Riding (12 Seconds)",
+                    GUILayout.ExpandWidth(true), GUILayout.Height(28f)))
+                LiveFootDiagnostics.Arm();
+            GUILayout.Label(LiveFootDiagnostics.Status, Menu.UiMutedWrappedStyle);
+
             GUILayout.Space(8f);
             DrawLeftFootCard(settings);
             GUILayout.Space(8f);

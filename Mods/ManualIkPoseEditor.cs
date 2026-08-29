@@ -17,6 +17,7 @@ namespace rowemod.Mods
     /// </summary>
     public static class ManualIkPoseEditor
     {
+        private const float ManualSignalReleaseGraceSeconds = 0.5f;
         private enum HandleKind { None, LeftFoot, RightFoot, Hips }
 
         private static VehicleController _vehicle;
@@ -59,6 +60,10 @@ namespace rowemod.Mods
         private static Vector3 _smoothedHipsOffset;
         private static bool _active;
         private static bool _editing;
+        private static VehicleController _manualSignalVehicle;
+        private static TrickDetection _manualTrickDetection;
+        private static float _rearManualHoldUntil;
+        private static float _frontManualHoldUntil;
         private static string _status = "Enter a map to resolve rider IK targets.";
 
         private static GameObject _leftHandle;
@@ -72,6 +77,7 @@ namespace rowemod.Mods
             LateNativeHooks.ManualIkReady && (_editing || (Config.manualIkPoseSettings?.enabled ?? false));
 
         public static bool IsEditing => _editing;
+        internal static bool PoseCurrentlyApplied => _active;
         public static string Status => LateNativeHooks.ManualIkReady ? _status :
             "Manual IK hooks unavailable on this game build; pose editing is inactive. Check the log.";
 
@@ -110,9 +116,14 @@ namespace rowemod.Mods
                 _dragging = HandleKind.None;
                 DestroyHandles();
             }
+            UpdateManualSignalLatch(vehicle, settings.enabled);
+            bool rearManualActive = IsRearWheelManual(vehicle) ||
+                Time.unscaledTime < _rearManualHoldUntil;
+            bool frontManualActive = IsFrontWheelManual(vehicle) ||
+                Time.unscaledTime < _frontManualHoldUntil;
             bool manualActive = settings.enabled && vehicle != null &&
-                ((settings.applyDuringManual && vehicle.IsManny) ||
-                 (settings.applyDuringNoseManual && vehicle.IsNosey));
+                ((settings.applyDuringManual && rearManualActive) ||
+                 (settings.applyDuringNoseManual && frontManualActive));
 
             if (!preview && !manualActive)
             {
@@ -135,12 +146,10 @@ namespace rowemod.Mods
             }
 
             ApplyChainTargets();
-            // The native pedal rig can retarget the feet again when drive direction
-            // changes. DeeTRIX's Rocket Manual owns these two targets through the end
-            // of LateUpdate, then reapplies the captured neutral foot rotations.
+            // The native pedal rig animates these targets every LateUpdate. Keep them
+            // owned through the manual, then reapply the captured foot rotations.
             ApplyPedalTargets();
             ApplyFootTransforms();
-            ApplyHipsTransform();
             if (preview)
             {
                 EnsureHandles();
@@ -168,6 +177,102 @@ namespace rowemod.Mods
             _smoothedHipsOffset = Vector3.Lerp(_smoothedHipsOffset, wanted, t);
             if (_smoothedHipsOffset.sqrMagnitude > 0.00000001f)
                 _fullBodyMotion.AddToWantedHipsPos(_smoothedHipsOffset);
+        }
+
+        internal static bool IsRearWheelManual(VehicleController vehicle)
+        {
+            if (vehicle == null) return false;
+            try
+            {
+                if (TryReadTrackedManualState(vehicle, true, out bool tracked))
+                    return tracked;
+
+                return vehicle.IsManny;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryReadTrackedManualState(VehicleController vehicle, bool rear, out bool active)
+        {
+            active = false;
+            if (vehicle == null)
+                return false;
+
+            if (_manualSignalVehicle != vehicle || _manualTrickDetection == null)
+            {
+                _manualSignalVehicle = vehicle;
+                _manualTrickDetection = vehicle.GetComponentInChildren<TrickDetection>(true) ??
+                    vehicle.GetComponentInParent<TrickDetection>();
+            }
+
+            if (_manualTrickDetection == null)
+                return false;
+
+            if (rear)
+            {
+                if (_manualTrickDetection._manualActivity == null)
+                    return false;
+                active = _manualTrickDetection._manualActivity._isManualing;
+            }
+            else
+            {
+                if (_manualTrickDetection._noseyActivity == null)
+                    return false;
+                active = _manualTrickDetection._noseyActivity._isManualing;
+            }
+
+            return true;
+        }
+
+        private static void UpdateManualSignalLatch(VehicleController vehicle, bool enabled)
+        {
+            if (!enabled || vehicle == null)
+            {
+                _manualSignalVehicle = vehicle;
+                _manualTrickDetection = null;
+                _rearManualHoldUntil = 0f;
+                _frontManualHoldUntil = 0f;
+                return;
+            }
+
+            if (_manualSignalVehicle != vehicle)
+            {
+                _manualSignalVehicle = vehicle;
+                _manualTrickDetection = null;
+                _rearManualHoldUntil = 0f;
+                _frontManualHoldUntil = 0f;
+            }
+
+            float holdUntil = Time.unscaledTime + ManualSignalReleaseGraceSeconds;
+            if (IsRearWheelManual(vehicle))
+                _rearManualHoldUntil = holdUntil;
+            if (IsFrontWheelManual(vehicle))
+                _frontManualHoldUntil = holdUntil;
+        }
+
+        internal static float RearManualHoldRemaining =>
+            Mathf.Max(0f, _rearManualHoldUntil - Time.unscaledTime);
+
+        internal static float FrontManualHoldRemaining =>
+            Mathf.Max(0f, _frontManualHoldUntil - Time.unscaledTime);
+
+        internal static bool IsFrontWheelManual(VehicleController vehicle)
+        {
+            if (vehicle == null) return false;
+            try
+            {
+                if (TryReadTrackedManualState(vehicle, false, out bool tracked))
+                    return tracked;
+
+                return vehicle.IsNosey;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static void Cleanup()
@@ -375,7 +480,13 @@ namespace rowemod.Mods
         internal static void BeforeAnimatorIk(HumanIK instance)
         {
             if (_active && instance == _humanIk)
+            {
+                // Move the body before HumanIK solves the bar grips and foot targets.
+                // Reapplying the hips in RoweMod's LateUpdate moves the entire limb
+                // hierarchy after IK and leaves the hands/feet visibly detached.
+                ApplyHipsTransform();
                 ApplyChainTargets();
+            }
         }
 
         internal static void AfterAnimatorIk(HumanIK instance)
@@ -389,7 +500,6 @@ namespace rowemod.Mods
             if (settings.rightFootEnabled)
                 ApplyAnimatorFoot(AvatarIKGoal.RightFoot, AvatarIKHint.RightKnee,
                     FootWorldPosition(false), FootWorldRotation(false), _rightKneeRootSpace, hipWorldOffset);
-            ApplyHipsTransform();
         }
 
         private static void ApplyAnimatorFoot(AvatarIKGoal goal, AvatarIKHint hint,
@@ -640,6 +750,7 @@ namespace rowemod.Mods
             _throttleTarget = null;
             _brakeTarget = null;
             _pedalTargetsCaptured = false;
+            _manualTrickDetection = null;
             _fullBodyMotion = null;
             _smoothedHipsOffset = Vector3.zero;
         }
@@ -678,8 +789,17 @@ namespace rowemod.Mods
 
     internal static class ManualIkHumanPatch
     {
-        private static void Prefix(HumanIK __instance) => ManualIkPoseEditor.BeforeAnimatorIk(__instance);
-        private static void Postfix(HumanIK __instance) => ManualIkPoseEditor.AfterAnimatorIk(__instance);
+        private static void Prefix(HumanIK __instance)
+        {
+            LiveFootDiagnostics.BeforeHumanIk(__instance);
+            ManualIkPoseEditor.BeforeAnimatorIk(__instance);
+        }
+
+        private static void Postfix(HumanIK __instance)
+        {
+            ManualIkPoseEditor.AfterAnimatorIk(__instance);
+            LiveFootDiagnostics.AfterHumanIk(__instance);
+        }
     }
 
     internal static class ManualIkNativeLimbPatch
@@ -689,6 +809,10 @@ namespace rowemod.Mods
 
     internal static class ManualIkPedalRigPatch
     {
-        private static bool Prefix(VehicleFootPedalAnimationRig __instance) => ManualIkPoseEditor.AllowPedalRigUpdate(__instance);
+        private static bool Prefix(VehicleFootPedalAnimationRig __instance)
+        {
+            LiveFootDiagnostics.BeforePedalRig(__instance);
+            return ManualIkPoseEditor.AllowPedalRigUpdate(__instance);
+        }
     }
 }

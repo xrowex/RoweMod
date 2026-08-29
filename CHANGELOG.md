@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.3.3
+
+### Tricks and animation workflow
+
+- Cleaned up the Trick Mapping layout so the toolbar, input map, set groups, and rows use one consistent visual flow.
+- Trick previews now follow the game's active trick state and wait for the complete animation before repeating. Stopping preview or leaving the menu cancels the preview and restores the rider.
+- Added one-click Studio animation packages that apply coordinated rider and bike clips, phase timing, and mirror routing without modifying unrelated tricks.
+- Included the Animation Studio authoring tools, package format, validation utilities, and focused tests used by the runtime workflow.
+
+### Riding and effects fixes
+
+- Manual IK now uses Mash's tracked manual and nose-manual activity state. Ordinary hop landings no longer claim manual-pose ownership, while real and fakie manuals retain the short release latch needed to avoid pedal-target flicker.
+- Restored peg sparks to native peg contacts, added optional entry-impact bursts, recorded sparks for Replay, and simplified the player controls.
+- Reorganized Grind Poses into Bike, Rider, Balance, and Transform sections and cached preset discovery to reduce tab lag.
+
+### Replay and session recovery
+
+- Added an opt-in Replay recovery path: if normal Back fails, holding B or Escape for two seconds walks the game's native close APIs before a final Gameplay transition.
+- Fixed the host player-capacity nullable conversion that could throw an `InvalidCastException` while starting a host session.
+
+**Testing note:** the Release build and native target/signature audits passed, along with 25 focused animation checks. An in-game pass covered startup, native hooks, trick previews, manual IK, grind tools, peg sparks and Replay recording/playback with no exceptions or errors in the final MelonLoader log.
+
 ## 3.3.2
 
 ### More control over your rider

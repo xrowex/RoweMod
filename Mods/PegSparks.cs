@@ -92,6 +92,7 @@ namespace rowemod.Mods
         // The Debug map-loader path gets a longer preview because a scene transition can
         // otherwise consume most of the normal three-second visual check.
         private static float _queuedPreviewDurationSeconds;
+        private static bool _showAdvancedControls;
         private static string _status = "Waiting for the local rider.";
 
         public static string Status => _status;
@@ -187,6 +188,23 @@ namespace rowemod.Mods
             bool changed = enabled != settings.enabled;
             settings.enabled = enabled;
 
+            if (Menu.SecondaryButton("Test Sparks (3 Seconds)", GUILayout.Height(30f)))
+                TriggerPreview();
+
+            GUILayout.Label("Status: " + Status, Menu.UiBadgeStyle);
+            _showAdvancedControls = Menu.ModernFoldout("Spark Tuning", _showAdvancedControls);
+            if (!_showAdvancedControls)
+            {
+                if (changed)
+                {
+                    OnSettingsChanged();
+                    Config.RequestSave();
+                }
+
+                Menu.EndPane();
+                return;
+            }
+
             float speed = settings.minimumSlideSpeed;
             Menu.ModernSlider("Minimum Slide Speed", ref speed, 0.1f, 12f, "peg_sparks_min_speed");
             changed |= !Mathf.Approximately(speed, settings.minimumSlideSpeed);
@@ -201,6 +219,16 @@ namespace rowemod.Mods
             Menu.ModernSlider("VFX Update Rate", ref rate, 10f, 60f, "peg_sparks_rate");
             changed |= !Mathf.Approximately(rate, settings.updateRate);
             settings.updateRate = rate;
+
+            bool bursts = settings.impactBursts;
+            Menu.ModernToggle("Entry Impact Bursts", ref bursts, "peg_sparks_bursts");
+            changed |= bursts != settings.impactBursts;
+            settings.impactBursts = bursts;
+
+            float impactAmount = settings.impactAmount;
+            Menu.ModernSlider("Impact Amount", ref impactAmount, 0f, 3f, "peg_sparks_impact_amount");
+            changed |= !Mathf.Approximately(impactAmount, settings.impactAmount);
+            settings.impactAmount = impactAmount;
 
             float sparkSize = settings.sparkSize;
             Menu.ModernSlider("Spark Size", ref sparkSize, 0.25f, 3f, "peg_sparks_size");
@@ -245,12 +273,8 @@ namespace rowemod.Mods
             changed |= recordReplay != settings.recordInReplay;
             settings.recordInReplay = recordReplay;
 
-            if (Menu.SecondaryButton("Test Sparks (3 Seconds)", GUILayout.Height(30f)))
-                TriggerPreview();
-
-            GUILayout.Label("Status: " + Status, Menu.UiBadgeStyle);
             GUILayout.Label(
-                "Short hot-orange sparks emit only while a native peg is sliding. There are no detached entry bursts.",
+                "Hot-orange sparks emit from each native peg contact while it is sliding.",
                 Menu.UiMutedWrappedStyle);
 
             if (changed)
@@ -312,12 +336,6 @@ namespace rowemod.Mods
             float now = Time.unscaledTime;
             for (int i = 0; i < PegCount; i++)
                 Runtimes[i].UpdateTrail(now);
-
-            if (!IsNativePegGrinding())
-            {
-                StopAllEffects();
-                return;
-            }
 
             for (int i = 0; i < PegCount; i++)
                 UpdateNativePeg(i);
@@ -467,13 +485,22 @@ namespace rowemod.Mods
             Vector3 normalizedTangent = tangent.normalized;
             float strength = Mathf.Clamp01(slideSpeed / 10f) * settings.intensity;
             point = ResolveEmissionPoint(pegIndex, point);
+            bool impact = !runtime.WasGrinding && settings.impactBursts &&
+                          now >= runtime.NextImpactTime;
             if (now >= runtime.NextUpdateTime)
             {
                 runtime.NextUpdateTime = now + (1f / Config.pegSparksSettings.updateRate);
                 if (EnsureRig(runtime))
                     runtime.UpdateContinuous(point, normal, normalizedTangent, settings);
 
-                RecordReplaySample(pegIndex, point, normal, normalizedTangent, strength, false);
+                RecordReplaySample(pegIndex, point, normal, normalizedTangent, strength, impact);
+            }
+
+            if (impact && EnsureRig(runtime))
+            {
+                runtime.NextImpactTime = now + ImpactCooldownSeconds;
+                runtime.PlayImpact(point, normal, normalizedTangent, settings);
+                runtime.PlayChing(settings, strength);
             }
 
             runtime.WasGrinding = true;

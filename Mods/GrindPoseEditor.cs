@@ -24,6 +24,9 @@ namespace rowemod.Mods
         private static Vector2 _presetScroll;
         private static string _newPresetName = string.Empty;
         private static int _selectedPresetIndex;
+        private static bool _presetsExpanded;
+        private static int _editorSection = 1;
+        private static List<string> _availablePresets = new List<string>();
         private static readonly Vector3 GrindsTabPlayerOffset = new Vector3(0f, 0.5f, 0f);
         private static bool _isGrindsTabStateApplied;
         private static bool _playerOffsetApplied;
@@ -87,7 +90,6 @@ namespace rowemod.Mods
         public static void DrawGrindPoseTab()
         {
             OnGrindsTabEntered();
-            RefreshPoseCache();
 
             Menu.BeginPane("Grind Poses", "Select a saved grind pose, then tune rider and bike offsets.");
 
@@ -99,6 +101,10 @@ namespace rowemod.Mods
             if (Menu.SecondaryButton("Log Pose State", GUILayout.Width(130f), GUILayout.Height(26f)))
             {
                 LogForcedPoseState("manual");
+            }
+            if (Menu.SecondaryButton("Refresh Poses", GUILayout.Width(130f), GUILayout.Height(26f)))
+            {
+                RefreshPoseCache(true);
             }
             GUILayout.FlexibleSpace();
             Menu.EndToolbar();
@@ -161,7 +167,6 @@ namespace rowemod.Mods
                 return;
             }
 
-            RefreshPoseCache();
             if (_selectedPoseIndex < 0 || _selectedPoseIndex >= PoseCache.Count)
             {
                 SetComMarkersVisible(false, false);
@@ -198,6 +203,10 @@ namespace rowemod.Mods
 
         private static void DrawPresetControls()
         {
+            _presetsExpanded = Menu.ModernFoldout("Grind Pose Presets", _presetsExpanded);
+            if (!_presetsExpanded)
+                return;
+
             Menu.BeginAltPane("Grind Pose Presets", "Save the current pose tuning or apply a saved preset.");
             _newPresetName = GUILayout.TextField(_newPresetName, 32, Menu.UiSearchFieldStyle);
 
@@ -207,12 +216,13 @@ namespace rowemod.Mods
                 if (!string.IsNullOrWhiteSpace(presetName))
                 {
                     SaveCurrentPreset(presetName);
+                    RefreshPresetCache();
                     _newPresetName = string.Empty;
                     GUI.FocusControl(null);
                 }
             }
 
-            List<string> availablePresets = GrindPosePreset.GetAvailablePresets();
+            List<string> availablePresets = _availablePresets;
             if (availablePresets.Count == 0)
             {
                 GUILayout.Label("No grind pose presets saved yet.", Menu.UiMutedWrappedStyle);
@@ -239,6 +249,7 @@ namespace rowemod.Mods
                 {
                     if (GrindPosePreset.Delete(presetName))
                     {
+                        RefreshPresetCache();
                         deletedPreset = true;
                         if (_selectedPresetIndex >= i)
                         {
@@ -347,6 +358,7 @@ namespace rowemod.Mods
             if (firstEnter)
             {
                 RefreshPoseCache();
+                RefreshPresetCache();
                 _forcedPoseAppliedThisOpen = ApplyForcedPoseFromSelection("tab-enter");
                 InvokeAnimatedOnJumpOncePerOpen();
             }
@@ -748,38 +760,55 @@ namespace rowemod.Mods
             //changed |= DrawBoolField("Air Pose Only", poseKey, "AirPoseOnly", pose.AirPoseOnly, v => pose.AirPoseOnly = v);
             //changed |= DrawBoolField("Mirror Cranks", poseKey, "MirrorCranks", pose.MirrorCranks, v => pose.MirrorCranks = v);
 
-            BeginSectionBox("Bike Controls");
-            changed |= DrawFloatField("Bars Rotation", poseKey, "BarsRotation", pose.BarsRotation, -360f, 360f, defaults.BarsRotation, v => pose.BarsRotation = v);
-            changed |= DrawFloatField("Cranks Rotation", poseKey, "CranksRotation", pose.CranksRotation, -360f, 360f, defaults.CranksRotation, v => pose.CranksRotation = v);
-            changed |= DrawFloatField("Normal Push Offset", poseKey, "NormalPushOffset", pose.NormalPushOffset, -2f, 2f, defaults.NormalPushOffset, v => pose.NormalPushOffset = v);
-            changed |= DrawFloatField("Left Pedal Rotation", poseKey, "LeftPedalRotation", pose.LeftPedalRotation, -360f, 360f, defaults.LeftPedalRotation, v => pose.LeftPedalRotation = v);
-            changed |= DrawFloatField("Right Pedal Rotation", poseKey, "RightPedalRotation", pose.RightPedalRotation, -360f, 360f, defaults.RightPedalRotation, v => pose.RightPedalRotation = v);
-            EndSectionBox();
+            GUILayout.BeginHorizontal();
+            if (Menu.PillButton("Bike", _editorSection == 0)) _editorSection = 0;
+            if (Menu.PillButton("Rider", _editorSection == 1)) _editorSection = 1;
+            if (Menu.PillButton("Balance", _editorSection == 2)) _editorSection = 2;
+            if (Menu.PillButton("Transform", _editorSection == 3)) _editorSection = 3;
+            GUILayout.EndHorizontal();
 
-            BeginSectionBox("Rider Pose");
-            changed |= DrawFloatField("Rider Head Twist", poseKey, "Rider_HeadTwist", pose.Rider_HeadTwist, -360f, 360f, defaults.Rider_HeadTwist, v => pose.Rider_HeadTwist = v);
-            changed |= DrawFloatField("Rider Elbows Roll", poseKey, "Rider_ElbowsRoll", pose.Rider_ElbowsRoll, -360f, 360f, defaults.Rider_ElbowsRoll, v => pose.Rider_ElbowsRoll = v);
-            changed |= DrawFloatField("Rider Left Elbow Roll", poseKey, "Rider_LeftElbowRoll", pose.Rider_LeftElbowRoll, -360f, 360f, defaults.Rider_LeftElbowRoll, v => pose.Rider_LeftElbowRoll = v);
-            changed |= DrawFloatField("Rider Right Elbow Roll", poseKey, "Rider_RightElbowRoll", pose.Rider_RightElbowRoll, -360f, 360f, defaults.Rider_RightElbowRoll, v => pose.Rider_RightElbowRoll = v);
-            changed |= DrawFloatField("Rider Knees Roll", poseKey, "Rider_KneesRoll", pose.Rider_KneesRoll, -360f, 360f, defaults.Rider_KneesRoll, v => pose.Rider_KneesRoll = v);
-            changed |= DrawFloatField("Rider Left Knee Roll", poseKey, "Rider_LeftKneeRoll", pose.Rider_LeftKneeRoll, -360f, 360f, defaults.Rider_LeftKneeRoll, v => pose.Rider_LeftKneeRoll = v);
-            changed |= DrawFloatField("Rider Right Knee Roll", poseKey, "Rider_RightKneeRoll", pose.Rider_RightKneeRoll, -360f, 360f, defaults.Rider_RightKneeRoll, v => pose.Rider_RightKneeRoll = v);
-            changed |= DrawFloatField("Rider Spine Curl", poseKey, "Rider_SpineCurl", pose.Rider_SpineCurl, -360f, 360f, defaults.Rider_SpineCurl, v => pose.Rider_SpineCurl = v);
-            changed |= DrawFloatField("Rider Spine Twist", poseKey, "Rider_SpineTwist", pose.Rider_SpineTwist, -360f, 360f, defaults.Rider_SpineTwist, v => pose.Rider_SpineTwist = v);
-            changed |= DrawVector3Field("Rider Hips Pos", poseKey, "Rider_HipsPos", pose.Rider_HipsPos, -2f, 2f, defaults.Rider_HipsPos, v => pose.Rider_HipsPos = v);
-            changed |= DrawVector3Field("Rider Hips Rot", poseKey, "Rider_HipsRot", pose.Rider_HipsRot, -360f, 360f, defaults.Rider_HipsRot, v => pose.Rider_HipsRot = v);
-            EndSectionBox();
-            
-            BeginSectionBox("Center of Mass");
-            DrawComVisualControls();
-            changed |= DrawVector3Field("Chassis CM", poseKey, "ChassisCM", pose.ChassisCM, -2f, 2f, defaults.ChassisCM, v => pose.ChassisCM = v);
-            changed |= DrawVector3Field("Driver CM", poseKey, "DriverCM", pose.DriverCM, -2f, 2f, defaults.DriverCM, v => pose.DriverCM = v);
-            EndSectionBox();
-            
-            DrawSectionHeader("Bike Transform");
-            changed |= DrawVector3Field("Bike Position", poseKey, "RootPosition", pose.RootPosition, -5f, 5f, defaults.RootPosition, v => pose.RootPosition = v);
-            changed |= DrawVector3Field("Bike Position Connected", poseKey, "RootPositionConnected", pose.RootPositionConnected, -5f, 5f, defaults.RootPositionConnected, v => pose.RootPositionConnected = v);
-            changed |= DrawVector3Field("Bike Rotation", poseKey, "RootRotation", pose.RootRotation, -360f, 360f, defaults.RootRotation, v => pose.RootRotation = v);
+            if (_editorSection == 0)
+            {
+                BeginSectionBox("Bike Controls");
+                changed |= DrawFloatField("Bars Rotation", poseKey, "BarsRotation", pose.BarsRotation, -360f, 360f, defaults.BarsRotation, v => pose.BarsRotation = v);
+                changed |= DrawFloatField("Cranks Rotation", poseKey, "CranksRotation", pose.CranksRotation, -360f, 360f, defaults.CranksRotation, v => pose.CranksRotation = v);
+                changed |= DrawFloatField("Normal Push Offset", poseKey, "NormalPushOffset", pose.NormalPushOffset, -2f, 2f, defaults.NormalPushOffset, v => pose.NormalPushOffset = v);
+                changed |= DrawFloatField("Left Pedal Rotation", poseKey, "LeftPedalRotation", pose.LeftPedalRotation, -360f, 360f, defaults.LeftPedalRotation, v => pose.LeftPedalRotation = v);
+                changed |= DrawFloatField("Right Pedal Rotation", poseKey, "RightPedalRotation", pose.RightPedalRotation, -360f, 360f, defaults.RightPedalRotation, v => pose.RightPedalRotation = v);
+                EndSectionBox();
+            }
+            else if (_editorSection == 1)
+            {
+                BeginSectionBox("Rider Pose");
+                changed |= DrawFloatField("Rider Head Twist", poseKey, "Rider_HeadTwist", pose.Rider_HeadTwist, -360f, 360f, defaults.Rider_HeadTwist, v => pose.Rider_HeadTwist = v);
+                changed |= DrawFloatField("Rider Elbows Roll", poseKey, "Rider_ElbowsRoll", pose.Rider_ElbowsRoll, -360f, 360f, defaults.Rider_ElbowsRoll, v => pose.Rider_ElbowsRoll = v);
+                changed |= DrawFloatField("Rider Left Elbow Roll", poseKey, "Rider_LeftElbowRoll", pose.Rider_LeftElbowRoll, -360f, 360f, defaults.Rider_LeftElbowRoll, v => pose.Rider_LeftElbowRoll = v);
+                changed |= DrawFloatField("Rider Right Elbow Roll", poseKey, "Rider_RightElbowRoll", pose.Rider_RightElbowRoll, -360f, 360f, defaults.Rider_RightElbowRoll, v => pose.Rider_RightElbowRoll = v);
+                changed |= DrawFloatField("Rider Knees Roll", poseKey, "Rider_KneesRoll", pose.Rider_KneesRoll, -360f, 360f, defaults.Rider_KneesRoll, v => pose.Rider_KneesRoll = v);
+                changed |= DrawFloatField("Rider Left Knee Roll", poseKey, "Rider_LeftKneeRoll", pose.Rider_LeftKneeRoll, -360f, 360f, defaults.Rider_LeftKneeRoll, v => pose.Rider_LeftKneeRoll = v);
+                changed |= DrawFloatField("Rider Right Knee Roll", poseKey, "Rider_RightKneeRoll", pose.Rider_RightKneeRoll, -360f, 360f, defaults.Rider_RightKneeRoll, v => pose.Rider_RightKneeRoll = v);
+                changed |= DrawFloatField("Rider Spine Curl", poseKey, "Rider_SpineCurl", pose.Rider_SpineCurl, -360f, 360f, defaults.Rider_SpineCurl, v => pose.Rider_SpineCurl = v);
+                changed |= DrawFloatField("Rider Spine Twist", poseKey, "Rider_SpineTwist", pose.Rider_SpineTwist, -360f, 360f, defaults.Rider_SpineTwist, v => pose.Rider_SpineTwist = v);
+                changed |= DrawVector3Field("Rider Hips Pos", poseKey, "Rider_HipsPos", pose.Rider_HipsPos, -2f, 2f, defaults.Rider_HipsPos, v => pose.Rider_HipsPos = v);
+                changed |= DrawVector3Field("Rider Hips Rot", poseKey, "Rider_HipsRot", pose.Rider_HipsRot, -360f, 360f, defaults.Rider_HipsRot, v => pose.Rider_HipsRot = v);
+                EndSectionBox();
+            }
+            else if (_editorSection == 2)
+            {
+                BeginSectionBox("Center of Mass");
+                DrawComVisualControls();
+                changed |= DrawVector3Field("Chassis CM", poseKey, "ChassisCM", pose.ChassisCM, -2f, 2f, defaults.ChassisCM, v => pose.ChassisCM = v);
+                changed |= DrawVector3Field("Driver CM", poseKey, "DriverCM", pose.DriverCM, -2f, 2f, defaults.DriverCM, v => pose.DriverCM = v);
+                EndSectionBox();
+            }
+            else
+            {
+                BeginSectionBox("Bike Transform");
+                changed |= DrawVector3Field("Bike Position", poseKey, "RootPosition", pose.RootPosition, -5f, 5f, defaults.RootPosition, v => pose.RootPosition = v);
+                changed |= DrawVector3Field("Bike Position Connected", poseKey, "RootPositionConnected", pose.RootPositionConnected, -5f, 5f, defaults.RootPositionConnected, v => pose.RootPositionConnected = v);
+                changed |= DrawVector3Field("Bike Rotation", poseKey, "RootRotation", pose.RootRotation, -360f, 360f, defaults.RootRotation, v => pose.RootRotation = v);
+                EndSectionBox();
+            }
 
             return changed;
         }
@@ -1139,6 +1168,11 @@ namespace rowemod.Mods
                 PoseKeys.Clear();
                 Log.Error($"Failed to refresh BikeGrindPoseData cache: {ex.Message}");
             }
+        }
+
+        private static void RefreshPresetCache()
+        {
+            _availablePresets = GrindPosePreset.GetAvailablePresets();
         }
 
         private static string BuildPoseKey(BikeGrindPoseData pose, int index)
