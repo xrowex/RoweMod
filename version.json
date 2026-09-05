@@ -1,8 +1,8 @@
 {
-    "version":  "3.3.5",
+    "version":  "3.3.6",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "6b9f6377c229413aaed4c8c5dedcc5e344e7cb9820bebf462bd48a241614f16e",
-    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.5",
-    "patchNotes":  "Four-button pie menu: RoweMod up, Replay right, Emotes down, and Vehicle Tuning left. Added Restore Game Outfit for native clothing and material restoration. Vehicle tuning keeps its presets inside RoweMod. Added emote looping and an independent boombox with volume, directional audio, distance falloff, and the last five completed songs with cache cleanup. Added replay prop/media integration, coping and transition controls, and landing-prediction visualization. Added an extended replay-capacity option for higher physics rates and raised the replay camera-light limit to 50,000. Included peg-spark visibility fixes and replay diagnostics. TV playback and opt-in multiplayer media are experimental: TV may still show no video frame, and two-client synchronization is not yet verified. The new pie layout, outfit reset, and replay/media behavior still need fresh in-game testing.",
+    "sha256":  "479ef393168a099fbc45620a7baeb6d4496425098699c2300e3d5cb5c89535af",
+    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.6",
+    "patchNotes":  "Custom emote animations now download automatically when you open Emotes. RoweMod verifies and caches the official pack, then refreshes the emote and dance lists without restarting. Existing verified packs work offline. Download status and Refresh Emotes provide progress and retry; failed downloads preserve existing files and clean up temporary files. Includes the four-button pie menu with Replay on the right, native outfit restoration, radio controls, and the riding/replay tools from 3.3.5. Automatic in-game download and playback still need a fresh game test. Custom emotes remain local; TV playback and multiplayer media remain experimental.",
     "requiredGameVersion":  ""
 }

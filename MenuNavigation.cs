@@ -1513,6 +1513,7 @@ namespace rowemod
             BeginPane("Native Emote System",
                 "Stock emotes use the game's normal Play and Cancel path. Added poses use the same native animation layer locally.");
             GUILayout.Label(EmoteController.Status, UiMutedWrappedStyle);
+            GUILayout.Label(EmoteBundleLoader.Status, UiMutedWrappedStyle);
             BeginToolbar();
             if (SecondaryButton("Refresh Emotes", GUILayout.Width(145f), GUILayout.Height(28f)))
                 EmoteController.Refresh(true);

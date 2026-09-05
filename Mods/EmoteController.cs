@@ -54,6 +54,7 @@ namespace rowemod.Mods
         private static EmoteSystem _system;
         private static Il2CppReferenceArray<AnimationClip> _originalClips;
         private static int _systemInstanceId = int.MinValue;
+        private static int _packRevision = -1;
         private static bool _lastPlayWasAddedClip;
         private static EmoteOption _loopOption;
         private static bool _loopSawActive;
@@ -77,6 +78,7 @@ namespace rowemod.Mods
 
         public static bool Refresh(bool force = false)
         {
+            EmoteBundleLoader.EnsureAvailable(force);
             EmoteSystem resolved = ResolveLocalSystem();
             if (resolved == null)
             {
@@ -87,7 +89,8 @@ namespace rowemod.Mods
 
             int instanceId = resolved.GetInstanceID();
             bool sameSystem = _system != null && _systemInstanceId == instanceId;
-            if (!force && sameSystem && OptionsInternal.Count > 0)
+            if (!force && sameSystem && OptionsInternal.Count > 0 &&
+                (_packRevision == EmoteBundleLoader.Revision || IsActive))
                 return true;
 
             ClearLoopState();
@@ -202,6 +205,7 @@ namespace rowemod.Mods
             for (int i = 0; i < combined.Count; i++)
                 replacement[i] = combined[i];
             resolved._emote = replacement;
+            _packRevision = EmoteBundleLoader.Revision;
 
             _status =
                 $"Native emotes ready: {stockCount} stock, {curatedCount} added poses, " +

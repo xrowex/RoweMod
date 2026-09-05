@@ -698,6 +698,9 @@ namespace rowemod.Utils
                 // before loading it. Loading it here first allowed a stale bundle with the same
                 // prefab name to win for the entire session.
                 string ownedBundleName = Path.GetFileName(bundlePath);
+                if (ownedBundleName.Equals("rowemod_custom_emotes", StringComparison.OrdinalIgnoreCase) ||
+                    ownedBundleName.Equals("rowemod_custom_emotes.download", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 if (string.Equals(
                         ownedBundleName,
                         "rowemod_peg_sparks",
@@ -804,6 +807,7 @@ namespace rowemod.Utils
             }
 
             assetBundlesLoaded = true;
+            EmoteBundleLoader.RegisterLoadedBundle();
             TrickAnimationEditor.NotifyAssetBundlesReloaded();
         }
 

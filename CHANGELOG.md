@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.6
+
+- Custom emotes automatically download, verify, cache, and load when the Emotes page opens.
+- Added download status, retry through Refresh Emotes, and temporary-file cleanup.
+- Published the official emote bundle and an optional manual-install pack.
+- Preserved the four-button pie menu with Replay on the right.
+
 ## 3.3.5
 
 - Reduced the pie menu to four equal sections: RoweMod up, Replay right, Emotes down, and Vehicle Tuning left.
