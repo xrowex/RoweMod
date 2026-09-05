@@ -49,6 +49,8 @@ namespace rowemod.Mods
         private static int _flipSystemInstanceId = int.MinValue;
         private static bool _flipSystemMissingLogged;
         private static bool _customOpen;
+        private static bool _embeddedInitialized;
+        private static bool _embeddedMode;
         private static bool _loggedInspector;
         private static Rect _windowRect;
         private static Vector2 _scroll;
@@ -93,6 +95,7 @@ namespace rowemod.Mods
         private static Texture2D _resetDefaultTexture;
 
         public static bool IsOpen => _customOpen;
+        private static float EditorWidth => _embeddedMode ? Menu.ActiveContentWidth : _windowRect.width;
 
         private sealed class FlipSystemSnapshot
         {
@@ -160,6 +163,8 @@ namespace rowemod.Mods
             _flipSystemInstanceId = int.MinValue;
             _flipSystemMissingLogged = false;
             _customOpen = false;
+            _embeddedInitialized = false;
+            _embeddedMode = false;
             _loggedInspector = false;
             _windowRect = default;
             _scroll = Vector2.zero;
@@ -189,17 +194,9 @@ namespace rowemod.Mods
 
         public static bool OpenInspector(string source = "RoweMod menu")
         {
-            RuntimeVehicleTuneMenu menu = ResolveMenu();
-            if (menu == null)
-            {
-                Log.Warning("[RuntimeVehicleReset] Vehicle inspector is unavailable until a supported vehicle is loaded.");
-                return false;
-            }
-
-            _menu = menu;
-            RefreshVehicle(menu, false);
-            EnsureWindowRect();
-            SetCustomOpen(true, source);
+            SetCustomOpen(false, "consolidated into RoweMod", false);
+            Menu.OpenVehicleTuningPage();
+            Log.Msg($"[RuntimeVehicleReset] Opened consolidated RoweMod Vehicle Tuning page from {source}.");
             return true;
         }
 
@@ -259,13 +256,9 @@ namespace rowemod.Mods
             if (menu._isOpen)
             {
                 menu._isOpen = false;
-                bool open = !_customOpen;
-                if (open)
-                {
-                    RefreshVehicle(menu, false);
-                    EnsureWindowRect();
-                }
-                SetCustomOpen(open, "Ctrl+Shift+U");
+                SetCustomOpen(false, "consolidated into RoweMod", false);
+                Menu.OpenVehicleTuningPage();
+                Log.Msg("[RuntimeVehicleReset] Ctrl+Shift+U opened the consolidated RoweMod Vehicle Tuning page.");
             }
 
             if (!_customOpen)
@@ -763,7 +756,7 @@ namespace rowemod.Mods
         {
             GUILayout.BeginHorizontal(_rowStyle, GUILayout.MinHeight(RowHeight));
             GUILayout.Space(18f);
-            GUILayout.Label(label, _labelStyle, GUILayout.Width(Mathf.Clamp(_windowRect.width * 0.34f - 18f, 210f, 390f)));
+            GUILayout.Label(label, _labelStyle, GUILayout.Width(Mathf.Clamp(EditorWidth * 0.34f - 18f, 210f, 390f)));
             bool changed = DrawRangedFloatField(path, current, minimum, maximum, out float next);
             bool atDefault = Mathf.Approximately(current, baseline);
             if (Menu.ControllerButton($"vehicle_reset_{path}", "Reset", atDefault ? _resetDefaultStyle : _resetStyle, GUILayout.Width(ResetWidth), GUILayout.Height(30f)) && !atDefault)
@@ -783,7 +776,7 @@ namespace rowemod.Mods
         {
             GUILayout.BeginHorizontal(_rowStyle, GUILayout.MinHeight(RowHeight));
             GUILayout.Space(18f);
-            GUILayout.Label(label, _labelStyle, GUILayout.Width(Mathf.Clamp(_windowRect.width * 0.34f - 18f, 210f, 390f)));
+            GUILayout.Label(label, _labelStyle, GUILayout.Width(Mathf.Clamp(EditorWidth * 0.34f - 18f, 210f, 390f)));
             bool changed = DrawRangedIntField(path, current, minimum, maximum, out int next);
             bool atDefault = current == baseline;
             if (Menu.ControllerButton($"vehicle_reset_{path}", "Reset", atDefault ? _resetDefaultStyle : _resetStyle, GUILayout.Width(ResetWidth), GUILayout.Height(30f)) && !atDefault)
@@ -1505,7 +1498,7 @@ namespace rowemod.Mods
 
             GUILayout.BeginHorizontal(_rowStyle, GUILayout.MinHeight(RowHeight));
             GUILayout.Space(depth * 18f);
-            float labelWidth = Mathf.Clamp(_windowRect.width * 0.34f - (depth * 18f), 210f, 390f);
+            float labelWidth = Mathf.Clamp(EditorWidth * 0.34f - (depth * 18f), 210f, 390f);
             bool editorOwnsTitle = field.FieldType?.FullName == "System.Boolean" || field.FieldType?.IsEnum == true;
             if (!editorOwnsTitle)
                 GUILayout.Label(label, _labelStyle, GUILayout.Width(labelWidth));
@@ -1678,8 +1671,8 @@ namespace rowemod.Mods
             const float popupWidth = 408f;
             const float popupHeight = 326f;
             Rect panel = new Rect(
-                Mathf.Max(18f, (_windowRect.width - popupWidth) * 0.5f),
-                78f,
+                Mathf.Max(18f, (EditorWidth - popupWidth) * 0.5f),
+                _embeddedMode ? Menu.ActiveScrollOffset + 18f : 78f,
                 popupWidth,
                 popupHeight);
             GUI.Box(panel, GUIContent.none, _rowStyle);
@@ -2371,6 +2364,88 @@ namespace rowemod.Mods
             changed |= DrawDriveEditor(_flipSystem._drive, _flipSystemDefaults.Drive);
 
             return changed;
+        }
+
+        public static void DrawEmbeddedInspector()
+        {
+            EnsureStyles();
+            RuntimeVehicleTuneMenu menu = ResolveMenu();
+            if (menu == null)
+            {
+                GUILayout.Label(
+                    "Vehicle tuning is unavailable until the game's runtime tuning component has loaded.",
+                    Menu.UiMutedWrappedStyle);
+                return;
+            }
+
+            if (!_embeddedInitialized)
+            {
+                _embeddedInitialized = true;
+                RefreshVehicle(menu, false);
+            }
+
+            _embeddedMode = true;
+            try
+            {
+                GUILayout.BeginHorizontal(GUILayout.Height(34f));
+                GUILayout.Label(
+                    menu._currentSettings != null
+                        ? $"Live settings: {menu._currentSettings.name}"
+                        : "No live vehicle settings found",
+                    _labelStyle,
+                    GUILayout.ExpandWidth(true));
+                if (Menu.ControllerButton("vehicle_refresh", "Refresh", Menu.UiButtonStyle,
+                        GUILayout.Width(105f), GUILayout.Height(30f)))
+                    RefreshVehicle(menu, true);
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal(GUILayout.Height(31f));
+                GUILayout.Label("Search", _mutedStyle, GUILayout.Width(58f));
+                string nextSearch = GUILayout.TextField(
+                    _search ?? string.Empty,
+                    Menu.UiSearchFieldStyle,
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.Height(26f));
+                if (!string.Equals(nextSearch, _search, StringComparison.Ordinal))
+                    _search = nextSearch;
+                GUILayout.EndHorizontal();
+
+                DrawPresetControls(menu);
+
+                if (menu._currentSettings == null)
+                {
+                    GUILayout.Space(12f);
+                    GUILayout.Label(
+                        "Drive a supported vehicle, then press Refresh. Your existing presets remain available.",
+                        Menu.UiMutedWrappedStyle,
+                        GUILayout.ExpandWidth(true));
+                }
+                else if (EnsureDefaultSnapshot(menu))
+                {
+                    Il2CppType rootType = Il2CppInterop.Runtime.Il2CppType.From(typeof(MotorVehicleSettings));
+                    bool changed = false;
+                    changed |= DrawFlipSystemEditor();
+                    GUILayout.Space(8f);
+                    changed |= DrawLiveVehicleSystems(menu);
+                    GUILayout.Space(8f);
+                    changed |= DrawObjectEditor(
+                        menu,
+                        string.Empty,
+                        menu._currentSettings,
+                        _defaultSettings,
+                        rootType,
+                        0);
+
+                    if (changed)
+                        ApplyChanges(menu);
+                }
+
+                DrawNumericEditor();
+            }
+            finally
+            {
+                _embeddedMode = false;
+            }
         }
 
         private static string DescribeOnePointOhState(OnePointOhFlipSystem system)

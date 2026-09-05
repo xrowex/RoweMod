@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using rowemod.Challenges;
 using rowemod.Mods;
@@ -16,6 +17,8 @@ namespace rowemod
     /// </summary>
     public static partial class Menu
     {
+        private static int _selectedDanceIndex;
+
         private enum MenuArea
         {
             Ride,
@@ -30,6 +33,7 @@ namespace rowemod
         private enum MenuPage
         {
             RideHandling,
+            RidePrediction,
             RideSafety,
             RideVehicleTuning,
             TrickMapping,
@@ -38,6 +42,7 @@ namespace rowemod
             BikeFit,
             BikeMaterials,
             RiderAppearance,
+            RiderEmotes,
             RiderTools,
             BikeStudio,
             CameraGameplay,
@@ -107,6 +112,9 @@ namespace rowemod
             new PageDefinition(MenuPage.RideHandling, MenuArea.Ride, "Handling",
                 "Core riding assists, pump, spins, manuals, and bike response.", Tab.Physics,
                 "physics spin assist grind align drift gravity hop pump manual nose manual steering damping handling", "Ride"),
+            new PageDefinition(MenuPage.RidePrediction, MenuArea.Ride, "Prediction Lab",
+                "Inspect landing arcs and tune the game's flight, coping, and lip prediction systems.", Tab.Physics,
+                "prediction landing arc trajectory rays flight augment corner detector coping lip magnet ragdoll rigidbody joints muscles", "Prediction Lab"),
             new PageDefinition(MenuPage.RideSafety, MenuArea.Ride, "Safety",
                 "Bail and injury behavior that changes how mistakes are handled.", Tab.Misc,
                 "no bail never bail bone breaking injury bone strength safety", "Safety"),
@@ -133,6 +141,9 @@ namespace rowemod
             new PageDefinition(MenuPage.RiderAppearance, MenuArea.Customize, "Rider",
                 "Choose rider models, clothing materials, visibility, and appearance presets.", Tab.Character,
                 "rider character clothing model shirt pants shoes hair hat appearance", "Rider Appearance"),
+            new PageDefinition(MenuPage.RiderEmotes, MenuArea.Customize, "Emotes",
+                "Play the game's stock emotes, added poses, and imported humanoid clips.", Tab.Character,
+                "rider emote pose sitting sit dance gun fingers party animation", "Emotes"),
             new PageDefinition(MenuPage.RiderTools, MenuArea.Customize, "Stance & Look",
                 "Bike-only stance, manual and nose-manual foot IK, and rider head tracking.", Tab.RiderTools,
                 "rider tools stance goofy regular opposite manny manual nosey nose manual foot ik target variant head tracking look", "Rider Tools"),
@@ -199,12 +210,12 @@ namespace rowemod
         private static readonly AreaDefinition[] NavigationAreas =
         {
             new AreaDefinition(MenuArea.Ride, "Ride",
-                MenuPage.RideHandling, MenuPage.RideSafety, MenuPage.RideVehicleTuning),
+                MenuPage.RideHandling, MenuPage.RidePrediction, MenuPage.RideSafety, MenuPage.RideVehicleTuning),
             new AreaDefinition(MenuArea.Tricks, "Tricks",
                 MenuPage.TrickMapping, MenuPage.GrindPoses),
             new AreaDefinition(MenuArea.Customize, "Customize",
                 MenuPage.BikeParts, MenuPage.BikeFit, MenuPage.BikeMaterials,
-                MenuPage.RiderAppearance, MenuPage.RiderTools, MenuPage.BikeStudio),
+                MenuPage.RiderAppearance, MenuPage.RiderEmotes, MenuPage.RiderTools, MenuPage.BikeStudio),
             new AreaDefinition(MenuArea.Camera, "Camera",
                 MenuPage.CameraGameplay, MenuPage.CameraLens, MenuPage.CameraFocus,
                 MenuPage.CameraFraming, MenuPage.CameraLight, MenuPage.CameraPresets),
@@ -643,6 +654,9 @@ namespace rowemod
                 case MenuPage.RideHandling:
                     DrawRideHandlingPage();
                     break;
+                case MenuPage.RidePrediction:
+                    DrawPredictionLabPage();
+                    break;
                 case MenuPage.RideSafety:
                     DrawRideSafetyPage();
                     break;
@@ -666,6 +680,9 @@ namespace rowemod
                     break;
                 case MenuPage.RiderAppearance:
                     Custom.DrawCharacterTab();
+                    break;
+                case MenuPage.RiderEmotes:
+                    DrawRiderEmotesPage();
                     break;
                 case MenuPage.RiderTools:
                     RiderStyleEditor.DrawTab();
@@ -776,9 +793,6 @@ namespace rowemod
 
             BeginPane("Core Handling", "The most common riding assists and bike-response controls.");
             ModernToggle("Spin Assist", ref physics.spinAssist);
-            ModernToggle("Grind Align Assist", ref physics.grindAlignAssist);
-            if (physics.grindAlignAssist)
-                Slider("Grind Assist Force Multiplier", ref physics.grindAssistStrength, 0.5f, 0f, 10f);
             ModernToggle("Drifting", ref physics.driftAbility);
             bool disableTweaking = Config.trickAnimationDebugSettings.disableTweaking;
             ModernToggle("Disable Trick Tweaking", ref disableTweaking, "ride_disable_trick_tweaking");
@@ -798,11 +812,138 @@ namespace rowemod
             {
                 if (!float.IsFinite(physics.physicsStepRate) || physics.physicsStepRate <= 0f)
                     physics.physicsStepRate = gamePhysicsRate;
-                Slider("Physics Update Rate (Hz)", ref physics.physicsStepRate, gamePhysicsRate, 30f, 250f);
+
+                ModernToggle(
+                    "Allow Rates Above Game Default (Larger Replay Buffer)",
+                    ref physics.allowHighPhysicsRateWithExtendedReplay,
+                    "physics_allow_extended_replay");
+                float maximumPhysicsRate = physics.allowHighPhysicsRateWithExtendedReplay
+                    ? 250f
+                    : Mathf.Max(30f, gamePhysicsRate);
+                Slider(
+                    "Physics Update Rate (Hz)",
+                    ref physics.physicsStepRate,
+                    gamePhysicsRate,
+                    30f,
+                    maximumPhysicsRate);
+
+                if (physics.allowHighPhysicsRateWithExtendedReplay &&
+                    physics.physicsStepRate > gamePhysicsRate)
+                {
+                    float replayMemoryMultiplier = physics.physicsStepRate / gamePhysicsRate;
+                    GUILayout.Label(
+                        $"Replay protection: RoweMod requests about {replayMemoryMultiplier:0.##}x the normal " +
+                        "native replay samples to preserve duration. This uses more memory.",
+                        UiMutedWrappedStyle);
+                }
             }
             GUILayout.Label(
-                $"Game default detected: {gamePhysicsRate:0.##} Hz. Lower uses less CPU but can reduce landing/contact stability; higher is smoother but costs more performance.",
+                $"Game default detected: {gamePhysicsRate:0.##} Hz. Lower uses less CPU but can reduce " +
+                "landing/contact stability. Higher rates require a proportionally larger replay buffer.",
                 UiMutedWrappedStyle);
+            EndPane();
+
+            BeginAltPane(
+                "Coping Finder",
+                "Tunes the native tire-ride system armed by holding RB with throttle as the jump begins.");
+            GUILayout.Label(CopingFinderControl.StatusText, UiMutedWrappedStyle);
+            if (!physics.copingFinderTuningEnabled)
+            {
+                GUILayout.Label(
+                    "Game values are untouched. Start from the live bike's current values before changing anything.",
+                    UiMutedWrappedStyle);
+                if (PrimaryButton("Customize Current Game Values", GUILayout.Width(250f), GUILayout.Height(28f)))
+                {
+                    if (CopingFinderControl.BeginCustomization())
+                        GUI.changed = true;
+                }
+            }
+            else
+            {
+                ModernToggle("Magnet Pull Enabled", ref physics.copingFinderMagnetEnabled,
+                    "coping_finder_magnet_enabled");
+                ModernToggle("Allow Steering Alignment", ref physics.copingFinderUserAlignment,
+                    "coping_finder_user_alignment");
+                ModernToggle("Auto Rotation Assist", ref physics.grindAlignAssist,
+                    "coping_finder_alignment_assist");
+                Slider("Search Range Multiplier", ref physics.copingFinderSearchRange, 1f, 0.25f, 3f);
+                Slider("Pull Strength Multiplier", ref physics.grindAssistStrength, 0.5f, 0.01f, 5f);
+                Slider("Detector Rotation Offset", ref physics.copingFinderRotation, 0f, -45f, 45f);
+                GUILayout.Label(
+                    "Search range changes how far the native corner detector looks. Pull strength changes the lateral magnet force. Rotation offsets the detector pivot in degrees.",
+                    UiMutedWrappedStyle);
+                BeginToolbar();
+                if (SecondaryButton("Use Current Live Values", GUILayout.Width(185f), GUILayout.Height(27f)))
+                {
+                    if (CopingFinderControl.CopyLiveValuesToConfig())
+                        GUI.changed = true;
+                }
+                if (SecondaryButton("Restore Game Values", GUILayout.Width(170f), GUILayout.Height(27f)))
+                {
+                    CopingFinderControl.RestoreGameValues();
+                    GUI.changed = true;
+                }
+                EndToolbar();
+            }
+            EndPane();
+
+            BeginAltPane(
+                "Transition Scanner",
+                "Tunes the native surface scanner used to find transition landings. Detection ownership stays with the game.");
+            GUILayout.Label(TransitionSettingsControl.StatusText, UiMutedWrappedStyle);
+            if (!physics.transitionTuningEnabled)
+            {
+                GUILayout.Label(
+                    "Game values are untouched. Customization starts from the current bike's live TransitionSettings asset.",
+                    UiMutedWrappedStyle);
+                if (PrimaryButton("Customize Current Game Values", GUILayout.Width(250f), GUILayout.Height(28f)))
+                {
+                    if (TransitionSettingsControl.BeginCustomization())
+                        GUI.changed = true;
+                }
+            }
+            else
+            {
+                GUILayout.Label("Detection Range", UiMutedWrappedStyle);
+                Slider("Accepted Surface Slope", ref physics.transitionAcceptableSlope,
+                    TransitionSettingsControl.NativeAcceptableSlope, 0f, 90f);
+                Slider("Base Scan Radius", ref physics.transitionScanRadius,
+                    TransitionSettingsControl.NativeScanRadius, 0.01f, 10f);
+                Slider("Velocity Radius Minimum", ref physics.transitionScanRadiusPerVelocityMin,
+                    TransitionSettingsControl.NativeScanRadiusPerVelocityMin, 0f, 10f);
+                Slider("Velocity Radius Maximum", ref physics.transitionScanRadiusPerVelocityMax,
+                    TransitionSettingsControl.NativeScanRadiusPerVelocityMax, 0f, 10f);
+
+                GUILayout.Label("Scan Shape", UiMutedWrappedStyle);
+                IntegerSlider("Horizontal Scan Rays", ref physics.transitionHorizontalRays,
+                    TransitionSettingsControl.NativeHorizontalRays, 1, 32);
+                IntegerSlider("Vertical Scan Rays", ref physics.transitionVerticalRays,
+                    TransitionSettingsControl.NativeVerticalRays, 1, 32);
+                Slider("Minimum Surface Up Dot", ref physics.transitionMinimumYDot,
+                    TransitionSettingsControl.NativeMinimumYDot, 0f, 1f);
+                ModernToggle("Scan Under the Bike", ref physics.transitionRunUnderScanner,
+                    "transition_run_under_scanner");
+                Slider("Side Fallback Scan Length", ref physics.transitionSecondarySideScannerLength,
+                    TransitionSettingsControl.NativeSecondarySideScannerLength, 0f, 20f);
+                Slider("Under-Bike Fallback Length", ref physics.transitionSecondaryUnderScannerLength,
+                    TransitionSettingsControl.NativeSecondaryUnderScannerLength, 0f, 20f);
+                GUILayout.Label(
+                    "More rays sample the landing surface more densely but cost more physics work. The up-dot threshold rejects surfaces whose normal is too far from upright.",
+                    UiMutedWrappedStyle);
+
+                BeginToolbar();
+                if (SecondaryButton("Use Current Live Values", GUILayout.Width(185f), GUILayout.Height(27f)))
+                {
+                    if (TransitionSettingsControl.CopyLiveValuesToConfig())
+                        GUI.changed = true;
+                }
+                if (SecondaryButton("Restore Game Values", GUILayout.Width(170f), GUILayout.Height(27f)))
+                {
+                    TransitionSettingsControl.RestoreGameValues();
+                    GUI.changed = true;
+                }
+                EndToolbar();
+            }
             EndPane();
 
             BeginAltPane("Pump, Spin & Manuals", "Less commonly changed riding-response controls.");
@@ -851,6 +992,302 @@ namespace rowemod
                 Mods.Physics.Update();
         }
 
+        public static void OpenVehicleTuningPage()
+        {
+            _menuSearch = string.Empty;
+            SelectPage(MenuPage.RideVehicleTuning);
+            Main.OpenRoweModMenu();
+        }
+
+        private static void IntegerSlider(string label, ref int target, int defaultValue, int min, int max)
+        {
+            float value = target;
+            Slider(label, ref value, defaultValue, min, max);
+            target = Mathf.Clamp(Mathf.RoundToInt(value), min, max);
+        }
+
+        private static void PredictionIntegerSlider(string label, ref int target, int min, int max, string controlId)
+        {
+            float value = target;
+            ModernSlider(label, ref value, min, max, controlId);
+            target = Mathf.Clamp(Mathf.RoundToInt(value), min, max);
+        }
+
+        private static void DrawPredictionLabPage()
+        {
+            bool previousGuiChanged = GUI.changed;
+            GUI.changed = false;
+            PredictionLabSettings settings = predictionLabSettings;
+
+            BeginPane("Runtime Topology & One-Jump Recorder",
+                "Read-only diagnostics for shared prediction assets, activation order, forces, targets, balance, and rider-joint error.");
+            GUILayout.Label(PredictionRuntimeDiagnostics.Status, UiMutedWrappedStyle);
+            GUILayout.Label(PredictionRuntimeDiagnostics.TopologySummary, UiMutedWrappedStyle);
+            BeginToolbar();
+            if (SecondaryButton("Refresh Topology", GUILayout.Width(170f), GUILayout.Height(28f)))
+                PredictionRuntimeDiagnostics.RefreshTopology();
+            if (!PredictionRuntimeDiagnostics.CanCancel)
+            {
+                if (PrimaryButton("Arm One-Jump Capture", GUILayout.Width(190f), GUILayout.Height(28f)))
+                    PredictionRuntimeDiagnostics.ArmOneJumpCapture();
+            }
+            else if (SecondaryButton("Cancel Capture", GUILayout.Width(150f), GUILayout.Height(28f)))
+            {
+                PredictionRuntimeDiagnostics.CancelCapture();
+            }
+            EndToolbar();
+            if (!string.IsNullOrWhiteSpace(PredictionRuntimeDiagnostics.LastReportPath))
+                GUILayout.Label("Topology report: " + PredictionRuntimeDiagnostics.LastReportPath, UiMutedWrappedStyle);
+            if (!string.IsNullOrWhiteSpace(PredictionRuntimeDiagnostics.LastCapturePath))
+                GUILayout.Label("Last jump capture: " + PredictionRuntimeDiagnostics.LastCapturePath, UiMutedWrappedStyle);
+            GUILayout.Label(
+                "Arm while on the ground, close the menu, perform one jump, and land. The recorder samples existing state only and saves a CSV under RoweMod\\Diagnostics.",
+                UiMutedWrappedStyle);
+            EndPane();
+
+            BeginPane("Predicted Landing Display",
+                "Draws a depth-tested arc from the game's native landing result. It adds no rigidbody, collider, joint, or force.");
+            GUILayout.Label(PredictionSystemsControl.PredictionStatus, UiMutedWrappedStyle);
+            ModernToggle("Show Predicted Landing", ref settings.visualizationEnabled, "prediction_visual_enabled");
+            if (settings.visualizationEnabled)
+            {
+                ModernToggle("Flight Arc", ref settings.visualizationShowArc, "prediction_visual_arc");
+                ModernToggle("Landing Cross", ref settings.visualizationShowLandingMarker, "prediction_visual_marker");
+                ModernToggle("Landing Surface Normal", ref settings.visualizationShowSurfaceNormal, "prediction_visual_normal");
+                PredictionIntegerSlider("Arc Segments", ref settings.visualizationArcSegments, 6, 96,
+                    "prediction_visual_segments");
+                ModernSlider("Line Width", ref settings.visualizationLineWidth, 0.005f, 0.15f,
+                    "prediction_visual_width");
+                ModernSlider("Marker Size", ref settings.visualizationMarkerSize, 0.05f, 2f,
+                    "prediction_visual_marker_size");
+                GUILayout.Label("Display Color", UiMutedWrappedStyle);
+                ModernSlider("Red", ref settings.visualizationColorR, 0f, 1f, "prediction_visual_r");
+                ModernSlider("Green", ref settings.visualizationColorG, 0f, 1f, "prediction_visual_g");
+                ModernSlider("Blue", ref settings.visualizationColorB, 0f, 1f, "prediction_visual_b");
+            }
+            GUILayout.Label(
+                "The retail game's original DrawFlightPath routine is stripped, so RoweMod reconstructs the display from its launch point, apex, landing point, and landing normal.",
+                UiMutedWrappedStyle);
+            EndPane();
+
+            BeginAltPane("Flight Landing Assist",
+                "Tunes the native force correction that steers the bike toward a predicted landing.");
+            GUILayout.Label(PredictionSystemsControl.FlightStatus, UiMutedWrappedStyle);
+            if (!settings.flightAugmentTuningEnabled)
+            {
+                DrawPredictionOptIn(
+                    "Game values are untouched. Capture the current bike's FlightAugmentSettings before editing.",
+                    PredictionSystemsControl.BeginFlightCustomization);
+            }
+            else
+            {
+                ModernSlider("Correction Strength", ref settings.flightCorrectionStrength, 0f, 100f,
+                    "prediction_flight_strength");
+                ModernSlider("Force Cap", ref settings.flightForceCap, 0f, 1000f,
+                    "prediction_flight_force_cap");
+                ModernSlider("Surface Normal Push", ref settings.flightNormalPushOff, -100f, 100f,
+                    "prediction_flight_push");
+                ModernSlider("Maximum Velocity Adjustment", ref settings.flightMaximumVelocityAdjust, 0f, 100f,
+                    "prediction_flight_velocity_adjust");
+                ModernSlider("Minimum Air Time", ref settings.flightMinimumAirTime, 0f, 5f,
+                    "prediction_flight_min_air");
+                ModernSlider("Maximum Correction Time", ref settings.flightMaximumTickTime, 0f, 5f,
+                    "prediction_flight_max_tick");
+                ModernSlider("Landing Pitch", ref settings.flightLandingPitch, -90f, 90f,
+                    "prediction_flight_pitch");
+                ModernToggle("Choose Closest Point to Body", ref settings.flightClosestToBody,
+                    "prediction_flight_closest");
+                ModernToggle("Choose Furthest Point", ref settings.flightFurthestPoint,
+                    "prediction_flight_furthest");
+                ModernToggle("Choose Steepest Angle", ref settings.flightSteepestAngle,
+                    "prediction_flight_steepest");
+                ModernToggle("Stop Correcting While Falling", ref settings.flightDoNotTickIfFalling,
+                    "prediction_flight_no_fall");
+                DrawPredictionRestoreButton("Restore Flight Augment Game Values", PredictionSystemsControl.RestoreFlight);
+            }
+            EndPane();
+
+            BeginPane("Flight Prediction",
+                "Controls how the game searches the projected path and samples a landing surface.");
+            GUILayout.Label(PredictionSystemsControl.PredictionStatus, UiMutedWrappedStyle);
+            if (!settings.predictionTuningEnabled)
+            {
+                DrawPredictionOptIn(
+                    "Game values are untouched. Capture the live FlightPredictionSettings asset before editing.",
+                    PredictionSystemsControl.BeginPredictionCustomization);
+            }
+            else
+            {
+                PredictionIntegerSlider("Simulation Steps", ref settings.predictionSteps, 1, 1000,
+                    "prediction_steps");
+                ModernSlider("Time per Step", ref settings.predictionPathTimeStep, 0.001f, 0.2f,
+                    "prediction_time_step");
+                ModernSlider("Start Height Offset", ref settings.predictionStartYOffset, -1f, 1f,
+                    "prediction_start_y");
+                ModernSlider("Seconds Between Predictions", ref settings.predictionTickInterval, 0f, 0.2f,
+                    "prediction_tick_interval");
+                ModernSlider("Cast Radius", ref settings.predictionCastRadius, 0f, 1f,
+                    "prediction_cast_radius");
+                ModernSlider("Minimum Cast Radius", ref settings.predictionCastRadiusMin, 0f, 1f,
+                    "prediction_cast_radius_min");
+                GUILayout.Label("Landing Surface Sampling", UiMutedWrappedStyle);
+                PredictionIntegerSlider("Normal Sample Rays", ref settings.predictionSurfaceNormalRays, 1, 128,
+                    "prediction_normal_rays");
+                ModernSlider("Normal Cast Distance", ref settings.predictionSurfaceNormalMaxDistance, 0f, 20f,
+                    "prediction_normal_distance");
+                ModernSlider("Normal Start Offset", ref settings.predictionSurfaceNormalStartOffset, 0f, 10f,
+                    "prediction_normal_offset");
+                ModernSlider("Normal Ray Spread", ref settings.predictionSurfaceNormalSpread, 0f, 10f,
+                    "prediction_normal_spread");
+                ModernToggle("Prefer Rider Up Direction", ref settings.predictionPreferPlayerUp,
+                    "prediction_prefer_up");
+                ModernToggle("Prefer Transition Angle", ref settings.predictionPreferTransitionAngle,
+                    "prediction_prefer_transition");
+                if (settings.predictionPreferTransitionAngle)
+                {
+                    ModernSlider("Wanted Normal X", ref settings.predictionWantedNormalX, -1f, 1f,
+                        "prediction_normal_x");
+                    ModernSlider("Wanted Normal Y", ref settings.predictionWantedNormalY, -1f, 1f,
+                        "prediction_normal_y");
+                    ModernSlider("Wanted Normal Z", ref settings.predictionWantedNormalZ, -1f, 1f,
+                        "prediction_normal_z");
+                }
+                ModernSlider("Landing Normal Pitch", ref settings.predictionLandingNormalPitch, -90f, 90f,
+                    "prediction_landing_normal_pitch");
+                GUILayout.Label(
+                    "More steps and surface rays improve sampling density but increase physics-query cost.",
+                    UiMutedWrappedStyle);
+                DrawPredictionRestoreButton("Restore Flight Prediction Game Values", PredictionSystemsControl.RestorePrediction);
+            }
+            EndPane();
+
+            BeginAltPane("Coping Corner Detector",
+                "Exposes the native ray fan used to identify coping and usable lip edges.");
+            GUILayout.Label(PredictionSystemsControl.CornerStatus, UiMutedWrappedStyle);
+            if (!settings.cornerDetectorTuningEnabled)
+            {
+                DrawPredictionOptIn(
+                    "Game values are untouched. Capture the current CornerDetector before editing.",
+                    PredictionSystemsControl.BeginCornerCustomization);
+            }
+            else
+            {
+                ModernSlider("Distance Multiplier", ref settings.cornerDistanceMultiplier, 0.1f, 10f,
+                    "prediction_corner_distance_mult");
+                ModernSlider("Corner Check Distance", ref settings.cornerCheckDistance, 0.1f, 10f,
+                    "prediction_corner_distance");
+                PredictionIntegerSlider("Ray Count", ref settings.cornerNumberOfRays, 4, 360,
+                    "prediction_corner_rays");
+                ModernSlider("Facing Dot Threshold", ref settings.cornerFacingDot, 0f, 1f,
+                    "prediction_corner_facing");
+                ModernSlider("Up Normal Threshold", ref settings.cornerYNormalThreshold, 0f, 1f,
+                    "prediction_corner_y_normal");
+                ModernSlider("Ray Start Height", ref settings.cornerStartUpOffset, 0f, 1f,
+                    "prediction_corner_start_y");
+                ModernSlider("Maximum Edge Walk", ref settings.cornerEdgeCheckMaximum, 0.25f, 20f,
+                    "prediction_corner_edge_max");
+                ModernSlider("Edge Walk Step", ref settings.cornerEdgeStep, 0.01f, 0.5f,
+                    "prediction_corner_edge_step");
+                ModernSlider("Edge Probe Outset", ref settings.cornerEdgeProbeOutset, 0f, 0.2f,
+                    "prediction_corner_edge_outset");
+                ModernSlider("Edge Angle Tolerance", ref settings.cornerEdgeAngleTolerance, 0f, 30f,
+                    "prediction_corner_angle");
+                PredictionIntegerSlider("Allowed Missed Probes", ref settings.cornerMissesAllowed, 0, 2,
+                    "prediction_corner_misses");
+                ModernSlider("Down Probe Distance", ref settings.cornerDownTestDistance, 0f, 0.5f,
+                    "prediction_corner_down");
+                ModernSlider("Up-Walk Probe Distance", ref settings.cornerUpWalkTestDistance, 0f, 0.5f,
+                    "prediction_corner_up");
+                ModernSlider("Inward Probe Distance", ref settings.cornerInwardTestDistance, 0f, 0.5f,
+                    "prediction_corner_inward");
+                DrawPredictionRestoreButton("Restore Corner Detector Game Values", PredictionSystemsControl.RestoreCorner);
+            }
+            EndPane();
+
+            BeginPane("Lip Magnet",
+                "Tunes the native edge magnet and its optional flight-prediction handoff.");
+            GUILayout.Label(PredictionSystemsControl.LipStatus, UiMutedWrappedStyle);
+            if (!settings.lipMagnetTuningEnabled)
+            {
+                DrawPredictionOptIn(
+                    "Game values are untouched. Capture the current LipMagnet before editing.",
+                    PredictionSystemsControl.BeginLipCustomization);
+            }
+            else
+            {
+                ModernSlider("Pull Power Multiplier", ref settings.lipPowerMultiplier, 0f, 1f,
+                    "prediction_lip_power");
+                ModernSlider("Pull Length Multiplier", ref settings.lipLengthMultiplier, 0f, 3f,
+                    "prediction_lip_length");
+                ModernSlider("Surface Normal Push", ref settings.lipNormalPushOff, -0.3f, 0.3f,
+                    "prediction_lip_push");
+                ModernSlider("Minimum Height from Flight Apex", ref settings.lipMinimumYFromFlightApex, -1f, 1f,
+                    "prediction_lip_apex_y");
+                ModernSlider("Minimum Target Distance", ref settings.lipMinimumDistance, -0.5f, 0.5f,
+                    "prediction_lip_min_distance");
+                ModernSlider("Distance Boost", ref settings.lipDistanceBoost, -0.5f, 0.5f,
+                    "prediction_lip_distance_boost");
+                ModernSlider("Maximum Magnet Velocity", ref settings.lipMaximumMagnetVelocity, 0f, 100f,
+                    "prediction_lip_max_velocity");
+                ModernSlider("Rotation Offset", ref settings.lipRotation, -90f, 90f,
+                    "prediction_lip_rotation");
+                ModernSlider("Move Delta Multiplier", ref settings.lipMoveDeltaMultiplier, 0f, 10f,
+                    "prediction_lip_delta_mult");
+                ModernSlider("Maximum Move Delta", ref settings.lipMaximumMoveDelta, 0f, 10f,
+                    "prediction_lip_delta_max");
+                ModernToggle("Alignment Assist", ref settings.lipAlignmentAssist, "prediction_lip_align");
+                ModernToggle("Override Vertical Motion", ref settings.lipOverrideVertical,
+                    "prediction_lip_override_vertical");
+                ModernToggle("Run Flight Prediction", ref settings.lipRunFlightPrediction,
+                    "prediction_lip_run_prediction");
+                ModernToggle("Prefer Vertical Assist", ref settings.lipPreferVerticalAssist,
+                    "prediction_lip_prefer_vertical");
+                ModernToggle("Allow Negative Push", ref settings.lipAllowNegativePush,
+                    "prediction_lip_negative_push");
+                DrawPredictionRestoreButton("Restore Lip Magnet Game Values", PredictionSystemsControl.RestoreLip);
+            }
+            EndPane();
+
+            BeginAltPane("Rider Physics Body", "Read-only inventory of the local rider's physical animation system.");
+            GUILayout.Label(PredictionSystemsControl.RagdollStatus, UiMutedWrappedStyle);
+            GUILayout.Label(
+                "The rider is an active ragdoll: physics bones have Rigidbody and ConfigurableJoint components driven by spring, damper, maximum-force, positional-strength, and PID values. Those drives act like muscles, but the game does not use PuppetMaster Muscle objects.",
+                UiMutedWrappedStyle);
+            GUILayout.Label(
+                "Prediction visualization does not duplicate or modify this body. Joint-drive tuning is intentionally read-only until each bone's ownership and recovery behavior can be tested safely.",
+                UiMutedWrappedStyle);
+            EndPane();
+
+            bool changed = GUI.changed;
+            GUI.changed |= previousGuiChanged;
+            if (changed)
+            {
+                PredictionSystemsControl.ApplyAll();
+                Config.RequestSave();
+            }
+        }
+
+        private static void DrawPredictionOptIn(string explanation, Func<bool> beginCustomization)
+        {
+            GUILayout.Label(explanation, UiMutedWrappedStyle);
+            if (PrimaryButton("Customize Current Game Values", GUILayout.Width(250f), GUILayout.Height(28f)) &&
+                beginCustomization())
+            {
+                GUI.changed = true;
+            }
+        }
+
+        private static void DrawPredictionRestoreButton(string label, Action restore)
+        {
+            BeginToolbar();
+            if (SecondaryButton(label, GUILayout.Width(250f), GUILayout.Height(27f)))
+            {
+                restore();
+                GUI.changed = true;
+            }
+            EndToolbar();
+        }
+
         private static void DrawRideSafetyPage()
         {
             BeginPane("Bails & Injuries", "These settings change recovery and injury behavior, not bike handling.");
@@ -890,14 +1327,10 @@ namespace rowemod
             DrawMotorTuningData();
             EndPane();
 
-            BeginAltPane("Advanced Vehicle Inspector",
-                "Use the complete searchable inspector and vehicle presets for uncommon native settings.");
-            if (PrimaryButton("Open Vehicle Inspector", GUILayout.Width(210f), GUILayout.Height(30f)))
-            {
-                if (RuntimeVehicleTuneResetSupport.OpenInspector())
-                    Main.CloseRoweModMenu();
-            }
-            GUILayout.Label("Shortcut: Ctrl + Shift + U", UiMutedWrappedStyle);
+            BeginAltPane("Native Vehicle Settings",
+                "Search and edit the complete live vehicle settings. Vehicle presets remain saved as reusable JSON files.");
+            RuntimeVehicleTuneResetSupport.DrawEmbeddedInspector();
+            GUILayout.Label("Shortcut: Ctrl + Shift + U opens this RoweMod page.", UiMutedWrappedStyle);
             EndPane();
 
             bool changed = GUI.changed;
@@ -1064,6 +1497,213 @@ namespace rowemod
             EndPane();
         }
 
+        public static void OpenEmotesPage()
+        {
+            _menuSearch = string.Empty;
+            SelectPage(MenuPage.RiderEmotes);
+            Main.OpenRoweModMenu();
+        }
+
+        private static void DrawRiderEmotesPage()
+        {
+            EmoteController.Refresh(false);
+            EmotePropController.EnsureRadioVisual();
+            VideoTvController.EnsureVisual();
+
+            BeginPane("Native Emote System",
+                "Stock emotes use the game's normal Play and Cancel path. Added poses use the same native animation layer locally.");
+            GUILayout.Label(EmoteController.Status, UiMutedWrappedStyle);
+            BeginToolbar();
+            if (SecondaryButton("Refresh Emotes", GUILayout.Width(145f), GUILayout.Height(28f)))
+                EmoteController.Refresh(true);
+            if (SecondaryButton("Test Firecracker FX", GUILayout.Width(175f), GUILayout.Height(28f)))
+                EmotePropController.TestFirecrackerFx();
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = EmoteController.IsActive || EmoteController.IsLooping;
+            if (SecondaryButton("Stop Emote", GUILayout.Width(125f), GUILayout.Height(28f)))
+                EmoteController.Stop();
+            GUI.enabled = previousEnabled;
+            EndToolbar();
+            GUILayout.Label(EmotePropController.TestStatus, UiMutedWrappedStyle);
+            EndPane();
+
+            BeginPane("Radio",
+                "Play a song from the placed 3D radio. Song playback is independent from the rider's selected dance.");
+            GUILayout.Label("YouTube link", UiRowMutedLabelStyle);
+            RadioDanceController.YouTubeUrl = GUILayout.TextField(
+                RadioDanceController.YouTubeUrl,
+                UiSearchFieldStyle,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(30f * UiScale));
+            IReadOnlyList<RecentRadioSong> recentSongs = RadioDanceController.RecentSongs;
+            if (recentSongs.Count > 0)
+            {
+                GUILayout.Label("Recently played", UiRowMutedLabelStyle);
+                for (int recentIndex = 0; recentIndex < recentSongs.Count; recentIndex++)
+                {
+                    RecentRadioSong recentSong = recentSongs[recentIndex];
+                    string recentTitle = recentSong?.title ?? "Untitled video";
+                    if (recentTitle.Length > 72)
+                        recentTitle = recentTitle.Substring(0, 69) + "...";
+                    if (SecondaryButton(
+                            recentTitle,
+                            GUILayout.ExpandWidth(true),
+                            GUILayout.Height(27f * UiScale)))
+                        RadioDanceController.SelectRecentSong(recentIndex);
+                }
+            }
+            float radioVolume = RadioDanceController.Volume;
+            Slider("Radio Volume", ref radioVolume, 0.85f, 0f, 1f);
+            RadioDanceController.Volume = radioVolume;
+            bool multiplayerMediaEnabled = Config.replaySettings.multiplayerMediaEnabled;
+            bool previousMultiplayerMediaEnabled = multiplayerMediaEnabled;
+            ModernToggle(
+                "Sync this station with RoweMod players",
+                ref multiplayerMediaEnabled,
+                "radio_multiplayer_media_sync");
+            if (multiplayerMediaEnabled != previousMultiplayerMediaEnabled)
+            {
+                Config.replaySettings.multiplayerMediaEnabled = multiplayerMediaEnabled;
+                Config.RequestSave();
+                MultiplayerMediaSync.OnSettingChanged();
+            }
+            GUILayout.Label(MultiplayerMediaSync.Status, UiMutedWrappedStyle);
+            GUILayout.Label(RadioDanceController.Status, UiMutedWrappedStyle);
+            GUILayout.Label(EmotePropController.RadioVisualStatus, UiMutedWrappedStyle);
+            BeginToolbar();
+            previousEnabled = GUI.enabled;
+            GUI.enabled = !RadioDanceController.IsBusy;
+            if (PrimaryButton(
+                    RadioDanceController.IsBusy ? "Preparing..." : "Play YouTube Radio",
+                    GUILayout.Width(185f),
+                    GUILayout.Height(30f)))
+                RadioDanceController.StartFromYouTube();
+            GUI.enabled = previousEnabled && (RadioDanceController.IsPlaying || RadioDanceController.IsBusy);
+            if (SecondaryButton(RadioDanceController.IsBusy ? "Cancel" : "Stop Radio", GUILayout.Width(125f), GUILayout.Height(30f)))
+                RadioDanceController.Stop();
+            GUI.enabled = previousEnabled;
+            EndToolbar();
+            BeginToolbar();
+            previousEnabled = GUI.enabled;
+            GUI.enabled = !RadioDanceController.IsBusy;
+            if (PrimaryButton(
+                    RadioDanceController.IsBusy ? "Preparing..." : "Play Radio + TV",
+                    GUILayout.Width(185f),
+                    GUILayout.Height(30f)))
+                RadioDanceController.StartRadioAndTvFromYouTube();
+            GUI.enabled = previousEnabled && (VideoTvController.IsActive || VideoTvController.HasPendingVideo);
+            if (SecondaryButton("Stop TV", GUILayout.Width(125f), GUILayout.Height(30f)))
+                VideoTvController.Stop();
+            GUI.enabled = previousEnabled;
+            EndToolbar();
+            GUILayout.Label(VideoTvController.Status, UiMutedWrappedStyle);
+            GUILayout.Label(VideoTvController.VisualStatus, UiMutedWrappedStyle);
+            GUILayout.Label(
+                "First use downloads the official yt-dlp Windows helper and verifies it against the release SHA-256 list. " +
+                "The radio remains where it was placed; FMOD pans it from the active camera, begins fading within the first meter, " +
+                "and reaches silence at about 24 meters. Play Radio + TV also caches a compatible 720p MP4 and maps it only to the TV screen; " +
+                "the TV is placed 2.6 meters in front of the live bike and uses the radio as its spatial audio source. " +
+                "Multiplayer sync is opt-in and requires the same RoweMod build on each player; clients exchange only the station state, " +
+                "then validate and cache the YouTube media themselves. Shared boombox physics is held kinematic so every client sees the same placement. " +
+                "Only use audio you have permission to access.",
+                UiMutedWrappedStyle);
+            EndPane();
+
+            BeginPane("Dance",
+                "Choose a local dance independently. You can switch or stop the dance without interrupting the radio.");
+            IReadOnlyList<EmoteController.EmoteOption> dances = EmoteController.DanceOptions;
+            if (dances.Count == 0)
+            {
+                GUILayout.Label("No compatible local dance clips are loaded.", UiMutedWrappedStyle);
+            }
+            else
+            {
+                _selectedDanceIndex = Mathf.Clamp(_selectedDanceIndex, 0, dances.Count - 1);
+                EmoteController.EmoteOption selectedDance = dances[_selectedDanceIndex];
+                GUILayout.Label("Selected dance", UiRowMutedLabelStyle);
+                GUILayout.Label(selectedDance.Label, UiRowLabelStyle);
+                GUILayout.Label(selectedDance.ClipName, UiRowMutedLabelStyle);
+                BeginToolbar();
+                if (SecondaryButton("Previous", GUILayout.Width(110f), GUILayout.Height(30f)))
+                    _selectedDanceIndex = (_selectedDanceIndex - 1 + dances.Count) % dances.Count;
+                GUILayout.Label($"{_selectedDanceIndex + 1} of {dances.Count}", UiRowMutedLabelStyle, GUILayout.Width(70f));
+                if (SecondaryButton("Next", GUILayout.Width(110f), GUILayout.Height(30f)))
+                    _selectedDanceIndex = (_selectedDanceIndex + 1) % dances.Count;
+                if (PrimaryButton("Loop Dance", GUILayout.Width(135f), GUILayout.Height(30f)) &&
+                    EmoteController.Play(dances[_selectedDanceIndex], true))
+                    Main.CloseRoweModMenu();
+                previousEnabled = GUI.enabled;
+                GUI.enabled = EmoteController.IsActive || EmoteController.IsLooping;
+                if (SecondaryButton("Stop Dance", GUILayout.Width(125f), GUILayout.Height(30f)))
+                    EmoteController.Stop();
+                GUI.enabled = previousEnabled;
+                EndToolbar();
+            }
+            EndPane();
+
+            DrawEmoteGroup(
+                "Added Poses",
+                "Sitting and other compatible clips already shipped with the game. These play locally so custom IDs are never sent to players without them.",
+                option => !option.Stock && !option.Imported);
+            DrawEmoteGroup(
+                "Game Emotes",
+                "The original emote array. These keep the game's native networking behavior.",
+                option => option.Stock);
+            DrawEmoteGroup(
+                "Imported Animation Clips",
+                "Humanoid rider clips found in your RoweMod animation bundles. Trick-specific clips may not look natural as stationary emotes.",
+                option => option.Imported);
+        }
+
+        private static void DrawEmoteGroup(
+            string title,
+            string description,
+            Func<EmoteController.EmoteOption, bool> include)
+        {
+            BeginAltPane(title, description);
+            IReadOnlyList<EmoteController.EmoteOption> options = EmoteController.Options;
+            int shown = 0;
+            for (int i = 0; i < options.Count; i++)
+            {
+                EmoteController.EmoteOption option = options[i];
+                if (option == null || !include(option))
+                    continue;
+
+                shown++;
+                GUILayout.BeginHorizontal(UiRowButtonStyle, GUILayout.MinHeight(42f * UiScale));
+                GUILayout.BeginVertical(GUILayout.ExpandWidth(true));
+                GUILayout.Label(option.Label, UiRowLabelStyle);
+                GUILayout.Label(option.ClipName, UiRowMutedLabelStyle);
+                GUILayout.EndVertical();
+                if (ControllerButton(
+                        $"emote_play_{option.NativeIndex}_{option.ClipName}",
+                        "Play",
+                        UiButtonStyle,
+                        GUILayout.Width(90f * UiScale),
+                        GUILayout.Height(30f * UiScale)))
+                {
+                    if (EmoteController.Play(option))
+                        Main.CloseRoweModMenu();
+                }
+                if (!option.Stock && ControllerButton(
+                        $"emote_loop_{option.NativeIndex}_{option.ClipName}",
+                        "Loop",
+                        UiButtonStyle,
+                        GUILayout.Width(90f * UiScale),
+                        GUILayout.Height(30f * UiScale)))
+                {
+                    if (EmoteController.Play(option, true))
+                        Main.CloseRoweModMenu();
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Space(4f * UiScale);
+            }
+
+            if (shown == 0)
+                GUILayout.Label("No compatible clips were found in this group.", UiMutedWrappedStyle);
+            EndPane();
+        }
+
         private static void DrawMultiplayerPage()
         {
             BeginPane("Player Labels", "Name tag visibility and multiplayer challenge controls.");
@@ -1100,6 +1740,10 @@ namespace rowemod
         {
             switch (page)
             {
+                case MenuPage.RidePrediction:
+                    PredictionSystemsControl.RestoreAllGameValues();
+                    predictionLabSettings = new PredictionLabSettings();
+                    break;
                 case MenuPage.RideSafety:
                     misc.neverBail = false;
                     misc.disableBoneBreaking = false;
@@ -1113,6 +1757,9 @@ namespace rowemod
                     RestoreMotorTuningDefaults();
                     _motorTuningNeedsRefresh = true;
                     Mods.Physics.Update();
+                    break;
+                case MenuPage.RiderEmotes:
+                    EmoteController.RestoreOriginalList();
                     break;
                 case MenuPage.WorldDrone:
                     misc.droneBodyToggle = true;

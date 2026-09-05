@@ -323,6 +323,7 @@ namespace rowemod.Mods
             Log.Msg("GameEvent_TitleLoop_Replay_OnExit!");
             ReplayCameraLight.OnReplayClosed("GameEvent_TitleLoop_Replay_OnExit");
             PegSparks.OnReplayClosed();
+            EmotePropController.OnReplayClosed();
 
             Memory.FindObjects(Memory.physicsDrivenCharacter);
             MelonCoroutines.Start(BikeMaterialsLoader.DelayedApplySavedMaterials());
@@ -337,6 +338,7 @@ namespace rowemod.Mods
             Log.Msg("[ReplayLight] GameEvent_ReplaySystem_OnBeginReplay fired.");
             ReplayCameraLight.OnReplayOpened(_replaySystemBeginReplay);
             PegSparks.OnReplayOpened();
+            EmotePropController.OnReplayOpened();
         }
 
         private void OnPlayerResetAtMarker()

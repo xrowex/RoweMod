@@ -122,10 +122,11 @@ namespace rowemod.Mods
         }
 
         /// <summary>
-        /// Opens replay through GameLoopManager's public replay-state transition.
-        /// Native SetGameStateToReplay performs the same State(Replay) ->
-        /// RequestTransition path used by the legacy OpenReplay event, without a
-        /// temporary listener reattachment or re-entrancy window.
+        /// Opens replay through ReplaySystem's native request path. RoweMod keeps
+        /// GameLoopManager's legacy listener detached during normal gameplay so
+        /// D-pad Right belongs to the pie menu, then authorizes that exact handler
+        /// only for this synchronous request. This preserves every other listener
+        /// and any replay preparation performed before the game-state transition.
         /// </summary>
         public static bool TryOpenReplayFromPieMenu()
         {
@@ -143,24 +144,69 @@ namespace rowemod.Mods
             }
 
             NativeGameLoopManager manager = NativeGameLoopManager.Instance;
-            if (manager == null)
+            NativeReplaySystem replaySystem = NativeReplaySystem.Instance;
+            if (manager == null || replaySystem == null)
             {
-                Log.Warning("[RoweModInput] GameLoopManager.Instance is null.");
+                Log.Warning("[RoweModInput] Native replay services are unavailable.");
                 return false;
             }
 
+            bool handlerAuthorized = false;
             try
             {
-                manager.SetGameStateToReplay();
+                if (cachedGameLoopManager == null ||
+                    manager.Pointer != cachedGameLoopManager.Pointer ||
+                    replaySystem.OpenReplayRequest_GE == null ||
+                    replaySystem.OpenReplayRequest_GE.Pointer != cachedOpenReplayEvent.Pointer)
+                {
+                    Log.Warning(
+                        "[RoweModInput] Replay was not opened because the cached native " +
+                        "OpenReplay binding no longer matches the live services.");
+                    return false;
+                }
+
+                if (!DelegateChainContains(cachedOpenReplayEvent.OnRaise_A, cachedOpenReplayHandler))
+                {
+                    cachedOpenReplayEvent.OnRaise_A += cachedOpenReplayHandler;
+                    handlerAuthorized = true;
+                }
+
+                replaySystem.OpenReplayRequest();
                 Log.Msg(
-                    "[RoweModInput] Requested the Replay state directly through GameLoopManager " +
-                    "from the pie menu.");
+                    "[RoweModInput] Raised ReplaySystem.OpenReplayRequest through the full " +
+                    "native listener chain from the pie menu.");
                 return true;
             }
             catch (Exception ex)
             {
-                Log.Error($"[RoweModInput] GameLoopManager replay transition failed: {ex.Message}");
+                Log.Error($"[RoweModInput] Native replay-open request failed: {ex.Message}");
                 return false;
+            }
+            finally
+            {
+                if (handlerAuthorized && cachedOpenReplayEvent != null &&
+                    cachedOpenReplayHandler != null)
+                {
+                    try
+                    {
+                        if (DelegateChainContains(
+                            cachedOpenReplayEvent.OnRaise_A,
+                            cachedOpenReplayHandler))
+                        {
+                            cachedOpenReplayEvent.OnRaise_A -= cachedOpenReplayHandler;
+                        }
+
+                        replayListenerDetached = !DelegateChainContains(
+                            cachedOpenReplayEvent.OnRaise_A,
+                            cachedOpenReplayHandler);
+                    }
+                    catch (Exception ex)
+                    {
+                        replayListenerDetached = false;
+                        Log.Warning(
+                            $"[RoweModInput] Could not re-reserve the native Replay shortcut: {ex.Message}");
+                    }
+                }
             }
         }
 
@@ -429,12 +475,21 @@ namespace rowemod.Mods
                 string codeFlow = manager?.CodeFlowStatus ?? "null";
                 float recordTime = replaySystem?.CurrentRecordTime ?? -1f;
                 float playbackTime = replaySystem?.CurrentPlaybackTime ?? -1f;
+                float playbackMin = replaySystem?.PlaybackRangeMinTime ?? -1f;
+                float playbackMax = replaySystem?.PlaybackRangeMaxTime ?? -1f;
+                float maxRecordTime = replaySystem?.MaxRecordTime ?? -1f;
+                float physicsRate = Time.fixedDeltaTime > 0f
+                    ? 1f / Time.fixedDeltaTime
+                    : -1f;
 
                 Log.Msg(
                     $"[ReplayRecovery] Snapshot ({reason}): gameState={gameState}, " +
                     $"replayState={replayState}, gameplayMenus={NativeMenuService.CurrentGameplayMenuStackSize}, " +
                     $"blockUndo={NativeMenuService.BlockUndo}, commands={commandCount}, undos={undoCount}, " +
-                    $"recordTime={recordTime:F3}, playbackTime={playbackTime:F3}, codeFlow='{codeFlow}'.");
+                    $"recordTime={recordTime:F3}, playbackTime={playbackTime:F3}, " +
+                    $"playbackRange=[{playbackMin:F3}, {playbackMax:F3}], " +
+                    $"maxRecordTime={maxRecordTime:F3}, physicsRate={physicsRate:F2}Hz, " +
+                    $"codeFlow='{codeFlow}'.");
             }
             catch (Exception ex)
             {

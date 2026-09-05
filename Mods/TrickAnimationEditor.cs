@@ -2086,6 +2086,22 @@ namespace rowemod.Mods
                 Log.Msg($"[TrickAnimEditor] Loaded {customClips.Count} custom animation clip(s) from RoweMod bundles.");
         }
 
+        internal static List<AnimationClip> GetCustomRiderClips(bool force)
+        {
+            EnsureCustomClipCatalog(force);
+            var riderClips = new List<AnimationClip>();
+            for (int i = 0; i < customClips.Count; i++)
+            {
+                AnimationClip clip = customClips[i];
+                string clipName = SafeRead(() => clip?.name, string.Empty);
+                if (clip != null &&
+                    SafeRead(() => clip.humanMotion, false) &&
+                    !IsStudioBikeClipName(clipName))
+                    riderClips.Add(clip);
+            }
+            return riderClips;
+        }
+
         private static void EnsureClipSourceCatalog(bool force)
         {
             if (force)

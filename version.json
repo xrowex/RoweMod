@@ -1,8 +1,8 @@
 {
-    "version":  "3.3.3",
+    "version":  "3.3.5",
     "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "56d8d6fa5bb4032c9628f47c3bdf44984b8ede56de0dcb3dcab1791e6c2ea8a6",
-    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.3",
-    "patchNotes":  "Improved Trick Mapping layout and made previews wait for the complete trick before repeating. Added one-click Studio packages that apply coordinated rider and bike animations, including phase and mirror routing. Manual IK now follows Mash\u0027s tracked manual state so ordinary hop landings do not trigger custom poses, while real and fakie manuals retain foot ownership. Added a staged Replay exit recovery when the game\u0027s normal Back action gets stuck. Restored native peg-contact sparks with entry bursts, replay samples, and simpler controls. Reorganized Grind Poses into responsive Bike, Rider, Balance, and Transform sections with cached presets. Fixed the host player-capacity nullable conversion that could throw when starting a session. Tested in game with a clean MelonLoader log; build, native-hook audits, and focused animation checks passed.",
+    "sha256":  "6b9f6377c229413aaed4c8c5dedcc5e344e7cb9820bebf462bd48a241614f16e",
+    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.5",
+    "patchNotes":  "Four-button pie menu: RoweMod up, Replay right, Emotes down, and Vehicle Tuning left. Added Restore Game Outfit for native clothing and material restoration. Vehicle tuning keeps its presets inside RoweMod. Added emote looping and an independent boombox with volume, directional audio, distance falloff, and the last five completed songs with cache cleanup. Added replay prop/media integration, coping and transition controls, and landing-prediction visualization. Added an extended replay-capacity option for higher physics rates and raised the replay camera-light limit to 50,000. Included peg-spark visibility fixes and replay diagnostics. TV playback and opt-in multiplayer media are experimental: TV may still show no video frame, and two-client synchronization is not yet verified. The new pie layout, outfit reset, and replay/media behavior still need fresh in-game testing.",
     "requiredGameVersion":  ""
 }

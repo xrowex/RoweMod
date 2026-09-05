@@ -93,11 +93,9 @@ namespace rowemod.Mods
                     Log.Warning("PumpSystem component is not initialized.");
                 }
 
-                if (grindMagnetZEM != null)
-                {
-                    grindMagnetZEM._alignAssist = physics.grindAlignAssist;
-                    grindMagnetZEM._forceMult = physics.grindAssistStrength;
-                }
+                CopingFinderControl.Apply();
+                TransitionSettingsControl.Apply();
+                PredictionSystemsControl.ApplyAll();
 
             }
 
@@ -496,7 +494,24 @@ namespace rowemod.Mods
             float rate = float.IsFinite(physics.physicsStepRate) && physics.physicsStepRate > 0f
                 ? physics.physicsStepRate
                 : GamePhysicsRate;
-            rate = Mathf.Round(Mathf.Clamp(rate, 30f, 250f));
+            float maximumRate = physics.allowHighPhysicsRateWithExtendedReplay
+                ? 250f
+                : Mathf.Max(30f, GamePhysicsRate);
+            rate = Mathf.Round(Mathf.Clamp(rate, 30f, maximumRate));
+
+            if (rate > GamePhysicsRate &&
+                !ReplayCapacityController.TryPreserveDuration(GamePhysicsRate, rate))
+            {
+                Log.Warning(
+                    $"[Physics] {rate:0} Hz was not applied because the native replay buffer " +
+                    "could not be extended safely. Falling back to the game rate.");
+                rate = GamePhysicsRate;
+            }
+            else if (rate <= GamePhysicsRate)
+            {
+                ReplayCapacityController.RestoreNativeRate();
+            }
+
             physics.physicsStepRate = rate;
             float step = 1f / rate;
             if (!Mathf.Approximately(Time.fixedDeltaTime, step))
@@ -512,6 +527,7 @@ namespace rowemod.Mods
                 return;
 
             Time.fixedDeltaTime = _originalFixedDeltaTime;
+            ReplayCapacityController.RestoreNativeRate();
             _physicsStepBaselineCaptured = false;
         }
 

@@ -31,6 +31,7 @@ namespace rowemod.Mods
         private const int OverlayWindowId = 537219;
         private const int MaximumCustomKeys = 2048;
         private const float KeyTimeEpsilon = 0.0085f;
+        public const float MaximumIntensity = 50000f;
 
         private enum LensTrack
         {
@@ -486,7 +487,7 @@ namespace rowemod.Mods
             float intensity = settings.cameraLightIntensity;
             // HDRP receives this as candela. Keep the normal default modest, but
             // allow enough headroom for dark HDRI/night maps without editing config files.
-            Menu.ModernSlider("Intensity", ref intensity, 0f, 1000f, controlPrefix + "intensity");
+            Menu.ModernSlider("Intensity", ref intensity, 0f, MaximumIntensity, controlPrefix + "intensity");
             changed |= !Mathf.Approximately(intensity, settings.cameraLightIntensity);
             settings.cameraLightIntensity = intensity;
 

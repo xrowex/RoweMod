@@ -74,6 +74,12 @@ namespace rowemod.Mods
         private static Vector2 _slotScroll;
         private static Vector2 _contentScroll;
         private static Vector2 _presetScroll;
+        private static bool _nativeRestoreRunning;
+        private static string _nativeRestoreStatus =
+            "Restore Game Outfit removes RoweMod model and material overrides and re-equips the current in-game outfit.";
+
+        public static bool NativeRestoreRunning => _nativeRestoreRunning;
+        public static string NativeRestoreStatus => _nativeRestoreStatus;
 
         public static void ResetTabState()
         {
@@ -148,6 +154,19 @@ namespace rowemod.Mods
 
             GUILayout.Space(8f);
             BeginPane("Presets", "Save or load character model/material combinations.");
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = !_nativeRestoreRunning;
+            if (SecondaryButton(
+                    _nativeRestoreRunning ? "Restoring Game Outfit..." : "Restore Game Outfit",
+                    GUILayout.Width(190f),
+                    GUILayout.Height(28f)))
+            {
+                Config.ResetCharacterTab();
+                Config.Save();
+            }
+            GUI.enabled = previousEnabled;
+            GUILayout.Label(_nativeRestoreStatus, UiMutedWrappedStyle);
+            GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
             _newPresetName = GUILayout.TextField(
                 _newPresetName,
@@ -302,6 +321,126 @@ namespace rowemod.Mods
             // Apply to both characters if they exist
             ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
             ApplyToCharacter(Memory.gamePlayer, "GamePlayer");
+        }
+
+        public static void RestoreNativeOutfitFromGameSelection()
+        {
+            if (_nativeRestoreRunning)
+                return;
+
+            _nativeRestoreRunning = true;
+            _nativeRestoreStatus = "Restoring the current game outfit...";
+            MelonCoroutines.Start(RestoreNativeOutfitRoutine());
+        }
+
+        private static IEnumerator RestoreNativeOutfitRoutine()
+        {
+            var managers = new List<CustomCharacterManager>();
+            var managerIds = new HashSet<int>();
+
+            void AddLocalManager(GameObject root, string label)
+            {
+                if (root == null)
+                    return;
+
+                CustomCharacterManager manager = root.GetComponentInChildren<CustomCharacterManager>(true);
+                if (manager == null || !managerIds.Add(manager.GetInstanceID()))
+                    return;
+
+                try
+                {
+                    if (!manager.IsLocalCharacterManager)
+                    {
+                        Log.Msg($"[CharacterReset] Skipped non-local {label} manager '{manager.name}'.");
+                        return;
+                    }
+                }
+                catch
+                {
+                    // These roots are populated only by local spawn/menu events. Older game
+                    // builds may not expose IsLocalCharacterManager reliably.
+                }
+
+                managers.Add(manager);
+            }
+
+            AddLocalManager(Memory.menuPlayer, "menu");
+            AddLocalManager(Memory.gamePlayer, "gameplay");
+            AddLocalManager(Memory.rMbCharacter, "active rider");
+
+            int initialized = 0;
+            int equipped = 0;
+            try
+            {
+                if (managers.Count == 0)
+                {
+                    _nativeRestoreStatus = "No local character is ready. Enter the menu or a gameplay map and try again.";
+                    Log.Warning("[CharacterReset] No local CustomCharacterManager was available.");
+                    yield break;
+                }
+
+                foreach (CustomCharacterManager manager in managers)
+                {
+                    if (manager == null)
+                        continue;
+                    try
+                    {
+                        manager.InitCharacterData();
+                        initialized++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[CharacterReset] InitCharacterData failed on {manager.name}: {ex.Message}");
+                    }
+                }
+
+                // Let native character data and addressable callbacks settle before the
+                // explicit equip pass replaces RoweMod's live slot objects/materials.
+                yield return new WaitForEndOfFrame();
+
+                foreach (CustomCharacterManager manager in managers)
+                {
+                    if (manager == null)
+                        continue;
+                    try
+                    {
+                        manager.EquipData();
+                        equipped++;
+                        Log.Msg($"[CharacterReset] Re-equipped native outfit data on {manager.name}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[CharacterReset] EquipData failed on {manager.name}: {ex.Message}");
+                    }
+                }
+
+                yield return new WaitForSeconds(0.35f);
+                if (Memory.rMbCharacter != null)
+                    Memory.FindObjects(Memory.rMbCharacter);
+
+                // ReplaceMaterial deliberately uses Unload(false) while its material is live.
+                // After native EquipData replaces those renderers, this releases only assets
+                // that no longer have a scene reference.
+                AsyncOperation unload = Resources.UnloadUnusedAssets();
+                if (unload != null)
+                    yield return unload;
+
+                if (equipped > 0)
+                {
+                    _nativeRestoreStatus =
+                        $"Restored the current game outfit on {equipped} local character" +
+                        (equipped == 1 ? "." : "s.");
+                    Log.Msg($"[CharacterReset] Complete: managers={managers.Count}, initialized={initialized}, equipped={equipped}.");
+                }
+                else
+                {
+                    _nativeRestoreStatus = "The game outfit could not be re-equipped. Check the MelonLoader log.";
+                }
+            }
+            finally
+            {
+                _nativeRestoreRunning = false;
+            }
         }
 
 

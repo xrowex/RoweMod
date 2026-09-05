@@ -702,6 +702,14 @@ namespace rowemod.Utils
                         ownedBundleName,
                         "rowemod_peg_sparks",
                         StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        ownedBundleName,
+                        "rowemod_native_boombox",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(
+                        ownedBundleName,
+                        "rowemod_video_tv",
+                        StringComparison.OrdinalIgnoreCase) ||
                     ownedBundleName.StartsWith(
                         "rowemod_hdri_",
                         StringComparison.OrdinalIgnoreCase))

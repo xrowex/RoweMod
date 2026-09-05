@@ -415,6 +415,7 @@ namespace rowemod
         }
 
         public static float ActiveContentWidth => GetContentWidth();
+        internal static float ActiveScrollOffset => scrollOffset;
 
         private static Rect GetContentVisibleRect()
         {

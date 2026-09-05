@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppMashBox.Addons.ContentManagment;
 using MelonLoader;
 using GameReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
@@ -40,26 +39,6 @@ namespace rowemod.Mods
         // near the local BMX.  Keep the effect physically attached to the matching local peg
         // in that case instead of trusting a point that leaves sparks on the rail or map.
         private const float MaxNativePointDistanceFromPeg = 1.25f;
-        private static readonly string[] SparkColorProperties =
-        {
-            "Spark Color",
-            "Sparks Color",
-            "Spark Colour",
-            "Sparks Colour",
-            "Color",
-            "Colour"
-        };
-        private static readonly string[] SparkGradientProperties =
-        {
-            "Spark Color Gradient",
-            "Sparks Color Gradient",
-            "Spark Colour Gradient",
-            "Sparks Colour Gradient",
-            "Color Gradient"
-        };
-        private static readonly Vector4 HotOrangeSparkColor =
-            new Vector4(2.5f, 0.55f, 0.02f, 1f);
-        private static Gradient _hotOrangeGradient;
         private static readonly PegRuntime[] Runtimes =
         {
             new PegRuntime("Front Right"),
@@ -67,6 +46,7 @@ namespace rowemod.Mods
             new PegRuntime("Rear Left"),
             new PegRuntime("Rear Right")
         };
+        private static readonly PegRuntime EmoteBurstRuntime = new PegRuntime("Emote Burst");
         private static readonly Transform[] PegAnchors = new Transform[PegCount];
         private static readonly bool[] LoggedBadNativePoint = new bool[PegCount];
 
@@ -300,6 +280,7 @@ namespace rowemod.Mods
 
             for (int i = 0; i < Runtimes.Length; i++)
                 Runtimes[i].DestroyRig();
+            EmoteBurstRuntime.DestroyRig();
 
             _rigPrefab = null;
             _localRoot = null;
@@ -317,6 +298,7 @@ namespace rowemod.Mods
 
         public static void Update()
         {
+            EmoteBurstRuntime.UpdateTrail(Time.unscaledTime);
             if (_previewUntil > 0f)
             {
                 UpdatePreview();
@@ -325,6 +307,35 @@ namespace rowemod.Mods
 
             if (_replayActive)
                 UpdateReplayPlayback();
+        }
+
+        public static bool PlayEmoteBurst(Vector3 position, Vector3 direction)
+        {
+            if (!EnsureRigs() || _rigPrefab == null)
+                return false;
+
+            if (EmoteBurstRuntime.Rig == null)
+                EmoteBurstRuntime.CreateRig(_rigPrefab);
+            if (EmoteBurstRuntime.Impact == null)
+                return false;
+
+            PegSparksSettings source = Config.pegSparksSettings ?? new PegSparksSettings();
+            var burst = new PegSparksSettings
+            {
+                enabled = true,
+                intensity = Mathf.Max(1.5f, source.intensity),
+                impactBursts = true,
+                impactAmount = Mathf.Max(1.35f, source.impactAmount),
+                sparkSize = Mathf.Max(1f, source.sparkSize),
+                sparkLifetime = Mathf.Max(0.8f, source.sparkLifetime),
+                sparkSpeed = Mathf.Max(1.2f, source.sparkSpeed),
+                chingEnabled = false
+            };
+
+            Vector3 tangent = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
+            EmoteBurstRuntime.PlayImpact(position, Vector3.up, tangent, burst);
+            Log.Msg($"[PegSparks] Fired authored emote burst at {position}.");
+            return true;
         }
 
         public static void FixedUpdate()
@@ -1025,6 +1036,12 @@ namespace rowemod.Mods
                 Transform impact = Rig.transform.Find("Impact");
                 Continuous = continuous != null ? continuous.GetComponent<VisualEffect>() : null;
                 Impact = impact != null ? impact.GetComponent<VisualEffect>() : null;
+                if (Continuous == null || Impact == null)
+                {
+                    Log.Warning(
+                        $"[PegSparks] {Name} VFX rig is incomplete: " +
+                        $"continuous={Continuous != null}, impact={Impact != null}.");
+                }
                 if (Continuous != null)
                 {
                     // The graph renderer is a separate component from VisualEffect.  Keep it
@@ -1039,12 +1056,16 @@ namespace rowemod.Mods
 
                 if (Impact != null)
                 {
+                    Renderer impactRenderer = Impact.GetComponent<Renderer>();
+                    if (impactRenderer != null)
+                        impactRenderer.enabled = true;
                     Impact.Stop();
                     Impact.enabled = false;
                 }
 
-                SetSparkColor(Continuous);
-                SetSparkColor(Impact);
+                // Preserve the bundle's authored HDR gradients. Their values deliberately reach
+                // far above 1.0 to drive the spark glow; replacing them with ordinary UI colors
+                // makes the transparent VFX output appear effectively invisible in HDRP.
                 Ching = Impact != null
                     ? Impact.gameObject.GetComponent<AudioSource>() ??
                       Impact.gameObject.AddComponent<AudioSource>()
@@ -1061,6 +1082,8 @@ namespace rowemod.Mods
                 // Keep the rig alive for later local peg updates, but leave every effect
                 // explicitly disabled until UpdateContinuous or PlayImpact requests it.
                 Rig.SetActive(true);
+                LogRendererState(Continuous, "continuous");
+                LogRendererState(Impact, "impact");
             }
 
             public void UpdateContinuous(
@@ -1080,7 +1103,12 @@ namespace rowemod.Mods
                 if (!_continuousPlaying)
                 {
                     Continuous.enabled = true;
+                    Continuous.pause = false;
                     Continuous.Reinit();
+                    // Send the graph's authored event explicitly. Play() normally resolves
+                    // the same event, but the explicit event is reliable for VFX components
+                    // instantiated disabled from an AssetBundle in IL2CPP builds.
+                    Continuous.SendEvent("OnPlay");
                     Continuous.Play();
                     _continuousPlaying = true;
                 }
@@ -1099,8 +1127,13 @@ namespace rowemod.Mods
 
                 SetTransform(Impact.transform, position, normal, tangent);
                 SetVisualSettings(Impact, settings, true);
+                Renderer impactRenderer = Impact.GetComponent<Renderer>();
+                if (impactRenderer != null)
+                    impactRenderer.enabled = true;
                 Impact.enabled = true;
+                Impact.pause = false;
                 Impact.Reinit();
+                Impact.SendEvent("OnPlay");
                 Impact.Play();
                 ImpactEndTime = Time.unscaledTime +
                                 Mathf.Max(0.25f, settings.sparkLifetime + 0.12f);
@@ -1209,54 +1242,30 @@ namespace rowemod.Mods
                 transform.rotation = Quaternion.LookRotation(tangent, normal);
             }
 
-            private static void SetSparkColor(VisualEffect effect)
+            private static void LogRendererState(VisualEffect effect, string role)
             {
                 if (effect == null)
                     return;
 
-                for (int i = 0; i < SparkGradientProperties.Length; i++)
+                Renderer renderer = effect.GetComponent<Renderer>();
+                if (renderer == null)
                 {
-                    string propertyName = SparkGradientProperties[i];
-                    if (!effect.HasGradient(propertyName))
-                        continue;
-
-                    effect.SetGradient(propertyName, GetHotOrangeGradient());
+                    Log.Warning($"[PegSparks] Authored {role} graph has no VFX renderer.");
                     return;
                 }
 
-                for (int i = 0; i < SparkColorProperties.Length; i++)
+                string materialState = "no output material";
+                Material material = renderer.sharedMaterial;
+                if (material != null)
                 {
-                    string propertyName = SparkColorProperties[i];
-                    if (!effect.HasVector4(propertyName))
-                        continue;
-
-                    effect.SetVector4(propertyName, HotOrangeSparkColor);
-                    return;
+                    Shader shader = material.shader;
+                    materialState = shader != null
+                        ? $"shader='{shader.name}', supported={shader.isSupported}, queue={material.renderQueue}"
+                        : "output shader is missing";
                 }
-            }
 
-            private static Gradient GetHotOrangeGradient()
-            {
-                if (_hotOrangeGradient != null)
-                    return _hotOrangeGradient;
-
-                _hotOrangeGradient = new Gradient();
-                var colors = new Il2CppStructArray<GradientColorKey>(
-                    new[]
-                    {
-                        new GradientColorKey(new Color(2.5f, 0.65f, 0.03f), 0f),
-                        new GradientColorKey(new Color(1f, 0.24f, 0.01f), 0.35f),
-                        new GradientColorKey(new Color(0.35f, 0.015f, 0f), 1f)
-                    });
-                var alpha = new Il2CppStructArray<GradientAlphaKey>(
-                    new[]
-                    {
-                        new GradientAlphaKey(1f, 0f),
-                        new GradientAlphaKey(1f, 0.55f),
-                        new GradientAlphaKey(0f, 1f)
-                    });
-                _hotOrangeGradient.SetKeys(colors, alpha);
-                return _hotOrangeGradient;
+                Log.Msg($"[PegSparks] Authored {role} renderer ready: " +
+                        $"layer={effect.gameObject.layer}, enabled={renderer.enabled}, {materialState}.");
             }
 
             private static void SetVisualSettings(
@@ -1264,6 +1273,14 @@ namespace rowemod.Mods
                 PegSparksSettings settings,
                 bool impact)
             {
+                // These VFX Graphs use exposed fixed bounds. The authored 5 m box is
+                // reported as culled after the prefab is moved from bundle space to a peg,
+                // even while particles are alive. A bounded 40 m box keeps the four pooled,
+                // local-only effects visible without disabling VFX culling globally.
+                if (effect.HasVector3("Bounds_center"))
+                    effect.SetVector3("Bounds_center", Vector3.zero);
+                if (effect.HasVector3("Bounds_size"))
+                    effect.SetVector3("Bounds_size", new Vector3(40f, 40f, 40f));
                 if (effect.HasFloat("Sparks Particle Spawn Rate"))
                     effect.SetFloat("Sparks Particle Spawn Rate", 180f * settings.intensity);
                 if (effect.HasVector2("Spark Particle Size"))

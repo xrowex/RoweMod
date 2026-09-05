@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +22,7 @@ namespace rowemod
         public float gravity;
         public bool useCustomPhysicsStepRate;
         public float physicsStepRate;
+        public bool allowHighPhysicsRateWithExtendedReplay;
         public float smallHopForce;
         public float pumpForce;
         public float steerDamp;
@@ -45,8 +46,102 @@ namespace rowemod
         public float bmxMaxSpeed;
         public bool grindAlignAssist;
         public float grindAssistStrength;
+        public bool copingFinderTuningEnabled;
+        public bool copingFinderMagnetEnabled;
+        public bool copingFinderUserAlignment;
+        public float copingFinderSearchRange;
+        public float copingFinderRotation;
+        public bool transitionTuningEnabled;
+        public float transitionAcceptableSlope;
+        public float transitionScanRadius;
+        public float transitionScanRadiusPerVelocityMin;
+        public float transitionScanRadiusPerVelocityMax;
+        public int transitionHorizontalRays;
+        public int transitionVerticalRays;
+        public float transitionMinimumYDot;
+        public bool transitionRunUnderScanner;
+        public float transitionSecondarySideScannerLength;
+        public float transitionSecondaryUnderScannerLength;
         public float airAngularDrag;
         public float grindPoseLerpSpeed;
+    }
+
+    public class PredictionLabSettings
+    {
+        public bool flightAugmentTuningEnabled;
+        public float flightCorrectionStrength;
+        public float flightForceCap;
+        public float flightNormalPushOff;
+        public float flightMaximumVelocityAdjust;
+        public float flightMinimumAirTime;
+        public float flightMaximumTickTime;
+        public float flightLandingPitch;
+        public bool flightClosestToBody;
+        public bool flightFurthestPoint;
+        public bool flightSteepestAngle;
+        public bool flightDoNotTickIfFalling;
+
+        public bool predictionTuningEnabled;
+        public int predictionSteps = 64;
+        public float predictionPathTimeStep = 0.02f;
+        public float predictionStartYOffset;
+        public float predictionTickInterval = 0.02f;
+        public float predictionCastRadius = 0.25f;
+        public float predictionCastRadiusMin = 0.05f;
+        public int predictionSurfaceNormalRays = 8;
+        public float predictionSurfaceNormalMaxDistance = 2f;
+        public float predictionSurfaceNormalStartOffset = 0.1f;
+        public float predictionSurfaceNormalSpread = 0.3f;
+        public bool predictionPreferPlayerUp;
+        public bool predictionPreferTransitionAngle;
+        public float predictionWantedNormalX;
+        public float predictionWantedNormalY = 1f;
+        public float predictionWantedNormalZ;
+        public float predictionLandingNormalPitch;
+
+        public bool cornerDetectorTuningEnabled;
+        public float cornerDistanceMultiplier = 1f;
+        public float cornerCheckDistance = 1f;
+        public int cornerNumberOfRays = 32;
+        public float cornerFacingDot;
+        public float cornerYNormalThreshold;
+        public float cornerStartUpOffset;
+        public float cornerEdgeCheckMaximum = 1f;
+        public float cornerEdgeStep = 0.1f;
+        public float cornerEdgeProbeOutset;
+        public float cornerEdgeAngleTolerance = 10f;
+        public int cornerMissesAllowed;
+        public float cornerDownTestDistance = 0.1f;
+        public float cornerUpWalkTestDistance = 0.1f;
+        public float cornerInwardTestDistance = 0.1f;
+
+        public bool lipMagnetTuningEnabled;
+        public float lipPowerMultiplier = 1f;
+        public float lipLengthMultiplier = 1f;
+        public float lipNormalPushOff;
+        public float lipMinimumYFromFlightApex;
+        public float lipMinimumDistance;
+        public float lipDistanceBoost;
+        public bool lipAlignmentAssist;
+        public float lipMaximumMagnetVelocity = 10f;
+        public float lipRotation;
+        public bool lipOverrideVertical;
+        public bool lipRunFlightPrediction;
+        public bool lipPreferVerticalAssist;
+        public bool lipAllowNegativePush;
+        public float lipMoveDeltaMultiplier = 1f;
+        public float lipMaximumMoveDelta = 1f;
+
+        public bool visualizationEnabled;
+        public bool visualizationShowArc = true;
+        public bool visualizationShowLandingMarker = true;
+        public bool visualizationShowSurfaceNormal = true;
+        public int visualizationArcSegments = 24;
+        public float visualizationLineWidth = 0.025f;
+        public float visualizationMarkerSize = 0.3f;
+        public float visualizationColorR = 1f;
+        public float visualizationColorG = 0.54f;
+        public float visualizationColorB = 0.3f;
     }
 
     public class MotorTuningConfigEntry
@@ -226,6 +321,13 @@ namespace rowemod
         public float fixedExposure { get; set; }
     }
 
+    public class RecentRadioSong
+    {
+        public string title { get; set; } = string.Empty;
+        public string url { get; set; } = string.Empty;
+        public string videoId { get; set; } = string.Empty;
+    }
+
     public class ReplaySettings
     {
         public int cameraLabVersion { get; set; } = 1;
@@ -287,6 +389,11 @@ namespace rowemod
         public float cameraLightShadowNormalBias { get; set; } = 0.4f;
         public float cameraLightShadowNearPlane { get; set; } = 0.2f;
         public bool replayCameraNoCollision { get; set; }
+        public float radioVolume { get; set; } = 0.85f;
+        // Opt-in because receiving a shared station may download media locally. Both
+        // multiplayer clients must run a compatible RoweMod build for this to appear.
+        public bool multiplayerMediaEnabled { get; set; }
+        public List<RecentRadioSong> recentRadioSongs { get; set; } = new List<RecentRadioSong>();
     }
 
     /// <summary>
@@ -462,6 +569,7 @@ namespace rowemod
             gravity = 12.5f,
             useCustomPhysicsStepRate = false,
             physicsStepRate = 0f,
+            allowHighPhysicsRateWithExtendedReplay = false,
             smallHopForce = 4.2f,
             pumpForce = 1.5f,
             steerDamp = 5.0f,
@@ -484,6 +592,22 @@ namespace rowemod
             bmxMaxSpeed = 7.5f,
             grindAlignAssist = false,
             grindAssistStrength = 0.5f,
+            copingFinderTuningEnabled = false,
+            copingFinderMagnetEnabled = true,
+            copingFinderUserAlignment = true,
+            copingFinderSearchRange = 1f,
+            copingFinderRotation = 0f,
+            transitionTuningEnabled = false,
+            transitionAcceptableSlope = 45f,
+            transitionScanRadius = 1f,
+            transitionScanRadiusPerVelocityMin = 0f,
+            transitionScanRadiusPerVelocityMax = 0f,
+            transitionHorizontalRays = 8,
+            transitionVerticalRays = 8,
+            transitionMinimumYDot = 0f,
+            transitionRunUnderScanner = false,
+            transitionSecondarySideScannerLength = 0f,
+            transitionSecondaryUnderScannerLength = 0f,
             airAngularDrag = 2.75f,
             grindPoseLerpSpeed = 2f
         };
@@ -586,6 +710,7 @@ namespace rowemod
         public static BikeOnlyStanceSettings bikeOnlyStanceSettings = new BikeOnlyStanceSettings();
         public static ManualIkPoseSettings manualIkPoseSettings = new ManualIkPoseSettings();
         public static TrickAnimationDebugSettings trickAnimationDebugSettings = new TrickAnimationDebugSettings();
+        public static PredictionLabSettings predictionLabSettings = new PredictionLabSettings();
         public static bool disclaimerAccepted = false;
         public static bool autoSkipIntro = true;
 
@@ -611,6 +736,7 @@ namespace rowemod
             public BikeOnlyStanceSettings bikeOnlyStanceSettingsData { get; set; }
             public ManualIkPoseSettings manualIkPoseSettingsData { get; set; }
             public TrickAnimationDebugSettings trickAnimationDebugSettingsData { get; set; }
+            public PredictionLabSettings predictionLabSettingsData { get; set; }
             public bool disclaimerAccepted { get; set; }
             public bool autoSkipIntro { get; set; }
         }
@@ -734,6 +860,7 @@ namespace rowemod
                     bikeOnlyStanceSettingsData = bikeOnlyStanceSettings,
                     manualIkPoseSettingsData = manualIkPoseSettings,
                     trickAnimationDebugSettingsData = trickAnimationDebugSettings,
+                    predictionLabSettingsData = predictionLabSettings,
                     disclaimerAccepted = disclaimerAccepted,
                     autoSkipIntro = autoSkipIntro
                 }, Formatting.Indented);
@@ -796,6 +923,8 @@ namespace rowemod
                 jsonContent.IndexOf("\"bikeOnlyStanceVersion\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasTrickAnimationDebugSettings =
                 jsonContent.IndexOf("\"trickAnimationDebugSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasPredictionLabSettings =
+                jsonContent.IndexOf("\"predictionLabSettingsData\"", StringComparison.OrdinalIgnoreCase) >= 0;
             bool hasGrindInputMap =
                 jsonContent.IndexOf("\"grindInputMap\"", StringComparison.OrdinalIgnoreCase) >= 0;
             ConfigData jsonData = JsonConvert.DeserializeObject<ConfigData>(jsonContent);
@@ -930,6 +1059,7 @@ namespace rowemod
                 Log.Msg("[BikeOnlyStance] Migrated bike-only stance to enabled; hold LS switching restored.");
             }
             trickAnimationDebugSettings = jsonData.trickAnimationDebugSettingsData ?? new TrickAnimationDebugSettings();
+            predictionLabSettings = jsonData.predictionLabSettingsData ?? new PredictionLabSettings();
             if (trickAnimationDebugSettings.overrides == null)
             {
                 trickAnimationDebugSettings.overrides = new Dictionary<string, TrickAnimationOverride>();
@@ -969,6 +1099,7 @@ namespace rowemod
                 !hasManualIkPoseSettings ||
                 migratedBikeOnlyStanceEnabled ||
                 !hasTrickAnimationDebugSettings ||
+                !hasPredictionLabSettings ||
                 !hasGrindInputMap ||
                 !hasMenuScale || !hasMenuDesignVersion || !hasHostPlayerLimit)
             {
@@ -1018,7 +1149,11 @@ namespace rowemod
             settings.replayFramingMode = Math.Max(0, Math.Min(2, settings.replayFramingMode));
             settings.replayMatteOpacity = Clamp01OrDefault(settings.replayMatteOpacity, 1f);
             settings.activeReplayLensPreset ??= string.Empty;
-            settings.cameraLightIntensity = ClampFinite(settings.cameraLightIntensity, 0f, 1000f, 20f);
+            settings.cameraLightIntensity = ClampFinite(
+                settings.cameraLightIntensity,
+                0f,
+                ReplayCameraLight.MaximumIntensity,
+                20f);
             settings.cameraLightRange = ClampFinite(settings.cameraLightRange, 1f, 50f, 14f);
             settings.cameraLightSpotAngle = ClampFinite(settings.cameraLightSpotAngle, 10f, 179f, 75f);
             settings.cameraLightColorR = Clamp01OrDefault(settings.cameraLightColorR, 1f);
@@ -1036,6 +1171,21 @@ namespace rowemod
             settings.cameraLightShadowBias = ClampFinite(settings.cameraLightShadowBias, 0f, 2f, 0.05f);
             settings.cameraLightShadowNormalBias = ClampFinite(settings.cameraLightShadowNormalBias, 0f, 3f, 0.4f);
             settings.cameraLightShadowNearPlane = ClampFinite(settings.cameraLightShadowNearPlane, 0.01f, 10f, 0.2f);
+            settings.radioVolume = Clamp01OrDefault(settings.radioVolume, 0.85f);
+            settings.recentRadioSongs ??= new List<RecentRadioSong>();
+            settings.recentRadioSongs = settings.recentRadioSongs
+                .Where(song => song != null &&
+                               !string.IsNullOrWhiteSpace(song.title) &&
+                               !string.IsNullOrWhiteSpace(song.url))
+                .GroupBy(song => song.url.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => new RecentRadioSong
+                {
+                    title = group.First().title.Trim(),
+                    url = group.Key,
+                    videoId = (group.First().videoId ?? string.Empty).Trim()
+                })
+                .Take(5)
+                .ToList();
         }
 
         private static void NormalizeManualIkPoseSettings(ManualIkPoseSettings settings)
@@ -1193,6 +1343,13 @@ namespace rowemod
 // Reset physics tab settings to defaults
         public static void ResetPhysicsTab()
         {
+            if (physics.copingFinderTuningEnabled)
+                CopingFinderControl.RestoreGameValues();
+            if (physics.transitionTuningEnabled)
+                TransitionSettingsControl.RestoreGameValues();
+            PredictionSystemsControl.RestoreAllGameValues();
+            predictionLabSettings = new PredictionLabSettings();
+
             float grindPoseLerpSpeed = physics.grindPoseLerpSpeed > 0f
                 ? physics.grindPoseLerpSpeed
                 : 2f;
@@ -1209,6 +1366,7 @@ namespace rowemod
                 gravity = 12.5f,
                 useCustomPhysicsStepRate = false,
                 physicsStepRate = 0f,
+                allowHighPhysicsRateWithExtendedReplay = false,
                 smallHopForce = 4.2f,
                 pumpForce = 1.5f,
                 steerDamp = 5.0f,
@@ -1231,6 +1389,22 @@ namespace rowemod
                 bmxMaxSpeed = 7.5f,
                 grindAlignAssist = false,
                 grindAssistStrength = 0.5f,
+                copingFinderTuningEnabled = false,
+                copingFinderMagnetEnabled = true,
+                copingFinderUserAlignment = true,
+                copingFinderSearchRange = 1f,
+                copingFinderRotation = 0f,
+                transitionTuningEnabled = false,
+                transitionAcceptableSlope = 45f,
+                transitionScanRadius = 1f,
+                transitionScanRadiusPerVelocityMin = 0f,
+                transitionScanRadiusPerVelocityMax = 0f,
+                transitionHorizontalRays = 8,
+                transitionVerticalRays = 8,
+                transitionMinimumYDot = 0f,
+                transitionRunUnderScanner = false,
+                transitionSecondarySideScannerLength = 0f,
+                transitionSecondaryUnderScannerLength = 0f,
                 airAngularDrag = 2.75f,
                 grindPoseLerpSpeed = grindPoseLerpSpeed
             };
@@ -1238,27 +1412,10 @@ namespace rowemod
             motorTuning = new Dictionary<string, MotorTuningConfigEntry>();
         }
 
-        // Reset character tab settings to defaults
-        // Reset character tab settings to defaults
+        // Clear RoweMod overrides, then ask the game's character manager to rebuild
+        // the currently selected native outfit and release unreferenced custom assets.
         public static void ResetCharacterTab()
         {
-            // Load the preset by name
-            var preset = ClothingPreset.Load(Config.character.lastLoadedPresetCharacter);
-            if (preset != null && preset.SlotVisibility != null)
-            {
-                foreach (var slot in preset.SlotVisibility.Keys.ToList())
-                {
-                    Custom.ToggleSlotVisibility(slot, true);
-                }
-
-                Log.Msg($"All SlotVisibility set to true for preset '{preset.Name}'.");
-            }
-            else
-            {
-                Log.Warning("Could not load preset or SlotVisibility dictionary was null.");
-            }
-
-            
             character = new CustomCharacter
             {
                 lastLoadedPresetCharacter = "None",
@@ -1285,10 +1442,9 @@ namespace rowemod
                 eyewearModelPath = null,
                 eyewearMaterialPath = null
             };
-            
-            Memory.roweCharacterManager.InitCharacterData();
-            Memory.roweCharacterManager.InitCharacterData();
+
             Custom.ResetTabState();
+            Custom.RestoreNativeOutfitFromGameSelection();
         }
 
         // Reset bike tab settings to defaults

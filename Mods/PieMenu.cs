@@ -33,13 +33,9 @@ namespace rowemod.Mods
         private static readonly PieEntry[] Entries =
         {
             new PieEntry("RoweMod", "rowemod", new Vector2(0f, -1f)),
-            new PieEntry("Vehicle Tuning", "vehicle_tuning", new Vector2(0.707f, -0.707f)),
             new PieEntry("Replay", "extra_3", new Vector2(1f, 0f)),
-            new PieEntry("Extra 4", "extra_4", new Vector2(0.707f, 0.707f)),
-            new PieEntry("Extra 5", "extra_5", new Vector2(0f, 1f)),
-            new PieEntry("Extra 6", "extra_6", new Vector2(-0.707f, 0.707f)),
-            new PieEntry("Extra 7", "extra_7", new Vector2(-1f, 0f)),
-            new PieEntry("Extra 8", "extra_8", new Vector2(-0.707f, -0.707f))
+            new PieEntry("Emotes", "emotes", new Vector2(0f, 1f)),
+            new PieEntry("Vehicle Tuning", "vehicle_tuning", new Vector2(-1f, 0f))
         };
 
         private const float SelectionDeadzone = 0.55f;
@@ -752,10 +748,13 @@ namespace rowemod.Mods
                     break;
                 case "vehicle_tuning":
                     ControllerMenuInput.SuppressNavigationUntilDpadRightRelease();
-                    if (RuntimeVehicleTuneResetSupport.OpenInspector("pie menu"))
-                        Log.Msg("[PieMenu] Opened Vehicle Tuning from pie menu.");
-                    else
-                        Log.Warning("[PieMenu] Vehicle Tuning is unavailable until a supported vehicle is loaded.");
+                    Menu.OpenVehicleTuningPage();
+                    Log.Msg("[PieMenu] Opened RoweMod Vehicle Tuning page from pie menu.");
+                    break;
+                case "emotes":
+                    ControllerMenuInput.SuppressNavigationUntilDpadRightRelease();
+                    Menu.OpenEmotesPage();
+                    Log.Msg("[PieMenu] Opened RoweMod Emotes page from pie menu.");
                     break;
                 case "extra_3":
                     OpenReplayFromPieMenu();
@@ -905,6 +904,7 @@ namespace rowemod.Mods
             Color rim = new Color(0f, 0f, 0f, 0.45f);
             Color glow = Color.Lerp(accentColor, Color.white, 0.28f);
             float center = (WheelTextureSize - 1) * 0.5f;
+            float halfSectorDegrees = 180f / Entries.Length;
 
             for (int y = 0; y < WheelTextureSize; y++)
             {
@@ -927,7 +927,7 @@ namespace rowemod.Mods
                     int entryIndex = GetNearestEntry(direction);
                     float entryAngle = GetEntryGuiAngleDegrees(entryIndex);
                     float angleDelta = Mathf.Abs(Mathf.DeltaAngle(angle, entryAngle));
-                    float dividerDistance = Mathf.Abs(angleDelta - 22.5f);
+                    float dividerDistance = Mathf.Abs(angleDelta - halfSectorDegrees);
                     float dividerBlend = 1f - SmoothStep(WheelDividerHalfDegrees, WheelDividerHalfDegrees + DividerAntialiasDegrees, dividerDistance);
                     float innerRimBlend = 1f - SmoothStep(0f, 2.8f, Mathf.Abs(radius - WheelInnerRadius));
                     float outerRimBlend = 1f - SmoothStep(0f, 2.8f, Mathf.Abs(radius - WheelOuterRadius));
@@ -936,7 +936,8 @@ namespace rowemod.Mods
                     Color pixelColor;
                     if (entryIndex == selectedEntryIndex)
                     {
-                        float edgePulse = Mathf.Clamp01((Mathf.Max(angleDelta, 22.5f - angleDelta) - 17f) / 5.5f);
+                        float edgePulse = Mathf.InverseLerp(0.75f, 1f,
+                            Mathf.Max(angleDelta, halfSectorDegrees - angleDelta) / halfSectorDegrees);
                         float radialPulse = 1f - Mathf.Abs(Mathf.InverseLerp(WheelInnerRadius, WheelOuterRadius, radius) - 0.58f) * 1.8f;
                         float glowBlend = Mathf.Clamp01(Mathf.Max(edgePulse * 0.38f, radialPulse * 0.18f));
                         pixelColor = Color.Lerp(accentColor, glow, glowBlend);

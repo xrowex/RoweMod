@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.3.5
+
+- Reduced the pie menu to four equal sections: RoweMod up, Replay right, Emotes down, and Vehicle Tuning left.
+- Added Restore Game Outfit to clear custom overrides, request the native local outfit, and clean up unused assets while retaining saved presets.
+- Consolidated vehicle tuning in RoweMod with presets and added coping-finder, transition, and prediction controls.
+- Added emote looping, an independent native boombox with directional audio and volume/distance controls, replay prop/media integration, and five completed songs with cache cleanup.
+- Included experimental TV playback and opt-in multiplayer media sharing.
+- Added an extended replay-capacity option for higher physics rates and raised the replay camera-light limit to 50,000.
+- Included peg-spark visibility fixes and replay lifecycle diagnostics.
+
+**Testing note:** compilation and automated checks are separate from in-game acceptance. Fresh checks remain for the pie layout, outfit restoration, replay capacity, and media playback. TV can still produce no visible frame; multiplayer media needs two-client and late-join testing. See `docs/releases/3.3.5.md`.
+
+## 3.3.4
+
+### Peg sparks
+
+- Fixed the Visual Effect Graph bounds that caused live particles to be culled after the spark rig moved from bundle space to a bike peg.
+- Corrected the graph's exposed color properties so sparks use the intended hot-orange lifetime tint instead of retaining the prefab's blue base tint.
+- Explicitly starts the graph's authored `OnPlay` event when an AssetBundle VFX component is enabled in the IL2CPP game.
+
+**Testing note:** the Release build and project checks passed. In game, the preview spawned live particles and the fixed build rendered visible sparks; native peg-contact grinding and the final MelonLoader log were also checked.
+
 ## 3.3.3
 
 ### Tricks and animation workflow
