@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.7
+
+- Fixed hats and busts hiding custom hair, including when clothing changes after hair is equipped. No new toggle is required.
+- Fixed physics-hair equip timeouts by following native coroutine completion instead of the game's unreliable busy flag.
+- Fixed custom hair materials skipping hidden meshes or applying before equipping finishes; newer selections cancel stale material requests.
+- Preserved the existing Hair visibility control, Restore Game Outfit, and other players' outfit settings.
+
+**Testing note:** the custom-hair fix was confirmed working in game by the user. Release build, automated checks, and native-hook audits passed. This release does not change experimental TV or multiplayer-media support.
+
 ## 3.3.6
 
 - Custom emotes automatically download, verify, cache, and load when the Emotes page opens.

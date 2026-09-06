@@ -30,20 +30,20 @@ internal static class Program
         Reset();
         var harmony = new HarmonyLib.Harmony();
         LateNativeHooks.Install(harmony);
-        Check(harmony.Calls.Count == 10, "all ten old early hooks registered");
-        Check(NativeHookSafety.Validated.Count == 10, "every target validated first");
+        Check(harmony.Calls.Count == 12, "all late hooks registered including hair policy and native completion");
+        Check(NativeHookSafety.Validated.Count == 12, "every target validated first");
         Check(LateNativeHooks.ManualIkReady, "IK ready only after all three targets install");
-        Check(harmony.Calls.Select(x => x.DeclaringType.FullName + x.Name).Distinct().Count() == 10, "no duplicate targets");
+        Check(harmony.Calls.Select(x => x.DeclaringType.FullName + x.Name).Distinct().Count() == 12, "no duplicate targets");
         Check(harmony.Calls.Single(x => x.Name == "Tick").GetParameters().Length == 2, "exact landing drive overload selected");
         Check(harmony.Calls.Single(x => x.Name == "SetInputData").GetParameters().Length == 2, "exact grind overload selected");
         LateNativeHooks.Install(harmony);
-        Check(harmony.Calls.Count == 10 && NativeHookSafety.Validated.Count == 10, "registration attempted only once");
+        Check(harmony.Calls.Count == 12 && NativeHookSafety.Validated.Count == 12, "registration attempted only once");
 
         Reset();
         harmony = new HarmonyLib.Harmony();
         NativeHookSafety.FailMethod = "UpdateIK";
         LateNativeHooks.Install(harmony);
-        Check(harmony.Calls.Count == 7 && !harmony.Calls.Any(IsIk), "entire IK group validated before any patch");
+        Check(harmony.Calls.Count == 9 && !harmony.Calls.Any(IsIk), "entire IK group validated before any patch");
         Check(!LateNativeHooks.ManualIkReady, "failed validation leaves IK inactive");
         Check(harmony.Removed.Count == 0, "validation rejection never invokes Unpatch or creates a patcher");
         Check(harmony.Calls.Any(x => x.Name == "RPC_FireBullet"), "later unrelated groups still install");
@@ -63,15 +63,67 @@ internal static class Program
         LateNativeHooks.Install(harmony);
         Check(harmony.Calls.Count == 0 && !LateNativeHooks.ManualIkReady, "unsupported build or native backend installs nothing");
         Check(harmony.Removed.Count == 0, "unsupported build never calls patch or unpatch");
-        Check(Log.Lines.Count(x => x.Contains("group skipped")) == 6, "failure is isolated and reported per group");
+        Check(Log.Lines.Count(x => x.Contains("group skipped")) == 7, "failure is isolated and reported per group");
         LateNativeHooks.Install(harmony);
-        Check(Log.Lines.Count(x => x.Contains("group skipped")) == 6, "failed bootstrap is not retried on frame/update calls");
+        Check(Log.Lines.Count(x => x.Contains("group skipped")) == 7, "failed bootstrap is not retried on frame/update calls");
+        CheckHairPolicy();
+        Reset();
+        harmony = new HarmonyLib.Harmony();
+        NativeHookSafety.FailMethod = "MoveNext";
+        LateNativeHooks.Install(harmony);
+        Check(!harmony.Calls.Any(x => x.Name == "ApplyRenderPolicy"), "hair visibility does not install without reliable completion hook");
         Console.WriteLine($"PASS: {checks} native-registration assertions. No native/game runtime simulated.");
+    }
+
+    private static void CheckHairPolicy()
+    {
+        var meshA = new UnityEngine.Renderer();
+        var meshB = new UnityEngine.Renderer();
+        var item = new UnityEngine.GameObject { Renderers = new[] { meshA, meshB } };
+        var slot = new Il2CppMashBox.Character.Scripts.EquipSlot { _renderDisabled = true, Item = item };
+        Custom.Eligible = true;
+        CustomHairRenderPolicyPatch.Prefix(slot);
+        Check(!slot._renderDisabled, "hide flag masked before native renderer deactivation");
+        Check(!meshA.gameObject.Active && !meshB.gameObject.Active, "prefix leaves renderer writes to native policy");
+        slot._renderDisabled = true; // later hat/bust recalculation writes its source flags again
+        CustomHairRenderPolicyPatch.Prefix(slot);
+        Check(!slot._renderDisabled, "later clothing recalculation masked again");
+        slot._renderDisabled = true;
+        Custom.Eligible = false;
+        CustomHairRenderPolicyPatch.Prefix(slot);
+        Check(slot._renderDisabled, "ineligible slot retains native hide flag (remote, native or hidden hair)");
+        Custom.Eligible = true;
+        slot._renderDisabled = false;
+        CustomHairRenderPolicyPatch.Prefix(slot);
+        Check(!slot._renderDisabled, "unsuppressed item stays unsuppressed");
+        CustomHairRenderPolicyPatch.Prefix(null);
+        var native = new Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80 { __4__this = slot, go = item };
+        Custom.CompletionCount = 0;
+        CustomEquipCompletionPatch.Postfix(native, true);
+        Check(Custom.CompletionCount == 0, "yielding native coroutine is not completed");
+        CustomEquipCompletionPatch.Postfix(native, false);
+        Check(Custom.CompletionCount == 1 && Custom.CompletedSlot == slot && Custom.CompletedSource == item,
+            "actual coroutine return signals completion with source identity");
+        CustomEquipCompletionPatch.Postfix(null, false);
     }
 }
 
 namespace rowemod.Mods
 {
+    internal static class Custom
+    {
+        internal static bool Eligible;
+        internal static int CompletionCount;
+        internal static Il2CppMashBox.Character.Scripts.EquipSlot CompletedSlot;
+        internal static UnityEngine.GameObject CompletedSource;
+        internal static bool ShouldKeepCustomHairVisible(Il2CppMashBox.Character.Scripts.EquipSlot slot) => Eligible;
+        internal static void OnNativeEquipCompleted(Il2CppMashBox.Character.Scripts.EquipSlot slot, UnityEngine.GameObject source)
+        {
+            CompletionCount++;
+            CompletedSlot = slot;
+            CompletedSource = source;
+        }
+    }
     internal static class NativeHookSafety
     {
         internal static bool RejectAll;
@@ -134,7 +186,40 @@ namespace HarmonyLib
             : type.GetMethod(name, BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static, null, parameters, null);
     }
 }
-namespace UnityEngine { internal struct Vector3 { } internal struct Quaternion { } internal class Rigidbody { } }
+namespace UnityEngine
+{
+    internal struct Vector3 { }
+    internal struct Quaternion { }
+    internal class Rigidbody { }
+    internal class Renderer { internal GameObject gameObject = new(); }
+    internal class GameObject
+    {
+        internal bool Active, IncludedInactive;
+        internal Renderer[] Renderers = Array.Empty<Renderer>();
+        internal void SetActive(bool value) => Active = value;
+        internal T[] GetComponentsInChildren<T>(bool includeInactive)
+        {
+            IncludedInactive = includeInactive;
+            return Renderers.Cast<T>().ToArray();
+        }
+    }
+}
+namespace Il2CppMashBox.Character.Scripts
+{
+    internal class EquipSlot
+    {
+        internal bool _renderDisabled;
+        internal UnityEngine.GameObject Item;
+        internal UnityEngine.GameObject GetEquipItem() => Item;
+        public void ApplyRenderPolicy() { }
+        internal class _EnumEquip_d__80
+        {
+            internal EquipSlot __4__this;
+            internal UnityEngine.GameObject go;
+            public bool MoveNext() => false;
+        }
+    }
+}
 namespace Il2CppMashBoxBridge.Common.Interfaces { internal enum HookGrind { Null } }
 namespace Il2CppMashBox.Netorking { internal class FusionBootstrap { public void DrawServerBrowserHostMapControls(float value) { } } }
 namespace Il2CppFusion

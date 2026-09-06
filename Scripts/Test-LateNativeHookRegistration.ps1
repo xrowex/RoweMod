@@ -44,6 +44,8 @@ try {
         @('HostPlayerLimitHostSetupPatch', 'FusionBootstrap', 'DrawServerBrowserHostMapControls', 1),
         @('HostPlayerLimitStartGamePatch', 'NetworkRunner', 'StartGame', 1),
         @('PlayerUserNameTargetSpawnPatch', 'NetworkPlayer', 'Spawned', 0),
+        @('CustomHairRenderPolicyPatch', 'EquipSlot', 'ApplyRenderPolicy', 0),
+        @('CustomEquipCompletionPatch', '_EnumEquip_d__80', 'MoveNext', 0),
         @('ManualIkHumanPatch', 'HumanIK', 'OnAnimatorIK', 1),
         @('ManualIkNativeLimbPatch', 'UnityIKLimb', 'UpdateIK', 1),
         @('ManualIkPedalRigPatch', 'VehicleFootPedalAnimationRig', 'LateUpdate', 0),
@@ -85,6 +87,7 @@ try {
                 $actual = $parameter.ParameterType.FullName.TrimEnd('&')
                 if ($parameter.Name -eq '__instance') { $expected = $target.DeclaringType.FullName }
                 elseif ($parameter.Name -eq '__runOriginal') { $expected = 'System.Boolean' }
+                elseif ($parameter.Name -eq '__result') { $expected = $target.ReturnType.FullName }
                 elseif ($parameter.Name -match '^__(\d+)$') {
                     $index = [int]$Matches[1]
                     if ($index -ge $target.Parameters.Count) { throw "Argument index out of bounds: $($method.FullName)" }

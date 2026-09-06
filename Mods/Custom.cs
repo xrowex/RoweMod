@@ -75,6 +75,17 @@ namespace rowemod.Mods
         private static Vector2 _contentScroll;
         private static Vector2 _presetScroll;
         private static bool _nativeRestoreRunning;
+        private static readonly Dictionary<int, long> _materialRequests = new();
+        private static long _nextMaterialRequest;
+        private static readonly Dictionary<int, GameObject> _customHairItems = new();
+        private sealed class EquipRequest
+        {
+            internal GameObject Source, PreviousItem, Item;
+            internal Slot Slot;
+            internal string Label;
+            internal bool Completed;
+        }
+        private static readonly Dictionary<int, EquipRequest> _equipRequests = new();
         private static string _nativeRestoreStatus =
             "Restore Game Outfit removes RoweMod model and material overrides and re-equips the current in-game outfit.";
 
@@ -83,6 +94,9 @@ namespace rowemod.Mods
 
         public static void ResetTabState()
         {
+            _materialRequests.Clear();
+            _customHairItems.Clear();
+            _equipRequests.Clear();
             foreach (Slot slot in Enum.GetValues(typeof(Slot)))
             {
                 _slotVisibility[slot] = true;
@@ -315,6 +329,8 @@ namespace rowemod.Mods
                 _slotObjects[slot] = slotObject;
 
                 slotObject.SetActive(isVisible);
+                if (slot == Slot.Hair)
+                    slotObject.GetComponent<EquipSlot>()?.ApplyRenderPolicy();
                 Log.Msg($"[ToggleSlotVisibility] {label}: '{fullPath}' set to {isVisible}");
             }
 
@@ -329,6 +345,9 @@ namespace rowemod.Mods
                 return;
 
             _nativeRestoreRunning = true;
+            _materialRequests.Clear();
+            _customHairItems.Clear();
+            _equipRequests.Clear();
             _nativeRestoreStatus = "Restoring the current game outfit...";
             MelonCoroutines.Start(RestoreNativeOutfitRoutine());
         }
@@ -519,6 +538,126 @@ namespace rowemod.Mods
             GUILayout.EndVertical();
         }
 
+        private static EquipSlot FindHairSlot(GameObject character)
+        {
+            if (character == null) return null;
+            var slot = character.transform.Find("Physics Skeleton/HeadGear/Hair_EquipSlot")
+                ?? character.transform.Find("Skeleton/HeadGear/Hair_EquipSlot");
+            return slot == null ? null : slot.GetComponent<EquipSlot>();
+        }
+
+        internal static bool ShouldKeepCustomHairVisible(EquipSlot slot)
+        {
+            if (_nativeRestoreRunning ||
+                string.IsNullOrWhiteSpace(Config.character.hairModelPath) ||
+                (_slotVisibility.TryGetValue(Slot.Hair, out bool visible) && !visible))
+                return false;
+            // Never change remote players, other slots, or the native character's built-in hair.
+            if (slot == null || (slot != FindHairSlot(menuPlayer) && slot != FindHairSlot(gamePlayer)))
+                return false;
+            var item = slot.GetEquipItem();
+            if (item == null) return false;
+            int id = slot.GetInstanceID();
+            if (_customHairItems.TryGetValue(id, out var customItem) && customItem != null && customItem == item)
+                return true;
+            // The native policy runs during equip, BEFORE its coroutine completes.
+            return _equipRequests.TryGetValue(id, out var request) && !request.Completed &&
+                request.Slot == Slot.Hair && item != request.PreviousItem;
+        }
+
+        internal static void OnNativeEquipCompleted(EquipSlot slot, GameObject source)
+        {
+            if (slot == null || !_equipRequests.TryGetValue(slot.GetInstanceID(), out var request) ||
+                request.Completed || source != request.Source)
+                return;
+            request.Completed = true;
+            request.Item = slot.GetEquipItem();
+            if (request.Item == null || request.Item == request.PreviousItem)
+            {
+                Log.Warning($"[CustomEquip] {request.Label}: {request.Slot} coroutine ended without a new equipped item.");
+                return;
+            }
+            if (request.Slot == Slot.Hair)
+                _customHairItems[slot.GetInstanceID()] = request.Item;
+            Log.Msg($"[CustomEquip] {request.Label}: {request.Slot} native coroutine completed; item='{request.Item.name}', busyFlag={slot._isBusyEquipping} (not used as completion signal).");
+            if (request.Slot == Slot.Hair)
+                MelonCoroutines.Start(CheckHairAfterEquip(slot, request.Item));
+        }
+
+        private static IEnumerator CheckHairAfterEquip(EquipSlot slot, GameObject item)
+        {
+            // Diagnostic only: no per-frame visibility enforcement.
+            yield return new WaitForSecondsRealtime(0.5f);
+            if (slot == null || item == null || slot.GetEquipItem() != item) yield break;
+            foreach (var renderer in item.GetComponentsInChildren<Renderer>(true))
+                Log.Msg($"[CustomHair] Settled '{renderer.name}': active={renderer.gameObject.activeInHierarchy}, enabled={renderer.enabled}, forceOff={renderer.forceRenderingOff}, shadows={renderer.shadowCastingMode}, hiddenFlag={slot._renderDisabled}, itemActive={item.activeSelf}, slotActive={slot.gameObject.activeInHierarchy}.");
+        }
+
+        private static IEnumerator ApplyMaterialAfterEquip(EquipSlot equipSlot, Slot slot,
+            Material material, string label, int id, long request)
+        {
+            float deadline = Time.realtimeSinceStartup + 10f;
+            // Equip starts a native coroutine; allow it to enter its busy state first.
+            yield return null;
+            try
+            {
+                while (_materialRequests.TryGetValue(id, out long current) && current == request)
+                {
+                    if (equipSlot == null || material == null) yield break;
+                    bool waiting = false;
+                    try
+                    {
+                        var item = equipSlot.GetEquipItem();
+                        // Some native branches return false without clearing _isBusyEquipping.
+                        // For our requests, wait for the actual native MoveNext(false) signal.
+                        waiting = _equipRequests.TryGetValue(id, out var equipRequest)
+                            ? !equipRequest.Completed
+                            : equipSlot._isBusyEquipping;
+                        if (!waiting && (item == null || (equipRequest != null && item == equipRequest.PreviousItem)))
+                        {
+                            Log.Warning($"[ReplaceMaterial] {label}: {slot} equip produced no new item; material not applied.");
+                            yield break;
+                        }
+                        if (!waiting)
+                        {
+                            var renderers = item.GetComponentsInChildren<Renderer>(true);
+                            int applied = 0;
+                            foreach (var renderer in renderers)
+                            {
+                                if (renderer == null) continue;
+                                renderer.sharedMaterial = material;
+                                applied++;
+                                // Hair packages can have multiple meshes. Other slots retain
+                                // their existing first-renderer material behavior.
+                                if (slot != Slot.Hair) break;
+                            }
+                            if (applied == 0)
+                                Log.Warning($"[ReplaceMaterial] {label}: Equipped {slot} '{item.name}' has no renderers, including inactive children.");
+                            else
+                                Log.Msg($"[ReplaceMaterial] {label}: Applied {slot} material after equip to {applied} renderer(s); nativeHidden={equipSlot._renderDisabled}, customHairOverride={ShouldKeepCustomHairVisible(equipSlot)}.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[ReplaceMaterial] {label}: Failed to apply {slot}: {ex.Message}");
+                        yield break;
+                    }
+                    if (!waiting) yield break;
+                    if (Time.realtimeSinceStartup >= deadline)
+                    {
+                        Log.Warning($"[ReplaceMaterial] {label}: Timed out waiting for {slot} equip; select the material again after the character is ready.");
+                        yield break;
+                    }
+                    yield return null;
+                }
+            }
+            finally
+            {
+                if (_materialRequests.TryGetValue(id, out long current) && current == request)
+                    _materialRequests.Remove(id);
+            }
+        }
+
         public static void ReplaceModel(Slot slot, string newBundlePath)
         {
             if (string.IsNullOrEmpty(newBundlePath))
@@ -588,7 +727,7 @@ namespace rowemod.Mods
                 }
 
                 string fullPath = SlotParentPath + equipSlotName;
-                if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
+                if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes || slot == Slot.Eyewear)
                     fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
 
                 Transform slotTransform = character.transform.Find(fullPath);
@@ -650,8 +789,17 @@ namespace rowemod.Mods
                 
                 
                     
+                _materialRequests.Remove(equipSlot.GetInstanceID());
+                if (slot == Slot.Hair)
+                    _customHairItems.Remove(equipSlot.GetInstanceID());
+                // Register BEFORE Equip: Unity executes its coroutine up to the first yield
+                // synchronously, including the first visibility pass.
+                _equipRequests[equipSlot.GetInstanceID()] = new EquipRequest
+                {
+                    Source = modelObject, PreviousItem = equipSlot.GetEquipItem(), Slot = slot, Label = label
+                };
                 equipSlot.Equip(modelObject);
-                Log.Msg($"[ReplaceModel] {label}: Successfully equipped {slot} model.");
+                Log.Msg($"[ReplaceModel] {label}: Requested {slot} model equip (native setup is asynchronous).");
                 
                 
                 
@@ -724,6 +872,7 @@ namespace rowemod.Mods
             if (assetNames == null || assetNames.Length == 0)
             {
                 Log.Error("[ReplaceMaterial] No assets found in material bundle.");
+                bundle.Unload(false);
                 return;
             }
 
@@ -766,7 +915,7 @@ namespace rowemod.Mods
                 }
                 else
                 {
-                    var prefabRenderer = prefab.GetComponentInChildren<Renderer>();
+                    var prefabRenderer = prefab.GetComponentInChildren<Renderer>(true);
                     if (prefabRenderer == null || prefabRenderer.sharedMaterial == null)
                     {
                         Log.Error($"[ReplaceMaterial] Prefab '{firstAsset}' has no renderer/material to steal.");
@@ -811,7 +960,7 @@ namespace rowemod.Mods
 
                     // Find the slot transform on this character (Physics Skeleton first, then Skeleton)
                     string fullPath = SlotParentPath + equipSlotName;
-                    if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes)
+                    if (slot == Slot.Hat || slot == Slot.Hair || slot == Slot.Eyes || slot == Slot.Eyewear)
                         fullPath = SlotParentPath + "HeadGear/" + equipSlotName;
 
                     Transform slotTransform = character.transform.Find(fullPath);
@@ -838,23 +987,10 @@ namespace rowemod.Mods
                     
                     
                     
-                    var renderer = equipSlot.GetComponentInChildren<Renderer>();
-                    if (renderer == null)
-                    {
-                        Log.Warning($"[ReplaceMaterial] {label}: No renderers under equipped object for {slot}.");
-                        return;
-                    }
-                    if (newMat!=null && renderer!=null)
-                    {
-
-                        renderer.sharedMaterial = newMat;
-                        
-                        Log.Msg($"[ReplaceMaterial] {label}: Applied material to {slot} on renderer.");
-                    }
-                    else
-                    {
-                        Log.Warning($"[ReplaceMaterial] {label}: newMat is null, cannot apply material.");
-                    }
+                    int id = equipSlot.GetInstanceID();
+                    long request = ++_nextMaterialRequest;
+                    _materialRequests[id] = request;
+                    MelonCoroutines.Start(ApplyMaterialAfterEquip(equipSlot, slot, newMat, label, id, request));
                         
                 }
 

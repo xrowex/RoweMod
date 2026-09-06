@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Mods\LateNativeHooks.cs" Link="LateNativeHooks.cs" />
+    <Compile Include="..\..\Mods\CustomHairRenderPolicyPatch.cs" Link="CustomHairRenderPolicyPatch.cs" />
   </ItemGroup>
 </Project>

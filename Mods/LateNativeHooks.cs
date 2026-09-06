@@ -36,6 +36,11 @@ namespace rowemod.Mods
                     typeof(HostPlayerLimitStartGamePatch), typeof(StartGameArgs)));
             InstallGroup(harmony, "Player labels",
                 new Hook(typeof(NetworkPlayer), "Spawned", 0x9F47C0, typeof(PlayerUserNameTargetSpawnPatch)));
+            InstallGroup(harmony, "Custom hair visibility",
+                new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot), "ApplyRenderPolicy", 0x7DE910,
+                    typeof(CustomHairRenderPolicyPatch)),
+                new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80), "MoveNext", 0x7F15C0,
+                    typeof(CustomEquipCompletionPatch)));
             InstallGroup(harmony, "Manual IK",
                 new Hook(typeof(HumanIK), "OnAnimatorIK", 0x2983750, typeof(ManualIkHumanPatch), typeof(int)),
                 new Hook(typeof(UnityIKLimb), "UpdateIK", 0x298C9E0, typeof(ManualIkNativeLimbPatch), typeof(bool)),
@@ -51,7 +56,7 @@ namespace rowemod.Mods
                     typeof(DroneControllerLocalSpawnBulletPatch), typeof(Vector3), typeof(Quaternion), typeof(Vector3)),
                 new Hook(typeof(DroneController), "RPC_FireBullet", 0x90E100,
                     typeof(DroneControllerRpcFireBulletPatch), typeof(Vector3), typeof(Quaternion), typeof(Vector3)));
-            Log.Msg($"[NativeHooks] Late registration complete: {ReadyGroups.Count}/6 feature groups ready. No blanket PatchAll.");
+            Log.Msg($"[NativeHooks] Late registration complete: {ReadyGroups.Count}/7 feature groups ready. No blanket PatchAll.");
         }
 
         private static void InstallGroup(global::HarmonyLib.Harmony harmony, string name, params Hook[] hooks)

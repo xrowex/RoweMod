@@ -1,5 +1,65 @@
 # Native hook registration audit — 2026-08-27
 
+## Custom hair follow-up — 2026-09-06
+
+### Retest correction
+
+The first build loaded its hook but failed visual acceptance. The 10:22–10:29 log
+shows completed static hair with `nativeHidden=True` and repeated ten-second timeouts
+for dreads/slim. The native `EnumEquip.MoveNext` (`0x7F15C0`) sets the busy flag at
+`0x7F178A`, but its return through `0x7F26D8` does not clear that flag. Only the other
+exit path clears it at `0x7F2D2C`. Busy=false was therefore an invalid universal
+completion test. Hat/bust equip registers suppression at `0x7F26B9` or updates the
+source dictionary and recalculates at `0x7F2A10`, after other setup work.
+
+Revision 2 replaces the renderer-reactivation postfix with a prefix that masks the
+local custom Hair slot's `_renderDisabled` BEFORE native deactivation. Source flags
+remain untouched in CharacterFeatureController. Requests are registered before Equip
+starts; pending custom hair is eligible once the newly instantiated item replaces the
+previous one. Actual `MoveNext(false)` completion supplies the slot and original source
+prefab, so stale/different-source callbacks do not finish newer selections. The native
+busy flag is not modified. Native hair replacement and outfit reset remain excluded.
+
+The completion hook and visibility prefix install together or not at all. Current
+registration is 12 targets / 7 groups. Validation: 28 stubbed registration/hook checks,
+15 compiled prefix/postfix signatures, uniqueness of all 17 audited addresses, and a
+Release build. A one-shot diagnostic at 0.5s records hierarchy/renderer/shadow state;
+there is no per-frame visibility enforcement. The user confirmed revision 2 working
+in game before requesting release 3.3.7.
+
+### First build (superseded)
+
+Added `EquipSlot.ApplyRenderPolicy()` at RVA `0x7DE910` to the guarded late registry
+(11 targets, 7 groups). The native method reads `_renderDisabled` and deactivates
+each equipped renderer's GameObject, including inactive children. `CharacterFeatureController`
+combines clothing suppression flags: Eyes=1, Hair=2, Beard=4. A hat or bust can therefore
+hide a valid, successfully equipped hair mesh. The old active-only material lookup then
+mistook the hidden mesh for a missing renderer.
+
+The new postfix restores renderer visibility only for the actual custom hair instance
+RoweMod finished equipping on the local gameplay/menu Hair slot. It does not modify
+clothing flags, other slots, native replacement hair, shadow policy, or remote players.
+There is no new toggle. The existing Hair visibility control and Restore Game Outfit
+still take precedence. Re-equipping hats/busts re-runs the policy automatically.
+
+Material requests now wait for native equip completion, use the equipped instance and
+include inactive children. New model/material requests cancel older material work;
+outfit reset cancels pending work. Hair applies to every hair renderer, while other
+slots retain their first-renderer material behavior.
+
+Validation: Release build, 26 stubbed registration/renderer-policy checks, compiled
+signatures against installed wrappers, and the native uniqueness audit. These do not
+prove in-game playback, equip sequencing, or visuals. In-game acceptance still needed:
+
+1. Equip Beard and dreads on a custom character with a hair-hiding hat and bust.
+2. Change each material and rapidly switch between the two hair models/materials.
+3. Change the hat and bust afterward; custom hair should stay visible.
+4. Hide/show Hair using the existing control; it should remain controllable.
+5. Restore Game Outfit; the game's normal hiding rules must return.
+6. Respawn and check that remote players' hair/outfits were not changed.
+
+The original audit below records the pre-hair baseline.
+
 ## Changes
 
 Removed `HarmonyInstance.PatchAll()` from early initialization and added the assembly's `HarmonyDontPatchAll` attribute. The installed MelonLoader 0.7 binary checks that attribute before its own automatic `PatchAll`, so a second registration path cannot bypass the allowlist. No attributed Harmony patch classes remain.

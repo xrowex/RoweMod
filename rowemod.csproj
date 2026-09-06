@@ -7,9 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<Version>3.3.6</Version>
-		<AssemblyVersion>3.3.6.0</AssemblyVersion>
-		<FileVersion>3.3.6.0</FileVersion>
+		<Version>3.3.7</Version>
+		<AssemblyVersion>3.3.7.0</AssemblyVersion>
+		<FileVersion>3.3.7.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -543,6 +543,7 @@
 		<Compile Include="Mods\HangFiveControl.cs" />
 		<Compile Include="Mods\NativeHookSafety.cs" />
 		<Compile Include="Mods\LateNativeHooks.cs" />
+		<Compile Include="Mods\CustomHairRenderPolicyPatch.cs" />
 		<Compile Include="Mods\TrickMods.cs" />
 		<Compile Include="Mods\TrickPreset.cs" />
 		<Compile Include="Utils\Memory.cs" />

@@ -1,8 +1,8 @@
 {
-    "version":  "3.3.6",
-    "downloadUrl":  "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-    "sha256":  "479ef393168a099fbc45620a7baeb6d4496425098699c2300e3d5cb5c89535af",
-    "notesUrl":  "https://github.com/xrowex/RoweMod/releases/tag/v3.3.6",
-    "patchNotes":  "Custom emote animations now download automatically when you open Emotes. RoweMod verifies and caches the official pack, then refreshes the emote and dance lists without restarting. Existing verified packs work offline. Download status and Refresh Emotes provide progress and retry; failed downloads preserve existing files and clean up temporary files. Includes the four-button pie menu with Replay on the right, native outfit restoration, radio controls, and the riding/replay tools from 3.3.5. Automatic in-game download and playback still need a fresh game test. Custom emotes remain local; TV playback and multiplayer media remain experimental.",
-    "requiredGameVersion":  ""
+  "version": "3.3.7",
+  "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
+  "sha256": "e739853169209bfc96d4e9fc629e4c67522cb031d97b0ab626adc254f3600b68",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.7",
+  "patchNotes": "Fixed hats and busts hiding custom hair, including after changing clothing. No new toggle is required. Fixed physics-hair equip timeouts by detecting native equip completion. Hair materials now apply after equipping and include hidden meshes; changing selections cancels stale material requests. Existing Hair visibility and Restore Game Outfit controls are preserved. The custom-hair fix was confirmed working in game. Automatic emote downloads remain included; experimental TV and multiplayer-media limitations are unchanged.",
+  "requiredGameVersion": ""
 }
