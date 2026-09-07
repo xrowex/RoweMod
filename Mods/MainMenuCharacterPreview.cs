@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace rowemod.Mods
 {
     /// <summary>
-    /// Restores the saved RoweMod clothing preset on the non-networked character
+    /// Discovers and restores the current RoweMod outfit on the non-networked character
     /// displayed by the MainMenu scene. The menu-spawn event is not guaranteed to
     /// arrive after RoweMod has subscribed, so this uses a short, bounded retry
     /// window after MainMenu loads instead of relying on that event alone.
@@ -26,15 +26,18 @@ namespace rowemod.Mods
         private static float _nextResolveTime;
         private static int _resolveAttempts;
         private static int _appliedCharacterId;
-        private static string _appliedPresetName = string.Empty;
         private static GameObject _eventCharacter;
+        private static int _generation;
 
         public static void OnSceneInitialized(string sceneName)
         {
-            Reset();
-
             if (string.Equals(sceneName, MainMenuSceneName, StringComparison.OrdinalIgnoreCase))
+            {
+                Reset();
                 RequestRestore("scene initialized");
+            }
+            else if (!SceneManager.GetSceneByName(MainMenuSceneName).isLoaded)
+                Reset();
         }
 
         public static void NotifyMenuCharacterSpawned(GameObject character)
@@ -42,7 +45,14 @@ namespace rowemod.Mods
             if (character == null)
                 return;
 
-            _eventCharacter = character;
+            GameObject root = FindCharacterRoot(character);
+            if (root != _eventCharacter)
+            {
+                _generation++;
+                _applyRoutineRunning = false;
+            }
+            _eventCharacter = root;
+            if (IsReadyMenuCharacter(root)) Memory.menuPlayer = root;
             RequestRestore("menu character spawned");
         }
 
@@ -50,12 +60,6 @@ namespace rowemod.Mods
         {
             if (!_restoreRequested || _applyRoutineRunning || Time.unscaledTime < _nextResolveTime)
                 return;
-
-            if (!HasSavedPreset())
-            {
-                _restoreRequested = false;
-                return;
-            }
 
             Scene mainMenu = SceneManager.GetSceneByName(MainMenuSceneName);
             if (!mainMenu.IsValid() || !mainMenu.isLoaded)
@@ -68,9 +72,8 @@ namespace rowemod.Mods
             if (menuCharacter != null)
             {
                 int characterId = menuCharacter.GetInstanceID();
-                string presetName = Config.character.lastLoadedPresetCharacter;
-                if (_appliedCharacterId == characterId &&
-                    string.Equals(_appliedPresetName, presetName, StringComparison.Ordinal))
+                Memory.menuPlayer = menuCharacter;
+                if (_appliedCharacterId == characterId)
                 {
                     _restoreRequested = false;
                     return;
@@ -79,7 +82,7 @@ namespace rowemod.Mods
                 Memory.menuPlayer = menuCharacter;
                 _restoreRequested = false;
                 _applyRoutineRunning = true;
-                MelonCoroutines.Start(ApplyPresetWhenReady(menuCharacter, characterId, presetName));
+                MelonCoroutines.Start(ApplyPresetWhenReady(menuCharacter, characterId, _generation, Custom.SelectionRevision));
                 return;
             }
 
@@ -94,28 +97,28 @@ namespace rowemod.Mods
             _nextResolveTime = Time.unscaledTime + RetryIntervalSeconds;
         }
 
-        private static IEnumerator ApplyPresetWhenReady(GameObject menuCharacter, int characterId, string presetName)
+        private static IEnumerator ApplyPresetWhenReady(GameObject menuCharacter, int characterId, int generation, long selectionRevision)
         {
             try
             {
-                yield return new WaitForSeconds(InitialApplyDelaySeconds);
+                yield return new WaitForSecondsRealtime(InitialApplyDelaySeconds);
 
-                if (menuCharacter == null ||
-                    !HasSavedPreset() ||
-                    !string.Equals(Config.character.lastLoadedPresetCharacter, presetName, StringComparison.Ordinal))
+                if (generation != _generation || !IsReadyMenuCharacter(menuCharacter) ||
+                    !SceneManager.GetSceneByName(MainMenuSceneName).isLoaded)
                 {
                     yield break;
                 }
 
                 Memory.menuPlayer = menuCharacter;
-                yield return Custom.LoadPreset(presetName);
+                // A manual selection or Restore Game Outfit during the delay wins.
+                if (Custom.SelectionRevision == selectionRevision)
+                    Custom.RestoreMenuSelection(menuCharacter);
                 _appliedCharacterId = characterId;
-                _appliedPresetName = presetName;
-                Log.Msg($"[MainMenuCharacter] Restored preset '{presetName}' on {menuCharacter.name}.");
+                Log.Msg($"[MainMenuCharacter] Menu character ready: {menuCharacter.name}. Outfit requests target this preview only.");
             }
             finally
             {
-                _applyRoutineRunning = false;
+                if (generation == _generation) _applyRoutineRunning = false;
             }
         }
 
@@ -132,18 +135,6 @@ namespace rowemod.Mods
                     continue;
 
                 CustomCharacterManager manager = root.GetComponentInChildren<CustomCharacterManager>(true);
-                GameObject candidate = FindCharacterRoot(manager != null ? manager.gameObject : null);
-                if (IsReadyMenuCharacter(candidate))
-                    return candidate;
-            }
-
-            // The menu rider can be instantiated before RoweMod finishes subscribing
-            // to game events, or can live under an additive bootstrap scene. Search
-            // loaded runtime managers as a bounded fallback so neither case relies on
-            // receiving LocalMenuHumanSpawned.
-            CustomCharacterManager[] managers = Resources.FindObjectsOfTypeAll<CustomCharacterManager>();
-            foreach (CustomCharacterManager manager in managers)
-            {
                 GameObject candidate = FindCharacterRoot(manager != null ? manager.gameObject : null);
                 if (IsReadyMenuCharacter(candidate))
                     return candidate;
@@ -176,6 +167,7 @@ namespace rowemod.Mods
             return character != null &&
                    character.scene.IsValid() &&
                    character.scene.isLoaded &&
+                   string.Equals(character.scene.name, MainMenuSceneName, StringComparison.OrdinalIgnoreCase) &&
                    HasEquipSlots(character.transform);
         }
 
@@ -186,31 +178,22 @@ namespace rowemod.Mods
                     root.Find("Skeleton/EquipSlot_Body") != null);
         }
 
-        private static bool HasSavedPreset()
-        {
-            return !string.IsNullOrWhiteSpace(Config.character.lastLoadedPresetCharacter) &&
-                   !string.Equals(Config.character.lastLoadedPresetCharacter, "None", StringComparison.OrdinalIgnoreCase);
-        }
-
         private static void RequestRestore(string source)
         {
-            if (!HasSavedPreset())
-                return;
-
             _restoreRequested = true;
             _resolveAttempts = 0;
             _nextResolveTime = Time.unscaledTime + RetryIntervalSeconds;
-            Log.Msg($"[MainMenuCharacter] Queued preset restore from {source}.");
+            Log.Msg($"[MainMenuCharacter] Queued menu character discovery from {source}.");
         }
 
         private static void Reset()
         {
+            _generation++;
             _restoreRequested = false;
             _applyRoutineRunning = false;
             _nextResolveTime = 0f;
             _resolveAttempts = 0;
             _appliedCharacterId = 0;
-            _appliedPresetName = string.Empty;
             _eventCharacter = null;
         }
     }

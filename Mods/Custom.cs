@@ -77,6 +77,7 @@ namespace rowemod.Mods
         private static bool _nativeRestoreRunning;
         private static readonly Dictionary<int, long> _materialRequests = new();
         private static long _nextMaterialRequest;
+        internal static long SelectionRevision { get; private set; }
         private static readonly Dictionary<int, GameObject> _customHairItems = new();
         private sealed class EquipRequest
         {
@@ -94,6 +95,7 @@ namespace rowemod.Mods
 
         public static void ResetTabState()
         {
+            SelectionRevision++;
             _materialRequests.Clear();
             _customHairItems.Clear();
             _equipRequests.Clear();
@@ -279,8 +281,10 @@ namespace rowemod.Mods
 
         private static Dictionary<Slot, GameObject> _slotObjects = new Dictionary<Slot, GameObject>();
 
-        public static void ToggleSlotVisibility(Slot slot, bool isVisible)
+        public static void ToggleSlotVisibility(Slot slot, bool isVisible, GameObject targetCharacter = null)
         {
+            SelectionRevision++;
+            _slotVisibility[slot] = isVisible;
             if (!SlotNameMap.TryGetValue(slot, out string equipSlotName))
             {
                 Log.Error($"[ToggleSlotVisibility] No mapped name found for slot '{slot}'.");
@@ -335,8 +339,12 @@ namespace rowemod.Mods
             }
 
             // Apply to both characters if they exist
-            ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
-            ApplyToCharacter(Memory.gamePlayer, "GamePlayer");
+            if (targetCharacter != null) ApplyToCharacter(targetCharacter, "MenuPlayer");
+            else
+            {
+                ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
+                ApplyToCharacter(Memory.gamePlayer, "GamePlayer");
+            }
         }
 
         public static void RestoreNativeOutfitFromGameSelection()
@@ -658,8 +666,9 @@ namespace rowemod.Mods
             }
         }
 
-        public static void ReplaceModel(Slot slot, string newBundlePath)
+        public static void ReplaceModel(Slot slot, string newBundlePath, GameObject targetCharacter = null, bool autoSelectMaterial = true)
         {
+            SelectionRevision++;
             if (string.IsNullOrEmpty(newBundlePath))
             {
                 Log.Error($"ReplaceModel: newBundlePath is null or empty for slot {slot}.");
@@ -809,19 +818,27 @@ namespace rowemod.Mods
             
             
             // Apply to both characters
-            ApplyToCharacter(menuPlayer, "MenuPlayer");
-            ApplyToCharacter(gamePlayer, "GamePlayer");
+            if (targetCharacter != null) ApplyToCharacter(targetCharacter, "MenuPlayer");
+            else
+            {
+                ApplyToCharacter(menuPlayer, "MenuPlayer");
+                ApplyToCharacter(gamePlayer, "GamePlayer");
+            }
             
                 
             newBundle.Unload(false);
 
-            Menu.currentSlot = slot;
-            OpenMaterialsTabAndAutoSelectFirst(slot);
+            if (autoSelectMaterial)
+            {
+                Menu.currentSlot = slot;
+                OpenMaterialsTabAndAutoSelectFirst(slot);
+            }
         }
 
 
-        public static void ReplaceMaterial(Slot slot, string selectedPath)
+        public static void ReplaceMaterial(Slot slot, string selectedPath, GameObject targetCharacter = null)
         {
+            SelectionRevision++;
             // ---------- 0) Validate ----------
             if (string.IsNullOrEmpty(selectedPath))
             {
@@ -994,8 +1011,12 @@ namespace rowemod.Mods
                         
                 }
 
-                ApplyToCharacter(menuPlayer, "MenuPlayer");
-                ApplyToCharacter(gamePlayer, "GamePlayer");
+                if (targetCharacter != null) ApplyToCharacter(targetCharacter, "MenuPlayer");
+                else
+                {
+                    ApplyToCharacter(menuPlayer, "MenuPlayer");
+                    ApplyToCharacter(gamePlayer, "GamePlayer");
+                }
                 
             
                 // Guard against IL2CPP weirdness on Unload
@@ -1019,7 +1040,7 @@ namespace rowemod.Mods
 
 
 
-        public static void SaveCurrentPreset(string presetName)
+        private static ClothingPreset CaptureCurrentSelection(string presetName)
         {
             ClothingPreset preset = new ClothingPreset { Name = presetName };
 
@@ -1049,7 +1070,40 @@ namespace rowemod.Mods
             preset.MaterialPaths[Slot.Hair] = Config.MakeRelativePath(Config.character.hairMaterialPath);
             preset.MaterialPaths[Slot.Eyes] = Config.MakeRelativePath(Config.character.eyesMaterialPath);
 
-            ClothingPreset.Save(preset);
+            preset.ModelPaths[Slot.Eyewear] = Config.MakeRelativePath(Config.character.eyewearModelPath);
+            preset.MaterialPaths[Slot.Eyewear] = Config.MakeRelativePath(Config.character.eyewearMaterialPath);
+            preset.SlotVisibility = new Dictionary<Slot, bool>(_slotVisibility);
+            return preset;
+        }
+
+        public static void SaveCurrentPreset(string presetName) => ClothingPreset.Save(CaptureCurrentSelection(presetName));
+
+        internal static void RestoreMenuSelection(GameObject target)
+        {
+            if (target == null || _nativeRestoreRunning) return;
+            var preset = CaptureCurrentSelection("Current selection");
+            bool hasPaths = preset.ModelPaths.Values.Concat(preset.MaterialPaths.Values).Any(p => !string.IsNullOrWhiteSpace(p));
+            if (!hasPaths && !string.IsNullOrWhiteSpace(Config.character.lastLoadedPresetCharacter) &&
+                !string.Equals(Config.character.lastLoadedPresetCharacter, "None", StringComparison.OrdinalIgnoreCase))
+                preset = ClothingPreset.Load(Config.character.lastLoadedPresetCharacter) ?? preset;
+
+            foreach (var entry in preset.ModelPaths)
+            {
+                if (target == null) return;
+                if (!string.IsNullOrWhiteSpace(entry.Value) && File.Exists(Config.MakeAbsolutePath(entry.Value)))
+                    ReplaceModel(entry.Key, Config.MakeAbsolutePath(entry.Value), target, false);
+            }
+            foreach (var entry in preset.MaterialPaths)
+            {
+                if (target == null) return;
+                if (!string.IsNullOrWhiteSpace(entry.Value) && File.Exists(Config.MakeAbsolutePath(entry.Value)))
+                    ReplaceMaterial(entry.Key, Config.MakeAbsolutePath(entry.Value), target);
+            }
+            foreach (var entry in preset.SlotVisibility)
+            {
+                if (target == null) return;
+                ToggleSlotVisibility(entry.Key, entry.Value, target);
+            }
         }
 
         public static IEnumerator LoadPreset(string presetName)

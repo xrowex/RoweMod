@@ -1,8 +1,8 @@
 {
-  "version": "3.3.7",
+  "version": "3.3.8",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "e739853169209bfc96d4e9fc629e4c67522cb031d97b0ab626adc254f3600b68",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.7",
-  "patchNotes": "Fixed hats and busts hiding custom hair, including after changing clothing. No new toggle is required. Fixed physics-hair equip timeouts by detecting native equip completion. Hair materials now apply after equipping and include hidden meshes; changing selections cancels stale material requests. Existing Hair visibility and Restore Game Outfit controls are preserved. The custom-hair fix was confirmed working in game. Automatic emote downloads remain included; experimental TV and multiplayer-media limitations are unchanged.",
+  "sha256": "6fa25f5450e2e25989a1bce57174c439132c2a66fab51ad177c607ef304359b3",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.8",
+  "patchNotes": "Fixed main-menu character discovery without a named preset. Current custom models and materials now restore to the menu preview, including the automatic custom-hair fix for hats and busts. Menu restoration only targets the menu character and preserves manual selections made while loading. Added pause-safe restoration, duplicate prevention, and cancellation when the preview character or scene changes. Main-menu runtime logs confirmed dreads, hat, and bust restoration with hair remaining active afterward. Existing presets and automatic emote downloads remain supported; experimental TV and multiplayer-media limitations are unchanged.",
   "requiredGameVersion": ""
 }

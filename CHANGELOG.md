@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.8
+
+- Fixed main-menu character discovery when no named RoweMod preset is saved.
+- Restores current custom models and materials to the menu preview, including the custom-hair visibility fix from 3.3.7.
+- Limits automatic menu restoration to the menu character, preserving gameplay characters and manual selections made during loading.
+- Uses a pause-safe delay, cancels outdated restoration when the character or scene changes, and avoids duplicate restores.
+
+**Testing note:** main-menu runtime logs confirmed dreads, hat, and bust restoration, with hair active and visible to rendering afterward. The Release build, automated checks, and native-hook audits passed.
+
 ## 3.3.7
 
 - Fixed hats and busts hiding custom hair, including when clothing changes after hair is equipped. No new toggle is required.
