@@ -151,6 +151,7 @@ namespace rowemod
         private static Texture2D tabIndicatorTexture;
         private static Texture2D toggleCapsuleMaskTexture;
         private static Texture2D toggleKnobTexture;
+        private static Texture2D sliderTrackMaskTexture;
         private static readonly List<Texture2D> generatedStyleTextures = new List<Texture2D>();
 
         private static Color uiAccentColor;
@@ -461,6 +462,13 @@ namespace rowemod
             Rect sidebarRect = new Rect(0f, 0f, sidebarWidth, windowRect.height);
             DrawSolidColorRect(sidebarRect, uiSidebarColor);
 
+            // Soft depth wash so the sidebar reads as a distinct plane, not a flat slab.
+            Rect washRect = new Rect(0f, 0f, sidebarWidth, Mathf.Min(160f * UiScale, windowRect.height * 0.28f));
+            DrawSolidColorRect(washRect, Color.Lerp(uiSidebarColor, uiAccentSoftColor, 0.55f));
+
+            Rect brandRail = new Rect(0f, 0f, 3f * UiScale, windowRect.height);
+            DrawSolidColorRect(brandRail, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.72f));
+
             Rect dividerRect = new Rect(sidebarWidth - 1f, UiTitleBarHeight, 1f, windowRect.height - UiTitleBarHeight);
             DrawSolidColorRect(dividerRect, uiBorderColor);
 
@@ -490,12 +498,22 @@ namespace rowemod
             }
             else
             {
-                GUI.Label(logoAreaRect, "RoweMod", sectionHeaderStyle);
+                GUIStyle wordmarkStyle = pageTitleStyle ?? sectionHeaderStyle;
+                GUI.Label(logoAreaRect, "RoweMod", wordmarkStyle);
             }
 
             Rect versionRect = new Rect(UiOuterPadding, UiTitleBarHeight + (8f * UiScale),
-                sidebarWidth - (UiOuterPadding * 2f), 20f * UiScale);
-            GUI.Label(versionRect, $"v. {Main.ModVersion}", subtleLabelStyle);
+                sidebarWidth - (UiOuterPadding * 2f), 22f * UiScale);
+            if (badgeStyle != null)
+            {
+                float badgeWidth = Mathf.Min(versionRect.width, 78f * UiScale);
+                GUI.Label(new Rect(versionRect.x, versionRect.y, badgeWidth, versionRect.height),
+                    $"v{Main.ModVersion}", badgeStyle);
+            }
+            else
+            {
+                GUI.Label(versionRect, $"v. {Main.ModVersion}", subtleLabelStyle);
+            }
         }
 
         private static void DrawContentHeader()
@@ -546,6 +564,12 @@ namespace rowemod
                 float visibleAreaHeight = visibleArea.height;
                 float contentWidth = visibleArea.width;
                 viewHeight = visibleAreaHeight;
+
+                // Soft content well so panels sit on a quieter plane than the chrome.
+                DrawSolidColorRect(visibleArea, Color.Lerp(uiBackgroundColor, uiPanelAltColor, 0.35f));
+                Rect contentAccent = new Rect(visibleArea.x, visibleArea.y, 2f * UiScale, visibleArea.height);
+                DrawSolidColorRect(contentAccent, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.22f));
+
                 GUI.BeginGroup(visibleArea);
                 beganGroup = true;
                 GUILayout.BeginArea(new Rect(0f, -scrollOffset, contentWidth, Mathf.Max(scrollViewHeight, visibleAreaHeight)));
@@ -979,6 +1003,7 @@ namespace rowemod
                 tricksTabIndicatorTexture = MakeStyleTex(2, 2, new Color(0.24f, 0.82f, 0.42f, 1f));
                 toggleCapsuleMaskTexture = MakeStyleCapsuleTex(96, 52, Color.white, 0, Color.clear);
                 toggleKnobTexture = MakeStyleCircleTex(64, new Color(0.96f, 0.97f, 1f, 1f), 1, new Color(0f, 0f, 0f, 0.45f));
+                sliderTrackMaskTexture = MakeStyleCapsuleTex(128, 24, Color.white, 0, Color.clear);
                 _circleTex = toggleKnobTexture;
 
                 windowStyle = new GUIStyle(GUI.skin.window);
@@ -1809,8 +1834,23 @@ namespace rowemod
         public static void DrawSectionTitle(string title, string detail = null)
         {
             GUILayout.Label(title, UiHeaderStyle);
+            Rect titleRect = GUILayoutUtility.GetLastRect();
+            if (Event.current.type == EventType.Repaint && titleRect.width > 1f)
+            {
+                float underlineWidth = Mathf.Min(42f * UiScale, titleRect.width * 0.28f);
+                Rect underlineRect = new Rect(
+                    titleRect.x,
+                    titleRect.yMax - (2f * UiScale),
+                    underlineWidth,
+                    Mathf.Max(2f, 2.5f * UiScale));
+                DrawSolidColorRect(underlineRect, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.85f));
+            }
+
             if (!string.IsNullOrWhiteSpace(detail))
+            {
+                GUILayout.Space(4f * UiScale);
                 GUILayout.Label(detail, UiMutedWrappedStyle);
+            }
         }
 
         public static bool MiniButton(string label, params GUILayoutOption[] options)
@@ -1951,10 +1991,24 @@ namespace rowemod
         public static void DrawEmptyState(string title, string detail = null)
         {
             GUILayout.FlexibleSpace();
-            GUIStyle titleStyle = UiHeaderStyle;
-            GUILayout.Label(title, titleStyle);
+            Rect wellRect = GUILayoutUtility.GetRect(0f, 120f * UiScale, GUILayout.ExpandWidth(true), GUILayout.Height(120f * UiScale));
+            if (Event.current.type == EventType.Repaint)
+            {
+                DrawSolidColorRect(wellRect, Color.Lerp(uiPanelAltColor, uiBackgroundColor, 0.35f));
+                Rect accent = new Rect(wellRect.x + (16f * UiScale), wellRect.y + (28f * UiScale),
+                    4f * UiScale, wellRect.height - (56f * UiScale));
+                DrawSolidColorRect(accent, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.7f));
+            }
+
+            Rect titleRect = new Rect(wellRect.x + (32f * UiScale), wellRect.y + (32f * UiScale),
+                wellRect.width - (48f * UiScale), 28f * UiScale);
+            GUI.Label(titleRect, title, UiHeaderStyle);
             if (!string.IsNullOrWhiteSpace(detail))
-                GUILayout.Label(detail, UiMutedWrappedStyle);
+            {
+                Rect detailRect = new Rect(wellRect.x + (32f * UiScale), wellRect.y + (62f * UiScale),
+                    wellRect.width - (48f * UiScale), 40f * UiScale);
+                GUI.Label(detailRect, detail, UiMutedWrappedStyle);
+            }
             GUILayout.FlexibleSpace();
         }
 
@@ -1969,16 +2023,15 @@ namespace rowemod
             Color backgroundColor = isHovering ? Color.Lerp(baseColor, uiPanelHoverColor, 0.6f) : baseColor;
             DrawSolidColorRect(rect, backgroundColor);
 
-            if (expanded)
-            {
-                Rect accentRect = new Rect(rect.x + 1f, rect.y + (6f * UiScale),
-                    4f * UiScale, rect.height - (12f * UiScale));
-                DrawSolidColorRect(accentRect, uiAccentColor);
-            }
+            Rect accentRect = new Rect(rect.x + 1f, rect.y + (6f * UiScale),
+                4f * UiScale, rect.height - (12f * UiScale));
+            DrawSolidColorRect(accentRect, expanded
+                ? uiAccentColor
+                : new Color(uiBorderColor.r, uiBorderColor.g, uiBorderColor.b, 0.9f));
 
             Rect dividerRect = new Rect(rect.x + (10f * UiScale), rect.yMax - 1f,
                 rect.width - (20f * UiScale), 1f);
-            DrawSolidColorRect(dividerRect, new Color(1f, 1f, 1f, 0.07f));
+            DrawSolidColorRect(dividerRect, new Color(1f, 1f, 1f, expanded ? 0.10f : 0.06f));
 
             Rect arrowRect = new Rect(rect.x + (12f * UiScale), rect.y, 18f * UiScale, rect.height);
             Rect labelRect = new Rect(rect.x + (34f * UiScale), rect.y,
@@ -2043,12 +2096,16 @@ namespace rowemod
             Rect resetRect = new Rect(valueRect.xMax + spacing, fullRect.y, resetButtonWidth, rowHeight);
 
             GUI.Label(labelRect, label, labelStyle);
-            DrawSolidColorRect(sliderRect, uiPanelAltColor);
+            DrawTintedTexture(sliderRect, sliderTrackMaskTexture, uiPanelAltColor);
 
             float percent = Mathf.InverseLerp(min, max, target);
             float fillWidth = Mathf.Clamp01(percent) * sliderRect.width;
-            Rect fillRect = new Rect(sliderRect.x, sliderRect.y, fillWidth, sliderRect.height);
-            DrawSolidColorRect(fillRect, uiAccentColor);
+            if (fillWidth > 0.5f)
+            {
+                Rect fillRect = new Rect(sliderRect.x, sliderRect.y, Mathf.Max(fillWidth, sliderRect.height), sliderRect.height);
+                fillRect.width = Mathf.Min(fillRect.width, sliderRect.width);
+                DrawTintedTexture(fillRect, sliderTrackMaskTexture, uiAccentColor);
+            }
 
             float knobSize = 18f * UiScale;
             float knobX = sliderRect.x + fillWidth - (knobSize * 0.5f);
@@ -2100,8 +2157,8 @@ namespace rowemod
 
             Rect borderRect = new Rect(valueRect.x - valueBorderSize, valueRect.y - valueBorderSize,
                 valueRect.width + valueBorderSize * 2f, valueRect.height + valueBorderSize * 2f);
-            DrawSolidColorRect(borderRect, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.5f));
-            DrawSolidColorRect(valueRect, new Color(0.08f, 0.09f, 0.11f, 1f));
+            DrawSolidColorRect(borderRect, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.42f));
+            DrawSolidColorRect(valueRect, uiPanelAltColor);
 
             if (!_sliderTextInputs.ContainsKey(sliderKey))
                 _sliderTextInputs[sliderKey] = target.ToString("0.00");

@@ -360,16 +360,21 @@ namespace rowemod
             Rect headerRect = new Rect(GetContentX(), UiTitleBarHeight + UiOuterPadding, GetContentWidth(), headerHeight);
             GUI.Box(headerRect, GUIContent.none, tabBarStyle);
 
+            Rect headerAccent = new Rect(headerRect.x + (2f * UiScale), headerRect.y + (10f * UiScale),
+                4f * UiScale, Mathf.Min(48f * UiScale, headerRect.height - (20f * UiScale)));
+            DrawSolidColorRect(headerAccent, uiAccentColor);
+
             float resetWidth = page.ResetScope == null || searching ? 0f : 156f * UiScale;
             float textWidth = headerRect.width - (UiInnerPadding * 2f) - (resetWidth > 0f ? resetWidth + UiInnerPadding : 0f);
-            Rect eyebrowRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + (10f * UiScale),
-                textWidth, 17f * UiScale);
+            float textLeft = headerRect.x + UiInnerPadding + (10f * UiScale);
+            Rect eyebrowRect = new Rect(textLeft, headerRect.y + (10f * UiScale),
+                textWidth - (10f * UiScale), 17f * UiScale);
             GUI.Label(eyebrowRect, searching ? "SEARCH" : GetAreaLabel(_selectedArea).ToUpperInvariant(), pageEyebrowStyle);
-            Rect titleRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + (27f * UiScale),
-                textWidth, 38f * UiScale);
+            Rect titleRect = new Rect(textLeft, headerRect.y + (27f * UiScale),
+                textWidth - (10f * UiScale), 38f * UiScale);
             GUI.Label(titleRect, searching ? "Find Settings" : page.Label, pageTitleStyle ?? sectionHeaderStyle);
-            Rect detailRect = new Rect(headerRect.x + UiInnerPadding, headerRect.y + (67f * UiScale),
-                textWidth, 38f * UiScale);
+            Rect detailRect = new Rect(textLeft, headerRect.y + (67f * UiScale),
+                textWidth - (10f * UiScale), 38f * UiScale);
             GUI.Label(detailRect,
                 searching ? "Search by player-facing names, technical names, or common phrases." : page.Description,
                 UiMutedWrappedStyle);
@@ -461,6 +466,9 @@ namespace rowemod
             float searchY = UiTitleBarHeight + (40f * UiScale);
             float searchWidth = sidebarWidth - (UiOuterPadding * 2f);
             float clearWidth = string.IsNullOrEmpty(_menuSearch) ? 0f : 32f * UiScale;
+            Rect searchWell = new Rect(UiOuterPadding - (2f * UiScale), searchY - (2f * UiScale),
+                searchWidth + (4f * UiScale), 40f * UiScale);
+            DrawSolidColorRect(searchWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.7f));
             Rect searchRect = new Rect(UiOuterPadding, searchY, searchWidth - clearWidth, 36f * UiScale);
             string previousSearch = _menuSearch;
             bool wasSearching = !string.IsNullOrWhiteSpace(previousSearch);
@@ -538,6 +546,9 @@ namespace rowemod
             GUI.EndScrollView();
 
             float hintY = windowRect.height - UiOuterPadding - NavigationHintHeight;
+            Rect hintWell = new Rect(UiOuterPadding - (4f * UiScale), hintY - (6f * UiScale),
+                navWidth + (8f * UiScale), NavigationHintHeight + (4f * UiScale));
+            DrawSolidColorRect(hintWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.55f));
             GUI.Label(new Rect(UiOuterPadding, hintY, navWidth, 18f * UiScale),
                 "D-pad Navigate  A Select", subtleLabelStyle);
             GUI.Label(new Rect(UiOuterPadding, hintY + (18f * UiScale), navWidth, 18f * UiScale),
@@ -1479,6 +1490,17 @@ namespace rowemod
             EndPane();
         }
 
+        private static readonly (string Label, float R, float G, float B)[] MenuAccentPresets =
+        {
+            ("Default", 1f, 0.54f, 0.30f),
+            ("Ember", 0.96f, 0.36f, 0.22f),
+            ("Amber", 0.95f, 0.72f, 0.28f),
+            ("Steel", 0.42f, 0.68f, 0.86f),
+            ("Moss", 0.42f, 0.74f, 0.48f),
+            ("Slate", 0.70f, 0.74f, 0.80f),
+        };
+        private static float _pendingAccentApplyAt = -1f;
+
         private static void DrawInterfacePage()
         {
             BeginPane("Interface Scale", "RoweMod combines this preference with a conservative screen-height scale.");
@@ -1489,12 +1511,116 @@ namespace rowemod
             EndPane();
 
             BeginPane("Menu Accent", "Customize RoweMod's accent color without changing the game's interface.");
+            DrawMenuAccentPreview();
+            GUILayout.Space(6f * UiScale);
             ModernSlider("Red", ref misc.menuAccentR, 0f, 1f, "interface_accent_r");
             ModernSlider("Green", ref misc.menuAccentG, 0f, 1f, "interface_accent_g");
             ModernSlider("Blue", ref misc.menuAccentB, 0f, 1f, "interface_accent_b");
+            SchedulePendingMenuAccentApply();
+
+            GUILayout.Label("Presets", UiMutedStyle);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < MenuAccentPresets.Length; i++)
+            {
+                var preset = MenuAccentPresets[i];
+                bool active = ColorsNearlyEqual(
+                    misc.menuAccentR, misc.menuAccentG, misc.menuAccentB,
+                    preset.R, preset.G, preset.B);
+                if (PillButton(preset.Label, active, GUILayout.Height(28f * UiScale)))
+                {
+                    misc.menuAccentR = preset.R;
+                    misc.menuAccentG = preset.G;
+                    misc.menuAccentB = preset.B;
+                    _pendingAccentApplyAt = -1f;
+                    stylesInitialized = false;
+                }
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f * UiScale);
+            BeginToolbar();
             if (PrimaryButton("Apply Menu Color", GUILayout.Width(170f), GUILayout.Height(30f)))
+            {
+                _pendingAccentApplyAt = -1f;
                 stylesInitialized = false;
+            }
+            if (SecondaryButton("Reset Accent", GUILayout.Width(130f), GUILayout.Height(30f)))
+            {
+                misc.menuAccentR = 1f;
+                misc.menuAccentG = 0.54f;
+                misc.menuAccentB = 0.30f;
+                _pendingAccentApplyAt = -1f;
+                stylesInitialized = false;
+            }
+            EndToolbar();
             EndPane();
+        }
+
+        private static void DrawMenuAccentPreview()
+        {
+            Color pending = new Color(
+                Mathf.Clamp01(misc.menuAccentR),
+                Mathf.Clamp01(misc.menuAccentG),
+                Mathf.Clamp01(misc.menuAccentB),
+                1f);
+            Rect row = GUILayoutUtility.GetRect(0f, 44f * UiScale, GUILayout.ExpandWidth(true), GUILayout.Height(44f * UiScale));
+            float swatchSize = 36f * UiScale;
+            Rect swatchOuter = new Rect(row.x, row.y + ((row.height - swatchSize) * 0.5f), swatchSize, swatchSize);
+            Rect swatchInner = new Rect(swatchOuter.x + 2f, swatchOuter.y + 2f, swatchOuter.width - 4f, swatchOuter.height - 4f);
+            DrawSolidColorRect(swatchOuter, Color.Lerp(uiBorderColor, pending, 0.55f));
+            DrawSolidColorRect(swatchInner, pending);
+
+            Rect sampleTrack = new Rect(swatchOuter.xMax + (12f * UiScale),
+                row.y + ((row.height - (10f * UiScale)) * 0.5f),
+                Mathf.Min(180f * UiScale, row.width - swatchSize - (24f * UiScale)),
+                10f * UiScale);
+            DrawTintedTexture(sampleTrack, sliderTrackMaskTexture, uiPanelAltColor);
+            Rect sampleFill = new Rect(sampleTrack.x, sampleTrack.y, sampleTrack.width * 0.62f, sampleTrack.height);
+            DrawTintedTexture(sampleFill, sliderTrackMaskTexture, pending);
+
+            Rect labelRect = new Rect(sampleTrack.xMax + (12f * UiScale), row.y,
+                Mathf.Max(80f, row.xMax - sampleTrack.xMax - (12f * UiScale)), row.height);
+            string hex = ColorUtility.ToHtmlStringRGB(pending);
+            bool pendingApply = !ColorsNearlyEqual(
+                pending.r, pending.g, pending.b,
+                uiAccentColor.r, uiAccentColor.g, uiAccentColor.b);
+            GUI.Label(labelRect, pendingApply ? $"#{hex}  ·  pending" : $"#{hex}", UiMutedStyle);
+        }
+
+        private static void SchedulePendingMenuAccentApply()
+        {
+            bool differs = !ColorsNearlyEqual(
+                misc.menuAccentR, misc.menuAccentG, misc.menuAccentB,
+                uiAccentColor.r, uiAccentColor.g, uiAccentColor.b);
+
+            if (!differs)
+            {
+                _pendingAccentApplyAt = -1f;
+                return;
+            }
+
+            if (activeSliderControlId != 0)
+            {
+                _pendingAccentApplyAt = Time.unscaledTime + 0.18f;
+                return;
+            }
+
+            if (_pendingAccentApplyAt < 0f)
+                _pendingAccentApplyAt = Time.unscaledTime + 0.18f;
+
+            if (Time.unscaledTime < _pendingAccentApplyAt)
+                return;
+
+            _pendingAccentApplyAt = -1f;
+            stylesInitialized = false;
+        }
+
+        private static bool ColorsNearlyEqual(float r1, float g1, float b1, float r2, float g2, float b2)
+        {
+            return Mathf.Abs(r1 - r2) < 0.004f &&
+                   Mathf.Abs(g1 - g2) < 0.004f &&
+                   Mathf.Abs(b1 - b2) < 0.004f;
         }
 
         public static void OpenEmotesPage()
