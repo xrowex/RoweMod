@@ -230,6 +230,7 @@ namespace rowemod
         public float menuAccentB;
         public float menuScale;
         public int menuDesignVersion;
+        public bool menuDaySession;
         public bool disableEmoteOnBike;
         public bool disableFreeCamCollider;
         public bool disableDroneCollider;
@@ -687,6 +688,7 @@ namespace rowemod
             menuAccentB = 0.30f,
             menuScale = 1f,
             menuDesignVersion = 1,
+            menuDaySession = false,
             disableEmoteOnBike = false,
             disableFreeCamCollider = false,
             disableDroneCollider = false,
@@ -1505,6 +1507,7 @@ namespace rowemod
                 menuAccentB = 0.30f,
                 menuScale = 1f,
                 menuDesignVersion = 1,
+                menuDaySession = false,
                 disableEmoteOnBike = false,
                 disableFreeCamCollider = false,
                 disableDroneCollider = false,

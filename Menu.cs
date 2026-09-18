@@ -78,20 +78,20 @@ namespace rowemod
         public static bool StylesNeedRefresh =>
             !stylesInitialized || _initializedScreenHeight != Screen.height;
 
-        private static float UiOuterPadding => 20f * UiScale;
-        private static float UiInnerPadding => 16f * UiScale;
-        private static float UiControlSpacing => 8f * UiScale;
-        private static float UiSectionSpacing => 16f * UiScale;
-        private static float UiTitleBarHeight => 34f * UiScale;
+        private static float UiOuterPadding => 14f * UiScale;
+        private static float UiInnerPadding => 12f * UiScale;
+        private static float UiControlSpacing => 5f * UiScale;
+        private static float UiSectionSpacing => 10f * UiScale;
+        private static float UiTitleBarHeight => 30f * UiScale;
         private static float UiResetButtonWidth => 112f * UiScale;
-        private static float UiTabSpacing => 8f * UiScale;
-        private static float UiSidebarWidth => 208f * UiScale;
-        private static float UiLogoAreaHeight => 124f * UiScale;
+        private static float UiTabSpacing => 5f * UiScale;
+        private static float UiSidebarWidth => 200f * UiScale;
+        private static float UiLogoAreaHeight => 112f * UiScale;
         private static float UiContentHeaderHeight => 76f * UiScale;
-        private static float UiNavButtonHeight => 44f * UiScale;
-        private static float UiFoldoutHeight => 38f * UiScale;
-        private static float UiRowHeight => 36f * UiScale;
-        private static float UiContentBottomPadding => 24f * UiScale;
+        private static float UiNavButtonHeight => 38f * UiScale;
+        private static float UiFoldoutHeight => 34f * UiScale;
+        private static float UiRowHeight => 32f * UiScale;
+        private static float UiContentBottomPadding => 16f * UiScale;
 
         private static Vector2 _tabScrollPosition = Vector2.zero;
         
@@ -492,7 +492,7 @@ namespace rowemod
         {
             float sidebarWidth = GetResponsiveSidebarWidth();
             float pad = UiOuterPadding;
-            Rect plateRect = new Rect(pad, 6f * UiScale, sidebarWidth - (pad * 2f), 58f * UiScale);
+            Rect plateRect = new Rect(pad, 4f * UiScale, sidebarWidth - (pad * 2f), 52f * UiScale);
             DrawSolidColorRect(plateRect, Color.Lerp(uiPanelAltColor, uiSidebarColor, 0.25f));
             DrawSolidColorRect(new Rect(plateRect.x, plateRect.y, plateRect.width, 1f),
                 new Color(1f, 1f, 1f, 0.10f));
@@ -1017,16 +1017,37 @@ namespace rowemod
                     uiAccentColor,
                     0.22f);
                 uiAccentTextColor = GetAccessibleTextColor(uiAccentColor);
-                // Street-metal palette: cooler blacks, warmer graphite panels, harder edges.
-                uiBackgroundColor = new Color(0.035f, 0.038f, 0.045f, 0.995f); // #090A0B
-                uiSidebarColor = new Color(0.045f, 0.050f, 0.060f, 0.995f);    // #0B0D0F
-                uiPanelColor = new Color(0.090f, 0.098f, 0.112f, 0.995f);       // #17191C
-                uiPanelHoverColor = new Color(0.118f, 0.130f, 0.150f, 1f);
-                uiPanelAltColor = new Color(0.062f, 0.068f, 0.078f, 1f);        // #101114
-                uiBorderColor = new Color(0.210f, 0.225f, 0.250f, 0.98f);       // #353940
-                uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.10f);
-                uiTextPrimaryColor = new Color(0.965f, 0.970f, 0.975f, 1f);     // #F6F7F8
-                uiTextMutedColor = new Color(0.620f, 0.650f, 0.690f, 1f);       // #9EA6B0
+                if (misc.menuDaySession)
+                {
+                    // Day Session: cool concrete / asphalt light — not cream, not purple.
+                    uiBackgroundColor = new Color(0.910f, 0.922f, 0.935f, 0.995f); // #E8EBEE
+                    uiSidebarColor = new Color(0.855f, 0.872f, 0.890f, 0.995f);    // #DADEE3
+                    uiPanelColor = new Color(0.965f, 0.970f, 0.976f, 0.995f);       // #F6F7F9
+                    uiPanelHoverColor = new Color(0.930f, 0.940f, 0.952f, 1f);
+                    uiPanelAltColor = new Color(0.890f, 0.902f, 0.918f, 1f);        // #E3E6EA
+                    uiBorderColor = new Color(0.690f, 0.720f, 0.760f, 0.98f);       // #B0B8C2
+                    uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.55f);
+                    uiTextPrimaryColor = new Color(0.102f, 0.122f, 0.149f, 1f);     // #1A1F26
+                    uiTextMutedColor = new Color(0.353f, 0.396f, 0.451f, 1f);       // #5A6573
+                    uiAccentSoftColor = Color.Lerp(uiSidebarColor, uiAccentColor, 0.18f);
+                }
+                else
+                {
+                    // Night Session: street-metal graphite.
+                    uiBackgroundColor = new Color(0.035f, 0.038f, 0.045f, 0.995f); // #090A0B
+                    uiSidebarColor = new Color(0.045f, 0.050f, 0.060f, 0.995f);    // #0B0D0F
+                    uiPanelColor = new Color(0.090f, 0.098f, 0.112f, 0.995f);       // #17191C
+                    uiPanelHoverColor = new Color(0.118f, 0.130f, 0.150f, 1f);
+                    uiPanelAltColor = new Color(0.062f, 0.068f, 0.078f, 1f);        // #101114
+                    uiBorderColor = new Color(0.210f, 0.225f, 0.250f, 0.98f);       // #353940
+                    uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.10f);
+                    uiTextPrimaryColor = new Color(0.965f, 0.970f, 0.975f, 1f);     // #F6F7F8
+                    uiTextMutedColor = new Color(0.620f, 0.650f, 0.690f, 1f);       // #9EA6B0
+                    uiAccentSoftColor = Color.Lerp(
+                        new Color(0.055f, 0.060f, 0.070f, 1f),
+                        uiAccentColor,
+                        0.22f);
+                }
                 uiDangerColor = new Color(0.345f, 0.102f, 0.137f, 0.98f);
                 uiDangerHoverColor = new Color(0.435f, 0.133f, 0.176f, 1f);
                 uiDangerActiveColor = new Color(0.275f, 0.075f, 0.106f, 1f);
@@ -1216,11 +1237,11 @@ namespace rowemod
                 tabButtonStyle.hover.textColor = uiTextPrimaryColor;
                 tabButtonStyle.active.textColor = uiTextPrimaryColor;
                 tabButtonStyle.padding = new RectOffset(
-                    Mathf.RoundToInt(36f * UiScale),
-                    Mathf.RoundToInt(10f * UiScale),
-                    Mathf.RoundToInt(6f * UiScale),
-                    Mathf.RoundToInt(6f * UiScale));
-                tabButtonStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
+                    Mathf.RoundToInt(52f * UiScale),
+                    Mathf.RoundToInt(8f * UiScale),
+                    Mathf.RoundToInt(4f * UiScale),
+                    Mathf.RoundToInt(4f * UiScale));
+                tabButtonStyle.fontSize = Mathf.RoundToInt(13f * UiScale);
                 tabButtonStyle.alignment = TextAnchor.MiddleLeft;
 
                 activeTabButtonStyle = new GUIStyle(tabButtonStyle);
@@ -1289,11 +1310,11 @@ namespace rowemod
 
                 panelStyle = new GUIStyle(sectionCardStyle);
                 panelStyle.padding = new RectOffset(
-                    Mathf.RoundToInt(20f * UiScale),
-                    Mathf.RoundToInt(18f * UiScale),
                     Mathf.RoundToInt(16f * UiScale),
-                    Mathf.RoundToInt(18f * UiScale));
-                panelStyle.margin = new RectOffset(0, 0, Mathf.RoundToInt(4f * UiScale), Mathf.RoundToInt(14f * UiScale));
+                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(12f * UiScale));
+                panelStyle.margin = new RectOffset(0, 0, Mathf.RoundToInt(2f * UiScale), Mathf.RoundToInt(8f * UiScale));
 
                 panelAltStyle = new GUIStyle(panelStyle);
                 panelAltStyle.normal.background = MakeStyleAccentPaneTex(72, 72, uiPanelAltColor, uiAccentColor, 8, uiBorderColor);
@@ -1327,7 +1348,8 @@ namespace rowemod
                 badgeStyle.padding = new RectOffset(7, 7, 2, 2);
                 badgeStyle.border = new RectOffset(7, 7, 7, 7);
 
-                Texture2D textFieldBackground = MakeStyleRoundedTex(64, 24, new Color(0.03f, 0.035f, 0.04f, 1f), 4, 1, uiBorderColor);
+                Texture2D textFieldBackground = MakeStyleRoundedTex(64, 24,
+                    Color.Lerp(uiPanelAltColor, uiBackgroundColor, 0.35f), 4, 1, uiBorderColor);
                 textFieldStyle = new GUIStyle(GUI.skin.textField);
                 textFieldStyle.alignment = TextAnchor.MiddleCenter;
                 textFieldStyle.fontSize = Mathf.RoundToInt(14f * UiScale);
