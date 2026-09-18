@@ -263,7 +263,7 @@ namespace rowemod
 
         private static float GetResponsiveSidebarWidth()
         {
-            return windowRect.width < 800f * UiScale ? 150f * UiScale : UiSidebarWidth;
+            return windowRect.width < 820f * UiScale ? 168f * UiScale : UiSidebarWidth;
         }
 
         private static void EnsureNavigationInitialized()
@@ -360,21 +360,26 @@ namespace rowemod
             Rect headerRect = new Rect(GetContentX(), UiTitleBarHeight + UiOuterPadding, GetContentWidth(), headerHeight);
             GUI.Box(headerRect, GUIContent.none, tabBarStyle);
 
-            Rect headerAccent = new Rect(headerRect.x + (2f * UiScale), headerRect.y + (10f * UiScale),
-                4f * UiScale, Mathf.Min(48f * UiScale, headerRect.height - (20f * UiScale)));
-            DrawSolidColorRect(headerAccent, uiAccentColor);
+            // Corner brackets — industrial title plate, not a soft card.
+            float bracket = 14f * UiScale;
+            float thick = 2f * UiScale;
+            Color bracketColor = Color.Lerp(uiAccentColor, Color.white, 0.15f);
+            DrawSolidColorRect(new Rect(headerRect.x + (8f * UiScale), headerRect.y + (8f * UiScale), bracket, thick), bracketColor);
+            DrawSolidColorRect(new Rect(headerRect.x + (8f * UiScale), headerRect.y + (8f * UiScale), thick, bracket), bracketColor);
+            DrawSolidColorRect(new Rect(headerRect.xMax - (8f * UiScale) - bracket, headerRect.y + (8f * UiScale), bracket, thick), bracketColor);
+            DrawSolidColorRect(new Rect(headerRect.xMax - (8f * UiScale) - thick, headerRect.y + (8f * UiScale), thick, bracket), bracketColor);
 
             float resetWidth = page.ResetScope == null || searching ? 0f : 156f * UiScale;
             float textWidth = headerRect.width - (UiInnerPadding * 2f) - (resetWidth > 0f ? resetWidth + UiInnerPadding : 0f);
-            float textLeft = headerRect.x + UiInnerPadding + (10f * UiScale);
-            Rect eyebrowRect = new Rect(textLeft, headerRect.y + (10f * UiScale),
-                textWidth - (10f * UiScale), 17f * UiScale);
+            float textLeft = headerRect.x + UiInnerPadding + (14f * UiScale);
+            Rect eyebrowRect = new Rect(textLeft, headerRect.y + (12f * UiScale),
+                textWidth - (14f * UiScale), 17f * UiScale);
             GUI.Label(eyebrowRect, searching ? "SEARCH" : GetAreaLabel(_selectedArea).ToUpperInvariant(), pageEyebrowStyle);
-            Rect titleRect = new Rect(textLeft, headerRect.y + (27f * UiScale),
-                textWidth - (10f * UiScale), 38f * UiScale);
+            Rect titleRect = new Rect(textLeft, headerRect.y + (28f * UiScale),
+                textWidth - (14f * UiScale), 40f * UiScale);
             GUI.Label(titleRect, searching ? "Find Settings" : page.Label, pageTitleStyle ?? sectionHeaderStyle);
-            Rect detailRect = new Rect(textLeft, headerRect.y + (67f * UiScale),
-                textWidth - (10f * UiScale), 38f * UiScale);
+            Rect detailRect = new Rect(textLeft, headerRect.y + (68f * UiScale),
+                textWidth - (14f * UiScale), 36f * UiScale);
             GUI.Label(detailRect,
                 searching ? "Search by player-facing names, technical names, or common phrases." : page.Description,
                 UiMutedWrappedStyle);
@@ -463,12 +468,14 @@ namespace rowemod
         {
             EnsureNavigationInitialized();
             float sidebarWidth = GetResponsiveSidebarWidth();
-            float searchY = UiTitleBarHeight + (40f * UiScale);
+            float searchY = UiTitleBarHeight + (64f * UiScale);
             float searchWidth = sidebarWidth - (UiOuterPadding * 2f);
             float clearWidth = string.IsNullOrEmpty(_menuSearch) ? 0f : 32f * UiScale;
             Rect searchWell = new Rect(UiOuterPadding - (2f * UiScale), searchY - (2f * UiScale),
                 searchWidth + (4f * UiScale), 40f * UiScale);
             DrawSolidColorRect(searchWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.7f));
+            DrawSolidColorRect(new Rect(searchWell.x, searchWell.y, 3f * UiScale, searchWell.height),
+                new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.55f));
             Rect searchRect = new Rect(UiOuterPadding, searchY, searchWidth - clearWidth, 36f * UiScale);
             string previousSearch = _menuSearch;
             bool wasSearching = !string.IsNullOrWhiteSpace(previousSearch);
@@ -528,12 +535,27 @@ namespace rowemod
                     SelectArea(area.Area);
                 }
 
+                Rect indexRect = new Rect(buttonRect.x + (6f * UiScale), buttonRect.y,
+                    26f * UiScale, buttonRect.height);
+                GUIStyle indexStyle = navIndexStyle ?? subtleLabelStyle;
+                if (selected && indexStyle != null)
+                {
+                    Color previous = indexStyle.normal.textColor;
+                    indexStyle.normal.textColor = uiAccentColor;
+                    GUI.Label(indexRect, $"{i + 1:00}", indexStyle);
+                    indexStyle.normal.textColor = previous;
+                }
+                else
+                {
+                    GUI.Label(indexRect, $"{i + 1:00}", indexStyle);
+                }
+
                 if (selected)
                 {
                     Rect indicatorRect = new Rect(buttonRect.x + (2f * UiScale),
-                        buttonRect.y + (7f * UiScale),
-                        4f * UiScale,
-                        buttonRect.height - (14f * UiScale));
+                        buttonRect.y + (8f * UiScale),
+                        3f * UiScale,
+                        buttonRect.height - (16f * UiScale));
                     if (tabIndicatorTexture != null)
                         GUI.DrawTexture(indicatorRect, tabIndicatorTexture);
                     else
@@ -546,9 +568,11 @@ namespace rowemod
             GUI.EndScrollView();
 
             float hintY = windowRect.height - UiOuterPadding - NavigationHintHeight;
-            Rect hintWell = new Rect(UiOuterPadding - (4f * UiScale), hintY - (6f * UiScale),
-                navWidth + (8f * UiScale), NavigationHintHeight + (4f * UiScale));
-            DrawSolidColorRect(hintWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.55f));
+            Rect hintWell = new Rect(UiOuterPadding - (4f * UiScale), hintY - (8f * UiScale),
+                navWidth + (8f * UiScale), NavigationHintHeight + (6f * UiScale));
+            DrawSolidColorRect(hintWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.7f));
+            DrawSolidColorRect(new Rect(hintWell.x, hintWell.y, hintWell.width, 2f * UiScale),
+                new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.45f));
             GUI.Label(new Rect(UiOuterPadding, hintY, navWidth, 18f * UiScale),
                 "D-pad Navigate  A Select", subtleLabelStyle);
             GUI.Label(new Rect(UiOuterPadding, hintY + (18f * UiScale), navWidth, 18f * UiScale),
