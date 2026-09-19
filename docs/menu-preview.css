@@ -384,7 +384,7 @@ body {
   border-radius: 50%;
   background: white;
 }
-.toggle.off { background: var(--panel-alt); }
+.toggle.off { background: var(--panel-alt); box-shadow: inset 0 0 0 1px var(--border); }
 .toggle.off::after { left: 3px; }
 
 .meta {
