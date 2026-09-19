@@ -3,88 +3,23 @@
 <head>
 <meta charset="utf-8" />
 <title>RoweMod Interface Preview</title>
-<style>
-  :root {
-    --bg: #090A0B; --sidebar: #0B0D0F; --panel: #17191C; --panel-alt: #101114;
-    --border: #353940; --text: #F6F7F8; --muted: #9EA6B0; --accent: #FF8A4D;
-    --font: Bahnschrift, "Segoe UI Semibold", "Segoe UI", Arial, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: #040506; }
-  body { display: flex; justify-content: center; padding: 24px; font-family: var(--font); color: var(--text); }
-  .menu { width: 1000px; height: 800px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; display: grid; grid-template-columns: 200px 1fr; overflow: hidden; }
-  .sidebar { position: relative; background: var(--sidebar); border-right: 1px solid var(--border); padding: 6px 12px 12px; display: flex; flex-direction: column; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 7px); }
-  .sidebar::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 160px; background: linear-gradient(180deg, rgba(255,138,77,0.14), transparent); pointer-events: none; }
-  .sidebar::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent); }
-  .plate { position: relative; z-index: 1; margin-top: 2px; height: 52px; background: #0e1013; border-top: 1px solid rgba(255,255,255,0.10); border-bottom: 1px solid rgba(0,0,0,0.35); display: flex; flex-direction: column; justify-content: center; padding: 0 10px 0 14px; }
-  .plate::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
-  .plate .mark { font-size: 20px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
-  .plate .sub { margin-top: 5px; font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #b89278; }
-  .badge { margin-top: 8px; width: fit-content; padding: 2px 8px; border: 1px solid #6a4a36; border-radius: 4px; background: #1a1512; color: var(--muted); font-size: 10px; font-weight: 700; z-index: 1; }
-  .search-well { margin-top: 12px; background: #0e1013; border-radius: 6px; padding: 2px; position: relative; z-index: 1; }
-  .search-well::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: rgba(255,138,77,0.55); border-radius: 6px 0 0 6px; }
-  .search { height: 32px; border-radius: 4px; border: 1px solid var(--border); background: #08090b; color: var(--muted); display: flex; align-items: center; padding: 0 10px 0 12px; font-size: 12px; }
-  .nav { margin-top: 14px; display: flex; flex-direction: column; gap: 5px; flex: 1; z-index: 1; }
-  .nav-btn { height: 38px; border-radius: 6px; border: 1px solid #1f2329; background: #0d0f12; color: var(--muted); display: grid; grid-template-columns: 20px 24px 1fr; align-items: center; gap: 2px; padding: 0 8px 0 8px; font-size: 13px; position: relative; }
-  .nav-btn .ico { width: 14px; height: 14px; border: 1.5px solid currentColor; border-radius: 2px; justify-self: center; opacity: 0.85; }
-  .nav-btn .idx { font-size: 10px; font-weight: 700; color: #7d8590; text-align: center; }
-  .nav-btn.active { background: #2a1f19; border-color: #7a4e35; color: var(--text); font-weight: 700; }
-  .nav-btn.active .idx, .nav-btn.active .ico { color: var(--accent); border-color: var(--accent); }
-  .nav-btn.active::before { content: ""; position: absolute; left: 2px; top: 7px; bottom: 7px; width: 3px; background: var(--accent); border-radius: 2px; }
-  .hints { margin-top: auto; background: #0e1013; border-radius: 6px; padding: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; z-index: 1; border-top: 2px solid rgba(255,138,77,0.45); }
-  .main { display: flex; flex-direction: column; min-width: 0; padding: 14px 14px 0; }
-  .header { position: relative; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px 0 18px; min-height: 140px; box-shadow: inset 4px 0 0 var(--accent); }
-  .header::before, .header::after { content: ""; position: absolute; width: 12px; height: 12px; border: 2px solid #ff9a62; pointer-events: none; }
-  .header::before { left: 6px; top: 6px; border-right: 0; border-bottom: 0; }
-  .header::after { right: 6px; top: 6px; border-left: 0; border-bottom: 0; }
-  .eyebrow { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
-  .title { margin-top: 2px; font-size: 28px; font-weight: 700; line-height: 1.15; }
-  .desc { margin-top: 6px; color: var(--muted); font-size: 12px; max-width: 620px; line-height: 1.3; }
-  .subnav { margin-top: 12px; border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-top: 1px; }
-  .subtab { height: 36px; border-radius: 8px 8px 0 0; border: 1px solid var(--border); border-bottom: none; background: #121418; color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 12px; position: relative; }
-  .subtab.active { background: #241c18; border-color: #7a4e35; color: var(--text); font-weight: 700; }
-  .subtab.active::after { content: ""; position: absolute; left: 10px; right: 10px; top: 1px; height: 3px; background: var(--accent); }
-  .content { position: relative; margin-top: 6px; flex: 1; background: #0c0d10; padding: 10px 10px 16px 12px; overflow: hidden; background-image: radial-gradient(rgba(255,255,255,0.03) 0.6px, transparent 0.6px); background-size: 3px 3px; }
-  .content::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: rgba(255,138,77,0.35); }
-  .pane { position: relative; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px 12px 18px; margin-bottom: 8px; box-shadow: inset 4px 0 0 var(--accent); }
-  .pane h3 { margin: 0; font-size: 15px; font-weight: 700; position: relative; padding-bottom: 6px; }
-  .pane h3::after { content: ""; position: absolute; left: 0; bottom: 0; width: 36px; height: 2px; background: rgba(255,138,77,0.85); }
-  .pane p { margin: 6px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.35; }
-  .row { display: grid; grid-template-columns: 140px 1fr 60px; gap: 10px; align-items: center; height: 32px; margin-bottom: 5px; font-size: 13px; }
-  .track { height: 8px; border-radius: 999px; background: var(--panel-alt); position: relative; box-shadow: inset 0 1px 2px rgba(0,0,0,0.45); }
-  .fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--accent); }
-  .knob { position: absolute; top: 50%; width: 16px; height: 16px; margin-top: -8px; margin-left: -8px; border-radius: 50%; background: #f5f7ff; box-shadow: 0 1px 0 rgba(0,0,0,0.45); }
-  .value { height: 32px; border: 1.5px solid rgba(255,138,77,0.42); background: var(--panel-alt); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
-  .preview { display: grid; grid-template-columns: 32px 160px 1fr; gap: 10px; align-items: center; height: 36px; margin-bottom: 6px; }
-  .swatch { width: 32px; height: 32px; border-radius: 5px; border: 2px solid #8a5a3d; background: var(--accent); }
-  .hex { color: var(--muted); font-size: 12px; }
-  .presets { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
-  .pill { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-alt); color: var(--text); font-size: 12px; display: inline-flex; align-items: center; }
-  .pill.active { background: var(--accent); border-color: #ffb07a; color: #1a120e; font-weight: 700; }
-  .toolbar { display: flex; gap: 8px; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
-  .btn { height: 28px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border); background: #15171b; color: var(--text); font-size: 12px; display: inline-flex; align-items: center; }
-  .btn.primary { background: var(--accent); border-color: #ffb07a; color: #1a120e; font-weight: 700; }
-  .toggle-row { display: flex; align-items: center; justify-content: space-between; height: 32px; margin-bottom: 4px; font-size: 13px; }
-  .toggle { width: 48px; height: 26px; border-radius: 999px; background: var(--accent); position: relative; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
-  .toggle::after { content: ""; position: absolute; top: 3px; left: 24px; width: 20px; height: 20px; border-radius: 50%; background: white; }
-  .toggle.off { background: var(--panel-alt); }
-  .toggle.off::after { left: 3px; }
-</style>
+<link rel="stylesheet" href="menu-preview.css" />
 </head>
 <body>
+<p class="page-label">Night · Advanced → Interface</p>
 <div class="menu">
   <aside class="sidebar">
-    <div class="plate"><div class="mark">ROWE</div><div class="sub">MOD TOOLKIT</div></div>
-    <div class="badge">v3.3.8</div>
-    <div class="search-well"><div class="search">Find settings...</div></div>
+    <div class="brand">RoweMod</div>
+    <div class="version">v3.3.8</div>
+    <div class="search">Find settings...</div>
     <div class="nav">
-      <div class="nav-btn"><span class="ico"></span><span class="idx">01</span><span>Ride</span></div>
-      <div class="nav-btn"><span class="ico"></span><span class="idx">02</span><span>Tricks</span></div>
-      <div class="nav-btn"><span class="ico"></span><span class="idx">03</span><span>Customize</span></div>
-      <div class="nav-btn"><span class="ico"></span><span class="idx">04</span><span>Camera</span></div>
-      <div class="nav-btn"><span class="ico"></span><span class="idx">05</span><span>World</span></div>
-      <div class="nav-btn"><span class="ico"></span><span class="idx">06</span><span>Graphics</span></div>
-      <div class="nav-btn active"><span class="ico"></span><span class="idx">07</span><span>Advanced</span></div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5"/></svg></span>Ride</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><path d="M2 7h10M7 2v10"/></svg></span>Tricks</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><circle cx="7" cy="4" r="2"/><path d="M3 12c1-3 7-3 8 0"/></svg></span>Customize</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><rect x="2" y="4" width="10" height="7" rx="1.5"/><path d="M5 4l1-2h2l1 2"/></svg></span>Camera</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5"/><path d="M2 7h10"/></svg></span>World</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="2" rx="1"/><rect x="2" y="6.5" width="7" height="2" rx="1"/><rect x="2" y="10" width="9" height="2" rx="1"/></svg></span>Graphics</div>
+      <div class="nav-btn active"><span class="ico"><svg viewBox="0 0 14 14"><path d="M3 4h8M3 7h8M3 10h8"/><circle cx="6" cy="4" r="1.2" fill="currentColor"/><circle cx="9" cy="7" r="1.2" fill="currentColor"/><circle cx="5" cy="10" r="1.2" fill="currentColor"/></svg></span>Advanced</div>
     </div>
     <div class="hints">D-pad Navigate&nbsp;&nbsp;A Select<br>B Close&nbsp;&nbsp;RS Scroll<br>LB/RB Area&nbsp;&nbsp;LT/RT Page</div>
   </aside>
@@ -102,10 +37,10 @@
     </header>
     <div class="content">
       <div class="pane">
-        <h3>Session Look</h3>
-        <p>Night keeps the graphite toolkit. Day Session switches to cool concrete daylight.</p>
+        <h3>Appearance</h3>
+        <p>Lighten the overlay for daytime play, or keep the dark menu at night.</p>
         <div class="toggle-row"><span>Day Session</span><div class="toggle off"></div></div>
-        <div style="color:var(--muted);font-size:11px">Active: Night Session — graphite metal, light text.</div>
+        <div style="color:var(--muted);font-size:11px">Active: dark panels and light text.</div>
       </div>
       <div class="pane">
         <h3>Interface Scale</h3>
@@ -117,14 +52,10 @@
         <h3>Menu Accent</h3>
         <p>Customize RoweMod's accent color without changing the game's interface.</p>
         <div class="preview"><div class="swatch"></div><div class="track"><div class="fill" style="width:62%"></div></div><div class="hex">#FF8A4D</div></div>
-        <div class="row"><div>Red</div><div class="track"><div class="fill" style="width:100%"></div><div class="knob" style="left:100%"></div></div><div class="value">1.00</div></div>
-        <div class="row"><div>Green</div><div class="track"><div class="fill" style="width:54%"></div><div class="knob" style="left:54%"></div></div><div class="value">0.54</div></div>
-        <div class="row"><div>Blue</div><div class="track"><div class="fill" style="width:30%"></div><div class="knob" style="left:30%"></div></div><div class="value">0.30</div></div>
         <div class="presets">
           <div class="pill active">Default</div><div class="pill">Ember</div><div class="pill">Amber</div>
           <div class="pill">Steel</div><div class="pill">Moss</div><div class="pill">Slate</div>
         </div>
-        <div class="toolbar"><div class="btn primary">Apply Menu Color</div><div class="btn">Reset Accent</div></div>
       </div>
     </div>
   </section>

@@ -346,9 +346,9 @@ namespace rowemod
 
         private static float GetNavigationHeaderHeight()
         {
-            float headerBodyHeight = 100f * UiScale;
+            float headerBodyHeight = 86f * UiScale;
             int rows = GetSubNavigationRows();
-            return headerBodyHeight + (rows * (38f * UiScale));
+            return headerBodyHeight + (rows * (34f * UiScale));
         }
 
         private static void DrawNavigationHeader()
@@ -360,26 +360,17 @@ namespace rowemod
             Rect headerRect = new Rect(GetContentX(), UiTitleBarHeight + UiOuterPadding, GetContentWidth(), headerHeight);
             GUI.Box(headerRect, GUIContent.none, tabBarStyle);
 
-            // Corner brackets — industrial title plate, not a soft card.
-            float bracket = 14f * UiScale;
-            float thick = 2f * UiScale;
-            Color bracketColor = Color.Lerp(uiAccentColor, Color.white, 0.15f);
-            DrawSolidColorRect(new Rect(headerRect.x + (8f * UiScale), headerRect.y + (8f * UiScale), bracket, thick), bracketColor);
-            DrawSolidColorRect(new Rect(headerRect.x + (8f * UiScale), headerRect.y + (8f * UiScale), thick, bracket), bracketColor);
-            DrawSolidColorRect(new Rect(headerRect.xMax - (8f * UiScale) - bracket, headerRect.y + (8f * UiScale), bracket, thick), bracketColor);
-            DrawSolidColorRect(new Rect(headerRect.xMax - (8f * UiScale) - thick, headerRect.y + (8f * UiScale), thick, bracket), bracketColor);
-
             float resetWidth = page.ResetScope == null || searching ? 0f : 156f * UiScale;
             float textWidth = headerRect.width - (UiInnerPadding * 2f) - (resetWidth > 0f ? resetWidth + UiInnerPadding : 0f);
-            float textLeft = headerRect.x + UiInnerPadding + (14f * UiScale);
-            Rect eyebrowRect = new Rect(textLeft, headerRect.y + (12f * UiScale),
-                textWidth - (14f * UiScale), 17f * UiScale);
+            float textLeft = headerRect.x + UiInnerPadding;
+            Rect eyebrowRect = new Rect(textLeft, headerRect.y + (10f * UiScale),
+                textWidth, 14f * UiScale);
             GUI.Label(eyebrowRect, searching ? "SEARCH" : GetAreaLabel(_selectedArea).ToUpperInvariant(), pageEyebrowStyle);
-            Rect titleRect = new Rect(textLeft, headerRect.y + (28f * UiScale),
-                textWidth - (14f * UiScale), 40f * UiScale);
+            Rect titleRect = new Rect(textLeft, headerRect.y + (24f * UiScale),
+                textWidth, 28f * UiScale);
             GUI.Label(titleRect, searching ? "Find Settings" : page.Label, pageTitleStyle ?? sectionHeaderStyle);
-            Rect detailRect = new Rect(textLeft, headerRect.y + (68f * UiScale),
-                textWidth - (14f * UiScale), 36f * UiScale);
+            Rect detailRect = new Rect(textLeft, headerRect.y + (54f * UiScale),
+                textWidth, 28f * UiScale);
             GUI.Label(detailRect,
                 searching ? "Search by player-facing names, technical names, or common phrases." : page.Description,
                 UiMutedWrappedStyle);
@@ -388,8 +379,8 @@ namespace rowemod
             {
                 DrawPageResetButton(page, headerRect, resetWidth);
                 Rect scopeRect = new Rect(headerRect.xMax - UiInnerPadding - resetWidth,
-                    headerRect.y + (70f * UiScale), resetWidth, 20f * UiScale);
-                GUI.Label(scopeRect, $"Scope: {page.ResetScope}", subtleLabelStyle);
+                    headerRect.y + (58f * UiScale), resetWidth, 18f * UiScale);
+                GUI.Label(scopeRect, page.ResetScope, subtleLabelStyle);
             }
 
             if (!searching)
@@ -403,7 +394,7 @@ namespace rowemod
 
             bool confirming = _resetConfirmationActive && _resetConfirmationPage == page.Page;
             Rect buttonRect = new Rect(headerRect.xMax - UiInnerPadding - width,
-                headerRect.y + (24f * UiScale), width, 40f * UiScale);
+                headerRect.y + (22f * UiScale), width, 34f * UiScale);
             string label = confirming ? "Confirm Restore" : "Restore Defaults";
             GUIStyle style = confirming
                 ? redButtonStyle ?? highQualityButtonStyle
@@ -431,9 +422,8 @@ namespace rowemod
             int columns = GetSubNavigationColumns(availableWidth, area.Pages.Length);
             float tabGap = 4f * UiScale;
             float buttonWidth = (availableWidth - ((columns - 1) * tabGap)) / columns;
-            float y = headerRect.y + (100f * UiScale);
+            float y = headerRect.y + (86f * UiScale);
 
-            // A visible rail makes this read as page navigation instead of a row of links.
             DrawSolidColorRect(
                 new Rect(left, y - (1f * UiScale), availableWidth, 1f * UiScale),
                 uiBorderColor);
@@ -445,9 +435,9 @@ namespace rowemod
                 PageDefinition page = FindPage(area.Pages[i]);
                 Rect buttonRect = new Rect(
                     left + column * (buttonWidth + tabGap),
-                    y + row * (38f * UiScale),
+                    y + row * (34f * UiScale),
                     buttonWidth,
-                    36f * UiScale);
+                    32f * UiScale);
                 bool selected = page.Page == _selectedPage;
                 if (GUI.Button(buttonRect, page.Label, selected ? subTabActiveButtonStyle : subTabButtonStyle))
                     SelectPage(page.Page);
@@ -455,10 +445,10 @@ namespace rowemod
                 if (selected)
                 {
                     Rect indicatorRect = new Rect(
-                        buttonRect.x + (10f * UiScale),
-                        buttonRect.y + (1f * UiScale),
-                        Mathf.Max(8f * UiScale, buttonRect.width - (20f * UiScale)),
-                        3f * UiScale);
+                        buttonRect.x + (12f * UiScale),
+                        buttonRect.yMax - (3f * UiScale),
+                        Mathf.Max(12f * UiScale, buttonRect.width - (24f * UiScale)),
+                        2f * UiScale);
                     DrawSolidColorRect(indicatorRect, uiAccentColor);
                 }
             }
@@ -468,15 +458,10 @@ namespace rowemod
         {
             EnsureNavigationInitialized();
             float sidebarWidth = GetResponsiveSidebarWidth();
-            float searchY = UiTitleBarHeight + (56f * UiScale);
+            float searchY = UiTitleBarHeight + (46f * UiScale);
             float searchWidth = sidebarWidth - (UiOuterPadding * 2f);
             float clearWidth = string.IsNullOrEmpty(_menuSearch) ? 0f : 32f * UiScale;
-            Rect searchWell = new Rect(UiOuterPadding - (2f * UiScale), searchY - (2f * UiScale),
-                searchWidth + (4f * UiScale), 40f * UiScale);
-            DrawSolidColorRect(searchWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.7f));
-            DrawSolidColorRect(new Rect(searchWell.x, searchWell.y, 3f * UiScale, searchWell.height),
-                new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.55f));
-            Rect searchRect = new Rect(UiOuterPadding, searchY, searchWidth - clearWidth, 36f * UiScale);
+            Rect searchRect = new Rect(UiOuterPadding, searchY, searchWidth - clearWidth, 32f * UiScale);
             string previousSearch = _menuSearch;
             bool wasSearching = !string.IsNullOrWhiteSpace(previousSearch);
             _menuSearch = GUI.TextField(searchRect, _menuSearch ?? string.Empty, UiSearchFieldStyle);
@@ -536,32 +521,17 @@ namespace rowemod
                 }
 
                 Color iconColor = selected ? uiAccentColor : uiTextMutedColor;
-                Rect iconRect = new Rect(buttonRect.x + (8f * UiScale),
-                    buttonRect.y + ((buttonRect.height - (16f * UiScale)) * 0.5f),
-                    16f * UiScale, 16f * UiScale);
+                Rect iconRect = new Rect(buttonRect.x + (10f * UiScale),
+                    buttonRect.y + ((buttonRect.height - (14f * UiScale)) * 0.5f),
+                    14f * UiScale, 14f * UiScale);
                 DrawNavAreaIcon(area.Area, iconRect, iconColor);
-
-                Rect indexRect = new Rect(buttonRect.x + (26f * UiScale), buttonRect.y,
-                    22f * UiScale, buttonRect.height);
-                GUIStyle indexStyle = navIndexStyle ?? subtleLabelStyle;
-                if (selected && indexStyle != null)
-                {
-                    Color previous = indexStyle.normal.textColor;
-                    indexStyle.normal.textColor = uiAccentColor;
-                    GUI.Label(indexRect, $"{i + 1:00}", indexStyle);
-                    indexStyle.normal.textColor = previous;
-                }
-                else
-                {
-                    GUI.Label(indexRect, $"{i + 1:00}", indexStyle);
-                }
 
                 if (selected)
                 {
                     Rect indicatorRect = new Rect(buttonRect.x + (2f * UiScale),
-                        buttonRect.y + (7f * UiScale),
-                        3f * UiScale,
-                        buttonRect.height - (14f * UiScale));
+                        buttonRect.y + (8f * UiScale),
+                        2f * UiScale,
+                        buttonRect.height - (16f * UiScale));
                     if (tabIndicatorTexture != null)
                         GUI.DrawTexture(indicatorRect, tabIndicatorTexture);
                     else
@@ -574,11 +544,8 @@ namespace rowemod
             GUI.EndScrollView();
 
             float hintY = windowRect.height - UiOuterPadding - NavigationHintHeight;
-            Rect hintWell = new Rect(UiOuterPadding - (4f * UiScale), hintY - (8f * UiScale),
-                navWidth + (8f * UiScale), NavigationHintHeight + (6f * UiScale));
-            DrawSolidColorRect(hintWell, Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.7f));
-            DrawSolidColorRect(new Rect(hintWell.x, hintWell.y, hintWell.width, 2f * UiScale),
-                new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.45f));
+            DrawSolidColorRect(new Rect(UiOuterPadding, hintY - (8f * UiScale),
+                navWidth, 1f), uiBorderColor);
             GUI.Label(new Rect(UiOuterPadding, hintY, navWidth, 18f * UiScale),
                 "D-pad Navigate  A Select", subtleLabelStyle);
             GUI.Label(new Rect(UiOuterPadding, hintY + (18f * UiScale), navWidth, 18f * UiScale),
@@ -1599,7 +1566,7 @@ namespace rowemod
 
         private static void DrawInterfacePage()
         {
-            BeginPane("Session Look", "Night keeps the graphite toolkit. Day Session switches to cool concrete daylight.");
+            BeginPane("Appearance", "Lighten the overlay for daytime play, or keep the dark menu at night.");
             bool daySession = misc.menuDaySession;
             ModernToggle("Day Session", ref daySession, "interface_day_session");
             if (daySession != misc.menuDaySession)
@@ -1609,8 +1576,8 @@ namespace rowemod
                 Config.MarkDirty();
             }
             GUILayout.Label(misc.menuDaySession
-                ? "Active: Day Session — concrete panels, dark text."
-                : "Active: Night Session — graphite metal, light text.", UiMutedWrappedStyle);
+                ? "Active: light panels and dark text."
+                : "Active: dark panels and light text.", UiMutedWrappedStyle);
             EndPane();
 
             BeginPane("Interface Scale", "RoweMod combines this preference with a conservative screen-height scale.");

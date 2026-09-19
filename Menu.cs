@@ -86,9 +86,9 @@ namespace rowemod
         private static float UiResetButtonWidth => 112f * UiScale;
         private static float UiTabSpacing => 5f * UiScale;
         private static float UiSidebarWidth => 200f * UiScale;
-        private static float UiLogoAreaHeight => 112f * UiScale;
+        private static float UiLogoAreaHeight => 96f * UiScale;
         private static float UiContentHeaderHeight => 76f * UiScale;
-        private static float UiNavButtonHeight => 38f * UiScale;
+        private static float UiNavButtonHeight => 36f * UiScale;
         private static float UiFoldoutHeight => 34f * UiScale;
         private static float UiRowHeight => 32f * UiScale;
         private static float UiContentBottomPadding => 16f * UiScale;
@@ -152,8 +152,6 @@ namespace rowemod
         private static Texture2D toggleCapsuleMaskTexture;
         private static Texture2D toggleKnobTexture;
         private static Texture2D sliderTrackMaskTexture;
-        private static Texture2D contentGrainTexture;
-        private static Texture2D sidebarGrainTexture;
         private static Texture2D headerPlateTexture;
         private static readonly List<Texture2D> generatedStyleTextures = new List<Texture2D>();
 
@@ -173,7 +171,6 @@ namespace rowemod
         private static Color uiDangerColor;
         private static Color uiDangerHoverColor;
         private static Color uiDangerActiveColor;
-        private static GUIStyle navIndexStyle;
         private static GUIStyle brandMarkStyle;
         private static GUIStyle brandSubStyle;
         
@@ -468,19 +465,9 @@ namespace rowemod
             float sidebarWidth = GetResponsiveSidebarWidth();
             Rect sidebarRect = new Rect(0f, 0f, sidebarWidth, windowRect.height);
             DrawSolidColorRect(sidebarRect, uiSidebarColor);
-            if (sidebarGrainTexture != null)
-                DrawTintedTexture(sidebarRect, sidebarGrainTexture, Color.white);
 
-            // Warm top plate + hard accent rail — garage-tool sidebar, not a flat app nav.
-            Rect washRect = new Rect(0f, 0f, sidebarWidth, Mathf.Min(188f * UiScale, windowRect.height * 0.34f));
-            DrawSolidColorRect(washRect, Color.Lerp(uiSidebarColor, uiAccentSoftColor, 0.72f));
-            DrawSolidColorRect(new Rect(0f, washRect.yMax - (2f * UiScale), sidebarWidth, 2f * UiScale),
-                new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.28f));
-
-            Rect brandRail = new Rect(0f, 0f, 4f * UiScale, windowRect.height);
+            Rect brandRail = new Rect(0f, 0f, 2f * UiScale, windowRect.height);
             DrawSolidColorRect(brandRail, uiAccentColor);
-            DrawSolidColorRect(new Rect(4f * UiScale, 0f, 1f * UiScale, windowRect.height),
-                new Color(1f, 1f, 1f, 0.06f));
 
             Rect dividerRect = new Rect(sidebarWidth - 1f, 0f, 1f, windowRect.height);
             DrawSolidColorRect(dividerRect, uiBorderColor);
@@ -492,23 +479,19 @@ namespace rowemod
         {
             float sidebarWidth = GetResponsiveSidebarWidth();
             float pad = UiOuterPadding;
-            Rect plateRect = new Rect(pad, 4f * UiScale, sidebarWidth - (pad * 2f), 52f * UiScale);
-            DrawSolidColorRect(plateRect, Color.Lerp(uiPanelAltColor, uiSidebarColor, 0.25f));
-            DrawSolidColorRect(new Rect(plateRect.x, plateRect.y, plateRect.width, 1f),
-                new Color(1f, 1f, 1f, 0.10f));
-            DrawSolidColorRect(new Rect(plateRect.x, plateRect.yMax - 1f, plateRect.width, 1f),
-                new Color(0f, 0f, 0f, 0.35f));
-            DrawSolidColorRect(new Rect(plateRect.x, plateRect.y, 3f * UiScale, plateRect.height), uiAccentColor);
+            Rect markRect = new Rect(pad, 8f * UiScale, sidebarWidth - (pad * 2f), 22f * UiScale);
+            Rect versionRect = new Rect(pad, markRect.yMax + (2f * UiScale),
+                sidebarWidth - (pad * 2f), 16f * UiScale);
 
             if (logoTexture != null && logoTexture.width > 0 && logoTexture.height > 0)
             {
-                float maxLogoWidth = plateRect.width - (16f * UiScale);
-                float maxLogoHeight = plateRect.height - (12f * UiScale);
+                float maxLogoWidth = markRect.width;
+                float maxLogoHeight = 28f * UiScale;
                 float scale = Mathf.Min(maxLogoWidth / logoTexture.width, maxLogoHeight / logoTexture.height);
                 float logoWidth = logoTexture.width * scale;
                 float logoHeight = logoTexture.height * scale;
-                Rect logoRect = new Rect(plateRect.x + (12f * UiScale),
-                    plateRect.y + ((plateRect.height - logoHeight) * 0.5f), logoWidth, logoHeight);
+                Rect logoRect = new Rect(markRect.x, markRect.y + ((22f * UiScale - logoHeight) * 0.5f),
+                    logoWidth, logoHeight);
 
                 Color previousColor = GUI.color;
                 GUI.color = Color.white;
@@ -517,26 +500,10 @@ namespace rowemod
             }
             else
             {
-                GUIStyle mark = brandMarkStyle ?? pageTitleStyle ?? sectionHeaderStyle;
-                GUIStyle sub = brandSubStyle ?? subtleLabelStyle;
-                GUI.Label(new Rect(plateRect.x + (12f * UiScale), plateRect.y + (6f * UiScale),
-                    plateRect.width - (16f * UiScale), 28f * UiScale), "ROWE", mark);
-                GUI.Label(new Rect(plateRect.x + (12f * UiScale), plateRect.y + (30f * UiScale),
-                    plateRect.width - (16f * UiScale), 20f * UiScale), "MOD TOOLKIT", sub);
+                GUI.Label(markRect, "RoweMod", brandMarkStyle ?? pageTitleStyle ?? sectionHeaderStyle);
             }
 
-            Rect versionRect = new Rect(pad, plateRect.yMax + (8f * UiScale),
-                sidebarWidth - (pad * 2f), 22f * UiScale);
-            if (badgeStyle != null)
-            {
-                float badgeWidth = Mathf.Min(versionRect.width, 86f * UiScale);
-                GUI.Label(new Rect(versionRect.x, versionRect.y, badgeWidth, versionRect.height),
-                    $"v{Main.ModVersion}", badgeStyle);
-            }
-            else
-            {
-                GUI.Label(versionRect, $"v. {Main.ModVersion}", subtleLabelStyle);
-            }
+            GUI.Label(versionRect, $"v{Main.ModVersion}", brandSubStyle ?? subtleLabelStyle);
         }
 
         private static void DrawContentHeader()
@@ -588,14 +555,7 @@ namespace rowemod
                 float contentWidth = visibleArea.width;
                 viewHeight = visibleAreaHeight;
 
-                // Soft content well with grain so panels sit on a quieter textured plane.
-                DrawSolidColorRect(visibleArea, Color.Lerp(uiBackgroundColor, uiPanelAltColor, 0.42f));
-                if (contentGrainTexture != null)
-                    DrawTintedTexture(visibleArea, contentGrainTexture, new Color(1f, 1f, 1f, 0.55f));
-                Rect contentAccent = new Rect(visibleArea.x, visibleArea.y, 3f * UiScale, visibleArea.height);
-                DrawSolidColorRect(contentAccent, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.35f));
-                DrawSolidColorRect(new Rect(visibleArea.x + (3f * UiScale), visibleArea.y, 1f * UiScale, visibleArea.height),
-                    new Color(1f, 1f, 1f, 0.05f));
+                DrawSolidColorRect(visibleArea, uiBackgroundColor);
 
                 GUI.BeginGroup(visibleArea);
                 beganGroup = true;
@@ -1019,57 +979,53 @@ namespace rowemod
                 uiAccentTextColor = GetAccessibleTextColor(uiAccentColor);
                 if (misc.menuDaySession)
                 {
-                    // Day Session: cool concrete / asphalt light — not cream, not purple.
-                    uiBackgroundColor = new Color(0.910f, 0.922f, 0.935f, 0.995f); // #E8EBEE
-                    uiSidebarColor = new Color(0.855f, 0.872f, 0.890f, 0.995f);    // #DADEE3
-                    uiPanelColor = new Color(0.965f, 0.970f, 0.976f, 0.995f);       // #F6F7F9
-                    uiPanelHoverColor = new Color(0.930f, 0.940f, 0.952f, 1f);
-                    uiPanelAltColor = new Color(0.890f, 0.902f, 0.918f, 1f);        // #E3E6EA
-                    uiBorderColor = new Color(0.690f, 0.720f, 0.760f, 0.98f);       // #B0B8C2
-                    uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.55f);
-                    uiTextPrimaryColor = new Color(0.102f, 0.122f, 0.149f, 1f);     // #1A1F26
-                    uiTextMutedColor = new Color(0.353f, 0.396f, 0.451f, 1f);       // #5A6573
-                    uiAccentSoftColor = Color.Lerp(uiSidebarColor, uiAccentColor, 0.18f);
+                    uiBackgroundColor = new Color(0.925f, 0.933f, 0.941f, 0.995f); // #ECEEF0
+                    uiSidebarColor = new Color(0.886f, 0.898f, 0.910f, 0.995f);    // #E2E5E8
+                    uiPanelColor = new Color(0.980f, 0.982f, 0.986f, 0.995f);       // #FAFBFC
+                    uiPanelHoverColor = new Color(0.945f, 0.953f, 0.961f, 1f);
+                    uiPanelAltColor = new Color(0.941f, 0.949f, 0.957f, 1f);        // #F0F2F4
+                    uiBorderColor = new Color(0.753f, 0.780f, 0.808f, 0.98f);       // #C0C7CE
+                    uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.70f);
+                    uiTextPrimaryColor = new Color(0.090f, 0.110f, 0.133f, 1f);     // #171C22
+                    uiTextMutedColor = new Color(0.345f, 0.388f, 0.439f, 1f);       // #586370
+                    uiAccentSoftColor = Color.Lerp(uiSidebarColor, uiAccentColor, 0.14f);
                 }
                 else
                 {
-                    // Night Session: street-metal graphite.
-                    uiBackgroundColor = new Color(0.035f, 0.038f, 0.045f, 0.995f); // #090A0B
-                    uiSidebarColor = new Color(0.045f, 0.050f, 0.060f, 0.995f);    // #0B0D0F
-                    uiPanelColor = new Color(0.090f, 0.098f, 0.112f, 0.995f);       // #17191C
-                    uiPanelHoverColor = new Color(0.118f, 0.130f, 0.150f, 1f);
-                    uiPanelAltColor = new Color(0.062f, 0.068f, 0.078f, 1f);        // #101114
-                    uiBorderColor = new Color(0.210f, 0.225f, 0.250f, 0.98f);       // #353940
-                    uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.10f);
-                    uiTextPrimaryColor = new Color(0.965f, 0.970f, 0.975f, 1f);     // #F6F7F8
-                    uiTextMutedColor = new Color(0.620f, 0.650f, 0.690f, 1f);       // #9EA6B0
+                    uiBackgroundColor = new Color(0.063f, 0.075f, 0.086f, 0.995f); // #101318
+                    uiSidebarColor = new Color(0.047f, 0.055f, 0.067f, 0.995f);    // #0C0E11
+                    uiPanelColor = new Color(0.110f, 0.122f, 0.141f, 0.995f);       // #1C1F24
+                    uiPanelHoverColor = new Color(0.137f, 0.153f, 0.176f, 1f);
+                    uiPanelAltColor = new Color(0.086f, 0.094f, 0.110f, 1f);        // #16181C
+                    uiBorderColor = new Color(0.204f, 0.224f, 0.255f, 0.98f);       // #343941
+                    uiEdgeHighlightColor = new Color(1f, 1f, 1f, 0.08f);
+                    uiTextPrimaryColor = new Color(0.945f, 0.953f, 0.961f, 1f);     // #F1F3F5
+                    uiTextMutedColor = new Color(0.557f, 0.596f, 0.643f, 1f);       // #8E98A4
                     uiAccentSoftColor = Color.Lerp(
                         new Color(0.055f, 0.060f, 0.070f, 1f),
                         uiAccentColor,
-                        0.22f);
+                        0.18f);
                 }
                 uiDangerColor = new Color(0.345f, 0.102f, 0.137f, 0.98f);
                 uiDangerHoverColor = new Color(0.435f, 0.133f, 0.176f, 1f);
                 uiDangerActiveColor = new Color(0.275f, 0.075f, 0.106f, 1f);
 
-                backgroundTexture = MakeStyleNoiseRoundedTex(72, 72, uiBackgroundColor, 10, 1, uiBorderColor, 0.045f);
+                backgroundTexture = MakeStyleRoundedTex(72, 72, uiBackgroundColor, 10, 1, uiBorderColor);
                 roundedButtonNormal = MakeStyleRoundedTex(48, 36, uiPanelAltColor, 6, 1, uiBorderColor);
                 roundedButtonHover = MakeStyleRoundedTex(48, 36, uiPanelHoverColor, 6, 1,
-                    Color.Lerp(uiBorderColor, uiAccentColor, 0.35f));
+                    Color.Lerp(uiBorderColor, uiAccentColor, 0.28f));
                 activeTabBackground = MakeStyleRoundedTex(48, 40,
-                    Color.Lerp(uiPanelColor, uiAccentColor, 0.22f),
+                    Color.Lerp(uiSidebarColor, uiAccentColor, 0.16f),
                     6,
                     1,
-                    Color.Lerp(uiBorderColor, uiAccentColor, 0.62f));
+                    Color.Lerp(uiBorderColor, uiAccentColor, 0.42f));
                 accentColorTexture = MakeStyleTex(2, 2, uiAccentColor);
                 tabIndicatorTexture = MakeStyleTex(2, 2, uiAccentColor);
                 tricksTabIndicatorTexture = MakeStyleTex(2, 2, new Color(0.24f, 0.82f, 0.42f, 1f));
                 toggleCapsuleMaskTexture = MakeStyleCapsuleTex(96, 52, Color.white, 0, Color.clear);
                 toggleKnobTexture = MakeStyleCircleTex(64, new Color(0.96f, 0.97f, 1f, 1f), 1, new Color(0f, 0f, 0f, 0.45f));
                 sliderTrackMaskTexture = MakeStyleCapsuleTex(128, 24, Color.white, 0, Color.clear);
-                contentGrainTexture = MakeStyleGrainTex(96, 96, 0.055f);
-                sidebarGrainTexture = MakeStyleDiagonalGrainTex(64, 128, 0.04f);
-                headerPlateTexture = MakeStyleAccentPaneTex(96, 64, uiPanelColor, uiAccentColor, 8, uiBorderColor);
+                headerPlateTexture = MakeStyleRoundedTex(96, 64, uiPanelColor, 8, 1, uiBorderColor);
                 _circleTex = toggleKnobTexture;
 
                 windowStyle = new GUIStyle(GUI.skin.window);
@@ -1105,30 +1061,24 @@ namespace rowemod
                 sectionHeaderStyle.fontSize = Mathf.RoundToInt(16f * UiScale);
 
                 pageTitleStyle = new GUIStyle(sectionHeaderStyle);
-                pageTitleStyle.fontSize = Mathf.RoundToInt(32f * UiScale);
+                pageTitleStyle.fontSize = Mathf.RoundToInt(22f * UiScale);
                 pageTitleStyle.fontStyle = FontStyle.Bold;
                 pageTitleStyle.alignment = TextAnchor.MiddleLeft;
 
                 pageEyebrowStyle = new GUIStyle(labelStyle);
                 pageEyebrowStyle.fontSize = Mathf.RoundToInt(11f * UiScale);
                 pageEyebrowStyle.fontStyle = FontStyle.Bold;
-                pageEyebrowStyle.normal.textColor = uiAccentColor;
+                pageEyebrowStyle.normal.textColor = uiTextMutedColor;
                 pageEyebrowStyle.alignment = TextAnchor.MiddleLeft;
 
                 brandMarkStyle = new GUIStyle(pageTitleStyle);
-                brandMarkStyle.fontSize = Mathf.RoundToInt(22f * UiScale);
+                brandMarkStyle.fontSize = Mathf.RoundToInt(16f * UiScale);
                 brandMarkStyle.alignment = TextAnchor.MiddleLeft;
 
                 brandSubStyle = new GUIStyle(subtleLabelStyle);
-                brandSubStyle.fontSize = Mathf.RoundToInt(10f * UiScale);
-                brandSubStyle.fontStyle = FontStyle.Bold;
-                brandSubStyle.normal.textColor = Color.Lerp(uiTextMutedColor, uiAccentColor, 0.35f);
-
-                navIndexStyle = new GUIStyle(subtleLabelStyle);
-                navIndexStyle.fontSize = Mathf.RoundToInt(11f * UiScale);
-                navIndexStyle.fontStyle = FontStyle.Bold;
-                navIndexStyle.alignment = TextAnchor.MiddleCenter;
-                navIndexStyle.normal.textColor = Color.Lerp(uiTextMutedColor, uiAccentColor, 0.25f);
+                brandSubStyle.fontSize = Mathf.RoundToInt(11f * UiScale);
+                brandSubStyle.fontStyle = FontStyle.Normal;
+                brandSubStyle.normal.textColor = uiTextMutedColor;
 
                 rowLabelStyle = new GUIStyle(labelStyle);
                 rowLabelStyle.richText = true;
@@ -1226,18 +1176,16 @@ namespace rowemod
                 miniButtonStyle.margin = new RectOffset(2, 2, 0, 0);
 
                 tabButtonStyle = new GUIStyle(highQualityButtonStyle);
-                Color sideTabBorder = Color.Lerp(uiBorderColor, uiSidebarColor, 0.42f);
-                tabButtonStyle.normal.background = MakeStyleRoundedTex(48, 40,
-                    Color.Lerp(uiSidebarColor, uiPanelAltColor, 0.55f), 6, 1, sideTabBorder);
+                tabButtonStyle.normal.background = MakeStyleRoundedTex(48, 40, uiSidebarColor, 6, 0, uiSidebarColor);
                 tabButtonStyle.hover.background = MakeStyleRoundedTex(48, 40,
-                    uiPanelHoverColor, 6, 1, Color.Lerp(uiBorderColor, uiAccentColor, 0.28f));
+                    uiPanelHoverColor, 6, 0, uiPanelHoverColor);
                 tabButtonStyle.active.background = MakeStyleRoundedTex(48, 40,
-                    Color.Lerp(uiPanelHoverColor, Color.black, 0.12f), 6, 1, uiBorderColor);
+                    Color.Lerp(uiPanelHoverColor, Color.black, 0.08f), 6, 0, uiPanelHoverColor);
                 tabButtonStyle.normal.textColor = uiTextMutedColor;
                 tabButtonStyle.hover.textColor = uiTextPrimaryColor;
                 tabButtonStyle.active.textColor = uiTextPrimaryColor;
                 tabButtonStyle.padding = new RectOffset(
-                    Mathf.RoundToInt(52f * UiScale),
+                    Mathf.RoundToInt(36f * UiScale),
                     Mathf.RoundToInt(8f * UiScale),
                     Mathf.RoundToInt(4f * UiScale),
                     Mathf.RoundToInt(4f * UiScale));
@@ -1263,29 +1211,27 @@ namespace rowemod
 
                 subTabButtonStyle = new GUIStyle(tabButtonStyle);
                 subTabButtonStyle.alignment = TextAnchor.MiddleCenter;
-                subTabButtonStyle.padding = new RectOffset(12, 12, 8, 5);
-                subTabButtonStyle.border = new RectOffset(9, 9, 9, 1);
-                subTabButtonStyle.normal.background = MakeStyleTopRoundedTabTex(64, 42,
-                    Color.Lerp(uiPanelAltColor, uiPanelColor, 0.18f), 10, 1, uiBorderColor);
-                subTabButtonStyle.hover.background = MakeStyleTopRoundedTabTex(64, 42,
-                    uiPanelHoverColor, 10, 1, Color.Lerp(uiBorderColor, uiTextMutedColor, 0.18f));
-                subTabButtonStyle.active.background = MakeStyleTopRoundedTabTex(64, 42,
-                    Color.Lerp(uiPanelHoverColor, Color.black, 0.10f), 10, 1, uiBorderColor);
+                subTabButtonStyle.padding = new RectOffset(12, 12, 6, 6);
+                subTabButtonStyle.border = new RectOffset(6, 6, 6, 6);
+                subTabButtonStyle.normal.background = MakeStyleRoundedTex(48, 32, uiPanelColor, 6, 0, uiPanelColor);
+                subTabButtonStyle.hover.background = MakeStyleRoundedTex(48, 32,
+                    uiPanelHoverColor, 6, 0, uiPanelHoverColor);
+                subTabButtonStyle.active.background = MakeStyleRoundedTex(48, 32,
+                    Color.Lerp(uiPanelHoverColor, Color.black, 0.08f), 6, 0, uiPanelHoverColor);
                 subTabButtonStyle.normal.textColor = uiTextMutedColor;
                 subTabButtonStyle.hover.textColor = uiTextPrimaryColor;
                 subTabButtonStyle.active.textColor = uiTextPrimaryColor;
 
                 subTabActiveButtonStyle = new GUIStyle(subTabButtonStyle);
-                Color activeSubTabColor = Color.Lerp(uiPanelColor, uiAccentColor, 0.13f);
-                Color activeSubTabBorder = Color.Lerp(uiBorderColor, uiAccentColor, 0.52f);
-                subTabActiveButtonStyle.normal.background = MakeStyleTopRoundedTabTex(64, 42,
-                    activeSubTabColor, 10, 1, activeSubTabBorder);
-                subTabActiveButtonStyle.hover.background = MakeStyleTopRoundedTabTex(64, 42,
-                    Color.Lerp(activeSubTabColor, Color.white, 0.05f), 10, 1, uiAccentColor);
-                subTabActiveButtonStyle.active.background = MakeStyleTopRoundedTabTex(64, 42,
-                    Color.Lerp(activeSubTabColor, Color.black, 0.10f), 10, 1, activeSubTabBorder);
+                Color activeSubTabColor = Color.Lerp(uiPanelColor, uiAccentColor, 0.10f);
+                subTabActiveButtonStyle.normal.background = MakeStyleRoundedTex(48, 32,
+                    activeSubTabColor, 6, 0, activeSubTabColor);
+                subTabActiveButtonStyle.hover.background = MakeStyleRoundedTex(48, 32,
+                    Color.Lerp(activeSubTabColor, Color.white, 0.04f), 6, 0, activeSubTabColor);
+                subTabActiveButtonStyle.active.background = MakeStyleRoundedTex(48, 32,
+                    Color.Lerp(activeSubTabColor, Color.black, 0.08f), 6, 0, activeSubTabColor);
                 subTabActiveButtonStyle.normal.textColor = uiTextPrimaryColor;
-                subTabActiveButtonStyle.hover.textColor = Color.white;
+                subTabActiveButtonStyle.hover.textColor = uiTextPrimaryColor;
                 subTabActiveButtonStyle.active.textColor = uiTextPrimaryColor;
                 subTabActiveButtonStyle.fontStyle = FontStyle.Bold;
 
@@ -1299,30 +1245,30 @@ namespace rowemod
                 redButtonStyle.active.textColor = uiTextPrimaryColor;
 
                 sectionCardStyle = new GUIStyle(GUI.skin.box);
-                sectionCardStyle.normal.background = MakeStyleAccentPaneTex(72, 72, uiPanelColor, uiAccentColor, 8, uiBorderColor);
+                sectionCardStyle.normal.background = MakeStyleRoundedTex(72, 72, uiPanelColor, 8, 1, uiBorderColor);
                 sectionCardStyle.padding = new RectOffset(
-                    Mathf.RoundToInt(UiInnerPadding + (6f * UiScale)),
+                    (int)UiInnerPadding,
                     (int)UiInnerPadding,
                     (int)UiInnerPadding,
                     (int)UiInnerPadding);
                 sectionCardStyle.margin = new RectOffset(0, 0, 0, 0);
-                sectionCardStyle.border = new RectOffset(14, 12, 12, 12);
+                sectionCardStyle.border = new RectOffset(12, 12, 12, 12);
 
                 panelStyle = new GUIStyle(sectionCardStyle);
                 panelStyle.padding = new RectOffset(
-                    Mathf.RoundToInt(16f * UiScale),
-                    Mathf.RoundToInt(12f * UiScale),
+                    Mathf.RoundToInt(14f * UiScale),
+                    Mathf.RoundToInt(14f * UiScale),
                     Mathf.RoundToInt(12f * UiScale),
                     Mathf.RoundToInt(12f * UiScale));
-                panelStyle.margin = new RectOffset(0, 0, Mathf.RoundToInt(2f * UiScale), Mathf.RoundToInt(8f * UiScale));
+                panelStyle.margin = new RectOffset(0, 0, Mathf.RoundToInt(2f * UiScale), Mathf.RoundToInt(10f * UiScale));
 
                 panelAltStyle = new GUIStyle(panelStyle);
-                panelAltStyle.normal.background = MakeStyleAccentPaneTex(72, 72, uiPanelAltColor, uiAccentColor, 8, uiBorderColor);
+                panelAltStyle.normal.background = MakeStyleRoundedTex(72, 72, uiPanelAltColor, 8, 1, uiBorderColor);
 
                 tabBarStyle = new GUIStyle(GUI.skin.box);
                 tabBarStyle.normal.background = headerPlateTexture ??
-                    MakeStyleAccentPaneTex(96, 64, uiPanelColor, uiAccentColor, 8, uiBorderColor);
-                tabBarStyle.border = new RectOffset(14, 12, 12, 12);
+                    MakeStyleRoundedTex(96, 64, uiPanelColor, 8, 1, uiBorderColor);
+                tabBarStyle.border = new RectOffset(12, 12, 12, 12);
                 tabBarStyle.padding = new RectOffset((int)UiInnerPadding, (int)UiInnerPadding, 4, 4);
                 tabBarStyle.margin = new RectOffset(0, 0, 0, 0);
 
@@ -2133,13 +2079,13 @@ namespace rowemod
             Rect titleRect = GUILayoutUtility.GetLastRect();
             if (Event.current.type == EventType.Repaint && titleRect.width > 1f)
             {
-                float underlineWidth = Mathf.Min(42f * UiScale, titleRect.width * 0.28f);
+                float underlineWidth = Mathf.Min(28f * UiScale, titleRect.width * 0.22f);
                 Rect underlineRect = new Rect(
                     titleRect.x,
-                    titleRect.yMax - (2f * UiScale),
+                    titleRect.yMax - (1f * UiScale),
                     underlineWidth,
-                    Mathf.Max(2f, 2.5f * UiScale));
-                DrawSolidColorRect(underlineRect, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.85f));
+                    1f);
+                DrawSolidColorRect(underlineRect, uiBorderColor);
             }
 
             if (!string.IsNullOrWhiteSpace(detail))
@@ -2291,18 +2237,15 @@ namespace rowemod
             if (Event.current.type == EventType.Repaint)
             {
                 DrawSolidColorRect(wellRect, Color.Lerp(uiPanelAltColor, uiBackgroundColor, 0.35f));
-                Rect accent = new Rect(wellRect.x + (16f * UiScale), wellRect.y + (28f * UiScale),
-                    4f * UiScale, wellRect.height - (56f * UiScale));
-                DrawSolidColorRect(accent, new Color(uiAccentColor.r, uiAccentColor.g, uiAccentColor.b, 0.7f));
             }
 
-            Rect titleRect = new Rect(wellRect.x + (32f * UiScale), wellRect.y + (32f * UiScale),
-                wellRect.width - (48f * UiScale), 28f * UiScale);
+            Rect titleRect = new Rect(wellRect.x + (16f * UiScale), wellRect.y + (32f * UiScale),
+                wellRect.width - (32f * UiScale), 28f * UiScale);
             GUI.Label(titleRect, title, UiHeaderStyle);
             if (!string.IsNullOrWhiteSpace(detail))
             {
-                Rect detailRect = new Rect(wellRect.x + (32f * UiScale), wellRect.y + (62f * UiScale),
-                    wellRect.width - (48f * UiScale), 40f * UiScale);
+                Rect detailRect = new Rect(wellRect.x + (16f * UiScale), wellRect.y + (62f * UiScale),
+                    wellRect.width - (32f * UiScale), 40f * UiScale);
                 GUI.Label(detailRect, detail, UiMutedWrappedStyle);
             }
             GUILayout.FlexibleSpace();
@@ -2319,15 +2262,16 @@ namespace rowemod
             Color backgroundColor = isHovering ? Color.Lerp(baseColor, uiPanelHoverColor, 0.6f) : baseColor;
             DrawSolidColorRect(rect, backgroundColor);
 
-            Rect accentRect = new Rect(rect.x + 1f, rect.y + (6f * UiScale),
-                4f * UiScale, rect.height - (12f * UiScale));
+            Rect accentRect = new Rect(rect.x + 1f, rect.y + (8f * UiScale),
+                2f * UiScale, rect.height - (16f * UiScale));
             DrawSolidColorRect(accentRect, expanded
                 ? uiAccentColor
-                : new Color(uiBorderColor.r, uiBorderColor.g, uiBorderColor.b, 0.9f));
+                : uiBorderColor);
 
             Rect dividerRect = new Rect(rect.x + (10f * UiScale), rect.yMax - 1f,
                 rect.width - (20f * UiScale), 1f);
-            DrawSolidColorRect(dividerRect, new Color(1f, 1f, 1f, expanded ? 0.10f : 0.06f));
+            DrawSolidColorRect(dividerRect, new Color(uiBorderColor.r, uiBorderColor.g, uiBorderColor.b,
+                expanded ? 0.90f : 0.55f));
 
             Rect arrowRect = new Rect(rect.x + (12f * UiScale), rect.y, 18f * UiScale, rect.height);
             Rect labelRect = new Rect(rect.x + (34f * UiScale), rect.y,
