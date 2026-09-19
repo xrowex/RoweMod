@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RoweMod Menu Preview</title>
+<link rel="stylesheet" href="menu-preview.css" />
+</head>
+<body>
+<p class="page-label">Night · Advanced → Interface</p>
+<div class="menu">
+  <aside class="sidebar">
+    <div class="brand">RoweMod</div>
+    <div class="version">v3.3.8</div>
+    <div class="search">Find settings...</div>
+    <div class="nav">
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5"/></svg></span>Ride</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><path d="M2 7h10M7 2v10"/></svg></span>Tricks</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><circle cx="7" cy="4" r="2"/><path d="M3 12c1-3 7-3 8 0"/></svg></span>Customize</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><rect x="2" y="4" width="10" height="7" rx="1.5"/><path d="M5 4l1-2h2l1 2"/></svg></span>Camera</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="5"/><path d="M2 7h10"/></svg></span>World</div>
+      <div class="nav-btn"><span class="ico"><svg viewBox="0 0 14 14"><rect x="2" y="3" width="10" height="2" rx="1"/><rect x="2" y="6.5" width="7" height="2" rx="1"/><rect x="2" y="10" width="9" height="2" rx="1"/></svg></span>Graphics</div>
+      <div class="nav-btn active"><span class="ico"><svg viewBox="0 0 14 14"><path d="M3 4h8M3 7h8M3 10h8"/><circle cx="6" cy="4" r="1.2" fill="currentColor"/><circle cx="9" cy="7" r="1.2" fill="currentColor"/><circle cx="5" cy="10" r="1.2" fill="currentColor"/></svg></span>Advanced</div>
+    </div>
+    <div class="hints">D-pad Navigate&nbsp;&nbsp;A Select<br>B Close&nbsp;&nbsp;RS Scroll<br>LB/RB Area&nbsp;&nbsp;LT/RT Page</div>
+  </aside>
+  <section class="main">
+    <header class="header">
+      <div class="eyebrow">ADVANCED</div>
+      <div class="title">Interface</div>
+      <div class="desc">Customize the RoweMod menu appearance.</div>
+      <div class="subnav">
+        <div class="subtab">Startup</div>
+        <div class="subtab active">Interface</div>
+        <div class="subtab">Multiplayer</div>
+        <div class="subtab">Developer</div>
+      </div>
+    </header>
+    <div class="content">
+      <div class="pane">
+        <h3>Appearance</h3>
+        <p>Lighten the overlay for daytime play, or keep the dark menu at night.</p>
+        <div class="toggle-row"><span>Day Session</span><div class="toggle off"></div></div>
+        <div style="color:var(--muted);font-size:11px">Active: dark panels and light text.</div>
+      </div>
+      <div class="pane">
+        <h3>Interface Scale</h3>
+        <p>RoweMod combines this preference with a conservative screen-height scale.</p>
+        <div class="row"><div>UI Scale</div><div class="track"><div class="fill" style="width:36%"></div><div class="knob" style="left:36%"></div></div><div class="value">1.00</div></div>
+        <div class="btn primary">Apply Interface Scale</div>
+      </div>
+      <div class="pane">
+        <h3>Menu Accent</h3>
+        <p>Customize RoweMod's accent color without changing the game's interface.</p>
+        <div class="preview"><div class="swatch"></div><div class="track"><div class="fill" style="width:62%"></div></div><div class="hex">#FF8A4D</div></div>
+        <div class="row"><div>Red</div><div class="track"><div class="fill" style="width:100%"></div><div class="knob" style="left:100%"></div></div><div class="value">1.00</div></div>
+        <div class="row"><div>Green</div><div class="track"><div class="fill" style="width:54%"></div><div class="knob" style="left:54%"></div></div><div class="value">0.54</div></div>
+        <div class="row"><div>Blue</div><div class="track"><div class="fill" style="width:30%"></div><div class="knob" style="left:30%"></div></div><div class="value">0.30</div></div>
+        <div class="presets">
+          <div class="pill active">Default</div><div class="pill">Ember</div><div class="pill">Amber</div>
+          <div class="pill">Steel</div><div class="pill">Moss</div><div class="pill">Slate</div>
+        </div>
+        <div class="toolbar"><div class="btn primary">Apply Menu Color</div><div class="btn">Reset Accent</div></div>
+      </div>
+    </div>
+  </section>
+</div>
+<p class="meta">
+  Quiet product chrome: no grain, brackets, numbered nav, or accent rails on every pane.
+  Accent is reserved for selection, toggles, and sliders.
+  Also see <a href="menu-preview-interface.html">Interface</a>,
+  <a href="menu-preview-ride.html">Ride</a>, and
+  <a href="menu-preview-day.html">Day Session</a>.
+</p>
+</body>
+</html>
