@@ -80,6 +80,18 @@ try {
         )
         if ($targets.Count -ne 1) { throw "Ambiguous/missing target $($spec[1]).$($spec[2])" }
         $target = $targets[0]
+        if ($spec[0] -eq 'CustomEquipCompletionPatch') {
+            foreach ($propertySpec in @(
+                @('__4__this', 'Il2CppMashBox.Character.Scripts.EquipSlot'),
+                @('go', 'UnityEngine.GameObject')
+            )) {
+                $property = @($target.DeclaringType.Properties | Where-Object Name -eq $propertySpec[0])
+                if ($property.Count -ne 1 -or $property[0].PropertyType.FullName -ne $propertySpec[1] -or
+                    $null -eq $property[0].GetMethod -or $property[0].GetMethod.IsStatic) {
+                    throw "Unsupported equip coroutine property: $($propertySpec[0])"
+                }
+            }
+        }
         foreach ($method in $patch.Methods | Where-Object { $_.Name -in @('Prefix', 'Postfix') }) {
             $patchCount++
             if (-not $method.IsStatic) { throw "Non-static patch: $($method.FullName)" }
@@ -94,9 +106,14 @@ try {
                     $expected = $target.Parameters[$index].ParameterType.FullName.TrimEnd('&')
                 }
                 else { throw "Fragile named argument '$($parameter.Name)' in $($method.FullName)" }
-                if ($actual -ne $expected) { throw "Patch argument mismatch: $($method.FullName) $actual vs $expected" }
+                if ($actual -ne $expected -and -not ($parameter.Name -eq '__instance' -and $actual -eq 'System.Object')) {
+                    throw "Patch argument mismatch: $($method.FullName) $actual vs $expected"
+                }
             }
         }
+    }
+    if ($mod.MainModule.GetTypeReferences() | Where-Object { $_.Name -eq '_EnumEquip_d__80' }) {
+        throw 'Generated equip coroutine remains a hard assembly reference; missing wrappers can abort startup during JIT compilation.'
     }
     Write-Output "PASS: no blanket/automatic/early patching; all $($specs.Count) late targets covered; $patchCount real compiled prefix/postfix signatures match installed wrappers."
 }

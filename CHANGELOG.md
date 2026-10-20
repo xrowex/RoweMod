@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.9
+
+- Fixed a startup `TypeLoadException` when the game's generated equip coroutine wrapper is missing.
+- Resolves the optional wrapper inside the hook group's error handling, allowing the remaining hooks and RoweMod startup to continue when that group is unavailable.
+- Validates the completion wrapper's properties before installing either custom-hair hook and preserves native game-build and hook-address checks.
+
+**Testing note:** the Release build, 156 automated checks (including an assembly with the equip coroutine omitted), and compiled hook/signature audit passed. A fresh local launch regenerated interop assemblies with `_EnumEquip_d__111` instead of `_EnumEquip_d__80` and reached the main menu with RoweMod running and no `TypeLoadException`. Native-hook safety rejected that newer game build (0/7 late hook groups available), and custom outfit materials timed out waiting for equip completion. This release fixes startup; it does not establish full compatibility with the newer game build. The reporting user's game remains to be retested.
+
 ## 3.3.8
 
 - Fixed main-menu character discovery when no named RoweMod preset is saved.

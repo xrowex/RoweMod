@@ -27,6 +27,20 @@ internal static class Program
     private static bool IsIk(MethodInfo method) => method.DeclaringType.Name is "HumanIK" or "UnityIKLimb" or "VehicleFootPedalAnimationRig";
     private static void Main()
     {
+#if MISSING_EQUIP_COROUTINE
+        Reset();
+        var harmony = new HarmonyLib.Harmony();
+        LateNativeHooks.Install(harmony);
+        Check(harmony.Calls.Count == 10, "missing coroutine skips only the two hair hooks");
+        Check(!harmony.Calls.Any(x => x.Name == "ApplyRenderPolicy"), "missing coroutine leaves hair group untouched");
+        Check(LateNativeHooks.ManualIkReady, "IK still initializes after missing coroutine");
+        Check(harmony.Calls.Any(x => x.Name == "RPC_FireBullet"), "last group still initializes after missing coroutine");
+        Check(Log.Lines.Count(x => x.Contains("group skipped")) == 1, "only unavailable group reported");
+        Check(Log.Lines.Any(x => x.Contains("Missing generated wrapper")), "actionable missing wrapper diagnostic");
+        Check(harmony.Removed.Count == 0, "missing wrapper never triggers unpatch");
+        LateNativeHooks.Install(harmony);
+        Check(harmony.Calls.Count == 10, "missing wrapper does not cause repeated registration");
+#else
         Reset();
         var harmony = new HarmonyLib.Harmony();
         LateNativeHooks.Install(harmony);
@@ -72,9 +86,11 @@ internal static class Program
         NativeHookSafety.FailMethod = "MoveNext";
         LateNativeHooks.Install(harmony);
         Check(!harmony.Calls.Any(x => x.Name == "ApplyRenderPolicy"), "hair visibility does not install without reliable completion hook");
+#endif
         Console.WriteLine($"PASS: {checks} native-registration assertions. No native/game runtime simulated.");
     }
 
+#if !MISSING_EQUIP_COROUTINE
     private static void CheckHairPolicy()
     {
         var meshA = new UnityEngine.Renderer();
@@ -99,6 +115,7 @@ internal static class Program
         CustomHairRenderPolicyPatch.Prefix(null);
         var native = new Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80 { __4__this = slot, go = item };
         Custom.CompletionCount = 0;
+        CustomEquipCompletionPatch.Prepare(native.GetType());
         CustomEquipCompletionPatch.Postfix(native, true);
         Check(Custom.CompletionCount == 0, "yielding native coroutine is not completed");
         CustomEquipCompletionPatch.Postfix(native, false);
@@ -106,6 +123,7 @@ internal static class Program
             "actual coroutine return signals completion with source identity");
         CustomEquipCompletionPatch.Postfix(null, false);
     }
+#endif
 }
 
 namespace rowemod.Mods
@@ -212,12 +230,14 @@ namespace Il2CppMashBox.Character.Scripts
         internal UnityEngine.GameObject Item;
         internal UnityEngine.GameObject GetEquipItem() => Item;
         public void ApplyRenderPolicy() { }
+#if !MISSING_EQUIP_COROUTINE
         internal class _EnumEquip_d__80
         {
-            internal EquipSlot __4__this;
-            internal UnityEngine.GameObject go;
+            public EquipSlot __4__this { get; set; }
+            public UnityEngine.GameObject go { get; set; }
             public bool MoveNext() => false;
         }
+#endif
     }
 }
 namespace Il2CppMashBoxBridge.Common.Interfaces { internal enum HookGrind { Null } }

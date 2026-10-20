@@ -4,6 +4,9 @@
     <TargetFramework>net6.0</TargetFramework>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(MissingEquipCoroutine)' == 'true'">
+    <DefineConstants>$(DefineConstants);MISSING_EQUIP_COROUTINE</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Mods\LateNativeHooks.cs" Link="LateNativeHooks.cs" />
     <Compile Include="..\..\Mods\CustomHairRenderPolicyPatch.cs" Link="CustomHairRenderPolicyPatch.cs" />

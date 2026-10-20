@@ -39,7 +39,7 @@ namespace rowemod.Mods
             InstallGroup(harmony, "Custom hair visibility",
                 new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot), "ApplyRenderPolicy", 0x7DE910,
                     typeof(CustomHairRenderPolicyPatch)),
-                new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80), "MoveNext", 0x7F15C0,
+                new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot), "_EnumEquip_d__80", "MoveNext", 0x7F15C0,
                     typeof(CustomEquipCompletionPatch)));
             InstallGroup(harmony, "Manual IK",
                 new Hook(typeof(HumanIK), "OnAnimatorIK", 0x2983750, typeof(ManualIkHumanPatch), typeof(int)),
@@ -103,6 +103,7 @@ namespace rowemod.Mods
         private sealed class Hook
         {
             private readonly Type _type;
+            private readonly string _nestedType;
             private readonly string _method;
             private readonly long _rva;
             private readonly Type _patch;
@@ -117,14 +118,29 @@ namespace rowemod.Mods
                 _type = type; _method = method; _rva = rva; _patch = patch; _arguments = arguments;
             }
 
+            internal Hook(Type owner, string nestedType, string method, long rva, Type patch)
+                : this(owner, method, rva, patch, Type.EmptyTypes)
+            {
+                _nestedType = nestedType;
+            }
+
             internal void ResolveAndValidate()
             {
-                Target = AccessTools.DeclaredMethod(_type, _method, _arguments);
+                // Generated coroutine names vary between interop assemblies. Resolve
+                // inside the group's try/catch; a typeof token can fail during JIT
+                // compilation of Install, before any of its error handling runs.
+                Type type = _nestedType == null ? _type :
+                    _type.GetNestedType(_nestedType, BindingFlags.Public | BindingFlags.NonPublic);
+                if (type == null)
+                    throw new TypeLoadException($"Missing generated wrapper {_type.FullName}+{_nestedType}. Check the BMX Streets build and MelonLoader interop assemblies.");
+                Target = AccessTools.DeclaredMethod(type, _method, _arguments);
                 Prefix = AccessTools.DeclaredMethod(_patch, "Prefix");
                 Postfix = AccessTools.DeclaredMethod(_patch, "Postfix");
                 if (Prefix == null && Postfix == null)
                     throw new InvalidOperationException($"No patch methods for {_patch.Name}.");
                 NativeHookSafety.Validate(Target, _rva);
+                if (_patch == typeof(CustomEquipCompletionPatch))
+                    CustomEquipCompletionPatch.Prepare(type);
             }
         }
     }

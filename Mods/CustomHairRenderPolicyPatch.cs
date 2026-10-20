@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Il2CppMashBox.Character.Scripts;
 using UnityEngine;
 using rowemod.Utils;
@@ -30,12 +31,28 @@ namespace rowemod.Mods
 
     internal static class CustomEquipCompletionPatch
     {
-        internal static void Postfix(EquipSlot._EnumEquip_d__80 __instance, bool __result)
+        private static PropertyInfo _slot;
+        private static PropertyInfo _source;
+
+        internal static void Prepare(Type coroutineType)
+        {
+            PropertyInfo slot = coroutineType.GetProperty("__4__this", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            PropertyInfo source = coroutineType.GetProperty("go", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (slot?.PropertyType != typeof(EquipSlot) || slot.GetGetMethod(true) == null ||
+                source?.PropertyType != typeof(GameObject) || source.GetGetMethod(true) == null)
+                throw new InvalidOperationException("Unsupported native equip completion wrapper properties.");
+            _slot = slot;
+            _source = source;
+        }
+
+        // Keep the generated coroutine out of every compiled signature as well as
+        // Install's IL. Harmony supplies the actual wrapper through __instance.
+        internal static void Postfix(object __instance, bool __result)
         {
             if (__result || __instance == null) return;
             try
             {
-                Custom.OnNativeEquipCompleted(__instance.__4__this, __instance.go);
+                Custom.OnNativeEquipCompleted((EquipSlot)_slot.GetValue(__instance), (GameObject)_source.GetValue(__instance));
             }
             catch (Exception ex)
             {

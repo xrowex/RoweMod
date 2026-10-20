@@ -1,8 +1,8 @@
 {
-  "version": "3.3.8",
+  "version": "3.3.9",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "6fa25f5450e2e25989a1bce57174c439132c2a66fab51ad177c607ef304359b3",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.8",
-  "patchNotes": "Fixed main-menu character discovery without a named preset. Current custom models and materials now restore to the menu preview, including the automatic custom-hair fix for hats and busts. Menu restoration only targets the menu character and preserves manual selections made while loading. Added pause-safe restoration, duplicate prevention, and cancellation when the preview character or scene changes. Main-menu runtime logs confirmed dreads, hat, and bust restoration with hair remaining active afterward. Existing presets and automatic emote downloads remain supported; experimental TV and multiplayer-media limitations are unchanged.",
+  "sha256": "9aabfed8432c5ee7eca388feda5626a1298f23e0296e20f0ebc9ab304e510805",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.9",
+  "patchNotes": "Fixed a startup TypeLoadException when the game's generated equip coroutine wrapper is missing. The affected custom-hair hook group now skips safely so the remaining hooks and RoweMod startup can continue. Preserves native game-build and hook-address checks. This update does not add native-hook support for unaudited game builds.",
   "requiredGameVersion": ""
 }
