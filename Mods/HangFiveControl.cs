@@ -18,7 +18,6 @@ namespace rowemod.Mods
     /// </summary>
     internal static class HangFiveControl
     {
-        private const string SupportedGameHash = "3D304228003AEEB7E96EE7588AD92526D67EADD3C5DB530F7BC0D661399D5EF1";
         private const long SetIntegerRva = 0x85BE70;
         private const string NoseyVariantParameter = "Nosey Variant";
         private const int DiagnosticLogLimit = 6;
@@ -59,14 +58,16 @@ namespace rowemod.Mods
                 }
                 if (gameModule == null)
                     throw new InvalidOperationException("GameAssembly module not found.");
+                string gameHash;
                 using (FileStream binary = File.OpenRead(gameModule.FileName))
                 using (SHA256 sha = SHA256.Create())
                 {
-                    if (!string.Equals(Convert.ToHexString(sha.ComputeHash(binary)), SupportedGameHash, StringComparison.Ordinal))
+                    gameHash = Convert.ToHexString(sha.ComputeHash(binary));
+                    if (!NativeHookBuilds.IsSupported(gameHash))
                         throw new InvalidOperationException("This game build has not been audited for native nose-manual hooks.");
                 }
 
-                target = ValidateNativeTarget(gameModule);
+                target = ValidateNativeTarget(gameModule, NativeHookBuilds.ResolveRva(gameHash, SetIntegerRva));
                 harmony.Patch(target, prefix: new HarmonyMethod(prefix));
                 _hooksReady = true;
                 _hookStatus = "Local nose-manual variant guard ready (verified native hook).";
@@ -85,7 +86,7 @@ namespace rowemod.Mods
             }
         }
 
-        private static unsafe MethodInfo ValidateNativeTarget(ProcessModule gameModule)
+        private static unsafe MethodInfo ValidateNativeTarget(ProcessModule gameModule, long expectedRva)
         {
             MethodInfo target = AccessTools.DeclaredMethod(typeof(VehicleAnimationInputHandler),
                 nameof(VehicleAnimationInputHandler.SetInteger), new[] { typeof(string), typeof(int) });
@@ -99,8 +100,8 @@ namespace rowemod.Mods
                 throw new InvalidOperationException("Null native SetInteger method metadata.");
             IntPtr nativeAddress = UnityVersionHandler.Wrap((Il2CppMethodInfo*)methodInfo).MethodPointer;
             long actualRva = nativeAddress.ToInt64() - gameModule.BaseAddress.ToInt64();
-            if (actualRva != SetIntegerRva || actualRva < 0 || actualRva >= gameModule.ModuleMemorySize)
-                throw new InvalidOperationException($"Refusing SetInteger: RVA 0x{actualRva:X} does not match audited 0x{SetIntegerRva:X}.");
+            if (actualRva != expectedRva || actualRva < 0 || actualRva >= gameModule.ModuleMemorySize)
+                throw new InvalidOperationException($"Refusing SetInteger: RVA 0x{actualRva:X} does not match audited 0x{expectedRva:X}.");
             var patcher = PatchManager.GetMethodPatcher(target);
             if (patcher?.GetType().FullName != "Il2CppInterop.HarmonySupport.Il2CppDetourMethodPatcher")
                 throw new InvalidOperationException($"Native patcher not ready: {patcher?.GetType().FullName ?? "none"}.");

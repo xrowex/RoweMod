@@ -7,9 +7,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -Path (Join-Path $GameRoot 'MelonLoader\net35\Mono.Cecil.dll')
 $metadataRoot = Join-Path $GameRoot 'MelonLoader\Dependencies\Il2CppAssemblyGenerator\Cpp2IL\cpp2il_out'
-$expectedHash = '3D304228003AEEB7E96EE7588AD92526D67EADD3C5DB530F7BC0D661399D5EF1'
+$originalHash = '3D304228003AEEB7E96EE7588AD92526D67EADD3C5DB530F7BC0D661399D5EF1'
+$updatedHash = '2D70F57905A2F3A79A2BC75FA503F9AB251AEACFC66CC72F78670ECBFAA8EEC2'
 $gameHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $GameRoot 'GameAssembly.dll')).Hash
-if ($gameHash -ne $expectedHash) { throw 'GameAssembly changed. Regenerate Cpp2IL metadata and re-audit targets before enabling native hooks.' }
+if ($gameHash -notin @($originalHash, $updatedHash)) { throw 'GameAssembly changed. Regenerate Cpp2IL metadata and re-audit targets before enabling native hooks.' }
 
 $targets = @{
     '0x8B0A50' = 'System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::RequestTweak()'
@@ -30,6 +31,31 @@ $targets = @{
     '0x8544D0' = 'System.Void MashBox.BMX_Physics_Development.TrickDetection::RecordTrickToHistory(System.String)'
     '0x9F3220' = 'System.Void MashBox.Addons.NetworkingFusion.NetworkPlayer::Despawned(Fusion.NetworkRunner,System.Boolean)'
 }
+$sharedGetterRva = '0x66E640'
+if ($gameHash -eq $updatedHash) {
+    # Audit the exact production profile against fresh metadata; do not maintain a
+    # separate unchecked list of replacement addresses in this script.
+    $profileSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Mods\NativeHookBuilds.cs') -Raw
+    $map = @{}
+    foreach ($entry in [regex]::Matches($profileSource, '\[(0x[0-9A-F]+)\]\s*=\s*(0x[0-9A-F]+)')) {
+        $map[$entry.Groups[1].Value] = $entry.Groups[2].Value
+    }
+    if ($map.Count -ne $targets.Count) { throw 'Production profile target coverage differs from this audit.' }
+    $updatedTargets = @{}
+    foreach ($originalRva in $targets.Keys) {
+        if (-not $map.ContainsKey($originalRva)) { throw "Missing production profile target $originalRva" }
+        $signature = $targets[$originalRva].Replace('<EnumEquip>d__80', '<EnumEquip>d__111')
+        if ($originalRva -eq '0x90DA80') {
+            $signature = 'System.Void MashBox.Addons.ProtoDrone.DroneController::LocalSpawnBullet(UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3,System.Single)'
+        }
+        if ($originalRva -eq '0x90E100') {
+            $signature = 'System.Void MashBox.Addons.ProtoDrone.DroneController::RPC_FireBullet(System.Int32,System.Double,UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3)'
+        }
+        $updatedTargets[$map[$originalRva]] = $signature
+    }
+    $targets = $updatedTargets
+    $sharedGetterRva = '0x6AE680'
+}
 $matches = @{}
 foreach ($rva in $targets.Keys) { $matches[$rva] = [System.Collections.Generic.List[string]]::new() }
 $unsafeAliases = [System.Collections.Generic.List[string]]::new()
@@ -48,7 +74,7 @@ foreach ($file in Get-ChildItem -LiteralPath $metadataRoot -Filter '*.dll') {
                         if ($field.Name -ne 'RVA') { continue }
                         $rva = [string]$field.Argument.Value
                         if ($matches.ContainsKey($rva)) { $matches[$rva].Add($method.FullName) }
-                        if ($rva -eq '0x66E640') { $unsafeAliases.Add($method.FullName) }
+                        if ($rva -eq $sharedGetterRva) { $unsafeAliases.Add($method.FullName) }
                     }
                 }
             }
@@ -69,4 +95,4 @@ if (-not ($unsafeAliases | Where-Object { $_ -like '*TweakState::get_CanEnterSta
     -not ($unsafeAliases | Where-Object { $_ -like '*NetworkAssetSourceStatic*::get_IsCompleted()*' })) {
     throw 'Expected shared-function regression evidence missing; confirm metadata is current.'
 }
-Write-Output "Confirmed rejected RVA 0x66E640 has $($unsafeAliases.Count) aliases, including the tweak-state and prefab-completion checks."
+Write-Output "Confirmed rejected RVA $sharedGetterRva has $($unsafeAliases.Count) aliases, including the tweak-state and prefab-completion checks."

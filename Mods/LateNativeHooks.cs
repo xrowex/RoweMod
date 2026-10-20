@@ -40,7 +40,7 @@ namespace rowemod.Mods
                 new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot), "ApplyRenderPolicy", 0x7DE910,
                     typeof(CustomHairRenderPolicyPatch)),
                 new Hook(typeof(Il2CppMashBox.Character.Scripts.EquipSlot), "_EnumEquip_d__80", "MoveNext", 0x7F15C0,
-                    typeof(CustomEquipCompletionPatch)));
+                    typeof(CustomEquipCompletionPatch), "_EnumEquip_d__111"));
             InstallGroup(harmony, "Manual IK",
                 new Hook(typeof(HumanIK), "OnAnimatorIK", 0x2983750, typeof(ManualIkHumanPatch), typeof(int)),
                 new Hook(typeof(UnityIKLimb), "UpdateIK", 0x298C9E0, typeof(ManualIkNativeLimbPatch), typeof(bool)),
@@ -53,9 +53,13 @@ namespace rowemod.Mods
                     typeof(OnePointOhQuaternionDrivePatch), typeof(Rigidbody), typeof(Quaternion)));
             InstallGroup(harmony, "Drone placement input",
                 new Hook(typeof(DroneController), "LocalSpawnBullet", 0x90DA80,
-                    typeof(DroneControllerLocalSpawnBulletPatch), typeof(Vector3), typeof(Quaternion), typeof(Vector3)),
+                    typeof(DroneControllerLocalSpawnBulletPatch),
+                    new[] { typeof(Vector3), typeof(Quaternion), typeof(Vector3) },
+                    new[] { typeof(Vector3), typeof(Quaternion), typeof(Vector3), typeof(float) }),
                 new Hook(typeof(DroneController), "RPC_FireBullet", 0x90E100,
-                    typeof(DroneControllerRpcFireBulletPatch), typeof(Vector3), typeof(Quaternion), typeof(Vector3)));
+                    typeof(DroneControllerRpcFireBulletPatch),
+                    new[] { typeof(Vector3), typeof(Quaternion), typeof(Vector3) },
+                    new[] { typeof(int), typeof(double), typeof(Vector3), typeof(Quaternion), typeof(Vector3) }));
             Log.Msg($"[NativeHooks] Late registration complete: {ReadyGroups.Count}/7 feature groups ready. No blanket PatchAll.");
         }
 
@@ -104,10 +108,12 @@ namespace rowemod.Mods
         {
             private readonly Type _type;
             private readonly string _nestedType;
+            private readonly string _alternateNestedType;
             private readonly string _method;
             private readonly long _rva;
             private readonly Type _patch;
             private readonly Type[] _arguments;
+            private readonly Type[] _alternateArguments;
             internal MethodInfo Target;
             internal MethodInfo Prefix;
             internal MethodInfo Postfix;
@@ -118,10 +124,17 @@ namespace rowemod.Mods
                 _type = type; _method = method; _rva = rva; _patch = patch; _arguments = arguments;
             }
 
-            internal Hook(Type owner, string nestedType, string method, long rva, Type patch)
+            internal Hook(Type type, string method, long rva, Type patch, Type[] arguments, Type[] alternateArguments)
+                : this(type, method, rva, patch, arguments)
+            {
+                _alternateArguments = alternateArguments;
+            }
+
+            internal Hook(Type owner, string nestedType, string method, long rva, Type patch, string alternateNestedType = null)
                 : this(owner, method, rva, patch, Type.EmptyTypes)
             {
                 _nestedType = nestedType;
+                _alternateNestedType = alternateNestedType;
             }
 
             internal void ResolveAndValidate()
@@ -131,9 +144,13 @@ namespace rowemod.Mods
                 // compilation of Install, before any of its error handling runs.
                 Type type = _nestedType == null ? _type :
                     _type.GetNestedType(_nestedType, BindingFlags.Public | BindingFlags.NonPublic);
+                if (type == null && _alternateNestedType != null)
+                    type = _type.GetNestedType(_alternateNestedType, BindingFlags.Public | BindingFlags.NonPublic);
                 if (type == null)
                     throw new TypeLoadException($"Missing generated wrapper {_type.FullName}+{_nestedType}. Check the BMX Streets build and MelonLoader interop assemblies.");
                 Target = AccessTools.DeclaredMethod(type, _method, _arguments);
+                if (Target == null && _alternateArguments != null)
+                    Target = AccessTools.DeclaredMethod(type, _method, _alternateArguments);
                 Prefix = AccessTools.DeclaredMethod(_patch, "Prefix");
                 Postfix = AccessTools.DeclaredMethod(_patch, "Postfix");
                 if (Prefix == null && Postfix == null)

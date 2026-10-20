@@ -1,0 +1,97 @@
+{
+  "gameAssemblySha256": "2D70F57905A2F3A79A2BC75FA503F9AB251AEACFC66CC72F78670ECBFAA8EEC2",
+  "steamBuildId": "26071101",
+  "auditedAssemblyCount": 162,
+  "auditedMethodCount": 199854,
+  "uniqueTargetCount": 17,
+  "rejectedSharedGetterRva": "0x6AE680",
+  "rejectedSharedGetterAliases": 499,
+  "targets": [
+    {
+      "originalRva": "0x8B0A50",
+      "updatedRva": "0x9716F0",
+      "signature": "System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::RequestTweak()"
+    },
+    {
+      "originalRva": "0x8B0E30",
+      "updatedRva": "0x971AD0",
+      "signature": "System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::Tweak()"
+    },
+    {
+      "originalRva": "0x85BE70",
+      "updatedRva": "0x8D2950",
+      "signature": "System.Void MashBox.BMX_Physics_Development.VehicleAnimationInputHandler::SetInteger(System.String,System.Int32)"
+    },
+    {
+      "originalRva": "0xA61F70",
+      "updatedRva": "0xBEA6F0",
+      "signature": "System.Void MashBox.Netorking.FusionBootstrap::DrawServerBrowserHostMapControls(System.Single)"
+    },
+    {
+      "originalRva": "0xD53AA0",
+      "updatedRva": "0xEC9A10",
+      "signature": "System.Threading.Tasks.Task`1<Fusion.StartGameResult> Fusion.NetworkRunner::StartGame(Fusion.StartGameArgs)"
+    },
+    {
+      "originalRva": "0x9F47C0",
+      "updatedRva": "0xB19D80",
+      "signature": "System.Void MashBox.Addons.NetworkingFusion.NetworkPlayer::Spawned()"
+    },
+    {
+      "originalRva": "0x7DE910",
+      "updatedRva": "0x854F80",
+      "signature": "System.Void MashBox.Character.Scripts.EquipSlot::ApplyRenderPolicy()"
+    },
+    {
+      "originalRva": "0x7F15C0",
+      "updatedRva": "0x87B630",
+      "signature": "System.Boolean MashBox.Character.Scripts.EquipSlot/<EnumEquip>d__111::MoveNext()"
+    },
+    {
+      "originalRva": "0x2983750",
+      "updatedRva": "0x2C571A0",
+      "signature": "System.Void MashBox.Core.Runtime.InverseKinematics.HumanIK::OnAnimatorIK(System.Int32)"
+    },
+    {
+      "originalRva": "0x298C9E0",
+      "updatedRva": "0x2C631A0",
+      "signature": "System.Void MashBox.Core.Runtime.InverseKinematics.UnityIKLimb::UpdateIK(System.Boolean)"
+    },
+    {
+      "originalRva": "0x89A960",
+      "updatedRva": "0x901490",
+      "signature": "System.Void MashBox.BMX_Physics_Development.VehicleFootPedalAnimationRig::LateUpdate()"
+    },
+    {
+      "originalRva": "0x8077B0",
+      "updatedRva": "0x892840",
+      "signature": "System.Void MashBox.BMX_Physics_Development.BikeGrindPoser::SetInputData(System.Int32,MashBoxBridge.Common.Interfaces.HookGrind)"
+    },
+    {
+      "originalRva": "0x837760",
+      "updatedRva": "0x8A5A50",
+      "signature": "System.Void MashBox.BMX_Physics_Development.QuaternionPDDrive::Tick(UnityEngine.Rigidbody,UnityEngine.Quaternion)"
+    },
+    {
+      "originalRva": "0x90DA80",
+      "updatedRva": "0x9A9D30",
+      "signature": "System.Void MashBox.Addons.ProtoDrone.DroneController::LocalSpawnBullet(UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3,System.Single)"
+    },
+    {
+      "originalRva": "0x90E100",
+      "updatedRva": "0x9AA540",
+      "signature": "System.Void MashBox.Addons.ProtoDrone.DroneController::RPC_FireBullet(System.Int32,System.Double,UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3)"
+    },
+    {
+      "originalRva": "0x8544D0",
+      "updatedRva": "0x8C9BA0",
+      "signature": "System.Void MashBox.BMX_Physics_Development.TrickDetection::RecordTrickToHistory(System.String)"
+    },
+    {
+      "originalRva": "0x9F3220",
+      "updatedRva": "0xB176F0",
+      "signature": "System.Void MashBox.Addons.NetworkingFusion.NetworkPlayer::Despawned(Fusion.NetworkRunner,System.Boolean)"
+    }
+  ],
+  "validation": "Cpp2IL native-address metadata audit; exact target signatures and unique ownership across all assemblies. Runtime validation separately checks loaded method pointers and native detour backend."
+}

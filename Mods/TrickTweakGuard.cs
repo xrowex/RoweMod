@@ -20,7 +20,6 @@ namespace rowemod.Mods
     {
         // Audited across every method in matching Cpp2IL metadata, not just this class.
         // Unknown binaries leave the game untouched until their addresses are re-audited.
-        private const string SupportedGameHash = "3D304228003AEEB7E96EE7588AD92526D67EADD3C5DB530F7BC0D661399D5EF1";
         private const long RequestTweakRva = 0x8B0A50;
         private const long TweakRva = 0x8B0E30;
         private const int BlockLogLimit = 3;
@@ -63,17 +62,19 @@ namespace rowemod.Mods
                 if (gameModule == null)
                     throw new InvalidOperationException("GameAssembly module not found.");
 
+                string gameHash;
                 using (FileStream binary = File.OpenRead(gameModule.FileName))
                 using (SHA256 sha = SHA256.Create())
                 {
-                    if (!string.Equals(Convert.ToHexString(sha.ComputeHash(binary)), SupportedGameHash, StringComparison.Ordinal))
+                    gameHash = Convert.ToHexString(sha.ComputeHash(binary));
+                    if (!NativeHookBuilds.IsSupported(gameHash))
                         throw new InvalidOperationException("This game build has not been audited for native tweak hooks.");
                 }
 
                 // Validate BOTH before installing either. Names alone don't establish
                 // native identity or protect against shared code addresses.
-                request = ValidateNativeTarget(nameof(TrickControllerV2.RequestTweak), RequestTweakRva, gameModule);
-                transition = ValidateNativeTarget(nameof(TrickControllerV2.Tweak), TweakRva, gameModule);
+                request = ValidateNativeTarget(nameof(TrickControllerV2.RequestTweak), NativeHookBuilds.ResolveRva(gameHash, RequestTweakRva), gameModule);
+                transition = ValidateNativeTarget(nameof(TrickControllerV2.Tweak), NativeHookBuilds.ResolveRva(gameHash, TweakRva), gameModule);
                 harmony.Patch(request, prefix: new HarmonyMethod(requestPrefix));
                 harmony.Patch(transition, prefix: new HarmonyMethod(transitionPrefix));
                 _hooksReady = true;

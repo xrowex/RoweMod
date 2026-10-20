@@ -1,8 +1,8 @@
 {
-  "version": "3.3.9",
+  "version": "3.3.10",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "9aabfed8432c5ee7eca388feda5626a1298f23e0296e20f0ebc9ab304e510805",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.9",
-  "patchNotes": "Fixed a startup TypeLoadException when the game's generated equip coroutine wrapper is missing. The affected custom-hair hook group now skips safely so the remaining hooks and RoweMod startup can continue. Preserves native game-build and hook-address checks. This update does not add native-hook support for unaudited game builds.",
+  "sha256": "7fc9d3e71b6d4df46173e9eba26882c8b23327bc31d58499a1e8f57f6e558aa9",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.10",
+  "patchNotes": "Restored native-hook support for BMX Streets build 26071101 with a complete audit of 17 native targets. Updated the equip completion coroutine and drone firing signatures, restoring the hooks used by custom hair and materials, manual IK, grind remapping, landing assistance, drone placement, host limits, player labels, tweak control, and nose-manual control. Preserves support for the previously audited build and continues to reject unknown binaries and shared native getters.",
   "requiredGameVersion": ""
 }

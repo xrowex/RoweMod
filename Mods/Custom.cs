@@ -79,12 +79,17 @@ namespace rowemod.Mods
         private static long _nextMaterialRequest;
         internal static long SelectionRevision { get; private set; }
         private static readonly Dictionary<int, GameObject> _customHairItems = new();
+        private static readonly System.Reflection.PropertyInfo NativeEquipCompletion =
+            typeof(EquipSlot).GetProperty("IsEquipRequestComplete");
         private sealed class EquipRequest
         {
             internal GameObject Source, PreviousItem, Item;
             internal Slot Slot;
             internal string Label;
             internal bool Completed;
+            internal IntPtr NativeCoroutine;
+            internal float CompletionDeadline;
+            internal bool Failed;
         }
         private static readonly Dictionary<int, EquipRequest> _equipRequests = new();
         private static string _nativeRestoreStatus =
@@ -573,10 +578,22 @@ namespace rowemod.Mods
                 request.Slot == Slot.Hair && item != request.PreviousItem;
         }
 
-        internal static void OnNativeEquipCompleted(EquipSlot slot, GameObject source)
+        internal static void OnNativeEquipStarted(EquipSlot slot, GameObject source, IntPtr coroutine)
+        {
+            if (slot == null || coroutine == IntPtr.Zero ||
+                !_equipRequests.TryGetValue(slot.GetInstanceID(), out var request) ||
+                request.Completed || request.NativeCoroutine != IntPtr.Zero || source != request.Source)
+                return;
+            // Capture identity before the updated native coroutine replaces its go
+            // field with an instantiated clone. A later selection owns a new request.
+            request.NativeCoroutine = coroutine;
+            Log.Msg($"[CustomEquip] {request.Label}: {request.Slot} native request bound to coroutine 0x{coroutine.ToInt64():X} before cloning.");
+        }
+
+        internal static void OnNativeEquipCompleted(EquipSlot slot, IntPtr coroutine)
         {
             if (slot == null || !_equipRequests.TryGetValue(slot.GetInstanceID(), out var request) ||
-                request.Completed || source != request.Source)
+                request.Completed || coroutine == IntPtr.Zero || coroutine != request.NativeCoroutine)
                 return;
             request.Completed = true;
             request.Item = slot.GetEquipItem();
@@ -618,9 +635,13 @@ namespace rowemod.Mods
                         var item = equipSlot.GetEquipItem();
                         // Some native branches return false without clearing _isBusyEquipping.
                         // For our requests, wait for the actual native MoveNext(false) signal.
-                        waiting = _equipRequests.TryGetValue(id, out var equipRequest)
-                            ? !equipRequest.Completed
-                            : equipSlot._isBusyEquipping;
+                        if (_equipRequests.TryGetValue(id, out var equipRequest))
+                        {
+                            if (equipRequest.Failed) yield break;
+                            deadline = equipRequest.CompletionDeadline;
+                            waiting = !equipRequest.Completed;
+                        }
+                        else waiting = equipSlot._isBusyEquipping;
                         if (!waiting && (item == null || (equipRequest != null && item == equipRequest.PreviousItem)))
                         {
                             Log.Warning($"[ReplaceMaterial] {label}: {slot} equip produced no new item; material not applied.");
@@ -653,7 +674,8 @@ namespace rowemod.Mods
                     if (!waiting) yield break;
                     if (Time.realtimeSinceStartup >= deadline)
                     {
-                        Log.Warning($"[ReplaceMaterial] {label}: Timed out waiting for {slot} equip; select the material again after the character is ready.");
+                        _equipRequests.TryGetValue(id, out var timedOutRequest);
+                        Log.Warning($"[ReplaceMaterial] {label}: Timed out waiting for {slot} equip; nativeStarted={timedOutRequest != null && timedOutRequest.NativeCoroutine != IntPtr.Zero}, busyFlag={equipSlot._isBusyEquipping}. Select the material again after the character is ready.");
                         yield break;
                     }
                     yield return null;
@@ -663,6 +685,42 @@ namespace rowemod.Mods
             {
                 if (_materialRequests.TryGetValue(id, out long current) && current == request)
                     _materialRequests.Remove(id);
+            }
+        }
+
+        private static IEnumerator SubmitNativeEquipWhenReady(EquipSlot slot, int id, EquipRequest request)
+        {
+            float deadline = Time.realtimeSinceStartup + 10f;
+            while (slot != null && request.Source != null &&
+                _equipRequests.TryGetValue(id, out var current) && ReferenceEquals(current, request))
+            {
+                bool ready;
+                try
+                {
+                    // The updated game exposes completion including its pending load.
+                    // Calling Equip earlier can stop that routine while leaving its
+                    // busy flag set, so its next PreEquipEnum waits indefinitely.
+                    ready = NativeEquipCompletion == null || (bool)NativeEquipCompletion.GetValue(slot);
+                    if (ready)
+                    {
+                        request.CompletionDeadline = Time.realtimeSinceStartup + 10f;
+                        slot.Equip(request.Source);
+                        yield break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    request.Failed = true;
+                    Log.Warning($"[CustomEquip] {request.Label}: Could not submit {request.Slot} equip: {ex.Message}");
+                    yield break;
+                }
+                if (Time.realtimeSinceStartup >= deadline)
+                {
+                    request.Failed = true;
+                    Log.Warning($"[CustomEquip] {request.Label}: Native {request.Slot} outfit is still loading; custom request skipped.");
+                    yield break;
+                }
+                yield return null;
             }
         }
 
@@ -803,11 +861,14 @@ namespace rowemod.Mods
                     _customHairItems.Remove(equipSlot.GetInstanceID());
                 // Register BEFORE Equip: Unity executes its coroutine up to the first yield
                 // synchronously, including the first visibility pass.
-                _equipRequests[equipSlot.GetInstanceID()] = new EquipRequest
+                int equipId = equipSlot.GetInstanceID();
+                var equipRequest = new EquipRequest
                 {
-                    Source = modelObject, PreviousItem = equipSlot.GetEquipItem(), Slot = slot, Label = label
+                    Source = modelObject, PreviousItem = equipSlot.GetEquipItem(), Slot = slot, Label = label,
+                    CompletionDeadline = Time.realtimeSinceStartup + 20f
                 };
-                equipSlot.Equip(modelObject);
+                _equipRequests[equipId] = equipRequest;
+                MelonCoroutines.Start(SubmitNativeEquipWhenReady(equipSlot, equipId, equipRequest));
                 Log.Msg($"[ReplaceModel] {label}: Requested {slot} model equip (native setup is asynchronous).");
                 
                 

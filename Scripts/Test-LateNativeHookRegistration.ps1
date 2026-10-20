@@ -1,6 +1,7 @@
 param(
     [string]$GameRoot = 'C:\Program Files (x86)\Steam\steamapps\common\BMX Streets',
-    [string]$ModAssembly = (Join-Path $PSScriptRoot '..\bin\Release\net6.0\rowemod.dll')
+    [string]$ModAssembly = (Join-Path $PSScriptRoot '..\bin\Release\net6.0\rowemod.dll'),
+    [string]$WrapperRoot = (Join-Path $GameRoot 'MelonLoader\Il2CppAssemblies')
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -Path (Join-Path $GameRoot 'MelonLoader\net35\Mono.Cecil.dll')
@@ -8,7 +9,7 @@ $mod = [Mono.Cecil.AssemblyDefinition]::ReadAssembly((Resolve-Path -LiteralPath 
 $wrappers = [System.Collections.Generic.List[Mono.Cecil.AssemblyDefinition]]::new()
 try {
     foreach ($file in @('Assembly-CSharp.dll', 'Il2CppMashBox.Core.Runtime.dll', 'Il2CppFusion.Runtime.dll')) {
-        $wrappers.Add([Mono.Cecil.AssemblyDefinition]::ReadAssembly((Join-Path $GameRoot "MelonLoader\Il2CppAssemblies\$file")))
+        $wrappers.Add([Mono.Cecil.AssemblyDefinition]::ReadAssembly((Join-Path $WrapperRoot $file)))
     }
     if (-not ($mod.CustomAttributes | Where-Object { $_.AttributeType.FullName -eq 'MelonLoader.HarmonyDontPatchAllAttribute' })) {
         throw 'MelonLoader automatic blanket patching is not disabled.'
@@ -40,19 +41,23 @@ try {
         if ($calls.Count -ne 1) { throw "Expected one late registration for $name, found $($calls.Count)." }
     }
 
+    $equipCoroutines = @($wrappers[0].MainModule.GetTypes() | Where-Object {
+        $_.DeclaringType.Name -eq 'EquipSlot' -and $_.Name -in @('_EnumEquip_d__80', '_EnumEquip_d__111')
+    })
+    if ($equipCoroutines.Count -ne 1) { throw 'Missing or ambiguous audited equip coroutine wrapper.' }
     $specs = @(
         @('HostPlayerLimitHostSetupPatch', 'FusionBootstrap', 'DrawServerBrowserHostMapControls', 1),
         @('HostPlayerLimitStartGamePatch', 'NetworkRunner', 'StartGame', 1),
         @('PlayerUserNameTargetSpawnPatch', 'NetworkPlayer', 'Spawned', 0),
         @('CustomHairRenderPolicyPatch', 'EquipSlot', 'ApplyRenderPolicy', 0),
-        @('CustomEquipCompletionPatch', '_EnumEquip_d__80', 'MoveNext', 0),
+        @('CustomEquipCompletionPatch', $equipCoroutines[0].Name, 'MoveNext', 0),
         @('ManualIkHumanPatch', 'HumanIK', 'OnAnimatorIK', 1),
         @('ManualIkNativeLimbPatch', 'UnityIKLimb', 'UpdateIK', 1),
         @('ManualIkPedalRigPatch', 'VehicleFootPedalAnimationRig', 'LateUpdate', 0),
         @('BikeGrindPoserInputRemapPatch', 'BikeGrindPoser', 'SetInputData', 2),
         @('OnePointOhQuaternionDrivePatch', 'QuaternionPDDrive', 'Tick', 2),
-        @('DroneControllerLocalSpawnBulletPatch', 'DroneController', 'LocalSpawnBullet', 3),
-        @('DroneControllerRpcFireBulletPatch', 'DroneController', 'RPC_FireBullet', 3)
+        @('DroneControllerLocalSpawnBulletPatch', 'DroneController', 'LocalSpawnBullet', @(3, 4)),
+        @('DroneControllerRpcFireBulletPatch', 'DroneController', 'RPC_FireBullet', @(3, 5))
     )
     $registrar = $mod.MainModule.GetType('rowemod.Mods.LateNativeHooks')
     $install = $registrar.Methods | Where-Object Name -eq 'Install'
@@ -73,7 +78,7 @@ try {
                 foreach ($type in $wrapper.MainModule.GetTypes()) {
                     if ($type.Name -ne $spec[1]) { continue }
                     foreach ($method in $type.Methods) {
-                        if ($method.Name -eq $spec[2] -and $method.Parameters.Count -eq $spec[3]) { $method }
+                        if ($method.Name -eq $spec[2] -and $method.Parameters.Count -in @($spec[3])) { $method }
                     }
                 }
             }
@@ -83,7 +88,8 @@ try {
         if ($spec[0] -eq 'CustomEquipCompletionPatch') {
             foreach ($propertySpec in @(
                 @('__4__this', 'Il2CppMashBox.Character.Scripts.EquipSlot'),
-                @('go', 'UnityEngine.GameObject')
+                @('go', 'UnityEngine.GameObject'),
+                @('__1__state', 'System.Int32')
             )) {
                 $property = @($target.DeclaringType.Properties | Where-Object Name -eq $propertySpec[0])
                 if ($property.Count -ne 1 -or $property[0].PropertyType.FullName -ne $propertySpec[1] -or
@@ -112,7 +118,7 @@ try {
             }
         }
     }
-    if ($mod.MainModule.GetTypeReferences() | Where-Object { $_.Name -eq '_EnumEquip_d__80' }) {
+    if ($mod.MainModule.GetTypeReferences() | Where-Object { $_.Name -in @('_EnumEquip_d__80', '_EnumEquip_d__111') }) {
         throw 'Generated equip coroutine remains a hard assembly reference; missing wrappers can abort startup during JIT compilation.'
     }
     Write-Output "PASS: no blanket/automatic/early patching; all $($specs.Count) late targets covered; $patchCount real compiled prefix/postfix signatures match installed wrappers."

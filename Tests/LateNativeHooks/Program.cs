@@ -4,6 +4,11 @@ using System.Linq;
 using System.Reflection;
 using rowemod.Mods;
 using rowemod.Utils;
+#if UPDATED_INTEROP && !MISSING_EQUIP_COROUTINE
+using TestEquipCoroutine = Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__111;
+#elif !MISSING_EQUIP_COROUTINE
+using TestEquipCoroutine = Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80;
+#endif
 
 // Actual registrar with fake patching/validation. Tests transactions and coverage,
 // not a native detour or Unity gameplay. Compiled real signatures are tested separately.
@@ -27,6 +32,7 @@ internal static class Program
     private static bool IsIk(MethodInfo method) => method.DeclaringType.Name is "HumanIK" or "UnityIKLimb" or "VehicleFootPedalAnimationRig";
     private static void Main()
     {
+        CheckBuildProfiles();
 #if MISSING_EQUIP_COROUTINE
         Reset();
         var harmony = new HarmonyLib.Harmony();
@@ -50,6 +56,14 @@ internal static class Program
         Check(harmony.Calls.Select(x => x.DeclaringType.FullName + x.Name).Distinct().Count() == 12, "no duplicate targets");
         Check(harmony.Calls.Single(x => x.Name == "Tick").GetParameters().Length == 2, "exact landing drive overload selected");
         Check(harmony.Calls.Single(x => x.Name == "SetInputData").GetParameters().Length == 2, "exact grind overload selected");
+#if UPDATED_INTEROP
+        Check(harmony.Calls.Single(x => x.Name == "LocalSpawnBullet").GetParameters().Length == 4, "updated local drone signature selected");
+        Check(harmony.Calls.Single(x => x.Name == "RPC_FireBullet").GetParameters().Length == 5, "updated drone RPC signature selected");
+        Check(harmony.Calls.Single(x => x.Name == "MoveNext").DeclaringType.Name == "_EnumEquip_d__111", "updated equip coroutine resolved");
+#else
+        Check(harmony.Calls.Single(x => x.Name == "LocalSpawnBullet").GetParameters().Length == 3, "original local drone signature preserved");
+        Check(harmony.Calls.Single(x => x.Name == "RPC_FireBullet").GetParameters().Length == 3, "original drone RPC signature preserved");
+#endif
         LateNativeHooks.Install(harmony);
         Check(harmony.Calls.Count == 12 && NativeHookSafety.Validated.Count == 12, "registration attempted only once");
 
@@ -90,6 +104,27 @@ internal static class Program
         Console.WriteLine($"PASS: {checks} native-registration assertions. No native/game runtime simulated.");
     }
 
+    private static void CheckBuildProfiles()
+    {
+        Check(NativeHookBuilds.IsSupported(NativeHookBuilds.OriginalHash), "original game hash retained");
+        Check(NativeHookBuilds.IsSupported(NativeHookBuilds.UpdatedHash), "updated game hash supported");
+        Check(!NativeHookBuilds.IsSupported(null) && !NativeHookBuilds.IsSupported("unknown"), "unknown game hashes rejected");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.OriginalHash, 0x7F15C0) == 0x7F15C0, "original completion address unchanged");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.UpdatedHash, 0x7F15C0) == 0x87B630, "updated completion address selected by game hash");
+        ExpectRejected("unknown", 0x7F15C0, "known target cannot enable an unknown game build");
+        ExpectRejected(NativeHookBuilds.UpdatedHash, 0x66E640, "shared original getter cannot become an approved target");
+        ExpectRejected(NativeHookBuilds.UpdatedHash, 0x6AE680, "shared updated getter cannot become an approved target");
+        ExpectRejected(NativeHookBuilds.OriginalHash, 0x87B630, "updated address cannot be passed as an original target identity");
+    }
+
+    private static void ExpectRejected(string hash, long rva, string label)
+    {
+        bool rejected = false;
+        try { NativeHookBuilds.ResolveRva(hash, rva); }
+        catch (InvalidOperationException) { rejected = true; }
+        Check(rejected, label);
+    }
+
 #if !MISSING_EQUIP_COROUTINE
     private static void CheckHairPolicy()
     {
@@ -113,14 +148,23 @@ internal static class Program
         CustomHairRenderPolicyPatch.Prefix(slot);
         Check(!slot._renderDisabled, "unsuppressed item stays unsuppressed");
         CustomHairRenderPolicyPatch.Prefix(null);
-        var native = new Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80 { __4__this = slot, go = item };
+        var native = new TestEquipCoroutine { __4__this = slot, go = item, Pointer = new IntPtr(123) };
         Custom.CompletionCount = 0;
+        Custom.StartCount = 0;
         CustomEquipCompletionPatch.Prepare(native.GetType());
+        CustomEquipCompletionPatch.Prefix(native);
+        Check(Custom.StartCount == 1 && Custom.StartedSource == item && Custom.StartedCoroutine == native.Pointer,
+            "initial MoveNext captures original source and native coroutine identity before mutation");
+        native.__1__state = 1;
+        native.go = new UnityEngine.GameObject(); // updated game replaces the source with a clone
+        CustomEquipCompletionPatch.Prefix(native);
+        Check(Custom.StartCount == 1 && Custom.StartedSource == item, "resumed coroutine cannot rebind a request to the clone");
         CustomEquipCompletionPatch.Postfix(native, true);
         Check(Custom.CompletionCount == 0, "yielding native coroutine is not completed");
         CustomEquipCompletionPatch.Postfix(native, false);
-        Check(Custom.CompletionCount == 1 && Custom.CompletedSlot == slot && Custom.CompletedSource == item,
-            "actual coroutine return signals completion with source identity");
+        Check(Custom.CompletionCount == 1 && Custom.CompletedSlot == slot && Custom.CompletedCoroutine == Custom.StartedCoroutine,
+            "completion follows the captured coroutine even after native source cloning");
+        CustomEquipCompletionPatch.Prefix(null);
         CustomEquipCompletionPatch.Postfix(null, false);
     }
 #endif
@@ -132,14 +176,22 @@ namespace rowemod.Mods
     {
         internal static bool Eligible;
         internal static int CompletionCount;
+        internal static int StartCount;
         internal static Il2CppMashBox.Character.Scripts.EquipSlot CompletedSlot;
-        internal static UnityEngine.GameObject CompletedSource;
+        internal static UnityEngine.GameObject StartedSource;
+        internal static IntPtr StartedCoroutine, CompletedCoroutine;
         internal static bool ShouldKeepCustomHairVisible(Il2CppMashBox.Character.Scripts.EquipSlot slot) => Eligible;
-        internal static void OnNativeEquipCompleted(Il2CppMashBox.Character.Scripts.EquipSlot slot, UnityEngine.GameObject source)
+        internal static void OnNativeEquipStarted(Il2CppMashBox.Character.Scripts.EquipSlot slot, UnityEngine.GameObject source, IntPtr coroutine)
+        {
+            StartCount++;
+            StartedSource = source;
+            StartedCoroutine = coroutine;
+        }
+        internal static void OnNativeEquipCompleted(Il2CppMashBox.Character.Scripts.EquipSlot slot, IntPtr coroutine)
         {
             CompletionCount++;
             CompletedSlot = slot;
-            CompletedSource = source;
+            CompletedCoroutine = coroutine;
         }
     }
     internal static class NativeHookSafety
@@ -231,14 +283,23 @@ namespace Il2CppMashBox.Character.Scripts
         internal UnityEngine.GameObject GetEquipItem() => Item;
         public void ApplyRenderPolicy() { }
 #if !MISSING_EQUIP_COROUTINE
-        internal class _EnumEquip_d__80
+#if UPDATED_INTEROP
+        internal class _EnumEquip_d__111 : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
+#else
+        internal class _EnumEquip_d__80 : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
+#endif
         {
             public EquipSlot __4__this { get; set; }
             public UnityEngine.GameObject go { get; set; }
+            public int __1__state { get; set; }
             public bool MoveNext() => false;
         }
 #endif
     }
+}
+namespace Il2CppInterop.Runtime.InteropTypes
+{
+    internal class Il2CppObjectBase { public IntPtr Pointer { get; set; } }
 }
 namespace Il2CppMashBoxBridge.Common.Interfaces { internal enum HookGrind { Null } }
 namespace Il2CppMashBox.Netorking { internal class FusionBootstrap { public void DrawServerBrowserHostMapControls(float value) { } } }
@@ -267,7 +328,12 @@ namespace Il2CppMashBox.Addons.ProtoDrone
 {
     internal class DroneController
     {
+#if UPDATED_INTEROP
+        public void LocalSpawnBullet(UnityEngine.Vector3 pos, UnityEngine.Quaternion rot, UnityEngine.Vector3 velocity, float lifetime) { }
+        public void RPC_FireBullet(int sequence, double time, UnityEngine.Vector3 pos, UnityEngine.Quaternion rot, UnityEngine.Vector3 velocity) { }
+#else
         public void LocalSpawnBullet(UnityEngine.Vector3 pos, UnityEngine.Quaternion rot, UnityEngine.Vector3 velocity) { }
         public void RPC_FireBullet(UnityEngine.Vector3 pos, UnityEngine.Quaternion rot, UnityEngine.Vector3 velocity) { }
+#endif
     }
 }

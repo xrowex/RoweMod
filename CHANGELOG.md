@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.3.10
+
+- Added an audited native-hook profile for BMX Streets build 26071101 while preserving the previously supported build.
+- Updated equip-completion handling for the renamed coroutine, restoring the hooks used by custom-hair visibility and asynchronous material application.
+- Tracks the native coroutine before it replaces the source with a clone, preserving stale-selection protection, and waits for the game's pending outfit load before submitting a replacement.
+- Updated drone local-fire and RPC signatures.
+- Updated the native targets for host limits, player labels, manual IK, grind remapping, landing assistance, tweak and nose-manual controls, and challenge lifecycle/trick hooks.
+- Continues to reject unknown game binaries, unexpected native addresses, and shared native getters.
+
+**Testing note:** the Release build, 220 automated checks, native address audit, and both game versions' compiled wrapper/signature audits passed. Fresh runtime logs confirmed 7/7 native feature groups, both tweak/nose-manual guards, bust/hat/hair completion and material application, and active hair rendering without equip timeouts. Controller-driven feature behavior and multiplayer remain to be checked in gameplay.
+
 ## 3.3.9
 
 - Fixed a startup `TypeLoadException` when the game's generated equip coroutine wrapper is missing.

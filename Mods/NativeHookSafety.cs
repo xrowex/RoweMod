@@ -12,7 +12,6 @@ namespace rowemod.Mods
     /// <summary>Startup-only validation, never called by gameplay prefixes.</summary>
     internal static class NativeHookSafety
     {
-        private const string SupportedGameHash = "3D304228003AEEB7E96EE7588AD92526D67EADD3C5DB530F7BC0D661399D5EF1";
         // Cache both success and failure: optional late hooks must not re-hash each spawn.
         private static readonly Lazy<AuditedModule> Module = new Lazy<AuditedModule>(ReadModule);
 
@@ -21,6 +20,7 @@ namespace rowemod.Mods
             if (target == null || target.IsStatic || target.ContainsGenericParameters || target.IsGenericMethod)
                 throw new InvalidOperationException("Missing or unsupported native instance method.");
             AuditedModule module = Module.Value;
+            expectedRva = NativeHookBuilds.ResolveRva(module.Hash, expectedRva);
             FieldInfo field = Il2CppInteropUtils.GetIl2CppMethodInfoPointerFieldForGeneratedMethod(target);
             if (field == null)
                 throw new InvalidOperationException($"No native metadata for {target.Name}.");
@@ -45,9 +45,10 @@ namespace rowemod.Mods
                     continue;
                 using FileStream binary = File.OpenRead(module.FileName);
                 using SHA256 sha = SHA256.Create();
-                if (!string.Equals(Convert.ToHexString(sha.ComputeHash(binary)), SupportedGameHash, StringComparison.Ordinal))
+                string hash = Convert.ToHexString(sha.ComputeHash(binary));
+                if (!NativeHookBuilds.IsSupported(hash))
                     throw new InvalidOperationException("This game build has not been audited for native RoweMod hooks.");
-                return new AuditedModule(module.BaseAddress.ToInt64(), module.ModuleMemorySize);
+                return new AuditedModule(module.BaseAddress.ToInt64(), module.ModuleMemorySize, hash);
             }
             throw new InvalidOperationException("GameAssembly module not found.");
         }
@@ -56,7 +57,8 @@ namespace rowemod.Mods
         {
             internal readonly long BaseAddress;
             internal readonly int Size;
-            internal AuditedModule(long baseAddress, int size) { BaseAddress = baseAddress; Size = size; }
+            internal readonly string Hash;
+            internal AuditedModule(long baseAddress, int size, string hash) { BaseAddress = baseAddress; Size = size; Hash = hash; }
         }
     }
 }
