@@ -1,8 +1,8 @@
 {
-  "version": "3.3.10",
+  "version": "3.3.11",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "7fc9d3e71b6d4df46173e9eba26882c8b23327bc31d58499a1e8f57f6e558aa9",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.10",
-  "patchNotes": "Restored native-hook support for BMX Streets build 26071101 with a complete audit of 17 native targets. Updated the equip completion coroutine and drone firing signatures, restoring the hooks used by custom hair and materials, manual IK, grind remapping, landing assistance, drone placement, host limits, player labels, tweak control, and nose-manual control. Preserves support for the previously audited build and continues to reject unknown binaries and shared native getters.",
+  "sha256": "7c5f649142a8ea4b187e5d5ed9bc1c4050edf219caf97014a6fbfc9231019bf4",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.11",
+  "patchNotes": "Restored native-hook compatibility with BMX Streets build 26117410 (October 21 update), including the hooks used by material application, custom hair, Disable Trick Tweaking, and nose-manual/hang-five controls. Re-audited all 17 native targets while preserving earlier supported builds and rejecting unknown binaries and shared functions. Added a visible per-trick speed slider and Reset to 1x in the trick editor, using the existing saved per-trick setting.",
   "requiredGameVersion": ""
 }

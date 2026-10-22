@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.11
+
+- Added an audited native-hook profile for BMX Streets build 26117410 (October 21 update), preserving both previously supported builds.
+- Restored the hooks used by asynchronous material application, custom hair, Disable Trick Tweaking, nose-manual/hang-five controls, manual IK, grind remapping, landing assistance, drone placement, host limits, player labels, and challenge lifecycle/trick capture.
+- Exposed the existing saved per-trick speed setting as a prominent Trick Speed slider (0.05x to 10x) with Reset to 1x in the trick editor.
+- Continues to reject unknown game binaries, unexpected addresses, and shared native functions.
+
+**Testing note:** Release build, 235 automated checks, and an audit of 17 unique targets across 201,418 methods passed. Fresh runtime logs confirmed 7/7 native groups, both tweak/nose-manual guards, and bust/hat/hair equip completion and material application without timeouts. Riding/controller behavior, per-trick speed behavior, and multiplayer still need gameplay acceptance.
+
 ## 3.3.10
 
 - Added an audited native-hook profile for BMX Streets build 26071101 while preserving the previously supported build.

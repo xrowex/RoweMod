@@ -435,14 +435,26 @@ namespace rowemod.Mods
                 GUILayout.Label(title, headerStyle);
             GUILayout.Label($"Animation data: {SafeRead(() => data.name, "(unnamed)")}", mutedStyle);
 
+            bool changed = false;
+            Menu.BeginPane(null);
+            changed |= DrawFloatSlider("Trick Speed (x)", data._overallSpeedMult, 0.05f, 10f,
+                v => data._overallSpeedMult = v);
+            Menu.BeginToolbar();
+            GUILayout.Label("1x = normal speed. Saved for this trick.", mutedStyle, GUILayout.ExpandWidth(true));
+            if (Menu.SecondaryButton("Reset to 1x", GUILayout.Width(110f), GUILayout.Height(26f)) &&
+                Mathf.Abs(data._overallSpeedMult - 1f) > 0.001f)
+            {
+                data._overallSpeedMult = 1f;
+                changed = true;
+            }
+            Menu.EndToolbar();
+            Menu.EndPane();
+
             DrawCustomClipTools(data);
 
-            bool changed = false;
             showAdvancedControls = Menu.ModernFoldout("Timing & Trick Rules", showAdvancedControls);
             if (showAdvancedControls)
             {
-                changed |= DrawFloatSlider("Overall Speed", data._overallSpeedMult, 0.05f, 10f, v => data._overallSpeedMult = v);
-
                 changed |= DrawFloatSlider("Enter Speed", data._enterSpeedMult, 0.05f, 5f, v => data._enterSpeedMult = v);
                 GUILayout.Label($"Derived Loop Speed: {SafeRead(() => data.LoopSpeedMult, 1f):0.###}", mutedStyle);
                 changed |= DrawFloatSlider("Loop Mult", data._loopMult, 0.05f, 5f, v => data._loopMult = v);

@@ -108,12 +108,17 @@ internal static class Program
     {
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.OriginalHash), "original game hash retained");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.UpdatedHash), "updated game hash supported");
+        Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October21Hash), "October 21 game hash supported");
         Check(!NativeHookBuilds.IsSupported(null) && !NativeHookBuilds.IsSupported("unknown"), "unknown game hashes rejected");
         Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.OriginalHash, 0x7F15C0) == 0x7F15C0, "original completion address unchanged");
         Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.UpdatedHash, 0x7F15C0) == 0x87B630, "updated completion address selected by game hash");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October21Hash, 0x7F15C0) == 0x890E00, "October 21 completion address selected by game hash");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October21Hash, 0xD53AA0) == 0xF36250, "October 21 networking address selected by game hash");
         ExpectRejected("unknown", 0x7F15C0, "known target cannot enable an unknown game build");
         ExpectRejected(NativeHookBuilds.UpdatedHash, 0x66E640, "shared original getter cannot become an approved target");
         ExpectRejected(NativeHookBuilds.UpdatedHash, 0x6AE680, "shared updated getter cannot become an approved target");
+        ExpectRejected(NativeHookBuilds.October21Hash, 0x6BE680, "shared October 21 getter cannot become an approved target");
+        ExpectRejected(NativeHookBuilds.October21Hash, 0x87B630, "previous completion address cannot be used as target identity on latest build");
         ExpectRejected(NativeHookBuilds.OriginalHash, 0x87B630, "updated address cannot be passed as an original target identity");
     }
 
