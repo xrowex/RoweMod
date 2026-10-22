@@ -38,7 +38,8 @@ namespace rowemod.Mods
 
         public static void Update()
         {
-            UnityEngine.Physics.gravity = new Vector3(0f, -physics.gravity, 0f);
+            PhysicsValueControl.Apply();
+            GrindFrictionControl.Apply();
             ApplyPhysicsStepRate();
 
             if (!physics.spinCompletionAssist)
@@ -111,8 +112,7 @@ namespace rowemod.Mods
                 {
                     if (vehicleInstance.JumpSettings != null)
                     {
-                        vehicleInstance.JumpSettings.JumpVelocity[0] = physics.smallHopForce;
-                        vehicleInstance.JumpSettings.JumpVelocity[1] = physics.smallHopForce;
+                        PhysicsValueControl.ApplyLegacyHop(vehicleInstance.JumpSettings);
                     }
 
                     if (vehicleInstance.EngineSettings == null)

@@ -111,7 +111,7 @@ namespace rowemod
         {
             new PageDefinition(MenuPage.RideHandling, MenuArea.Ride, "Handling",
                 "Core riding assists, pump, spins, manuals, and bike response.", Tab.Physics,
-                "physics spin assist grind align drift gravity hop pump manual nose manual steering damping handling", "Ride"),
+                "physics spin assist grind friction align drift gravity hop pump manual nose manual steering damping handling", "Ride"),
             new PageDefinition(MenuPage.RidePrediction, MenuArea.Ride, "Prediction Lab",
                 "Inspect landing arcs and tune the game's flight, coping, and lip prediction systems.", Tab.Physics,
                 "prediction landing arc trajectory rays flight augment corner detector coping lip magnet ragdoll rigidbody joints muscles", "Prediction Lab"),
@@ -804,8 +804,7 @@ namespace rowemod
             }
             if (disableTweaking)
                 GUILayout.Label(TrickTweakGuard.HookStatus, UiMutedWrappedStyle);
-            Slider("Gravity", ref physics.gravity, 12.5f, 0f, 30f);
-            Slider("Small Hop Force", ref physics.smallHopForce, 4.2f, 0f, 25f);
+            PhysicsValueControl.DrawControls();
             ModernToggle("Custom Physics Update Rate", ref physics.useCustomPhysicsStepRate, "physics_custom_step_rate");
             float gamePhysicsRate = Mods.Physics.GamePhysicsRate;
             if (physics.useCustomPhysicsStepRate)
@@ -842,6 +841,8 @@ namespace rowemod
                 "landing/contact stability. Higher rates require a proportionally larger replay buffer.",
                 UiMutedWrappedStyle);
             EndPane();
+
+            GrindFrictionControl.DrawControls();
 
             BeginAltPane(
                 "Coping Finder",

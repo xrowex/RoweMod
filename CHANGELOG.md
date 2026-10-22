@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.3.12
+
+- Restored Custom Grind Friction under Ride → Handling, with the previous 0–5 range and 0.03 reset value. Uses local peg material copies and restores native materials when disabled.
+- New configs use Streets' native Gravity and Small Hop values, ranges, and resets. Small Hop's native default is 1x; this mode leaves the bike's base hop velocities and world gravity untouched.
+- Existing raw physics tunes and old presets remain in Legacy mode. Mount the local bike and choose Use Streets Physics Values to restore original base values and switch to current Streets settings.
+- Native Physics Presets capture and restore the game values while retaining the active vehicle. Later edits through Streets are saved instead of repeatedly overwritten.
+- Preserves old friction presets, including intentional zero friction, and rejects unbound or remote-proxy native settings.
+
+**Testing note:** Release build and 269 automated checks passed. Eight native Unity/IL2CPP fixture checks cover local material isolation/restoration and hop preservation/restoration. Fresh startup retains all native groups and both trick guards. Mounted slider interaction, riding, and multiplayer still require gameplay acceptance.
+
 ## 3.3.11
 
 - Added an audited native-hook profile for BMX Streets build 26117410 (October 21 update), preserving both previously supported builds.

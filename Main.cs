@@ -18,14 +18,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.11", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.12", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 [assembly: HarmonyDontPatchAll]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.3.11";
+        public const string ModVersion = "3.3.12";
         private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -353,6 +353,10 @@ namespace rowemod
             MainMenuCharacterPreview.Update();
             PegSparks.Update();
             if (playableSceneLoaded && rMbCharacter)
+                PhysicsValueControl.Update();
+            if (GrindFrictionControl.RequiresUpdate)
+                GrindFrictionControl.Update();
+            if (playableSceneLoaded && rMbCharacter)
                 MultiplayerMediaSync.Update();
             EmoteController.Update();
             PredictionSystemsControl.Update();
@@ -478,6 +482,8 @@ namespace rowemod
             MultiplayerMediaSync.Shutdown();
             Mods.Physics.ReleaseSpinCompletionAssist();
             Mods.Physics.ReleasePhysicsStepRate();
+            PhysicsValueControl.Release();
+            GrindFrictionControl.Restore();
             RiderStyleEditor.Cleanup();
             BikeOnlyStance.Cleanup();
             _runtimeContributionsReleased = true;

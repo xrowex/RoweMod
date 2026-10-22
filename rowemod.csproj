@@ -7,9 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<Version>3.3.11</Version>
-		<AssemblyVersion>3.3.11.0</AssemblyVersion>
-		<FileVersion>3.3.11.0</FileVersion>
+		<Version>3.3.12</Version>
+		<AssemblyVersion>3.3.12.0</AssemblyVersion>
+		<FileVersion>3.3.12.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -530,6 +530,8 @@
 		<Compile Include="Mods\RiderStyleEditor.cs" />
 		<Compile Include="Mods\RuntimeVehicleTuneResetPatch.cs" />
 		<Compile Include="Mods\CopingFinderControl.cs" />
+		<Compile Include="Mods\PhysicsValueControl.cs" />
+		<Compile Include="Mods\GrindFrictionControl.cs" />
 		<Compile Include="Mods\TransitionSettingsControl.cs" />
 		<Compile Include="Mods\PredictionSystemsControl.cs" />
 		<Compile Include="Mods\PredictionRuntimeDiagnostics.cs" />

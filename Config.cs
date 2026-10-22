@@ -24,6 +24,14 @@ namespace rowemod
         public float physicsStepRate;
         public bool allowHighPhysicsRateWithExtendedReplay;
         public float smallHopForce;
+        // Version 0 keeps an existing raw tune. New configs use native Streets values.
+        public int physicsValueScaleVersion;
+        public bool nativeGravityOverride;
+        public float nativeGravity;
+        public bool nativeSmallHopOverride;
+        public float nativeSmallHop;
+        public bool grindFrictionEnabled;
+        public float grindFriction;
         public float pumpForce;
         public float steerDamp;
         public float manualAngle;
@@ -571,6 +579,9 @@ namespace rowemod
             physicsStepRate = 0f,
             allowHighPhysicsRateWithExtendedReplay = false,
             smallHopForce = 4.2f,
+            physicsValueScaleVersion = 1,
+            nativeSmallHop = 1f,
+            grindFriction = 0.03f,
             pumpForce = 1.5f,
             steerDamp = 5.0f,
             manualAngle = 30f,
@@ -933,6 +944,13 @@ namespace rowemod
 
             // Assign values from JSON, preserving defaults if fields are missing
             physics = jsonData.physicsData;
+            bool hasGrindFriction = jsonContent.IndexOf("\"grindFriction\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hasGrindFrictionEnabled = jsonContent.IndexOf("\"grindFrictionEnabled\"", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!hasGrindFriction) physics.grindFriction = 0.03f;
+            // Older presets/configs that still contain the removed friction field
+            // retain that deliberate override, including a valid zero-friction tune.
+            if (hasGrindFriction && !hasGrindFrictionEnabled) physics.grindFrictionEnabled = true;
+            PhysicsValueControl.OnConfigurationLoaded();
             if (!float.IsFinite(physics.physicsStepRate))
                 physics.physicsStepRate = 0f;
             if (physics.physicsStepRate > 0f)
@@ -1343,6 +1361,8 @@ namespace rowemod
 // Reset physics tab settings to defaults
         public static void ResetPhysicsTab()
         {
+            PhysicsValueControl.ResetToGameDefaults();
+            GrindFrictionControl.Restore();
             if (physics.copingFinderTuningEnabled)
                 CopingFinderControl.RestoreGameValues();
             if (physics.transitionTuningEnabled)
@@ -1368,6 +1388,9 @@ namespace rowemod
                 physicsStepRate = 0f,
                 allowHighPhysicsRateWithExtendedReplay = false,
                 smallHopForce = 4.2f,
+                physicsValueScaleVersion = 1,
+                nativeSmallHop = 1f,
+                grindFriction = 0.03f,
                 pumpForce = 1.5f,
                 steerDamp = 5.0f,
                 manualAngle = 30f,

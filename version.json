@@ -1,8 +1,8 @@
 {
-  "version": "3.3.11",
+  "version": "3.3.12",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "7c5f649142a8ea4b187e5d5ed9bc1c4050edf219caf97014a6fbfc9231019bf4",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.11",
-  "patchNotes": "Restored native-hook compatibility with BMX Streets build 26117410 (October 21 update), including the hooks used by material application, custom hair, Disable Trick Tweaking, and nose-manual/hang-five controls. Re-audited all 17 native targets while preserving earlier supported builds and rejecting unknown binaries and shared functions. Added a visible per-trick speed slider and Reset to 1x in the trick editor, using the existing saved per-trick setting.",
+  "sha256": "0cbf4829806b39f89048ad3cd8688bb9892c1d81d425fdc14f14ba638cd8ec4b",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.12",
+  "patchNotes": "Restored Grind Friction under Ride > Handling with local peg material copies and native material restoration. New configs use Streets' native Gravity and Small Hop settings, including their ranges and reset values, with 1x Small Hop as the game default. Existing raw physics tunes and old presets remain intact; mount the local bike and choose Use Streets Physics Values to switch. Native presets capture the current game values, while changes made through Streets are preserved.",
   "requiredGameVersion": ""
 }

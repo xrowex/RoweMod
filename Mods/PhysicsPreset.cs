@@ -83,10 +83,17 @@ namespace rowemod.Mods
             try
             {
                 Directory.CreateDirectory(PresetDirectory);
+                bool nativeValuesCaptured = PhysicsValueControl.SyncPresetValues();
+                var settings = Config.physics;
+                if (nativeValuesCaptured)
+                {
+                    settings.nativeGravityOverride = true;
+                    settings.nativeSmallHopOverride = true;
+                }
                 var preset = new PhysicsPreset
                 {
                     name = name,
-                    settings = Config.physics
+                    settings = settings
                 };
                 File.WriteAllText(PathFor(name), JsonConvert.SerializeObject(preset, Formatting.Indented));
                 rowemod.Utils.Log.Msg($"[Physics Presets] Saved '{name}'.");
@@ -105,13 +112,18 @@ namespace rowemod.Mods
                 if (!File.Exists(path))
                     return;
 
-                PhysicsPreset preset = JsonConvert.DeserializeObject<PhysicsPreset>(File.ReadAllText(path));
+                string json = File.ReadAllText(path);
+                PhysicsPreset preset = JsonConvert.DeserializeObject<PhysicsPreset>(json);
                 if (preset == null)
                     return;
 
                 // Vehicle selection is session state, not part of a handling preset.
                 int activeVehicle = Config.physics.lastVehicle;
                 Config.physics = preset.settings;
+                bool hasFriction = json.IndexOf("\"grindFriction\"", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (!hasFriction) Config.physics.grindFriction = 0.03f;
+                if (hasFriction && json.IndexOf("\"grindFrictionEnabled\"", StringComparison.OrdinalIgnoreCase) < 0)
+                    Config.physics.grindFrictionEnabled = true;
                 Config.physics.lastVehicle = activeVehicle;
                 Config.physics.smallHopForce = Mathf.Clamp(Config.physics.smallHopForce, 0f, 25f);
                 Config.physics.gravity = Mathf.Clamp(Config.physics.gravity, 0f, 30f);
@@ -121,6 +133,7 @@ namespace rowemod.Mods
                     Config.physics.physicsStepRate = Mathf.Clamp(Config.physics.physicsStepRate, 30f, 250f);
                 Config.physics.grindPoseLerpSpeed = Mathf.Clamp(Config.physics.grindPoseLerpSpeed, 0.05f, 10f);
 
+                PhysicsValueControl.OnPresetLoaded();
                 Physics.Update();
                 Config.RequestSave();
                 rowemod.Utils.Log.Msg($"[Physics Presets] Loaded '{name}'.");
