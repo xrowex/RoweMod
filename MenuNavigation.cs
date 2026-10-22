@@ -947,6 +947,8 @@ namespace rowemod
             }
             EndPane();
 
+            ManualActivationControl.DrawControls();
+
             BeginAltPane("Pump, Spin & Manuals", "Less commonly changed riding-response controls.");
             Slider("Pump Force", ref physics.pumpForce, 1.5f, 1f, 5f);
             Slider("Spin Speed Multiplier", ref physics.spinMultiplier, 1f, 0f, 10f);

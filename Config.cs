@@ -32,6 +32,11 @@ namespace rowemod
         public float nativeSmallHop;
         public bool grindFrictionEnabled;
         public float grindFriction;
+        public bool manualActivationEnabled;
+        public float manualActivationDelay;
+        public float noseManualActivationDelay;
+        public float manualActivationThreshold;
+        public float noseManualActivationThreshold;
         public float pumpForce;
         public float steerDamp;
         public float manualAngle;
@@ -1361,6 +1366,7 @@ namespace rowemod
 // Reset physics tab settings to defaults
         public static void ResetPhysicsTab()
         {
+            ManualActivationControl.Release();
             PhysicsValueControl.ResetToGameDefaults();
             GrindFrictionControl.Restore();
             if (physics.copingFinderTuningEnabled)

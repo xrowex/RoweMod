@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Reflection;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test;
 using Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System;
@@ -29,12 +29,14 @@ namespace rowemod.Mods
 
         public static InputAction? trickSet1InputAction, trickSet2InputAction,
                                   trickSet3InputAction, trickSet4InputAction,
-                                  trickSet5InputAction, trickSet6InputAction;
+                                  trickSet5InputAction, trickSet6InputAction,
+                                  trickSet7InputAction, trickSet8InputAction;
         
         // NEW: Track toggle state per TrickSet and cache originals so we can restore.
         public static readonly Dictionary<string, bool[]> _trickEnabled = new();
         private static readonly Dictionary<string, UnityEngine.Object?[]> _originalRefs = new();
         private static readonly Dictionary<string, UnityEngine.Object?[]> _configuredRefs = new();
+        private static readonly Dictionary<string, Dictionary<int, TrickEntry>> _unresolvedEntries = new();
 
 
         // We'll store the extracted trick names in a dictionary: TrickSetData.name -> List of strings
@@ -97,29 +99,6 @@ namespace rowemod.Mods
             "Up", "UpRight", "Right", "DownRight",
             "Down", "DownLeft", "Left", "UpLeft"
         };
-        private static Il2CppTypeRef ToIl2CppType(ManagedType managed)
-        {
-            if (managed == null) return null;
-
-            // Il2CppInterop.Runtime.Il2CppType.From(System.Type)
-            var interop = ManagedType.GetType("Il2CppInterop.Runtime.Il2CppType, Il2CppInterop.Runtime");
-            if (interop != null)
-            {
-                var m = interop.GetMethod("From", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, null, new[] { typeof(ManagedType) }, null);
-                if (m != null) return (Il2CppTypeRef)m.Invoke(null, new object[] { managed });
-            }
-
-            // UnhollowerRuntimeLib.Il2CppType.From(System.Type)
-            var unh = ManagedType.GetType("UnhollowerRuntimeLib.Il2CppType, UnhollowerBaseLib");
-            if (unh != null)
-            {
-                var m = unh.GetMethod("From", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static, null, new[] { typeof(ManagedType) }, null);
-                if (m != null) return (Il2CppTypeRef)m.Invoke(null, new object[] { managed });
-            }
-
-            return null;
-        }
-
         #region Main Methods
         private static void ApplyToggle(TrickSetData set, int index, bool enabled)
         {
@@ -135,6 +114,8 @@ namespace rowemod.Mods
                     configured = originals;
 
                 var newVal = enabled ? configured[index] : null;
+                if (_unresolvedEntries.TryGetValue(setKey, out var pending) && pending.TryGetValue(index, out var unresolved))
+                    unresolved.Enabled = enabled;
                 set._dataList[(Index)index] = newVal;
 
                 // UPDATED: keep the UI list in sync, but with cleaned names
@@ -163,6 +144,8 @@ namespace rowemod.Mods
             for (int i = 0; i < count; i++)
             {
                 flags[i] = enableAll;
+                if (_unresolvedEntries.TryGetValue(setKey, out var pending) && pending.TryGetValue(i, out var unresolved))
+                    unresolved.Enabled = enableAll;
                 set._dataList[(Index)i] = enableAll ? configured[i] : null;
             }
 
@@ -176,96 +159,9 @@ namespace rowemod.Mods
         // calls OnDisable/OnEnable which many systems use to rebuild.
         private static void ForceRefreshTrickRuntime()
         {
-            // Try v2 types first (as in your screenshot), then legacy names.
-            ToggleAllBehaviours(
-                "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickAnimator",
-                "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2",
-                "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickSystemBrainV2",
-                "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.TrickSystemBrain",
-                "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.TrickBrainHandler"
-            );
-
-            // Opportunistically poke common “rebuild” methods if present.
-            InvokeNoArgIfExistsOnAll(
-                "Il2CppMashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2",
-                "Rebuild", "Refresh", "Init", "Initialize", "Setup", "Build"
-            );
-
+            try { TrickRuntimeContext.Refresh(); }
+            catch (System.Exception ex) { Log.Warning("[Tricks] Local cache refresh unavailable: " + ex.Message); }
             TrickAnimationEditor.RequestRuntimeRefresh("trick runtime rebuilt");
-        }
-
-        // Toggle enabled -> disabled -> enabled on every instance of these types
-        private static void ToggleAllBehaviours(params string[] fullTypeNames)
-        {
-            foreach (var name in fullTypeNames)
-            {
-                var managed = FindType(name); // your existing System.Type finder
-                if (managed == null) continue;
-
-                var il2cpp = ToIl2CppType(managed); // <-- bridge
-                if (il2cpp == null) continue;
-
-                var objs = UnityEngine.Resources.FindObjectsOfTypeAll(il2cpp);
-                foreach (var o in objs)
-                {
-                    if (o is UnityEngine.Behaviour b)
-                    {
-                        bool was = b.enabled;
-                        b.enabled = false;
-                        b.enabled = was || true; // end enabled
-                    }
-                }
-            }
-        }
-
-
-        // Try to call common “rebuild-ish” methods (no args) if they exist
-        private static void InvokeNoArgIfExistsOnAll(string fullTypeName, params string[] methodNames)
-        {
-            var managed = FindType(fullTypeName);      // System.Type
-            if (managed == null) return;
-
-            var il2cpp = ToIl2CppType(managed);       // Il2CppSystem.Type
-            if (il2cpp == null) return;
-
-            // Use the IL2CPP overload of FindObjectsOfTypeAll
-            var objs = UnityEngine.Resources.FindObjectsOfTypeAll(il2cpp);
-            foreach (var o in objs)
-            {
-                // Best-effort poke without reflection brittleness on IL2CPP:
-                // SendMessage tolerates "method not found" via DontRequireReceiver.
-                if (o is UnityEngine.Component c)
-                {
-                    foreach (var mName in methodNames)
-                        c.SendMessage(mName, UnityEngine.SendMessageOptions.DontRequireReceiver);
-                }
-                else if (o is UnityEngine.Behaviour b)
-                {
-                    foreach (var mName in methodNames)
-                        b.SendMessage(mName, UnityEngine.SendMessageOptions.DontRequireReceiver);
-                }
-                // If you *really* want reflection here, you can still do it:
-                // var type = o.GetType(); ... GetMethod(...) ... Invoke(o, null);
-                // but SendMessage is usually enough to trigger OnEnable/Refresh-style hooks.
-            }
-        }
-
-
-        // Robust type finder without Harmony
-        private static ManagedType FindType(string fullName)
-        {
-            // Try direct first
-            var t = ManagedType.GetType(fullName, false);
-            if (t != null) return t;
-
-            // Search loaded assemblies (IL2CPP will still expose managed names)
-            var asms = AppDomain.CurrentDomain.GetAssemblies();
-            for (int i = 0; i < asms.Length; i++)
-            {
-                t = asms[i].GetType(fullName, false);
-                if (t != null) return t;
-            }
-            return null;
         }
 
         public static void DrawTrickPickerPopup()
@@ -355,7 +251,8 @@ namespace rowemod.Mods
 
             // Prefer the container asset "BMX_TrickDataSets"
             TrickSetData[] bmxSetsFromAsset = null;
-            var allSetsAssets = Resources.FindObjectsOfTypeAll<TrickDataSets>();
+            var localSets = TrickRuntimeContext.LocalDataSets();
+            var allSetsAssets = localSets != null ? new[] { localSets } : Resources.FindObjectsOfTypeAll<TrickDataSets>();
             if (allSetsAssets != null && allSetsAssets.Length > 0)
             {
                 for (int i = 0; i < allSetsAssets.Length; i++)
@@ -363,7 +260,7 @@ namespace rowemod.Mods
                     var ds = allSetsAssets[i];
                     if (ds == null) continue;
 
-                    if ((ds.name ?? "").IndexOf("BMX", StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (ds == localSets || (ds.name ?? "").IndexOf("BMX", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         var arr = ds.TrickSets; // Il2CppReferenceArray<TrickSetData>
                         if (arr != null && arr.Length > 0)
@@ -401,7 +298,7 @@ namespace rowemod.Mods
             // DO NOT overwrite rTrickSetData again here.
             // rTrickSetData = Resources.FindObjectsOfTypeAll<TrickSetData>();  <-- remove this line
 
-            rTrickSystemBrain = GameObject.FindObjectOfType<TrickSystemBrain>();
+            rTrickSystemBrain = Memory.rMbCharacter?.GetComponentInChildren<TrickSystemBrain>(true);
 
             trickDictionary.Clear();
             trickMenuDisplayItems.Clear();
@@ -475,16 +372,15 @@ namespace rowemod.Mods
                 Log.Msg("No BMX TrickSetData objects found!");
             }
 
-            if (rTrickSystemBrain != null)
-            {
-                rCharacter = rTrickSystemBrain.GetComponent<Character>();
-                trickSet1InputAction = rTrickSystemBrain._trickSet1InputAction;
-                trickSet2InputAction = rTrickSystemBrain._trickSet2InputAction;
-                trickSet3InputAction = rTrickSystemBrain._trickSet3InputAction;
-                trickSet4InputAction = rTrickSystemBrain._trickSet4InputAction;
-                trickSet5InputAction = rTrickSystemBrain._trickSet5InputAction;
-                trickSet6InputAction = rTrickSystemBrain._trickSet6InputAction;
-            }
+            rCharacter = Memory.rMbCharacter?.GetComponentInChildren<Character>(true);
+            trickSet1InputAction = TrickRuntimeContext.LocalInputAction(1);
+            trickSet2InputAction = TrickRuntimeContext.LocalInputAction(2);
+            trickSet3InputAction = TrickRuntimeContext.LocalInputAction(3);
+            trickSet4InputAction = TrickRuntimeContext.LocalInputAction(4);
+            trickSet5InputAction = TrickRuntimeContext.LocalInputAction(5);
+            trickSet6InputAction = TrickRuntimeContext.LocalInputAction(6);
+            trickSet7InputAction = TrickRuntimeContext.LocalInputAction(7);
+            trickSet8InputAction = TrickRuntimeContext.LocalInputAction(8);
 
             BuildTrickMenuDisplay();
             BuildCatalog();
@@ -1392,6 +1288,7 @@ namespace rowemod.Mods
             }
 
             var newTrick = _catalog[newIndex];
+            if (_unresolvedEntries.TryGetValue(set.name, out var pending)) pending.Remove(index);
             if (!_configuredRefs.TryGetValue(set.name, out var configured) || configured.Length <= index)
             {
                 EnsureBackingArrays(set);
@@ -1501,6 +1398,7 @@ namespace rowemod.Mods
                 trickDictionary[setKey] = names;
             }
 
+            _unresolvedEntries.Clear();
             Config.tricks.trickSets.Clear();
             SaveTricksToConfig();
 
@@ -1516,12 +1414,15 @@ namespace rowemod.Mods
         {
             if (rTrickSetData == null) return;
 
-            var dict = new Dictionary<string, List<TrickEntry>>();
+            // A partial runtime catalog must never delete saved LT/RT sets or
+            // mappings whose assets have not loaded yet.
+            var dict = TrickPresetCompatibility.CopySets(Config.tricks.trickSets);
             foreach (var set in rTrickSetData)
             {
                 if (set == null || set._dataList == null) continue;
 
-                var entries = new List<TrickEntry>();
+                TrickPresetCompatibility.TryFindSet(dict, set.name, out string previousKey, out var previousEntries);
+                var entries = previousEntries ?? new List<TrickEntry>();
                 _configuredRefs.TryGetValue(set.name, out var configured);
                 _trickEnabled.TryGetValue(set.name, out var flags);
 
@@ -1532,10 +1433,15 @@ namespace rowemod.Mods
                     string name = CleanTrickName(configuredObj);
                     bool enabled = flags != null && i < flags.Length ? flags[i] : obj != null;
 
-                    entries.Add(new TrickEntry { Name = name, Enabled = enabled });
+                    TrickEntry saved = new TrickEntry { Name = name, Enabled = enabled };
+                    if (_unresolvedEntries.TryGetValue(set.name, out var pending) && pending.TryGetValue(i, out var unresolved))
+                        saved = new TrickEntry { Name = unresolved.Name, Enabled = unresolved.Enabled };
+                    if (i < entries.Count) entries[i] = saved;
+                    else entries.Add(saved);
                 }
 
                 dict[set.name] = entries;
+                if (previousKey != null && previousKey != set.name) dict.Remove(previousKey);
             }
 
             Config.tricks.trickSets = dict;
@@ -1545,14 +1451,23 @@ namespace rowemod.Mods
 
         public static void LoadTricksFromConfig()
         {
+            var local = TrickRuntimeContext.LocalDataSets()?.TrickSets;
+            if (local != null && local.Length > 0)
+            {
+                bool changed = rTrickSetData == null || rTrickSetData.Length != local.Length;
+                for (int i = 0; !changed && i < local.Length; i++)
+                    changed = rTrickSetData[i] != local[i];
+                if (changed) GrabTrickData();
+            }
             if (rTrickSetData == null || Config.tricks.trickSets == null) return;
-            if (_catalogIndexByName.Count == 0) BuildCatalog();
+            BuildCatalog();
+            _unresolvedEntries.Clear();
 
             foreach (var set in rTrickSetData)
             {
                 if (set == null || set._dataList == null) continue;
 
-                if (!Config.tricks.trickSets.TryGetValue(set.name, out var savedTricks)) continue;
+                if (!TrickPresetCompatibility.TryFindSet(Config.tricks.trickSets, set.name, out _, out var savedTricks) || savedTricks == null) continue;
 
                 EnsureBackingArrays(set);
                 if (!_configuredRefs.TryGetValue(set.name, out var configured))
@@ -1571,9 +1486,19 @@ namespace rowemod.Mods
                 {
                     var entry = savedTricks[i];
                     UnityEngine.Object configuredTrick = null;
-                    if (entry != null && _catalogIndexByName.TryGetValue(entry.Name, out int newIndex))
+                    if (!string.IsNullOrWhiteSpace(entry?.Name) && _catalogIndexByName.TryGetValue(entry.Name, out int newIndex))
                     {
                         configuredTrick = _catalog[newIndex];
+                    }
+
+                    if (entry != null && configuredTrick == null &&
+                        (entry.Enabled || (!string.IsNullOrWhiteSpace(entry.Name) && entry.Name != "(null)")))
+                    {
+                        if (!_unresolvedEntries.TryGetValue(set.name, out var pending))
+                            _unresolvedEntries[set.name] = pending = new Dictionary<int, TrickEntry>();
+                        pending[i] = new TrickEntry { Name = entry.Name, Enabled = entry.Enabled };
+                        Log.Warning($"[Tricks] Preserving unavailable mapping {set.name}[{i}] '{entry.Name}'; the saved entry will not be erased.");
+                        if (entry.Enabled) continue;
                     }
 
                     bool isEnabled = entry?.Enabled == true && configuredTrick != null;

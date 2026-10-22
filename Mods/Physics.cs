@@ -40,6 +40,7 @@ namespace rowemod.Mods
         {
             PhysicsValueControl.Apply();
             GrindFrictionControl.Apply();
+            ManualActivationControl.Apply();
             ApplyPhysicsStepRate();
 
             if (!physics.spinCompletionAssist)

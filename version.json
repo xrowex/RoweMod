@@ -1,8 +1,8 @@
 {
-  "version": "3.3.12",
+  "version": "3.3.13",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "0cbf4829806b39f89048ad3cd8688bb9892c1d81d425fdc14f14ba638cd8ec4b",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.12",
-  "patchNotes": "Restored Grind Friction under Ride > Handling with local peg material copies and native material restoration. New configs use Streets' native Gravity and Small Hop settings, including their ranges and reset values, with 1x Small Hop as the game default. Existing raw physics tunes and old presets remain intact; mount the local bike and choose Use Streets Physics Values to switch. Native presets capture the current game values, while changes made through Streets are preserved.",
+  "sha256": "8f58907307bd6be18a4ceac4c02e75299dc425835111a7e76e3d9fc4d725733a",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.13",
+  "patchNotes": "Preserves LT/RT and unloaded trick preset sets, extra slots, and unresolved trick names. Refreshes only the local rider without enabling disabled components. Added opt-in Manual Activation under Ride > Handling with separate manual/nose-manual delays and stick thresholds, saved in Physics Presets. Physical LT/RT behavior with the reporting player's exact preset remains unverified.",
   "requiredGameVersion": ""
 }

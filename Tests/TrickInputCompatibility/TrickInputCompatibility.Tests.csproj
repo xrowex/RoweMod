@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net6.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><CheckEolTargetFramework>false</CheckEolTargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Mods/ManualActivationControl.cs" Link="ManualActivationControl.cs" />
+    <Compile Include="../../Mods/TrickPresetCompatibility.cs" Link="TrickPresetCompatibility.cs" />
+    <Compile Include="../../Mods/TrickRuntimeContext.cs" Link="TrickRuntimeContext.cs" />
+    <Compile Include="../../Mods/PhysicsValueControl.cs" Link="PhysicsValueControl.cs" />
+    <Compile Include="../../Mods/GrindFrictionControl.cs" Link="GrindFrictionControl.cs" />
+    <Compile Include="../PhysicsValues/Stubs.cs" Link="Stubs.cs" />
+    <Compile Include="../PhysicsValues/TrickInputStubs.cs" Link="TrickInputStubs.cs" />
+  </ItemGroup>
+</Project>

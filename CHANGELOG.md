@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.13
+
+- Preserves LT/RT and unloaded trick sets, extra slots, and unresolved trick names when saving presets. Supports native set-name aliases without merging ambiguous sets.
+- Missing or unnamed entries preserve usable live slots, while explicitly disabled entries stay disabled.
+- Refreshes only the local rider's trick runtime without enabling disabled components or broadcasting initialization.
+- Added opt-in Manual Activation controls under Ride → Handling: separate manual/nose-manual delays and minimum stick thresholds, Physics Preset persistence, and restoration to captured game values.
+
+**Testing note:** Release build, 307 automated checks, 16 real IL2CPP fixtures, wrapper/signature audits, and fresh startup checks passed. The reporting player's physical LT/RT failure and exact preset remain unverified; mounted UI, riding, and multiplayer require gameplay acceptance.
+
 ## 3.3.12
 
 - Restored Custom Grind Friction under Ride → Handling, with the previous 0–5 range and 0.03 reset value. Uses local peg material copies and restores native materials when disabled.

@@ -7,7 +7,10 @@ namespace rowemod
         public float gravity, smallHopForce, nativeGravity, nativeSmallHop, grindFriction, physicsStepRate, grindPoseLerpSpeed;
         public int physicsValueScaleVersion, lastVehicle;
         public bool nativeGravityOverride, nativeSmallHopOverride, grindFrictionEnabled;
+        public bool manualActivationEnabled;
+        public float manualActivationDelay, noseManualActivationDelay, manualActivationThreshold, noseManualActivationThreshold;
     }
+    public class TrickEntry { public string Name { get; set; } public bool Enabled { get; set; } }
     public static class Config
     {
         public static Physics physics;
@@ -41,6 +44,7 @@ namespace rowemod.Utils
     {
         public static UnityEngine.GameObject rMbCharacter;
         public static FakeVehicle vehicleController;
+        public static FakePlayerInput playerInputBehaviour;
     }
     public static class Log
     {
@@ -53,6 +57,20 @@ namespace rowemod.Utils
         public UnityEngine.GameObject gameObject;
         public NativeSetting _userGravitySmartData { get; set; }
         public NativeSetting _userQuickHopHeightSmartData { get; set; }
+        public Il2CppMashBox.Core.Runtime.TrickSystem.TrickDataSets VehicleTrickDataSets { get; set; }
+    }
+    public sealed class FakePlayerInput
+    {
+        public bool _hasInputAuthority;
+        public Il2CppMashBox.BMX_Physics_Development.InputHoldPoint _mannyInputHoldPoint, _noseyInputHoldPoint;
+        public UnityEngine.InputSystem.InputAction _trickSet1InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet2InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet3InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet4InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet5InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet6InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet7InputAction { get; set; }
+        public UnityEngine.InputSystem.InputAction _trickSet8InputAction { get; set; }
     }
     public sealed class NativeSetting
     {
@@ -99,8 +117,10 @@ namespace UnityEngine
     {
         public Transform transform;
         public Collider[] Colliders = Array.Empty<Collider>();
+        public Object[] ExtraComponents = Array.Empty<Object>();
+        public bool activeInHierarchy = true;
         public GameObject() { transform = new Transform { gameObject = this }; }
-        public T[] GetComponentsInChildren<T>(bool inactive) => Colliders.Cast<T>().ToArray();
+        public T[] GetComponentsInChildren<T>(bool inactive) => Colliders.Cast<Object>().Concat(ExtraComponents).OfType<T>().ToArray();
     }
     public sealed class Transform
     {
@@ -128,6 +148,8 @@ namespace UnityEngine
         public static float Clamp(float value, float min, float max) => Math.Clamp(value, min, max);
         public static int Clamp(int value, int min, int max) => Math.Clamp(value, min, max);
         public static int Max(int a, int b) => Math.Max(a, b);
+        public static float Max(float a, float b) => Math.Max(a, b);
+        public static float Min(float a, float b) => Math.Min(a, b);
     }
     public static class GUI { public static void FocusControl(string name) { } }
     public class GUIStyle { }
