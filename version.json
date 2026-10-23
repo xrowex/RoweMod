@@ -1,8 +1,8 @@
 {
-  "version": "3.3.14",
+  "version": "3.3.15",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "a437ce94cfaf220607390e318f473193b19df80fccc59f4d72a4c1a8853fcae3",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.14",
-  "patchNotes": "Fixes custom clothing materials left white by applying the selected material to all renderers and material slots in the equipped item. Restores current model/material selections when entering gameplay without a named clothing preset. Adds audited support for Streets build 26150520 / 2.0.0.3070.0 and restores its native equip-completion hooks. Eyewear materials now persist. Selected textures were visually verified in the menu and gameplay; the reporting player's exact bundles and multiplayer remain unverified.",
+  "sha256": "425c91d3e1183accc9650c0116a2d60abd244c8ebd21d6478a05a1d3052f9eae",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.15",
+  "patchNotes": "Adds nine off-bike Smoke Session gestures with temporary props, corrected camera and bong orientation, visible smoke, and shared emote search and filters. The pack is embedded in the DLL. Fixes hidden-slot equip timeouts when reloading outfit presets and extra reference bodies showing through custom clothes. Release build, 401 automated checks, native audits, and local preset/gameplay checks passed. Gestures and props are local; multiplayer sync, replay recording, and pack audio are not included.",
   "requiredGameVersion": ""
 }

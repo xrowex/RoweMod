@@ -18,14 +18,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.14", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.15", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 [assembly: HarmonyDontPatchAll]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.3.14";
+        public const string ModVersion = "3.3.15";
         private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -426,6 +426,7 @@ namespace rowemod
             // the cached fisheye shape afterward so its lightweight native parameters remain
             // authoritative without adding any rendering work.
             ReplayCameraLight.LateUpdate();
+            SmokeSessionController.LateUpdate();
 
             if (playableSceneLoaded && rMbCharacter)
             {

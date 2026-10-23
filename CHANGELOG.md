@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.3.15
+
+- Added nine Smoke Session gestures to the shared Emotes browser, with temporary joint, bong, beer, and camcorder props. Playing one dismounts the rider; Stop leaves the rider on foot.
+- Added an emote search and category filters, including Smoke Session. Animation Studio validation clips and custom trick phases no longer appear as imported emotes.
+- Corrected the camcorder grip and direction, both bong orientations, and visible smoke with a short fade after Stop. The pack is embedded in the DLL and excluded from the object dropper.
+- Hidden clothing slots now stay active until native equip finishes, then return to their saved visibility. Loading the same outfit preset again no longer prevents their equip coroutines from starting.
+- Removed bundled reference body meshes before native clothing cloning, fixing extra white body patches showing through custom clothing.
+- Updated the native-target audit script to recognize the already-supported October 22 Streets binary.
+
+**Testing note:** Release build, 401 automated checks, 17 unique native targets, and compiled wrapper/signature audits passed. The release DLL passed repeated-preset and gameplay-spawn checks using the local custom outfit. Gesture and prop orientations were visually accepted in Streets. Imported gestures and props remain local; multiplayer synchronization, replay recording, and pack audio are not included. An empty Invisible Eyes material bundle remains an asset issue; that slot stays hidden.
+
 ## 3.3.14
 
 - Added an audited native-hook profile for Streets build 26150520 / 2.0.0.3070.0, restoring equip-completion handling and retaining all older profiles and safety checks.

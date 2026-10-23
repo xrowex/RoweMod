@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using Il2CppMashBox.Addons.CharacterController;
+using Il2CppMashBox.Character;
 using UnityEngine;
 using rowemod.Utils;
 
@@ -56,6 +57,9 @@ namespace rowemod.Mods
         private static int _systemInstanceId = int.MinValue;
         private static int _packRevision = -1;
         private static bool _lastPlayWasAddedClip;
+        private static EmoteOption _pendingOption;
+        private static bool _pendingLoop;
+        private static float _pendingSince;
         private static EmoteOption _loopOption;
         private static bool _loopSawActive;
         private static float _loopStartedAt;
@@ -67,6 +71,7 @@ namespace rowemod.Mods
         public static string Status => _status;
         public static bool IsActive => _system != null && SafeRead(() => _system._isEmoteActive, false);
         public static bool IsLooping => _loopOption != null;
+        public static bool IsPending => _pendingOption != null;
 
         public static void OnSceneInitialized()
         {
@@ -79,6 +84,7 @@ namespace rowemod.Mods
         public static bool Refresh(bool force = false)
         {
             EmoteBundleLoader.EnsureAvailable(force);
+            bool smokePackLoaded = SmokeSessionController.EnsureAvailable();
             EmoteSystem resolved = ResolveLocalSystem();
             if (resolved == null)
             {
@@ -89,12 +95,13 @@ namespace rowemod.Mods
 
             int instanceId = resolved.GetInstanceID();
             bool sameSystem = _system != null && _systemInstanceId == instanceId;
-            if (!force && sameSystem && OptionsInternal.Count > 0 &&
+            if (!force && !smokePackLoaded && sameSystem && OptionsInternal.Count > 0 &&
                 (_packRevision == EmoteBundleLoader.Revision || IsActive))
                 return true;
 
             ClearLoopState();
             EmotePropController.StopEmoteProp();
+            SmokeSessionController.Stop();
 
             if (sameSystem)
             {
@@ -183,7 +190,11 @@ namespace rowemod.Mods
             {
                 AnimationClip clip = imported[i];
                 string clipName = SafeRead(() => clip?.name, string.Empty);
-                if (clip == null || string.IsNullOrWhiteSpace(clipName) || !names.Add(clipName))
+                // The rider catalog also contains trick phases and Studio validation exports.
+                // Only clips explicitly authored as emotes belong in this browser.
+                if (clip == null ||
+                    !clipName.StartsWith("RoweMod_Custom_Emote_", StringComparison.OrdinalIgnoreCase) ||
+                    !names.Add(clipName))
                     continue;
 
                 combined.Add(clip);
@@ -217,6 +228,39 @@ namespace rowemod.Mods
 
         public static bool Play(EmoteOption option, bool loop = false)
         {
+            if (option == null || !Refresh(false)) return false;
+            var rider = ResolveCharacterManager();
+            if (rider == null || !rider.IsAlive)
+            {
+                _status = "The local rider is not ready to get off the bike yet.";
+                return false;
+            }
+            _pendingOption = null;
+            if (!IsOnFoot(rider) || rider.IsBusyTransitioning || rider.TimeSinceChangedSeat < 1f)
+            {
+                Stop();
+                _pendingOption = option;
+                _pendingLoop = loop;
+                _pendingSince = Time.unscaledTime;
+                try
+                {
+                    if (!IsOnFoot(rider)) rider.Dismount();
+                }
+                catch (Exception ex)
+                {
+                    _pendingOption = null;
+                    _status = "Could not get off the bike: " + ex.Message;
+                    Log.Warning("[Emotes] " + _status);
+                    return false;
+                }
+                _status = $"Getting off the bike to play {option.Label}.";
+                return true;
+            }
+            return PlayNow(option, loop);
+        }
+
+        private static bool PlayNow(EmoteOption option, bool loop)
+        {
             if (option == null || !Refresh(false) || _system == null)
                 return false;
 
@@ -241,6 +285,9 @@ namespace rowemod.Mods
                     ArmLoop(option);
 
                 EmotePropController.Begin(option.ClipName, option.Clip, loop);
+                if (option.ClipName.StartsWith(SmokeSessionController.Prefix, StringComparison.Ordinal) && _system._emoteLayer?.CurrentState != null)
+                    _system._emoteLayer.CurrentState.Time = 0f;
+                SmokeSessionController.Begin(option.ClipName);
                 _status = option.Stock
                     ? $"Playing stock emote: {option.Label}. Native networking remains available."
                     : loop
@@ -259,9 +306,31 @@ namespace rowemod.Mods
 
         public static void Update()
         {
+            if (_pendingOption != null)
+            {
+                var rider = ResolveCharacterManager();
+                if (rider != null && rider.IsAlive && IsOnFoot(rider) && !rider.IsBusyTransitioning && rider.TimeSinceChangedSeat >= 1f)
+                {
+                    var option = _pendingOption;
+                    bool loop = _pendingLoop;
+                    _pendingOption = null;
+                    PlayNow(option, loop);
+                }
+                else if (Time.unscaledTime - _pendingSince > 5f)
+                {
+                    _pendingOption = null;
+                    _status = "Could not get off the bike. Stand beside it and try the emote again.";
+                }
+            }
+            if (IsActive)
+            {
+                var rider = ResolveCharacterManager();
+                if (rider == null || !rider.IsAlive || !IsOnFoot(rider)) Stop();
+            }
             RadioDanceController.Update();
             VideoTvController.Update();
             EmotePropController.Update(IsActive);
+            SmokeSessionController.Update(IsActive);
 
             if (_loopOption == null || _system == null)
                 return;
@@ -308,8 +377,16 @@ namespace rowemod.Mods
             RestartLoop();
         }
 
+        private static CharacterManager ResolveCharacterManager() =>
+            Memory.rMbCharacter == null ? null : Memory.rMbCharacter.GetComponentInChildren<CharacterManager>(true);
+
+        private static bool IsOnFoot(CharacterManager rider) =>
+            rider.CharacterControllerSeat != null && rider.IsCurrentlySeatedIn(rider.CharacterControllerSeat);
+
         public static void Stop()
         {
+            _pendingOption = null;
+            SmokeSessionController.Stop();
             if (_system == null)
             {
                 EmotePropController.StopEmoteProp();
@@ -336,6 +413,8 @@ namespace rowemod.Mods
 
         public static void RestoreOriginalList()
         {
+            _pendingOption = null;
+            SmokeSessionController.Release();
             ClearLoopState();
             EmotePropController.StopEmoteProp();
             RestoreOriginalArray(true);
@@ -348,6 +427,8 @@ namespace rowemod.Mods
 
         public static void Release()
         {
+            _pendingOption = null;
+            SmokeSessionController.Release();
             ClearLoopState();
             EmotePropController.Release();
             RestoreOriginalArray(true);
@@ -378,6 +459,9 @@ namespace rowemod.Mods
                 _system.FireEmote(option.NativeIndex);
                 ArmLoop(option);
                 EmotePropController.Begin(option.ClipName, option.Clip, true);
+                if (option.ClipName.StartsWith(SmokeSessionController.Prefix, StringComparison.Ordinal) && _system._emoteLayer?.CurrentState != null)
+                    _system._emoteLayer.CurrentState.Time = 0f;
+                SmokeSessionController.Begin(option.ClipName);
                 Log.Msg($"[Emotes] Repeated local loop: {option.Label}.");
             }
             catch (Exception ex)
@@ -478,6 +562,8 @@ namespace rowemod.Mods
                 return "Unnamed Emote";
 
             string result = clipName;
+            if (result.StartsWith(SmokeSessionController.Prefix, StringComparison.Ordinal))
+                return "Smoke Session - " + result.Substring(SmokeSessionController.Prefix.Length).Replace('_', ' ');
             if (result.StartsWith("Player@", StringComparison.OrdinalIgnoreCase))
                 result = result.Substring("Player@".Length);
             if (result.StartsWith("RoweMod_Custom_", StringComparison.OrdinalIgnoreCase))

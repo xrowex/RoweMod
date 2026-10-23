@@ -338,7 +338,11 @@ namespace rowemod.Mods
                 // Cache slot per-character separately if desired
                 _slotObjects[slot] = slotObject;
 
-                slotObject.SetActive(isVisible);
+                var equipSlot = slotObject.GetComponent<EquipSlot>();
+                bool equipping = equipSlot != null && _equipRequests.TryGetValue(equipSlot.GetInstanceID(), out var pending) &&
+                    !pending.Completed && !pending.Failed;
+                // Keep the native coroutine owner active until its equip finishes.
+                slotObject.SetActive(isVisible || equipping);
                 if (slot == Slot.Hair)
                     slotObject.GetComponent<EquipSlot>()?.ApplyRenderPolicy();
                 Log.Msg($"[ToggleSlotVisibility] {label}: '{fullPath}' set to {isVisible}");
@@ -682,36 +686,57 @@ namespace rowemod.Mods
         private static IEnumerator SubmitNativeEquipWhenReady(EquipSlot slot, int id, EquipRequest request)
         {
             float deadline = Time.realtimeSinceStartup + 10f;
-            while (slot != null && request.Source != null &&
-                _equipRequests.TryGetValue(id, out var current) && ReferenceEquals(current, request))
+            bool wasActive = slot != null && slot.gameObject.activeSelf;
+            try
             {
-                bool ready;
-                try
+                // Hidden preset slots still need their native equip coroutine to run.
+                if (slot != null && !wasActive) slot.gameObject.SetActive(true);
+                while (slot != null && request.Source != null &&
+                    _equipRequests.TryGetValue(id, out var current) && ReferenceEquals(current, request))
                 {
-                    // The updated game exposes completion including its pending load.
-                    // Calling Equip earlier can stop that routine while leaving its
-                    // busy flag set, so its next PreEquipEnum waits indefinitely.
-                    ready = NativeEquipCompletion == null || (bool)NativeEquipCompletion.GetValue(slot);
-                    if (ready)
+                    bool ready;
+                    try
                     {
-                        request.CompletionDeadline = Time.realtimeSinceStartup + 10f;
-                        slot.Equip(request.Source);
+                        ready = slot.gameObject.activeInHierarchy &&
+                            (NativeEquipCompletion == null || (bool)NativeEquipCompletion.GetValue(slot));
+                        if (ready)
+                        {
+                            request.CompletionDeadline = Time.realtimeSinceStartup + 10f;
+                            slot.Equip(request.Source);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        request.Failed = true;
+                        Log.Warning($"[CustomEquip] {request.Label}: Could not submit {request.Slot} equip: {ex.Message}");
                         yield break;
                     }
+                    if (ready)
+                    {
+                        while (slot != null && !request.Completed && !request.Failed &&
+                            _equipRequests.TryGetValue(id, out current) && ReferenceEquals(current, request) &&
+                            Time.realtimeSinceStartup < request.CompletionDeadline)
+                            yield return null;
+                        yield break;
+                    }
+                    if (Time.realtimeSinceStartup >= deadline)
+                    {
+                        request.Failed = true;
+                        Log.Warning($"[CustomEquip] {request.Label}: Native {request.Slot} outfit is still loading; custom request skipped.");
+                        yield break;
+                    }
+                    yield return null;
                 }
-                catch (Exception ex)
+            }
+            finally
+            {
+                // A newer selection owns the slot if this request was superseded.
+                if (slot != null && _equipRequests.TryGetValue(id, out var current) && ReferenceEquals(current, request))
                 {
-                    request.Failed = true;
-                    Log.Warning($"[CustomEquip] {request.Label}: Could not submit {request.Slot} equip: {ex.Message}");
-                    yield break;
+                    bool visible = _slotVisibility.TryGetValue(request.Slot, out bool chosen) ? chosen : wasActive;
+                    slot.gameObject.SetActive(visible);
+                    if (request.Slot == Slot.Hair && visible) slot.ApplyRenderPolicy();
                 }
-                if (Time.realtimeSinceStartup >= deadline)
-                {
-                    request.Failed = true;
-                    Log.Warning($"[CustomEquip] {request.Label}: Native {request.Slot} outfit is still loading; custom request skipped.");
-                    yield break;
-                }
-                yield return null;
             }
         }
 
@@ -816,21 +841,16 @@ namespace rowemod.Mods
                     return;
                 }
                 
-                // Disable SM_Body GameObjects
+                // Strip bundled reference bodies before native Equip clones this prefab.
                 foreach (Transform child in modelObject.GetComponentsInChildren<Transform>(true))
                 {
-                    if (child.name.Contains("SM_Body")) 
-                    {
-                        Log.Msg("Removing erroneous skinned mesh renderer : " + child.name);
-                        UnityEngine.Object.Destroy(child.gameObject);
-                    }
-                    if (child.name.Contains("SM_Bust")) 
-                    {
-                        Log.Msg("Removing erroneous skinned mesh renderer : " + child.name);
-                        UnityEngine.Object.Destroy(child.gameObject);
-                    }
+                    if (child == null || (!child.name.Contains("SM_Body") && !child.name.Contains("SM_Bust"))) continue;
+                    Log.Msg("Removing bundled reference mesh before equip: " + child.name);
+                    // Only the loaded bundle template changes; the source file stays intact.
+                    // Deferred Destroy lets Equip's synchronous clone retain the extra body.
+                    UnityEngine.Object.DestroyImmediate(child.gameObject, true);
                 }
-                
+
                 // Check for MagicaCloth component
                 var magicaCloth = modelObject.GetComponent<MagicaCloth>();
                 if (magicaCloth != null)
@@ -1336,7 +1356,7 @@ namespace rowemod.Mods
             }
             else
             {
-                Log.Error("Selected slot is Body, not auto applying.");
+                Log.Msg("[ReplaceModel] Body material auto-selection is skipped; use a preset or select its material explicitly.");
             }
 
 

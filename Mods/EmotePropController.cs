@@ -429,6 +429,7 @@ namespace rowemod.Mods
 
         public static void OnReplayOpened()
         {
+            SmokeSessionController.Release();
             _replayActive = true;
             Stop();
             _lastReplayPlaybackTime = float.NegativeInfinity;

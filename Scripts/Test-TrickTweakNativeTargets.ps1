@@ -10,8 +10,9 @@ $metadataRoot = Join-Path $GameRoot 'MelonLoader\Dependencies\Il2CppAssemblyGene
 $originalHash = '3D304228003AEEB7E96EE7588AD92526D67EADD3C5DB530F7BC0D661399D5EF1'
 $updatedHash = '2D70F57905A2F3A79A2BC75FA503F9AB251AEACFC66CC72F78670ECBFAA8EEC2'
 $october21Hash = '3EBD5AB08931C3BB35E1264739975F0EB6FD2AD56EDFD99E5FA48DA7EABD6E85'
+$october22Hash = 'D2B353D46A7B2E696736F4A5C39398E24DC13A66B5F956D696F553E42609C430'
 $gameHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $GameRoot 'GameAssembly.dll')).Hash
-if ($gameHash -notin @($originalHash, $updatedHash, $october21Hash)) { throw 'GameAssembly changed. Regenerate Cpp2IL metadata and re-audit targets before enabling native hooks.' }
+if ($gameHash -notin @($originalHash, $updatedHash, $october21Hash, $october22Hash)) { throw 'GameAssembly changed. Regenerate Cpp2IL metadata and re-audit targets before enabling native hooks.' }
 
 $targets = @{
     '0x8B0A50' = 'System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::RequestTweak()'
@@ -37,7 +38,7 @@ if ($gameHash -ne $originalHash) {
     # Audit the exact production profile against fresh metadata; do not maintain a
     # separate unchecked list of replacement addresses in this script.
     $profileSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Mods\NativeHookBuilds.cs') -Raw
-    $profileName = if ($gameHash -eq $october21Hash) { 'October21Rvas' } else { 'UpdatedRvas' }
+    $profileName = if ($gameHash -eq $october22Hash) { 'October22Rvas' } elseif ($gameHash -eq $october21Hash) { 'October21Rvas' } else { 'UpdatedRvas' }
     $profileBody = [regex]::Match($profileSource, "(?s)$profileName\s*=.*?\{(.*?)\};")
     if (-not $profileBody.Success) { throw "Missing production profile $profileName" }
     $map = @{}
@@ -58,7 +59,7 @@ if ($gameHash -ne $originalHash) {
         $updatedTargets[$map[$originalRva]] = $signature
     }
     $targets = $updatedTargets
-    $sharedGetterRva = if ($gameHash -eq $october21Hash) { '0x6BE680' } else { '0x6AE680' }
+    $sharedGetterRva = if ($gameHash -in @($october21Hash, $october22Hash)) { '0x6BE680' } else { '0x6AE680' }
 }
 $matches = @{}
 foreach ($rva in $targets.Keys) { $matches[$rva] = [System.Collections.Generic.List[string]]::new() }

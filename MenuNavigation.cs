@@ -17,7 +17,9 @@ namespace rowemod
     /// </summary>
     public static partial class Menu
     {
-        private static int _selectedDanceIndex;
+        private static string _emoteSearch = string.Empty;
+        private static int _emoteCategory;
+        private static readonly string[] EmoteCategories = { "All", "Dances", "Poses", "Game", "Imported", "Smoke Session" };
 
         private enum MenuArea
         {
@@ -1523,13 +1525,15 @@ namespace rowemod
             if (SecondaryButton("Test Firecracker FX", GUILayout.Width(175f), GUILayout.Height(28f)))
                 EmotePropController.TestFirecrackerFx();
             bool previousEnabled = GUI.enabled;
-            GUI.enabled = EmoteController.IsActive || EmoteController.IsLooping;
+            GUI.enabled = EmoteController.IsActive || EmoteController.IsLooping || EmoteController.IsPending;
             if (SecondaryButton("Stop Emote", GUILayout.Width(125f), GUILayout.Height(28f)))
                 EmoteController.Stop();
             GUI.enabled = previousEnabled;
             EndToolbar();
             GUILayout.Label(EmotePropController.TestStatus, UiMutedWrappedStyle);
             EndPane();
+
+            DrawEmoteBrowser();
 
             BeginPane("Radio",
                 "Play a song from the placed 3D radio. Song playback is independent from the rider's selected dance.");
@@ -1613,64 +1617,30 @@ namespace rowemod
                 UiMutedWrappedStyle);
             EndPane();
 
-            BeginPane("Dance",
-                "Choose a local dance independently. You can switch or stop the dance without interrupting the radio.");
-            IReadOnlyList<EmoteController.EmoteOption> dances = EmoteController.DanceOptions;
-            if (dances.Count == 0)
-            {
-                GUILayout.Label("No compatible local dance clips are loaded.", UiMutedWrappedStyle);
-            }
-            else
-            {
-                _selectedDanceIndex = Mathf.Clamp(_selectedDanceIndex, 0, dances.Count - 1);
-                EmoteController.EmoteOption selectedDance = dances[_selectedDanceIndex];
-                GUILayout.Label("Selected dance", UiRowMutedLabelStyle);
-                GUILayout.Label(selectedDance.Label, UiRowLabelStyle);
-                GUILayout.Label(selectedDance.ClipName, UiRowMutedLabelStyle);
-                BeginToolbar();
-                if (SecondaryButton("Previous", GUILayout.Width(110f), GUILayout.Height(30f)))
-                    _selectedDanceIndex = (_selectedDanceIndex - 1 + dances.Count) % dances.Count;
-                GUILayout.Label($"{_selectedDanceIndex + 1} of {dances.Count}", UiRowMutedLabelStyle, GUILayout.Width(70f));
-                if (SecondaryButton("Next", GUILayout.Width(110f), GUILayout.Height(30f)))
-                    _selectedDanceIndex = (_selectedDanceIndex + 1) % dances.Count;
-                if (PrimaryButton("Loop Dance", GUILayout.Width(135f), GUILayout.Height(30f)) &&
-                    EmoteController.Play(dances[_selectedDanceIndex], true))
-                    Main.CloseRoweModMenu();
-                previousEnabled = GUI.enabled;
-                GUI.enabled = EmoteController.IsActive || EmoteController.IsLooping;
-                if (SecondaryButton("Stop Dance", GUILayout.Width(125f), GUILayout.Height(30f)))
-                    EmoteController.Stop();
-                GUI.enabled = previousEnabled;
-                EndToolbar();
-            }
-            EndPane();
-
-            DrawEmoteGroup(
-                "Added Poses",
-                "Sitting and other compatible clips already shipped with the game. These play locally so custom IDs are never sent to players without them.",
-                option => !option.Stock && !option.Imported);
-            DrawEmoteGroup(
-                "Game Emotes",
-                "The original emote array. These keep the game's native networking behavior.",
-                option => option.Stock);
-            DrawEmoteGroup(
-                "Imported Animation Clips",
-                "Humanoid rider clips found in your RoweMod animation bundles. Trick-specific clips may not look natural as stationary emotes.",
-                option => option.Imported);
         }
 
-        private static void DrawEmoteGroup(
-            string title,
-            string description,
-            Func<EmoteController.EmoteOption, bool> include)
+        private static void DrawEmoteBrowser()
         {
-            BeginAltPane(title, description);
+            BeginAltPane("Emotes", "Play gestures and dances off the bike. Play or Loop gets the rider off first; Stop leaves them on foot.");
+            BeginToolbar();
+            for (int category = 0; category < EmoteCategories.Length; category++)
+            {
+                if (PillButton(EmoteCategories[category], _emoteCategory == category, GUILayout.ExpandWidth(true)))
+                    _emoteCategory = category;
+            }
+            EndToolbar();
+            GUILayout.Label("Search emotes", UiRowMutedLabelStyle);
+            _emoteSearch = GUILayout.TextField(_emoteSearch, UiSearchFieldStyle,
+                GUILayout.ExpandWidth(true), GUILayout.Height(28f * UiScale));
             IReadOnlyList<EmoteController.EmoteOption> options = EmoteController.Options;
             int shown = 0;
             for (int i = 0; i < options.Count; i++)
             {
                 EmoteController.EmoteOption option = options[i];
-                if (option == null || !include(option))
+                if (option == null || !MatchesEmoteCategory(option) ||
+                    (!string.IsNullOrWhiteSpace(_emoteSearch) &&
+                     (option.Label ?? string.Empty).IndexOf(_emoteSearch, StringComparison.OrdinalIgnoreCase) < 0 &&
+                     (option.ClipName ?? string.Empty).IndexOf(_emoteSearch, StringComparison.OrdinalIgnoreCase) < 0))
                     continue;
 
                 shown++;
@@ -1704,8 +1674,23 @@ namespace rowemod
             }
 
             if (shown == 0)
-                GUILayout.Label("No compatible clips were found in this group.", UiMutedWrappedStyle);
+                GUILayout.Label("No emotes match this category and search.", UiMutedWrappedStyle);
             EndPane();
+        }
+
+        private static bool MatchesEmoteCategory(EmoteController.EmoteOption option)
+        {
+            if (_emoteCategory == 1)
+            {
+                foreach (var dance in EmoteController.DanceOptions)
+                    if (ReferenceEquals(dance, option)) return true;
+                return false;
+            }
+            if (_emoteCategory == 2) return !option.Stock && !option.Imported;
+            if (_emoteCategory == 3) return option.Stock;
+            if (_emoteCategory == 4) return option.Imported;
+            if (_emoteCategory == 5) return option.ClipName != null && option.ClipName.StartsWith(SmokeSessionController.Prefix, StringComparison.Ordinal);
+            return true;
         }
 
         private static void DrawMultiplayerPage()

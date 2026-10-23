@@ -698,7 +698,8 @@ namespace rowemod.Utils
                 // before loading it. Loading it here first allowed a stale bundle with the same
                 // prefab name to win for the entire session.
                 string ownedBundleName = Path.GetFileName(bundlePath);
-                if (ownedBundleName.Equals("rowemod_custom_emotes", StringComparison.OrdinalIgnoreCase) ||
+                if (ownedBundleName.StartsWith("rowemod_smoke_session", StringComparison.OrdinalIgnoreCase) ||
+                    ownedBundleName.Equals("rowemod_custom_emotes", StringComparison.OrdinalIgnoreCase) ||
                     ownedBundleName.Equals("rowemod_custom_emotes.download", StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (string.Equals(
