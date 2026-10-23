@@ -7,9 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<Version>3.3.15</Version>
-		<AssemblyVersion>3.3.15.0</AssemblyVersion>
-		<FileVersion>3.3.15.0</FileVersion>
+		<Version>3.3.16</Version>
+		<AssemblyVersion>3.3.16.0</AssemblyVersion>
+		<FileVersion>3.3.16.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -500,6 +500,7 @@
 		<Compile Include="Mods\DroneEvents.cs" />
 		<Compile Include="Mods\EmoteController.cs" />
 		<Compile Include="Mods\SmokeSessionController.cs" />
+		<Compile Include="Mods\ReplayPropTrack.cs" />
 		<Compile Include="Mods\EmoteBundleLoader.cs" />
 		<Compile Include="Mods\EmotePropController.cs" />
 		<Compile Include="Mods\RadioDanceController.cs" />

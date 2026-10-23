@@ -228,6 +228,11 @@ namespace rowemod.Mods
 
         public static bool Play(EmoteOption option, bool loop = false)
         {
+            if (EmotePropController.IsReplayActive)
+            {
+                _status = "Close the replay editor to perform a new emote.";
+                return false;
+            }
             if (option == null || !Refresh(false)) return false;
             var rider = ResolveCharacterManager();
             if (rider == null || !rider.IsAlive)
@@ -306,6 +311,15 @@ namespace rowemod.Mods
 
         public static void Update()
         {
+            if (EmotePropController.IsReplayActive)
+            {
+                _pendingOption = null;
+                ClearLoopState();
+                RadioDanceController.Update();
+                VideoTvController.Update();
+                EmotePropController.Update(false);
+                return;
+            }
             if (_pendingOption != null)
             {
                 var rider = ResolveCharacterManager();

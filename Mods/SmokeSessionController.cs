@@ -8,6 +8,7 @@ using UnityEngine.Rendering.HighDefinition;
 using rowemod.Utils;
 using Il2CppMashBox.Addons.PhysicsDrivenAnimation;
 using Il2CppMashBox.Addons.CharacterController;
+using GameReplaySystem = Il2CppMashBox.Core.Runtime.ReplaySystem.ReplaySystem;
 
 namespace rowemod.Mods
 {
@@ -51,6 +52,30 @@ namespace rowemod.Mods
         private static Transform _head;
         private static Texture2D _smokeTexture;
         private static readonly List<Material> Materials = new List<Material>();
+        private readonly struct PropPose
+        {
+            internal readonly string Gesture;
+            internal readonly Vector3 Position;
+            internal readonly Quaternion Rotation;
+            internal PropPose(string gesture, Vector3 position, Quaternion rotation)
+            { Gesture = gesture; Position = position; Rotation = rotation; }
+        }
+        private readonly struct RecordedPuff
+        {
+            internal readonly float Time;
+            internal readonly Puff Data;
+            internal RecordedPuff(float time, Puff data) { Time = time; Data = data; }
+        }
+        private static readonly ReplayPropTrack<PropPose> ReplayTrack = new ReplayPropTrack<PropPose>();
+        private static readonly List<RecordedPuff> RecordedPuffs = new List<RecordedPuff>();
+        private static readonly List<Puff> ReplayPuffs = new List<Puff>();
+        private static readonly List<Material> ReplayMaterials = new List<Material>();
+        private static bool _replayActive;
+        private static GameObject _replayRoot;
+        private static string _replayGesture;
+        private static int _segment;
+        private static float _recordTime = -1f;
+        private static bool _loggedReplayRecording;
         public static string Status { get; private set; } = "Smoke Session pack has not been loaded.";
 
         public static bool EnsureAvailable()
@@ -101,6 +126,7 @@ namespace rowemod.Mods
 
         public static void Begin(string clipName)
         {
+            if (_replayActive) return;
             try { BeginInternal(clipName); }
             catch (Exception ex) { Stop(); Log.Warning("[SmokeSession] Prop setup failed: " + ex.Message); }
         }
@@ -129,74 +155,10 @@ namespace rowemod.Mods
             BindHand(_gesture.StartsWith("Smoke_", StringComparison.Ordinal));
             _head = animator.GetBoneTransform(HumanBodyBones.Head);
             if (_hand == null) return;
-            string mesh = null;
-            float size = 1f;
-            if (_gesture.StartsWith("Smoke_", StringComparison.Ordinal)) { mesh = "sm_njoint_mesh"; size = .09f; }
-            else if (_gesture == "Bong_Session") { mesh = "sm_noble_hand_bong_mesh"; size = .35f; }
-            else if (_gesture == "Bong_Table") { mesh = "cmn_prp_own_bk_propsfurniture_generic_table01_mesh"; size = 1.2f; }
-            else if (_gesture == "Beer_Shotgun") { mesh = "sm_fx_gesture_rainbow_a_mesh"; size = .17f; }
-            else if (_gesture == "Camera") { mesh = "sm_ncam_a_mesh"; size = .26f; }
-            if (mesh == null) return; // Hand signs and Twerk have no hand prop.
-            string assetName = null;
-            foreach (string name in _bundle.GetAllAssetNames())
-                if (name.EndsWith("smokesession_" + mesh + ".prefab", StringComparison.OrdinalIgnoreCase)) { assetName = name; break; }
-            GameObject prefab = assetName == null ? null : _bundle.LoadAsset<GameObject>(assetName);
-            if (prefab == null) { Log.Warning("[SmokeSession] Missing prop " + mesh); return; }
-            _root = new GameObject("RoweMod Smoke Session - " + _gesture);
-            _root.hideFlags = HideFlags.HideAndDontSave;
-            GameObject visual = UnityEngine.Object.Instantiate(prefab);
-            visual.transform.SetParent(_root.transform, false);
-            Bounds bounds = new Bounds(); bool first = true;
-            foreach (Renderer renderer in visual.GetComponentsInChildren<Renderer>(true))
+            _segment++;
+            _root = CreateProp(_gesture, Materials, out _bowl);
+            if (_gesture == "Bong_Table" && _root != null)
             {
-                if (first) { bounds = renderer.bounds; first = false; } else bounds.Encapsulate(renderer.bounds);
-                var source = renderer.sharedMaterials;
-                var converted = new Material[source.Length];
-                for (int i = 0; i < source.Length; i++)
-                {
-                    Shader shader = Shader.Find("HDRP/Lit") ?? Shader.Find("Standard");
-                    if (shader == null) throw new InvalidOperationException("No supported prop shader.");
-                    var material = new Material(shader) { name = "Smoke Session " + mesh, renderQueue = (int)RenderQueue.Geometry };
-                    Texture texture = source[i] == null ? null : source[i].mainTexture;
-                    if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
-                    if (material.HasProperty("_BaseColorMap"))
-                    {
-                        material.SetTexture("_BaseColorMap", texture);
-                        if (_gesture.StartsWith("Bong_", StringComparison.Ordinal)) { material.SetTextureScale("_BaseColorMap",new Vector2(1,-1)); material.SetTextureOffset("_BaseColorMap",new Vector2(0,1)); }
-                    }
-                    if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
-                    if (material.HasProperty("_SurfaceType")) material.SetFloat("_SurfaceType", 0);
-                    if (material.HasProperty("_ZWrite")) material.SetFloat("_ZWrite", 1);
-                    if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", .2f);
-                    converted[i] = material; Materials.Add(material);
-                }
-                renderer.sharedMaterials = converted;
-            }
-            float longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
-            float scale = size / Mathf.Max(.0001f, longest);
-            visual.transform.localScale = Vector3.one * scale;
-            visual.transform.localPosition = -bounds.center * scale;
-            if (_gesture == "Camera")
-            {
-                // The imported mesh is tilted in its source coordinates. Normalize the lens
-                // and top handle before attaching the handle (not the body centre) to the hand.
-                Quaternion upright = Quaternion.Inverse(Quaternion.LookRotation(
-                    new Vector3(0f, -.65f, -.76f), new Vector3(0f, -.76f, .65f)));
-                visual.transform.localRotation = upright;
-                visual.transform.localPosition = -(upright * new Vector3(-.02f, -.06f, -.04f)) * scale;
-            }
-            if (_gesture == "Bong_Session")
-            {
-                Quaternion turn = Quaternion.Euler(0f, 180f, 0f);
-                visual.transform.localRotation = turn;
-                visual.transform.localPosition = -(turn * bounds.center) * scale;
-                _bowl = new GameObject("Smoke Session bowl").transform;
-                _bowl.SetParent(visual.transform, false);
-                _bowl.localPosition = new Vector3(0f, 1.025f, .415f);
-            }
-            if (_gesture == "Bong_Table")
-            {
-                visual.transform.localScale = Vector3.one; visual.transform.localPosition = Vector3.zero;
                 Vector3 hips=animator.GetBoneTransform(HumanBodyBones.Hips).position;
                 Vector3 forward=Vector3.ProjectOnPlane(animator.transform.forward,Vector3.up).normalized;
                 _tableRotation=Quaternion.LookRotation(forward,Vector3.up); _tablePosition=hips;
@@ -204,14 +166,6 @@ namespace rowemod.Mods
                 foreach(var hit in UnityEngine.Physics.RaycastAll(hips+Vector3.up,Vector3.down,5f,~0,QueryTriggerInteraction.Ignore))
                     if(hit.collider!=null && !hit.collider.transform.IsChildOf(Memory.rMbCharacter.transform) && hit.distance<distance) {distance=hit.distance;_tablePosition.y=hit.point.y;}
                 if(distance==float.MaxValue) _tablePosition.y=hips.y-.95f;
-                Transform bong = null;
-                foreach (Transform child in visual.GetComponentsInChildren<Transform>(true))
-                    if (child.name == "SmokeSessionTableBong") { bong = child; break; }
-                if (bong == null) throw new InvalidDataException("The table bong pivot is missing.");
-                bong.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                _bowl = new GameObject("Smoke Session bowl").transform;
-                _bowl.SetParent(bong, false);
-                _bowl.localPosition = new Vector3(0f, 1.025f - .7900390625f, .415f - .484619140625f);
             }
             _startedAt = Time.unscaledTime;
             _sawActive = false;
@@ -222,11 +176,103 @@ namespace rowemod.Mods
                 _nextTrail = _nextExhale = Time.unscaledTime;
             }
             LateUpdate();
-            Log.Msg($"[SmokeSession] Attached {_gesture}: mesh={mesh}, scale={scale:0.####}, renderers={visual.GetComponentsInChildren<Renderer>().Length}.");
+            Log.Msg($"[SmokeSession] Attached {_gesture}: renderers={(_root == null ? 0 : _root.GetComponentsInChildren<Renderer>().Length)}.");
+        }
+
+        private static GameObject CreateProp(string gesture, List<Material> materials, out Transform bowl)
+        {
+            bowl = null;
+            string mesh = null;
+            float size = 1f;
+            if (gesture.StartsWith("Smoke_", StringComparison.Ordinal)) { mesh = "sm_njoint_mesh"; size = .09f; }
+            else if (gesture == "Bong_Session") { mesh = "sm_noble_hand_bong_mesh"; size = .35f; }
+            else if (gesture == "Bong_Table") { mesh = "cmn_prp_own_bk_propsfurniture_generic_table01_mesh"; size = 1.2f; }
+            else if (gesture == "Beer_Shotgun") { mesh = "sm_fx_gesture_rainbow_a_mesh"; size = .17f; }
+            else if (gesture == "Camera") { mesh = "sm_ncam_a_mesh"; size = .26f; }
+            if (mesh == null) return null; // Hand signs and Twerk have no hand prop.
+            string assetName = null;
+            foreach (string name in _bundle.GetAllAssetNames())
+                if (name.EndsWith("smokesession_" + mesh + ".prefab", StringComparison.OrdinalIgnoreCase)) { assetName = name; break; }
+            GameObject prefab = assetName == null ? null : _bundle.LoadAsset<GameObject>(assetName);
+            if (prefab == null) { Log.Warning("[SmokeSession] Missing prop " + mesh); return null; }
+            GameObject root = new GameObject("RoweMod Smoke Session - " + gesture);
+            try
+            {
+                root.hideFlags = HideFlags.HideAndDontSave;
+                GameObject visual = UnityEngine.Object.Instantiate(prefab);
+                visual.transform.SetParent(root.transform, false);
+                Bounds bounds = new Bounds(); bool first = true;
+                foreach (Renderer renderer in visual.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (first) { bounds = renderer.bounds; first = false; } else bounds.Encapsulate(renderer.bounds);
+                    var source = renderer.sharedMaterials;
+                    var converted = new Material[source.Length];
+                    for (int i = 0; i < source.Length; i++)
+                    {
+                        Shader shader = Shader.Find("HDRP/Lit") ?? Shader.Find("Standard");
+                        if (shader == null) throw new InvalidOperationException("No supported prop shader.");
+                        var material = new Material(shader) { name = "Smoke Session " + mesh, renderQueue = (int)RenderQueue.Geometry };
+                        Texture texture = source[i] == null ? null : source[i].mainTexture;
+                        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
+                        if (material.HasProperty("_BaseColorMap"))
+                        {
+                            material.SetTexture("_BaseColorMap", texture);
+                            if (gesture.StartsWith("Bong_", StringComparison.Ordinal)) { material.SetTextureScale("_BaseColorMap",new Vector2(1,-1)); material.SetTextureOffset("_BaseColorMap",new Vector2(0,1)); }
+                        }
+                        if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+                        if (material.HasProperty("_SurfaceType")) material.SetFloat("_SurfaceType", 0);
+                        if (material.HasProperty("_ZWrite")) material.SetFloat("_ZWrite", 1);
+                        if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", .2f);
+                        converted[i] = material; materials.Add(material);
+                    }
+                    renderer.sharedMaterials = converted;
+                }
+                float longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+                float scale = size / Mathf.Max(.0001f, longest);
+                visual.transform.localScale = Vector3.one * scale;
+                visual.transform.localPosition = -bounds.center * scale;
+                if (gesture == "Camera")
+                {
+                    // The imported mesh is tilted in its source coordinates. Normalize the lens
+                    // and top handle before attaching the handle (not the body centre) to the hand.
+                    Quaternion upright = Quaternion.Inverse(Quaternion.LookRotation(
+                        new Vector3(0f, -.65f, -.76f), new Vector3(0f, -.76f, .65f)));
+                    visual.transform.localRotation = upright;
+                    visual.transform.localPosition = -(upright * new Vector3(-.02f, -.06f, -.04f)) * scale;
+                }
+                if (gesture == "Bong_Session")
+                {
+                    Quaternion turn = Quaternion.Euler(0f, 180f, 0f);
+                    visual.transform.localRotation = turn;
+                    visual.transform.localPosition = -(turn * bounds.center) * scale;
+                    bowl = new GameObject("Smoke Session bowl").transform;
+                    bowl.SetParent(visual.transform, false);
+                    bowl.localPosition = new Vector3(0f, 1.025f, .415f);
+                }
+                if (gesture == "Bong_Table")
+                {
+                    visual.transform.localScale = Vector3.one; visual.transform.localPosition = Vector3.zero;
+                    Transform bong = null;
+                    foreach (Transform child in visual.GetComponentsInChildren<Transform>(true))
+                        if (child.name == "SmokeSessionTableBong") { bong = child; break; }
+                    if (bong == null) throw new InvalidDataException("The table bong pivot is missing.");
+                    bong.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                    bowl = new GameObject("Smoke Session bowl").transform;
+                    bowl.SetParent(bong, false);
+                    bowl.localPosition = new Vector3(0f, 1.025f - .7900390625f, .415f - .484619140625f);
+                }
+                return root;
+            }
+            catch
+            {
+                UnityEngine.Object.Destroy(root);
+                throw;
+            }
         }
 
         public static void Update(bool nativeActive)
         {
+            if (_replayActive) return;
             if (_gesture == null) return;
             if (nativeActive) _sawActive = true;
             else if (_sawActive || Time.unscaledTime - _startedAt > 1f) Stop();
@@ -254,10 +300,18 @@ namespace rowemod.Mods
 
         public static void LateUpdate()
         {
+            if (_replayActive) { UpdateReplay(); return; }
+            ObserveRecordClock();
             if (_restorePhysicsAt >= 0f && Time.unscaledTime >= _restorePhysicsAt)
                 RestorePhysics();
             UpdateSmoke(); // Detached puffs keep fading after Stop removes the prop.
-            if (_root == null || _hand == null) return;
+            if (_root == null || _hand == null)
+            {
+                // Replay exit can fire before the native clock resumes recording.
+                // End the prop on the first recording frame even when no live prop remains.
+                RecordPropPose(false);
+                return;
+            }
             Vector3 along = _finger != null ? _finger.position - _hand.position : _hand.forward;
             if (along.sqrMagnitude < .000001f) along = _hand.forward;
             Vector3 across = _palm != null && _finger != null ? _palm.position - _finger.position : _hand.right;
@@ -298,6 +352,7 @@ namespace rowemod.Mods
                     _nextExhale = now + .065f;
                 }
             }
+            RecordPropPose();
         }
 
         private static void BindHand(bool left)
@@ -346,6 +401,24 @@ namespace rowemod.Mods
         private static void EmitSmoke(Vector3 origin, Vector3 velocity, bool exhale)
         {
             if (_smokeMaterial == null || Puffs.Count >= 96) return;
+            var puff = new Puff { Origin = origin,
+                Velocity = velocity + UnityEngine.Random.insideUnitSphere * .025f,
+                Born = Time.unscaledTime, Lifetime = exhale ? 3.2f : 2.4f,
+                Size = exhale ? .13f : .045f, Spin = UnityEngine.Random.Range(0f, 360f),
+                Opacity = exhale ? .48f : .34f };
+            CreatePuffVisual(puff);
+            Puffs.Add(puff);
+            if (!_replayActive && _recordTime >= 0f)
+            {
+                if (RecordedPuffs.Count >= 65536) RecordedPuffs.RemoveRange(0, 256);
+                RecordedPuffs.Add(new RecordedPuff(_recordTime, new Puff { Origin = puff.Origin,
+                    Velocity = puff.Velocity, Lifetime = puff.Lifetime, Size = puff.Size,
+                    Spin = puff.Spin, Opacity = puff.Opacity }));
+            }
+        }
+
+        private static void CreatePuffVisual(Puff puff)
+        {
             var go = new GameObject("Smoke Session puff") { hideFlags = HideFlags.HideAndDontSave };
             go.AddComponent<MeshFilter>().sharedMesh = _smokeQuad;
             var renderer = go.AddComponent<MeshRenderer>();
@@ -356,11 +429,8 @@ namespace rowemod.Mods
             renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
             // Start hidden until its first billboard/opacity update.
             renderer.enabled = false;
-            Puffs.Add(new Puff { Object = go, Renderer = renderer, Origin = origin,
-                Velocity = velocity + UnityEngine.Random.insideUnitSphere * .025f,
-                Born = Time.unscaledTime, Lifetime = exhale ? 3.2f : 2.4f,
-                Size = exhale ? .13f : .045f, Spin = UnityEngine.Random.Range(0f, 360f),
-                Opacity = exhale ? .48f : .34f });
+            puff.Object = go;
+            puff.Renderer = renderer;
         }
 
         private static void UpdateSmoke()
@@ -375,15 +445,149 @@ namespace rowemod.Mods
                     if (puff.Object != null) UnityEngine.Object.Destroy(puff.Object);
                     Puffs.RemoveAt(i); continue;
                 }
-                puff.Object.transform.position = puff.Origin + puff.Velocity * age + Vector3.up * (.025f * age * age);
-                puff.Object.transform.localScale = Vector3.one * puff.Size * (1f + t * 3f);
-                if (camera != null) puff.Object.transform.rotation = camera.transform.rotation * Quaternion.AngleAxis(puff.Spin + age * 12f, Vector3.forward);
-                float alpha = puff.Opacity * Mathf.Clamp01(age * 12f) * Mathf.Pow(1f - t, 1.5f);
-                SmokeColor.SetColor("_UnlitColor", new Color(.82f, .84f, .86f, alpha));
-                puff.Renderer.SetPropertyBlock(SmokeColor);
-                puff.Renderer.enabled = camera != null;
+                RenderPuff(puff, puff, age, camera);
             }
             if (!_smoking && Puffs.Count == 0) ClearSmoke();
+        }
+
+        private static void RenderPuff(Puff visual, Puff data, float age, UnityEngine.Camera camera)
+        {
+            float t = Mathf.Clamp01(age / data.Lifetime);
+            visual.Object.transform.position = data.Origin + data.Velocity * age + Vector3.up * (.025f * age * age);
+            visual.Object.transform.localScale = Vector3.one * data.Size * (1f + t * 3f);
+            if (camera != null) visual.Object.transform.rotation = camera.transform.rotation * Quaternion.AngleAxis(data.Spin + age * 12f, Vector3.forward);
+            float alpha = data.Opacity * Mathf.Clamp01(age * 12f) * Mathf.Pow(1f - t, 1.5f);
+            SmokeColor.SetColor("_UnlitColor", new Color(.82f, .84f, .86f, alpha));
+            visual.Renderer.SetPropertyBlock(SmokeColor);
+            visual.Renderer.enabled = camera != null;
+        }
+
+        private static void ObserveRecordClock()
+        {
+            _recordTime = -1f;
+            try
+            {
+                GameReplaySystem replay = GameReplaySystem.Instance;
+                if (_replayActive || replay == null || (int)replay.State != 0) return;
+                float time = replay.CurrentRecordTime;
+                if (!float.IsFinite(time) || time < 0f) return;
+                float history = Mathf.Clamp(replay._replayManagerData?._maxRecordTimeBuffer ?? 600f, 1f, 1800f);
+                bool rewound = ReplayTrack.Observe(time, history);
+                if (rewound) RecordedPuffs.RemoveAll(puff => puff.Time > time);
+                int expired = 0;
+                while (expired < RecordedPuffs.Count && RecordedPuffs[expired].Time < time - history - 3.2f) expired++;
+                if (expired > 0) RecordedPuffs.RemoveRange(0, expired);
+                _recordTime = time;
+            }
+            catch { } // The scene-owned replay clock can disappear during teardown.
+        }
+
+        private static void RecordPropPose(bool visible = true)
+        {
+            if (_replayActive) return;
+            ObserveRecordClock();
+            if (_recordTime < 0f) return;
+            visible &= _root != null;
+            ReplayTrack.Record(_recordTime, _segment, visible, visible
+                ? new PropPose(_gesture, _root.transform.position, _root.transform.rotation) : default);
+            if (visible && !_loggedReplayRecording)
+            {
+                _loggedReplayRecording = true;
+                Log.Msg("[SmokeSession] Recording props and smoke on the native replay timeline.");
+            }
+        }
+
+        internal static void OnReplayOpened()
+        {
+            _replayActive = true; // Teardown must not append a stop event to the recorded timeline.
+            ReleaseLive();
+            ClearReplayVisuals();
+            Log.Msg($"[SmokeSession] Replay armed: {ReplayTrack.Count} prop samples, {RecordedPuffs.Count} smoke events.");
+        }
+
+        internal static void OnReplayClosed()
+        {
+            ClearReplayVisuals();
+            ClearSmoke();
+            _replayActive = false;
+            RecordPropPose(false);
+        }
+
+        private static void UpdateReplay()
+        {
+            try
+            {
+                GameReplaySystem replay = GameReplaySystem.Instance;
+                if (replay == null) { ClearReplayVisuals(); return; }
+                float time = replay.CurrentPlaybackTime;
+                if (!float.IsFinite(time)) { ClearReplayVisuals(); return; }
+                if (ReplayTrack.Evaluate(time, out var from, out var to, out float blend))
+                {
+                    if (_replayRoot == null || _replayGesture != from.Value.Gesture)
+                    {
+                        ClearReplayProp();
+                        EnsureAvailable();
+                        _replayGesture = from.Value.Gesture;
+                        _replayRoot = CreateProp(_replayGesture, ReplayMaterials, out _);
+                        if (_replayRoot != null) _replayRoot.name = "RoweMod Replay Smoke Session - " + _replayGesture;
+                    }
+                    if (_replayRoot != null)
+                    {
+                        _replayRoot.SetActive(true);
+                        _replayRoot.transform.SetPositionAndRotation(
+                            Vector3.LerpUnclamped(from.Value.Position, to.Value.Position, blend),
+                            Quaternion.SlerpUnclamped(from.Value.Rotation, to.Value.Rotation, blend));
+                    }
+                }
+                else if (_replayRoot != null) _replayRoot.SetActive(false);
+
+                // Reconstruct puffs from their recorded birth data, never wall-clock time.
+                // A pooled set of billboards supports paused, backward, and arbitrary seeks.
+                int low = 0, high = RecordedPuffs.Count;
+                while (low < high)
+                {
+                    int middle = low + ((high - low) >> 1);
+                    if (RecordedPuffs[middle].Time < time - 3.2f) low = middle + 1;
+                    else high = middle;
+                }
+                int used = 0;
+                UnityEngine.Camera camera = UnityEngine.Camera.main;
+                for (int i = low; i < RecordedPuffs.Count && RecordedPuffs[i].Time <= time && used < 96; i++)
+                {
+                    var puff = RecordedPuffs[i];
+                    float age = time - puff.Time;
+                    if (age >= puff.Data.Lifetime) continue;
+                    EnsureSmokeResources();
+                    if (used == ReplayPuffs.Count)
+                    {
+                        var visual = new Puff();
+                        CreatePuffVisual(visual);
+                        ReplayPuffs.Add(visual);
+                    }
+                    ReplayPuffs[used].Object.SetActive(true);
+                    RenderPuff(ReplayPuffs[used++], puff.Data, age, camera);
+                }
+                for (int i = used; i < ReplayPuffs.Count; i++) ReplayPuffs[i].Object.SetActive(false);
+            }
+            catch (Exception ex)
+            {
+                ClearReplayVisuals();
+                Log.Warning("[SmokeSession] Replay prop update failed: " + ex.Message);
+            }
+        }
+
+        private static void ClearReplayProp()
+        {
+            if (_replayRoot != null) UnityEngine.Object.Destroy(_replayRoot);
+            foreach (Material material in ReplayMaterials) if (material != null) UnityEngine.Object.Destroy(material);
+            ReplayMaterials.Clear(); _replayRoot = null; _replayGesture = null;
+        }
+
+        private static void ClearReplayVisuals()
+        {
+            ClearReplayProp();
+            foreach (Puff puff in ReplayPuffs) if (puff.Object != null) UnityEngine.Object.Destroy(puff.Object);
+            ReplayPuffs.Clear();
         }
 
         private static void ClearSmoke()
@@ -397,6 +601,15 @@ namespace rowemod.Mods
         }
 
         public static void Release()
+        {
+            ReleaseLive();
+            ClearReplayVisuals();
+            _replayActive = false;
+            ReplayTrack.Clear(); RecordedPuffs.Clear();
+            _recordTime = -1f; _loggedReplayRecording = false;
+        }
+
+        private static void ReleaseLive()
         {
             // Replay/mod shutdown may stop our LateUpdate before the normal fade finishes.
             // Evaluate the native standing pose before releasing its physics skeleton.
@@ -425,6 +638,7 @@ namespace rowemod.Mods
 
         public static void Stop()
         {
+            if (_root != null) RecordPropPose(false);
             if (_root != null) UnityEngine.Object.Destroy(_root);
             foreach (Material material in Materials) if (material != null) UnityEngine.Object.Destroy(material);
             Materials.Clear(); _root = null; _hand = null; _finger = null; _palm = null; _gesture = null; _sawActive = false;

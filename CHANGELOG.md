@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.16
+
+- Smoke Session props and smoke now appear in the replay editor for newly recorded emotes in the current session. Their poses and smoke age follow native playback time, including pause and scrubbing.
+- Replay visuals preserve the accepted camera grip and bong orientations. Closing replay clears them and stops the live emote loop.
+
+**Testing note:** Release build, 451 automated checks, compiled wrapper/signature audits, and native-target audits passed. All five prop models appeared in the Streets replay editor; pause, backward seeks, normal playback, and the stop boundary were checked. Prop history belongs to the current session and is not embedded in saved replay files. Physical controller speed/reverse controls and native replay-exit cleanup remain unverified.
+
 ## 3.3.15
 
 - Added nine Smoke Session gestures to the shared Emotes browser, with temporary joint, bong, beer, and camcorder props. Playing one dismounts the rider; Stop leaves the rider on foot.

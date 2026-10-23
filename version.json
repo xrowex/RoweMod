@@ -1,8 +1,8 @@
 {
-  "version": "3.3.15",
+  "version": "3.3.16",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "425c91d3e1183accc9650c0116a2d60abd244c8ebd21d6478a05a1d3052f9eae",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.15",
-  "patchNotes": "Adds nine off-bike Smoke Session gestures with temporary props, corrected camera and bong orientation, visible smoke, and shared emote search and filters. The pack is embedded in the DLL. Fixes hidden-slot equip timeouts when reloading outfit presets and extra reference bodies showing through custom clothes. Release build, 401 automated checks, native audits, and local preset/gameplay checks passed. Gestures and props are local; multiplayer sync, replay recording, and pack audio are not included.",
+  "sha256": "ac77e1a1080d2923988b7ed66b4e8b8153ab5a2fefd94e5290dbfd4b10d6625c",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.16",
+  "patchNotes": "Smoke Session props and smoke now appear in the replay editor for newly recorded emotes. Prop poses and smoke age follow native playback time, including pause and scrubbing. Preserves the camera grip, both bong orientations, and table placement. History belongs to the current session and is not embedded in saved replay files. Release build, 451 automated checks, wrapper/signature audits, and native replay checks passed.",
   "requiredGameVersion": ""
 }

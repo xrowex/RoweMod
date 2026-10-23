@@ -86,6 +86,7 @@ namespace rowemod.Mods
         private static bool _radioBundleDownloadInProgress;
 
         public static string TestStatus => _testStatus;
+        internal static bool IsReplayActive => _replayActive;
         public static string RadioVisualStatus => _radioVisualStatus;
         public static bool IsRadioPlaying => _kind == PropKind.Radio && _root != null && !_replayActive;
 
@@ -429,7 +430,7 @@ namespace rowemod.Mods
 
         public static void OnReplayOpened()
         {
-            SmokeSessionController.Release();
+            SmokeSessionController.OnReplayOpened();
             _replayActive = true;
             Stop();
             _lastReplayPlaybackTime = float.NegativeInfinity;
@@ -439,6 +440,7 @@ namespace rowemod.Mods
 
         public static void OnReplayClosed()
         {
+            SmokeSessionController.OnReplayClosed();
             Stop();
             _replayActive = false;
             _lastReplayPlaybackTime = float.NegativeInfinity;

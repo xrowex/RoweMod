@@ -51,12 +51,18 @@ Smoke Session's nine NOBLE gestures share the same browser under the
 **Smoke Session** filter. Joint, bong, beer can, and camcorder props are temporary
 and follow the local rider during their matching gesture. Emotes play off the
 bike: choosing Play or Loop while riding first uses Streets' native dismount.
-Stop Emote, movement cancellation, replay, and scene changes remove the props.
+Stop Emote and movement cancellation remove the live props. Opening replay
+replaces them with their recorded poses; scene changes clear the recording.
 Joint and bong smoke includes mouth puffs during exhalation. Existing smoke
 fades for up to 3.2 seconds after Stop; replay and scene changes clear it immediately.
 The camcorder faces outward and attaches at its top handle. Both bongs face
 the rider, with the table bong rotating independently of the furniture.
-The pack is local-only in Streets; multiplayer and replay recording are not added.
+The pack is local-only in Streets. In 3.3.16 and later, prop poses and smoke are recorded on the
+current native replay timeline, including the table's fixed placement. Pause,
+scrubbing, reverse playback, and speed changes use replay time. Perform a new
+emote after installing the update to capture its props. This track belongs to
+the current session; it is not embedded in saved replay files. Multiplayer
+synchronization is not added.
 
 The DLL embeds the verified pack, so replacing `Mods/rowemod.dll` and restarting Streets is enough. No separate download is needed. The assets are excluded from the object-dropper prefab catalog. The bike stays visible after dismounting; Stop leaves the rider on foot. Pack audio is not included.
 
