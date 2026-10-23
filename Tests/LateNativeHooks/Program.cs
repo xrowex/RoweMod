@@ -109,6 +109,21 @@ internal static class Program
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.OriginalHash), "original game hash retained");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.UpdatedHash), "updated game hash supported");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October21Hash), "October 21 game hash supported");
+        Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October22Hash), "October 22 game hash supported");
+        var october22 = new Dictionary<long, long>
+        {
+            [0x8B0A50]=0x9956B0, [0x8B0E30]=0x995A90, [0x85BE70]=0x918A50,
+            [0xA61F70]=0xC50D20, [0xD53AA0]=0xF3A5C0, [0x9F47C0]=0xB69CB0,
+            [0x7DE910]=0x86A5E0, [0x7F15C0]=0x890F70, [0x2983750]=0x2D7C9D0,
+            [0x298C9E0]=0x2D88A50, [0x89A960]=0x91C3C0, [0x8077B0]=0x8A61B0,
+            [0x837760]=0x8C8110, [0x90DA80]=0x9C9220, [0x90E100]=0x9C9BF0,
+            [0x8544D0]=0x8E2E30, [0x9F3220]=0xB65E80,
+        };
+        foreach (var target in october22)
+            Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October22Hash, target.Key) == target.Value,
+                $"October 22 audited target 0x{target.Key:X}");
+        ExpectRejected(NativeHookBuilds.October22Hash, 0x6BE680, "shared getter is not an October 22 hook");
+        ExpectRejected(NativeHookBuilds.October22Hash, 0x890E00, "previous completion address is not a target identity");
         Check(!NativeHookBuilds.IsSupported(null) && !NativeHookBuilds.IsSupported("unknown"), "unknown game hashes rejected");
         Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.OriginalHash, 0x7F15C0) == 0x7F15C0, "original completion address unchanged");
         Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.UpdatedHash, 0x7F15C0) == 0x87B630, "updated completion address selected by game hash");

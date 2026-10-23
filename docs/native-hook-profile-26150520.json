@@ -1,0 +1,94 @@
+{
+  "gameAssemblySha256": "D2B353D46A7B2E696736F4A5C39398E24DC13A66B5F956D696F553E42609C430",
+  "steamBuildId": "26150520",
+  "targets": [
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::RequestTweak()",
+      "originalRva": "0x8B0A50",
+      "updatedRva": "0x9956B0"
+    },
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::Tweak()",
+      "originalRva": "0x8B0E30",
+      "updatedRva": "0x995A90"
+    },
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.VehicleAnimationInputHandler::SetInteger(System.String,System.Int32)",
+      "originalRva": "0x85BE70",
+      "updatedRva": "0x918A50"
+    },
+    {
+      "signature": "System.Void MashBox.Netorking.FusionBootstrap::DrawServerBrowserHostMapControls(System.Single)",
+      "originalRva": "0xA61F70",
+      "updatedRva": "0xC50D20"
+    },
+    {
+      "signature": "System.Threading.Tasks.Task`1<Fusion.StartGameResult> Fusion.NetworkRunner::StartGame(Fusion.StartGameArgs)",
+      "originalRva": "0xD53AA0",
+      "updatedRva": "0xF3A5C0"
+    },
+    {
+      "signature": "System.Void MashBox.Addons.NetworkingFusion.NetworkPlayer::Spawned()",
+      "originalRva": "0x9F47C0",
+      "updatedRva": "0xB69CB0"
+    },
+    {
+      "signature": "System.Void MashBox.Character.Scripts.EquipSlot::ApplyRenderPolicy()",
+      "originalRva": "0x7DE910",
+      "updatedRva": "0x86A5E0"
+    },
+    {
+      "signature": "System.Boolean MashBox.Character.Scripts.EquipSlot/<EnumEquip>d__111::MoveNext()",
+      "originalRva": "0x7F15C0",
+      "updatedRva": "0x890F70"
+    },
+    {
+      "signature": "System.Void MashBox.Core.Runtime.InverseKinematics.HumanIK::OnAnimatorIK(System.Int32)",
+      "originalRva": "0x2983750",
+      "updatedRva": "0x2D7C9D0"
+    },
+    {
+      "signature": "System.Void MashBox.Core.Runtime.InverseKinematics.UnityIKLimb::UpdateIK(System.Boolean)",
+      "originalRva": "0x298C9E0",
+      "updatedRva": "0x2D88A50"
+    },
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.VehicleFootPedalAnimationRig::LateUpdate()",
+      "originalRva": "0x89A960",
+      "updatedRva": "0x91C3C0"
+    },
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.BikeGrindPoser::SetInputData(System.Int32,MashBoxBridge.Common.Interfaces.HookGrind)",
+      "originalRva": "0x8077B0",
+      "updatedRva": "0x8A61B0"
+    },
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.QuaternionPDDrive::Tick(UnityEngine.Rigidbody,UnityEngine.Quaternion)",
+      "originalRva": "0x837760",
+      "updatedRva": "0x8C8110"
+    },
+    {
+      "signature": "System.Void MashBox.Addons.ProtoDrone.DroneController::LocalSpawnBullet(UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3,System.Single)",
+      "originalRva": "0x90DA80",
+      "updatedRva": "0x9C9220"
+    },
+    {
+      "signature": "System.Void MashBox.Addons.ProtoDrone.DroneController::RPC_FireBullet(System.Int32,System.Double,UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3)",
+      "originalRva": "0x90E100",
+      "updatedRva": "0x9C9BF0"
+    },
+    {
+      "signature": "System.Void MashBox.BMX_Physics_Development.TrickDetection::RecordTrickToHistory(System.String)",
+      "originalRva": "0x8544D0",
+      "updatedRva": "0x8E2E30"
+    },
+    {
+      "signature": "System.Void MashBox.Addons.NetworkingFusion.NetworkPlayer::Despawned(Fusion.NetworkRunner,System.Boolean)",
+      "originalRva": "0x9F3220",
+      "updatedRva": "0xB65E80"
+    }
+  ],
+  "uniqueTargets": 17,
+  "auditedMethods": 201454,
+  "auditedAssemblies": 162
+}

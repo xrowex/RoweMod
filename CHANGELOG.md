@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.14
+
+- Added an audited native-hook profile for Streets build 26150520 / 2.0.0.3070.0, restoring equip-completion handling and retaining all older profiles and safety checks.
+- Custom clothing materials now cover all renderers and material slots in the equipped item, fixing visible meshes left on white/default materials.
+- Gameplay restores current model/material selections without requiring a named preset, resolves spawn children to the equip-slot owner, and cancels stale or superseded requests.
+- Corrected Eyewear material-path persistence.
+
+**Testing note:** Release build, 401 automated checks, 17 unique native targets, wrapper/signature audits, and fresh runtime checks passed. Selected textures were verified on the menu and gameplay rider after a real local map load with no named preset. The reporting player's exact bundles and multiplayer appearance remain unverified.
+
 ## 3.3.13
 
 - Preserves LT/RT and unloaded trick sets, extra slots, and unresolved trick names when saving presets. Supports native set-name aliases without merging ambiguous sets.

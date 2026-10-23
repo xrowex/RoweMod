@@ -1,8 +1,8 @@
 {
-  "version": "3.3.13",
+  "version": "3.3.14",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "8f58907307bd6be18a4ceac4c02e75299dc425835111a7e76e3d9fc4d725733a",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.13",
-  "patchNotes": "Preserves LT/RT and unloaded trick preset sets, extra slots, and unresolved trick names. Refreshes only the local rider without enabling disabled components. Added opt-in Manual Activation under Ride > Handling with separate manual/nose-manual delays and stick thresholds, saved in Physics Presets. Physical LT/RT behavior with the reporting player's exact preset remains unverified.",
+  "sha256": "a437ce94cfaf220607390e318f473193b19df80fccc59f4d72a4c1a8853fcae3",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.14",
+  "patchNotes": "Fixes custom clothing materials left white by applying the selected material to all renderers and material slots in the equipped item. Restores current model/material selections when entering gameplay without a named clothing preset. Adds audited support for Streets build 26150520 / 2.0.0.3070.0 and restores its native equip-completion hooks. Eyewear materials now persist. Selected textures were visually verified in the menu and gameplay; the reporting player's exact bundles and multiplayer remain unverified.",
   "requiredGameVersion": ""
 }

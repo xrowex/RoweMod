@@ -18,14 +18,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.13", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.14", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 [assembly: HarmonyDontPatchAll]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.3.13";
+        public const string ModVersion = "3.3.14";
         private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;

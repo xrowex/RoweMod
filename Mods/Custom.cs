@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Il2CppInterop.Runtime;
@@ -303,6 +303,7 @@ namespace rowemod.Mods
             // Helper function to toggle visibility on a specific character
             void ApplyToCharacter(GameObject character, string label)
             {
+                character = FindCharacterRoot(character);
                 if (character == null)
                 {
                     Log.Warning($"[ToggleSlotVisibility] {label} character is null — skipping.");
@@ -344,7 +345,7 @@ namespace rowemod.Mods
             }
 
             // Apply to both characters if they exist
-            if (targetCharacter != null) ApplyToCharacter(targetCharacter, "MenuPlayer");
+            if (targetCharacter != null) ApplyToCharacter(targetCharacter, targetCharacter == menuPlayer ? "MenuPlayer" : "LocalCharacter");
             else
             {
                 ApplyToCharacter(Memory.menuPlayer, "MenuPlayer");
@@ -649,17 +650,7 @@ namespace rowemod.Mods
                         }
                         if (!waiting)
                         {
-                            var renderers = item.GetComponentsInChildren<Renderer>(true);
-                            int applied = 0;
-                            foreach (var renderer in renderers)
-                            {
-                                if (renderer == null) continue;
-                                renderer.sharedMaterial = material;
-                                applied++;
-                                // Hair packages can have multiple meshes. Other slots retain
-                                // their existing first-renderer material behavior.
-                                if (slot != Slot.Hair) break;
-                            }
+                            int applied = CustomMaterialApplication.Apply(item, material);
                             if (applied == 0)
                                 Log.Warning($"[ReplaceMaterial] {label}: Equipped {slot} '{item.name}' has no renderers, including inactive children.");
                             else
@@ -781,6 +772,7 @@ namespace rowemod.Mods
             // Reusable function to apply model to a specific character
             void ApplyToCharacter(GameObject character, string label)
             {
+                character = FindCharacterRoot(character);
                 if (character == null)
                 {
                     Log.Warning($"[ReplaceModel] {label} character is null — skipping.");
@@ -879,7 +871,7 @@ namespace rowemod.Mods
             
             
             // Apply to both characters
-            if (targetCharacter != null) ApplyToCharacter(targetCharacter, "MenuPlayer");
+            if (targetCharacter != null) ApplyToCharacter(targetCharacter, targetCharacter == menuPlayer ? "MenuPlayer" : "LocalCharacter");
             else
             {
                 ApplyToCharacter(menuPlayer, "MenuPlayer");
@@ -921,6 +913,7 @@ namespace rowemod.Mods
                 case Slot.Hat: Config.character.hatMaterialPath = relativeForConfig; break;
                 case Slot.Hair: Config.character.hairMaterialPath = relativeForConfig; break;
                 case Slot.Eyes: Config.character.eyesMaterialPath = relativeForConfig; break;
+                case Slot.Eyewear: Config.character.eyewearMaterialPath = relativeForConfig; break;
             }
 
             // ---------- 2) Resolve an absolute path for loading ----------
@@ -1024,6 +1017,7 @@ namespace rowemod.Mods
             // ---------- 4) Apply to any available character(s) ----------
                 void ApplyToCharacter(GameObject character, string label)
                 {
+                    character = FindCharacterRoot(character);
                     if (!character)
                     {
                         Log.Warning($"[ReplaceMaterial] {label} is null — skipping.");
@@ -1072,7 +1066,7 @@ namespace rowemod.Mods
                         
                 }
 
-                if (targetCharacter != null) ApplyToCharacter(targetCharacter, "MenuPlayer");
+                if (targetCharacter != null) ApplyToCharacter(targetCharacter, targetCharacter == menuPlayer ? "MenuPlayer" : "LocalCharacter");
                 else
                 {
                     ApplyToCharacter(menuPlayer, "MenuPlayer");
@@ -1139,8 +1133,23 @@ namespace rowemod.Mods
 
         public static void SaveCurrentPreset(string presetName) => ClothingPreset.Save(CaptureCurrentSelection(presetName));
 
-        internal static void RestoreMenuSelection(GameObject target)
+        internal static GameObject FindCharacterRoot(GameObject character)
         {
+            for (Transform current = character == null ? null : character.transform;
+                 current != null; current = current.parent)
+            {
+                if (current.Find("Physics Skeleton/EquipSlot_Body") != null ||
+                    current.Find("Skeleton/EquipSlot_Body") != null)
+                    return current.gameObject;
+            }
+            return null;
+        }
+
+        internal static void RestoreMenuSelection(GameObject target) => RestoreCurrentSelection(target);
+
+        internal static void RestoreCurrentSelection(GameObject target)
+        {
+            target = FindCharacterRoot(target);
             if (target == null || _nativeRestoreRunning) return;
             var preset = CaptureCurrentSelection("Current selection");
             bool hasPaths = preset.ModelPaths.Values.Concat(preset.MaterialPaths.Values).Any(p => !string.IsNullOrWhiteSpace(p));

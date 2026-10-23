@@ -589,23 +589,7 @@ namespace rowemod.Mods
             Log.Msg("GameEvent_TitleLoop_LoadingScreen_OnEnter triggered; pie menu input disabled.");
         }
         
-        public IEnumerator DelayedLoadPreset()
-        {
-            
-            yield return new WaitForSeconds(4f); // Give it time to fully load scene stuff
-
-            if (HasSavedSelection(Config.character.lastLoadedPresetCharacter) &&
-                RemoteKillSwitched.isModEnabled)
-            { 
-                
-                Log.Msg("Manually invoking LoadPreset on TheShop scene...");
-                MelonCoroutines.Start(Custom.LoadPreset(Config.character.lastLoadedPresetCharacter)); // Now it should work
-            }
-            else
-            {
-                Log.Warning("Cannot load preset - missing reference or preset name.");
-            }
-        }
+        public IEnumerator DelayedLoadPreset() => GameplayCharacterOutfit.RestoreWhenReady();
 
         private static bool HasSavedSelection(string value)
         {
