@@ -1,8 +1,8 @@
 {
-  "version": "3.3.16",
+  "version": "3.3.17",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "ac77e1a1080d2923988b7ed66b4e8b8153ab5a2fefd94e5290dbfd4b10d6625c",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.16",
-  "patchNotes": "Smoke Session props and smoke now appear in the replay editor for newly recorded emotes. Prop poses and smoke age follow native playback time, including pause and scrubbing. Preserves the camera grip, both bong orientations, and table placement. History belongs to the current session and is not embedded in saved replay files. Release build, 451 automated checks, wrapper/signature audits, and native replay checks passed.",
+  "sha256": "71a9ff5b586a7f2dbb12b10356b002cfb978ac92b87dbfb6ef57b9d7f6d7dcd9",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.17",
+  "patchNotes": "Restores compatibility with Streets 2.0.0.3072.0 (Steam build 26175718). Audited native hooks restore outfit completion and clothing material application. All seven hook groups, 466 automated checks, repeated preset loads, and local gameplay material checks passed. Existing presets and clothing files are retained; the reporting player's exact outfit still needs confirmation.",
   "requiredGameVersion": ""
 }

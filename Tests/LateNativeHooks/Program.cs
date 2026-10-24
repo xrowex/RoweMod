@@ -110,6 +110,13 @@ internal static class Program
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.UpdatedHash), "updated game hash supported");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October21Hash), "October 21 game hash supported");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October22Hash), "October 22 game hash supported");
+        Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October23Hash), "October 23 game hash supported");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October23Hash, 0x7F15C0) == 0x88EF70,
+            "October 23 selects its own material equip-completion address");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October23Hash, 0x8B0A50) == 0x993BD0,
+            "October 23 selects its own tweak guard address");
+        ExpectRejected(NativeHookBuilds.October23Hash, 0x6BC680, "shared October 23 getter cannot become an approved hook");
+        ExpectRejected(NativeHookBuilds.October23Hash, 0x890F70, "October 22 completion address is not an October 23 target identity");
         var october22 = new Dictionary<long, long>
         {
             [0x8B0A50]=0x9956B0, [0x8B0E30]=0x995A90, [0x85BE70]=0x918A50,

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.17
+
+- Added audited support for Streets build 26175718 / 2.0.0.3072.0. The game update moved native functions, causing 3.3.16 to skip all seven hook groups and time out waiting for custom outfit completion.
+- Restores the native equip-completion and custom-hair hooks used by clothing materials, along with the other guarded native feature groups. Preserves all four older build profiles and unknown-build/shared-function rejection.
+
+**Testing note:** Release build, 466 automated checks, 17 unique native targets, compiled wrapper/signature audits, and local repeated-preset/map-load checks passed. The reporting user's log confirms successful material-bundle loading followed by unsupported-build hook failures; their exact clothing bundles and multiplayer appearance remain unverified.
+
 ## 3.3.16
 
 - Smoke Session props and smoke now appear in the replay editor for newly recorded emotes in the current session. Their poses and smoke age follow native playback time, including pause and scrubbing.
