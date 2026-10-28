@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-28",
+  "release": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.18",
+  "scope": "Published the tested Streets 3073 compatibility and idle outfit-slot fixes. Experimental runtime Animation Studio remains local.",
+  "findings": [
+    {
+      "pattern": "Native function layout changes on every compared rebuild",
+      "evidence": "All 17 tracked native targets moved in each of five consecutive build transitions. Transitions had 16, 16, 10, 9 and 10 distinct address shifts, respectively.",
+      "meaning": "A single relocation offset is insufficient. Runtime already subtracts the module base, so ordinary ASLR is accounted for; these changes are to function layout inside new GameAssembly binaries.",
+      "source": "Mods/NativeHookBuilds.cs"
+    },
+    {
+      "pattern": "Generated coroutine names change when the game is recompiled",
+      "evidence": "Equipment iterator counters have changed from 80 to 111 to 112. Referencing a missing generated type directly can cause a type-load failure before a registrar's exception handler runs.",
+      "accountedFor": "The released registrar resolves supported names inside each feature group's error handling. The new metadata audit matches the owner/method/return/arguments exactly while allowing only the compiler-generated numeric iterator counter to differ. Multiple matches are rejected.",
+      "source": "Mods/LateNativeHooks.cs"
+    },
+    {
+      "pattern": "Some native call signatures change",
+      "evidence": "LocalSpawnBullet changed from three arguments to four; RPC_FireBullet changed from three arguments to five.",
+      "accountedFor": "Known overloads are selected explicitly and compiled patch signatures are checked against installed wrappers. The new audit reports changed argument/return signatures as incompatible, including the available overloads, instead of selecting a similarly named function."
+    },
+    {
+      "pattern": "Outfit completion and render state change independently of texture files",
+      "evidence": "A missing native completion hook prevented material application. In 3073, clearing an empty Hair/Eyes slot could leave its completion nonce unsettled even with no load in progress.",
+      "accountedFor": "3.3.18 restores the audited completion hook and verifies that a slot is alive, empty, idle, has no pending request/coroutine/UID and has an invalid load handle before allowing the next request. It does not rewrite nonces or interrupt a real load.",
+      "source": "Mods/CustomEquipReadiness.cs"
+    },
+    {
+      "pattern": "Compiler deduplication makes broad boolean getters unsafe hook targets",
+      "evidence": "The current common getter address has 504 metadata aliases, including otherwise unrelated tweak-state and prefab-completion getters.",
+      "accountedFor": "Hook ownership is audited across all assemblies and methods. The new tool rejects shared addresses and incomplete metadata inventories for the approved build."
+    }
+  ],
+  "newAudit": {
+    "script": "Scripts/Test-StreetsBuildCompatibility.ps1",
+    "currentBuildCommand": "pwsh -NoProfile -File Scripts/Test-StreetsBuildCompatibility.ps1",
+    "newBuildPreparation": "Let MelonLoader regenerate matching interop wrappers and produce fresh Cpp2IL metadata from the updated GameAssembly before discovery. The report fingerprints its supplied metadata; it cannot independently prove that stale metadata was generated from a different binary.",
+    "newBuildCommand": "pwsh -NoProfile -File Scripts/Test-StreetsBuildCompatibility.ps1 -AllowUnknownBuildForReport -MetadataRoot <fresh-cpp2il_out> -GameVersion <installed-version> -SteamBuildId <installed-build-id>",
+    "outputs": ["compatibility-report.json", "candidate-native-profile.json when every target passes structural and ownership checks"],
+    "checks": ["GameAssembly hash before and after scanning", "PE image bounds", "Complete approved-build assembly/method inventory", "Ordinal exact semantic method identity", "Unique generated-counter matches", "Instance and nongeneric method shape", "Unique address ownership across all supplied metadata", "Missing/changed return types or arguments", "Metadata hashes and changing file inventory", "Existing report preservation"],
+    "promotionProcedure": [
+      "Review every reported native target and signature change; discovery never edits the approved runtime profile.",
+      "Add a reviewed build mapping and supported wrapper aliases as needed, retaining older supported profiles.",
+      "Run Scripts/Test-TrickTweakNativeTargets.ps1 and Scripts/Test-LateNativeHookRegistration.ps1 against the exact release DLL and current wrappers, plus compiled wrapper-reference checks.",
+      "Run native-registration and outfit regression tests, including legacy, current, missing-wrapper and unsupported-build cases.",
+      "Verify native hook groups, trick guards and outfit completion in game; distinguish that from physical-controller, multiplayer and replay acceptance.",
+      "Publish only the tested DLL and verify the downloaded release asset, updater DLL, manifest and website checksum."
+    ],
+    "safety": "Report-only discovery does not patch the game, replace wrappers or enable native hooks. Unknown game hashes remain unsupported by the runtime until a reviewed release. Metadata alone cannot verify changed gameplay semantics."
+  },
+  "validation": {
+    "fixtureChecks": 39,
+    "fixtureScript": "Tests/NativeCompatibilityAudit/Test-NativeCompatibilityAudit.ps1",
+    "currentBuildUniqueTargets": 17,
+    "currentBuildMethods": 201930,
+    "currentBuildAssemblies": 162,
+    "gameAssemblySha256": "CE09D8D744D7CFB40BF1F2101AB3768BDC973EA3CC95BA2D2FDFA66B5B2FD7EC",
+    "evidence": "outputs/release-3.3.18-20261028/"
+  },
+  "remainingLimits": [
+    "The new audit shortens and standardizes future update triage. It cannot guarantee compatibility with arbitrary future native or gameplay changes.",
+    "Invalid material bundles, unreadable/custom mesh issues and stale individual preset material paths still require asset or preset corrections."
+  ]
+}

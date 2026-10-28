@@ -1,6 +1,10 @@
 {
   "version": "3.3.18",
-  "status": "Local candidate installed and tested; not published",
+  "status": "Verified compatibility candidate published as v3.3.18; experimental animation editor remains a separate local test build",
+  "releaseUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.18",
+  "releaseCommit": "f8ac89c1a0b8f5f76b8b76ebf0909a792cc00455",
+  "publicDownloadAndUpdaterHashesVerified": true,
+  "websiteVersionAndHashVerified": true,
   "gameVersion": "2.0.0.3073.0",
   "steamBuildId": "26257400",
   "gameAssemblySha256": "CE09D8D744D7CFB40BF1F2101AB3768BDC973EA3CC95BA2D2FDFA66B5B2FD7EC",
@@ -28,7 +32,7 @@
   "menuBikeRigObserved": true,
   "temporaryHelperRemovedFromMods": true,
   "gameLeftOpen": true,
-  "publicFeedUnchanged": true,
+  "publicFeedVersion": "3.3.18",
   "remainingAssetWarnings": [
     "Eyes Invisible (No Shadow) bundle contains no usable material.",
     "Some custom body meshes lack runtime readability for clothing culling and retain unmatched authored skin bones.",
@@ -38,6 +42,6 @@
     "Physical controller/riding acceptance for every feature",
     "Multiplayer appearance",
     "Full replay playback/scrubbing in this build",
-    "A functional runtime animation editor"
+    "Experimental runtime animation editor is excluded from this compatibility release and has separate local validation"
   ]
 }
