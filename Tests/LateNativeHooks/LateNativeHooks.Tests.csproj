@@ -15,4 +15,7 @@
   <PropertyGroup Condition="'$(UpdatedInterop)' == 'true'">
     <DefineConstants>$(DefineConstants);UPDATED_INTEROP</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(October27Interop)' == 'true'">
+    <DefineConstants>$(DefineConstants);UPDATED_INTEROP;OCTOBER27_INTEROP</DefineConstants>
+  </PropertyGroup>
 </Project>

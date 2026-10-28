@@ -79,8 +79,6 @@ namespace rowemod.Mods
         private static long _nextMaterialRequest;
         internal static long SelectionRevision { get; private set; }
         private static readonly Dictionary<int, GameObject> _customHairItems = new();
-        private static readonly System.Reflection.PropertyInfo NativeEquipCompletion =
-            typeof(EquipSlot).GetProperty("IsEquipRequestComplete");
         private sealed class EquipRequest
         {
             internal GameObject Source, PreviousItem, Item;
@@ -697,8 +695,7 @@ namespace rowemod.Mods
                     bool ready;
                     try
                     {
-                        ready = slot.gameObject.activeInHierarchy &&
-                            (NativeEquipCompletion == null || (bool)NativeEquipCompletion.GetValue(slot));
+                        ready = slot.gameObject.activeInHierarchy && CustomEquipReadiness.CanSubmit(slot);
                         if (ready)
                         {
                             request.CompletionDeadline = Time.realtimeSinceStartup + 10f;

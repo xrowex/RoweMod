@@ -1,0 +1,43 @@
+{
+  "version": "3.3.18",
+  "status": "Local candidate installed and tested; not published",
+  "gameVersion": "2.0.0.3073.0",
+  "steamBuildId": "26257400",
+  "gameAssemblySha256": "CE09D8D744D7CFB40BF1F2101AB3768BDC973EA3CC95BA2D2FDFA66B5B2FD7EC",
+  "candidateSha256": "517FC55BF46D276D441887A4F3F9219483B4202679B0E150B9E6D668939B0DE2",
+  "buildErrors": 0,
+  "existingBuildWarnings": 51,
+  "automatedChecks": 578,
+  "nativeHookGroupsReady": 7,
+  "nativeHookGroupsExpected": 7,
+  "uniqueNativeTargets": 17,
+  "methodsAudited": 201930,
+  "assembliesAudited": 162,
+  "compiledWrapperReferences": 1687,
+  "wrapperVersionsTested": 4,
+  "nativePatchSignatures": 16,
+  "gameplayNativeSlotsComplete": 11,
+  "noEquipTimeouts": true,
+  "noIdleEmptySlotSkips": true,
+  "menuAndGameplayHairEyesCompleted": true,
+  "mapLoadPassed": true,
+  "visibleGameplayMaterialsChecked": true,
+  "settingsUnchanged": true,
+  "additiveSceneLifecyclePassed": true,
+  "menuHumanoidBones": 52,
+  "menuBikeRigObserved": true,
+  "temporaryHelperRemovedFromMods": true,
+  "gameLeftOpen": true,
+  "publicFeedUnchanged": true,
+  "remainingAssetWarnings": [
+    "Eyes Invisible (No Shadow) bundle contains no usable material.",
+    "Some custom body meshes lack runtime readability for clothing culling and retain unmatched authored skin bones.",
+    "The previously diagnosed durag preset still has the old Bucket Hat material override; preset repair is outside this update test."
+  ],
+  "notVerified": [
+    "Physical controller/riding acceptance for every feature",
+    "Multiplayer appearance",
+    "Full replay playback/scrubbing in this build",
+    "A functional runtime animation editor"
+  ]
+}

@@ -7,9 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<Version>3.3.17</Version>
-		<AssemblyVersion>3.3.17.0</AssemblyVersion>
-		<FileVersion>3.3.17.0</FileVersion>
+		<Version>3.3.18</Version>
+		<AssemblyVersion>3.3.18.0</AssemblyVersion>
+		<FileVersion>3.3.18.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -495,6 +495,7 @@
 		<Compile Include="Mods\ControllerMenuInput.cs" />
 		<Compile Include="Mods\Custom.cs" />
 		<Compile Include="Mods\CustomMaterialApplication.cs" />
+		<Compile Include="Mods\CustomEquipReadiness.cs" />
 		<Compile Include="Mods\GameplayCharacterOutfit.cs" />
 		<Compile Include="Mods\DebugTools.cs" />
 		<Compile Include="Mods\DroneEvents.cs" />

@@ -42,7 +42,7 @@ try {
     }
 
     $equipCoroutines = @($wrappers[0].MainModule.GetTypes() | Where-Object {
-        $_.DeclaringType.Name -eq 'EquipSlot' -and $_.Name -in @('_EnumEquip_d__80', '_EnumEquip_d__111')
+        $_.DeclaringType.Name -eq 'EquipSlot' -and $_.Name -in @('_EnumEquip_d__80', '_EnumEquip_d__111', '_EnumEquip_d__112')
     })
     if ($equipCoroutines.Count -ne 1) { throw 'Missing or ambiguous audited equip coroutine wrapper.' }
     $specs = @(
@@ -118,7 +118,7 @@ try {
             }
         }
     }
-    if ($mod.MainModule.GetTypeReferences() | Where-Object { $_.Name -in @('_EnumEquip_d__80', '_EnumEquip_d__111') }) {
+    if ($mod.MainModule.GetTypeReferences() | Where-Object { $_.Name -match '^_EnumEquip_d__\d+$' }) {
         throw 'Generated equip coroutine remains a hard assembly reference; missing wrappers can abort startup during JIT compilation.'
     }
     Write-Output "PASS: no blanket/automatic/early patching; all $($specs.Count) late targets covered; $patchCount real compiled prefix/postfix signatures match installed wrappers."

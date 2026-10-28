@@ -12,8 +12,9 @@ $updatedHash = '2D70F57905A2F3A79A2BC75FA503F9AB251AEACFC66CC72F78670ECBFAA8EEC2
 $october21Hash = '3EBD5AB08931C3BB35E1264739975F0EB6FD2AD56EDFD99E5FA48DA7EABD6E85'
 $october22Hash = 'D2B353D46A7B2E696736F4A5C39398E24DC13A66B5F956D696F553E42609C430'
 $october23Hash = '6D42AEB57FA79C2C29014BD35D3693F4983F954A4108218662C6827BC340B460'
+$october27Hash = 'CE09D8D744D7CFB40BF1F2101AB3768BDC973EA3CC95BA2D2FDFA66B5B2FD7EC'
 $gameHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $GameRoot 'GameAssembly.dll')).Hash
-if ($gameHash -notin @($originalHash, $updatedHash, $october21Hash, $october22Hash, $october23Hash)) { throw 'GameAssembly changed. Regenerate Cpp2IL metadata and re-audit targets before enabling native hooks.' }
+if ($gameHash -notin @($originalHash, $updatedHash, $october21Hash, $october22Hash, $october23Hash, $october27Hash)) { throw 'GameAssembly changed. Regenerate Cpp2IL metadata and re-audit targets before enabling native hooks.' }
 
 $targets = @{
     '0x8B0A50' = 'System.Void MashBox.BMX_Physics_Development.Animancer_Test.Trick_System.v2.TrickControllerV2::RequestTweak()'
@@ -39,7 +40,7 @@ if ($gameHash -ne $originalHash) {
     # Audit the exact production profile against fresh metadata; do not maintain a
     # separate unchecked list of replacement addresses in this script.
     $profileSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\Mods\NativeHookBuilds.cs') -Raw
-    $profileName = if ($gameHash -eq $october23Hash) { 'October23Rvas' } elseif ($gameHash -eq $october22Hash) { 'October22Rvas' } elseif ($gameHash -eq $october21Hash) { 'October21Rvas' } else { 'UpdatedRvas' }
+    $profileName = if ($gameHash -eq $october27Hash) { 'October27Rvas' } elseif ($gameHash -eq $october23Hash) { 'October23Rvas' } elseif ($gameHash -eq $october22Hash) { 'October22Rvas' } elseif ($gameHash -eq $october21Hash) { 'October21Rvas' } else { 'UpdatedRvas' }
     $profileBody = [regex]::Match($profileSource, "(?s)$profileName\s*=.*?\{(.*?)\};")
     if (-not $profileBody.Success) { throw "Missing production profile $profileName" }
     $map = @{}
@@ -50,7 +51,8 @@ if ($gameHash -ne $originalHash) {
     $updatedTargets = @{}
     foreach ($originalRva in $targets.Keys) {
         if (-not $map.ContainsKey($originalRva)) { throw "Missing production profile target $originalRva" }
-        $signature = $targets[$originalRva].Replace('<EnumEquip>d__80', '<EnumEquip>d__111')
+        $coroutineName = if ($gameHash -eq $october27Hash) { '<EnumEquip>d__112' } else { '<EnumEquip>d__111' }
+        $signature = $targets[$originalRva].Replace('<EnumEquip>d__80', $coroutineName)
         if ($originalRva -eq '0x90DA80') {
             $signature = 'System.Void MashBox.Addons.ProtoDrone.DroneController::LocalSpawnBullet(UnityEngine.Vector3,UnityEngine.Quaternion,UnityEngine.Vector3,System.Single)'
         }
@@ -60,7 +62,7 @@ if ($gameHash -ne $originalHash) {
         $updatedTargets[$map[$originalRva]] = $signature
     }
     $targets = $updatedTargets
-    $sharedGetterRva = if ($gameHash -eq $october23Hash) { '0x6BC680' } elseif ($gameHash -in @($october21Hash, $october22Hash)) { '0x6BE680' } else { '0x6AE680' }
+    $sharedGetterRva = if ($gameHash -eq $october27Hash) { '0x6CF680' } elseif ($gameHash -eq $october23Hash) { '0x6BC680' } elseif ($gameHash -in @($october21Hash, $october22Hash)) { '0x6BE680' } else { '0x6AE680' }
 }
 $matches = @{}
 foreach ($rva in $targets.Keys) { $matches[$rva] = [System.Collections.Generic.List[string]]::new() }

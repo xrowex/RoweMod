@@ -4,7 +4,9 @@ using System.Linq;
 using System.Reflection;
 using rowemod.Mods;
 using rowemod.Utils;
-#if UPDATED_INTEROP && !MISSING_EQUIP_COROUTINE
+#if OCTOBER27_INTEROP && !MISSING_EQUIP_COROUTINE
+using TestEquipCoroutine = Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__112;
+#elif UPDATED_INTEROP && !MISSING_EQUIP_COROUTINE
 using TestEquipCoroutine = Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__111;
 #elif !MISSING_EQUIP_COROUTINE
 using TestEquipCoroutine = Il2CppMashBox.Character.Scripts.EquipSlot._EnumEquip_d__80;
@@ -59,7 +61,11 @@ internal static class Program
 #if UPDATED_INTEROP
         Check(harmony.Calls.Single(x => x.Name == "LocalSpawnBullet").GetParameters().Length == 4, "updated local drone signature selected");
         Check(harmony.Calls.Single(x => x.Name == "RPC_FireBullet").GetParameters().Length == 5, "updated drone RPC signature selected");
+#if OCTOBER27_INTEROP
+        Check(harmony.Calls.Single(x => x.Name == "MoveNext").DeclaringType.Name == "_EnumEquip_d__112", "October 27 equip coroutine resolved");
+#else
         Check(harmony.Calls.Single(x => x.Name == "MoveNext").DeclaringType.Name == "_EnumEquip_d__111", "updated equip coroutine resolved");
+#endif
 #else
         Check(harmony.Calls.Single(x => x.Name == "LocalSpawnBullet").GetParameters().Length == 3, "original local drone signature preserved");
         Check(harmony.Calls.Single(x => x.Name == "RPC_FireBullet").GetParameters().Length == 3, "original drone RPC signature preserved");
@@ -111,6 +117,13 @@ internal static class Program
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October21Hash), "October 21 game hash supported");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October22Hash), "October 22 game hash supported");
         Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October23Hash), "October 23 game hash supported");
+        Check(NativeHookBuilds.IsSupported(NativeHookBuilds.October27Hash), "October 27 game hash supported");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October27Hash, 0x7F15C0) == 0x8A2290,
+            "October 27 selects the renamed equip coroutine's address");
+        Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October27Hash, 0x8B0A50) == 0x9A73C0,
+            "October 27 selects its own tweak address");
+        ExpectRejected(NativeHookBuilds.October27Hash, 0x6CF680, "shared October 27 getter is rejected");
+        ExpectRejected(NativeHookBuilds.October27Hash, 0x88EF70, "old completion RVA is not a target identity");
         Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October23Hash, 0x7F15C0) == 0x88EF70,
             "October 23 selects its own material equip-completion address");
         Check(NativeHookBuilds.ResolveRva(NativeHookBuilds.October23Hash, 0x8B0A50) == 0x993BD0,
@@ -310,7 +323,9 @@ namespace Il2CppMashBox.Character.Scripts
         internal UnityEngine.GameObject GetEquipItem() => Item;
         public void ApplyRenderPolicy() { }
 #if !MISSING_EQUIP_COROUTINE
-#if UPDATED_INTEROP
+#if OCTOBER27_INTEROP
+        internal class _EnumEquip_d__112 : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
+#elif UPDATED_INTEROP
         internal class _EnumEquip_d__111 : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
 #else
         internal class _EnumEquip_d__80 : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase

@@ -12,6 +12,7 @@ namespace rowemod.Mods
         internal const string October21Hash = "3EBD5AB08931C3BB35E1264739975F0EB6FD2AD56EDFD99E5FA48DA7EABD6E85";
         internal const string October22Hash = "D2B353D46A7B2E696736F4A5C39398E24DC13A66B5F956D696F553E42609C430";
         internal const string October23Hash = "6D42AEB57FA79C2C29014BD35D3693F4983F954A4108218662C6827BC340B460";
+        internal const string October27Hash = "CE09D8D744D7CFB40BF1F2101AB3768BDC973EA3CC95BA2D2FDFA66B5B2FD7EC";
 
         private static readonly Dictionary<long, long> UpdatedRvas = new Dictionary<long, long>
         {
@@ -97,13 +98,34 @@ namespace rowemod.Mods
             [0x9F3220] = 0xB4E890, // NetworkPlayer.Despawned
         };
 
-        internal static bool IsSupported(string hash) => hash == OriginalHash || hash == UpdatedHash || hash == October21Hash || hash == October22Hash || hash == October23Hash;
+        private static readonly Dictionary<long, long> October27Rvas = new Dictionary<long, long>
+        {
+            [0x8B0A50] = 0x9A73C0, // TrickControllerV2.RequestTweak
+            [0x8B0E30] = 0x9A77A0, // TrickControllerV2.Tweak
+            [0x85BE70] = 0x92A130, // VehicleAnimationInputHandler.SetInteger
+            [0xA61F70] = 0xC4D4C0, // FusionBootstrap.DrawServerBrowserHostMapControls
+            [0xD53AA0] = 0xF37250, // NetworkRunner.StartGame
+            [0x9F47C0] = 0xB66610, // NetworkPlayer.Spawned
+            [0x7DE910] = 0x87B820, // EquipSlot.ApplyRenderPolicy
+            [0x7F15C0] = 0x8A2290, // EquipSlot.<EnumEquip>d__112.MoveNext
+            [0x2983750] = 0x2D9BF00, // HumanIK.OnAnimatorIK
+            [0x298C9E0] = 0x2DA81E0, // UnityIKLimb.UpdateIK
+            [0x89A960] = 0x92DAA0, // VehicleFootPedalAnimationRig.LateUpdate
+            [0x8077B0] = 0x8B7540, // BikeGrindPoser.SetInputData
+            [0x837760] = 0x8D96B0, // QuaternionPDDrive.Tick (two arguments)
+            [0x90DA80] = 0x9D7EC0, // DroneController.LocalSpawnBullet (four arguments)
+            [0x90E100] = 0x9D8890, // DroneController.RPC_FireBullet (five arguments)
+            [0x8544D0] = 0x8F4460, // TrickDetection.RecordTrickToHistory
+            [0x9F3220] = 0xB627E0, // NetworkPlayer.Despawned
+        };
+
+        internal static bool IsSupported(string hash) => hash == OriginalHash || hash == UpdatedHash || hash == October21Hash || hash == October22Hash || hash == October23Hash || hash == October27Hash;
 
         internal static long ResolveRva(string hash, long originalRva)
         {
             if (!IsSupported(hash))
                 throw new InvalidOperationException("This game build has not been audited for native RoweMod hooks.");
-            var profile = hash == October23Hash ? October23Rvas : hash == October22Hash ? October22Rvas : hash == October21Hash ? October21Rvas : UpdatedRvas;
+            var profile = hash == October27Hash ? October27Rvas : hash == October23Hash ? October23Rvas : hash == October22Hash ? October22Rvas : hash == October21Hash ? October21Rvas : UpdatedRvas;
             if (!profile.TryGetValue(originalRva, out long updatedRva))
                 throw new InvalidOperationException($"Native target 0x{originalRva:X} has not been audited.");
             return hash == OriginalHash ? originalRva : updatedRva;
