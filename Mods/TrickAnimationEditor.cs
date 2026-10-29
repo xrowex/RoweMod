@@ -1074,6 +1074,7 @@ namespace rowemod.Mods
             int id = data.GetInstanceID();
             if (!runtimeDefaults.ContainsKey(id))
                 runtimeDefaults[id] = CaptureOverride(data, null);
+            RememberStudioStock(data, runtimeDefaults[id]);
         }
 
         private static void RestoreRuntimeDefault(SyncTrickAnimationData data)

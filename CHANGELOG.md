@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.3.19
+
+- Added Animation Studio to the Streets main menu, using the equipped rider and bike. Edit rider/bike pose variations over native trick phases, save multiple versions, and explicitly apply a saved variation in game.
+- Added frame stepping, previous/next edited key, phase boundaries, selected-joint/all-key views, contact keys, undo/redo and saved assignments. Arrow keys step frames, Ctrl+Arrows jump keys, and Home/End move to phase boundaries.
+- Stock BMX sources are isolated from legacy animation remaps across cache rebuilds. The stock catalog contains 54 BMX entries and excludes scooter clips. Applying a stock-based variation restores its paired base clips; existing saved presets are retained.
+- Contacts inherit the game's animated weights. Explicit locks capture the authored limb position relative to the bike, avoiding a snap to generic grip/pedal targets. Bar/frame edits rotate about the equipped frame's steering line.
+
+**Testing note:** Release build, 63 Studio data checks, compiled wrapper/signature audits and native preview probes passed. Probes checked all stock clip tracks, remap/cache isolation, zero pose change when locking, held foot anchors and the steering reference against the equipped frame. This editor is a preview: full controller-driven riding, mirrored playback, multiplayer and replay acceptance remain unverified.
+
+## 3.3.18
+
+- Added audited support for Streets build 26257400 / 2.0.0.3073.0, restoring all seven guarded native hook groups.
+- Fixed outfit requests remaining stuck after empty Hair/Eyes slots were cleared so subsequent material selections can apply. Presets and clothing files are preserved.
+
 ## 3.3.17
 
 - Added audited support for Streets build 26175718 / 2.0.0.3072.0. The game update moved native functions, causing 3.3.16 to skip all seven hook groups and time out waiting for custom outfit completion.

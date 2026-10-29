@@ -18,14 +18,14 @@ using Il2CppSteamworks;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.18", "rowe & nolew & holo & 8bitt", null)]
+[assembly: MelonInfo(typeof(rowemod.Main), "rowemod", "3.3.19", "rowe & nolew & holo & 8bitt", null)]
 [assembly: MelonGame("Mash Games", "BMX Streets")]
 [assembly: HarmonyDontPatchAll]
 namespace rowemod
 {
     public class Main : MelonMod
     {
-        public const string ModVersion = "3.3.18";
+        public const string ModVersion = "3.3.19";
         private static readonly bool EnablePieMenu = true;
         public static bool playableSceneLoaded = false;
         public static bool IsGameMainMenuActive = true;
@@ -216,6 +216,8 @@ namespace rowemod
         }
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
+            if (RuntimeAnimationStudio.OwnsScene(sceneName)) return;
+            RuntimeAnimationStudio.OnSceneChanged(sceneName);
             bool isGameplayScene =
                 !string.Equals(sceneName, "MashBox_Main", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(sceneName, "MainMenu", StringComparison.OrdinalIgnoreCase) &&
@@ -330,7 +332,7 @@ namespace rowemod
                 return;
 
             // Let the user press Ctrl+N to get the disabled message even when disabled
-            HandleMenuToggle();
+            if (!RuntimeAnimationStudio.IsOpen) HandleMenuToggle();
 
             if (!RemoteKillSwitched.isModEnabled)
             {
@@ -340,11 +342,13 @@ namespace rowemod
                 return;
             }
 
+            RuntimeAnimationStudio.Update();
+
             // Keep RoweMod's dedicated pie action scoped to live gameplay and resolve
             // GameLoopManager's exact legacy OpenReplay listener once when needed.
             ReplayInputPatch.TickDpadReservation();
 
-            if (isOpen || RuntimeVehicleTuneResetSupport.IsOpen)
+            if (!RuntimeAnimationStudio.IsOpen && (isOpen || RuntimeVehicleTuneResetSupport.IsOpen))
                 ControllerMenuInput.Update();
 
             if (DebugTools.RequiresUpdate)
@@ -438,6 +442,8 @@ namespace rowemod
                 if (TrickAnimationEditor.RequiresLateUpdate)
                     TrickAnimationEditor.LateUpdate();
             }
+            StudioRuntimePlayer.LateUpdate();
+            RuntimeAnimationStudio.LateUpdate();
         }
 
         public override void OnFixedUpdate()
@@ -470,6 +476,8 @@ namespace rowemod
 
         private static void ReleaseRuntimeContributions()
         {
+            if (RuntimeAnimationStudio.IsOpen && (!_startupAccessGranted || !RemoteKillSwitched.isModEnabled)) RuntimeAnimationStudio.CloseNow();
+            StudioRuntimePlayer.Restore();
             if (!RemoteKillSwitched.isModEnabled)
                 ReplayInputPatch.Cleanup();
 
@@ -549,6 +557,13 @@ namespace rowemod
             if (Menu.StylesNeedRefresh)
                 InitializeStyles();
 
+            if (RuntimeAnimationStudio.IsOpen)
+            {
+                RuntimeAnimationStudio.Draw();
+                RoweModCursor.Draw();
+                return;
+            }
+
             DrawMainMenuLauncher();
             
             if (isOpen)
@@ -614,6 +629,8 @@ namespace rowemod
                 Log.Msg("Main menu RoweMod launcher clicked.");
                 OpenRoweModMenu();
             }
+            buttonRect.y += buttonHeight + 8;
+            if (GUI.Button(buttonRect, "Animation Studio", buttonStyle)) RuntimeAnimationStudio.Open();
         }
 
         private static bool IsMainMenuLauncherPressed(Rect buttonRect)
@@ -877,6 +894,8 @@ namespace rowemod
 
         public override void OnDeinitializeMelon()
         {
+            RuntimeAnimationStudio.CloseNow();
+            StudioRuntimePlayer.Restore();
             _unityExplorerCursorCompatibilityEnabled = false;
             ReleaseRuntimeContributions();
             TrickAnimationEditor.Cleanup();

@@ -1,0 +1,35 @@
+{
+  "version": "3.3.19",
+  "releaseUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.19",
+  "sha256": "b4856efef3f0769ee9670346fc9ba3d9f79ff48de4e82b7ab8e224fd365f1bff",
+  "gameVersion": "2.0.0.3073.0",
+  "steamBuildId": "26257400",
+  "buildErrors": 0,
+  "existingBuildWarnings": 51,
+  "automatedChecks": 474,
+  "studioChecks": 63,
+  "compiledWrapperMembers": 1755,
+  "wrapperVersions": 4,
+  "compiledNativePatchSignatures": 16,
+  "nativePreview": {
+    "testedLocalVersion": "3.3.18",
+    "releaseChangesSinceNativeProbe": "Version metadata and build path mapping only",
+    "catalogEntries": 54,
+    "scooterClips": 0,
+    "remapAndSceneCacheIsolation": "PASS",
+    "lockTogglePositionResidual": 0,
+    "lockToggleRotationResidual": 0,
+    "heldFeetMaxGapMeters": 0.0013810679,
+    "activeSteeringAnchorPairs": 1,
+    "steeringRadialResidualMeters": 0.00035057217,
+    "normalLaunchWithoutHelper": true,
+    "nativeFeatureGroupsReady": "7/7"
+  },
+  "acceptancePending": [
+    "Visual check of this final revision",
+    "Complete controller-driven riding and landing",
+    "Mirrored playback",
+    "Multiplayer and replay behavior of variation contacts"
+  ],
+  "preservation": "Existing user presets, settings and variations are not bundled or replaced. Unrelated Unity workbench and local diagnostics changes are excluded from this release."
+}

@@ -1,8 +1,8 @@
 {
-  "version": "3.3.18",
+  "version": "3.3.19",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "517fc55bf46d276d441887a4f3f9219483b4202679b0e150b9e6d668939b0de2",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.18",
-  "patchNotes": "Supports Streets 2.0.0.3073.0 (Steam build 26257400). Restores all seven audited native hook groups and fixes outfit requests getting stuck after empty Hair/Eyes slots are cleared, allowing selected materials to apply. Presets, settings and clothing files are preserved. 578 automated checks and local menu/gameplay outfit checks passed. The experimental animation editor remains a separate local test build.",
+  "sha256": "b4856efef3f0769ee9670346fc9ba3d9f79ff48de4e82b7ab8e224fd365f1bff",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.19",
+  "patchNotes": "Adds Animation Studio to the Streets main menu with the equipped rider and bike, editable trick variations, frame/key navigation and saved assignments. Stock BMX clips remain separate from legacy remaps. Contact locks inherit game animation weights, preserve authored limb positions and hold captured bike-relative anchors. Bar/frame edits use the equipped steering pivot. Presets and settings are preserved. 474 automated checks, including 63 Studio data checks, and native preview checks passed; full riding, mirrored playback and replay acceptance remain under review.",
   "requiredGameVersion": ""
 }
