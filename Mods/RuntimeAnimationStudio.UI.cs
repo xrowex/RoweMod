@@ -10,7 +10,6 @@ namespace rowemod.Mods
         private static readonly Color Ink = new(.055f, .065f, .085f), Panel = new(.085f, .10f, .125f), Line = new(.16f, .19f, .23f), Blue = new(.29f, .61f, 1);
         private static readonly string[] fieldText = new string[6];
         private static int dragMode;
-        private static Vector2 dragStart;
         private static StudioPose dragPose;
         private static float keyFrom;
         private static string keyTarget;
@@ -122,7 +121,7 @@ namespace rowemod.Mods
             GUI.Label(new Rect(rect.x + 18, rect.y + 36, rect.width - 36, 24), Phases[Phase] + "  /  " + (Time * Duration).ToString("0.00") + " s", muted);
             GUI.Label(new Rect(rect.x + 18, rect.y + 62, rect.width - 36, 20), "Rider: " + (Source.Clip(Phase, false)?.name ?? "No clip"), small);
             GUI.Label(new Rect(rect.x + 18, rect.y + 84, rect.width - 36, 20), "Bike: " + (Source.Clip(Phase, true)?.name ?? "No clip"), small);
-            GUI.Label(new Rect(rect.x + 18, rect.yMax - 31, rect.width - 36, 22), "Click a joint · Drag to rotate · Right drag to orbit · Scroll to zoom", muted);
+            GUI.Label(new Rect(rect.x + 18, rect.yMax - 31, rect.width - 36, 22), "Select a joint · Drag X / Y / Z rotation rings · Right drag to orbit · Scroll to zoom", muted);
             if (Stage?.Camera == null || confirmDiscard) return;
             for (int i = 0; i < 4; i++)
             {
@@ -135,6 +134,7 @@ namespace rowemod.Mods
                 if (GUI.Button(icon, "", GUIStyle.none))
                 { SetContact(i, (StudioContactMode)(((int)mode + 1) % 3)); SelectTarget(StudioTargets.Effectors[i]); }
             }
+            DrawRotationGizmo(rect);
             foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
             {
                 if ((targetTab == 0) != !target.StartsWith("Bike:", StringComparison.Ordinal)) continue;
@@ -147,23 +147,18 @@ namespace rowemod.Mods
                 if (SelectedTarget == target) GUI.Label(new Rect(point.x + 12, point.y - 12, 170, 24), NiceTarget(target), small);
                 if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && Vector2.Distance(Event.current.mousePosition, point) < 13)
                 {
-                    SelectTarget(target); dragMode = 1; dragStart = Event.current.mousePosition; dragPose = draft; Event.current.Use(); break;
+                    SelectTarget(target); Event.current.Use(); break;
                 }
             }
             var e = Event.current;
             if (rect.Contains(e.mousePosition))
             {
                 if (e.type == EventType.ScrollWheel) { Stage.Distance = Mathf.Clamp(Stage.Distance + e.delta.y * .15f, 1.2f, 8); Stage.Orbit(); e.Use(); }
-                if (e.type == EventType.MouseDown && e.button == 1) { dragMode = 2; e.Use(); }
+                if (e.type == EventType.MouseDown && e.button == 1 && dragMode == 0) { dragMode = 2; e.Use(); }
             }
-            if (e.type == EventType.MouseDrag && (dragMode == 1 || dragMode == 2))
+            if (e.type == EventType.MouseDrag && dragMode == 2)
             {
-                if (dragMode == 2) { Stage.Yaw -= e.delta.x * .45f; Stage.Pitch = Mathf.Clamp(Stage.Pitch + e.delta.y * .4f, -35, 65); Stage.Orbit(); }
-                else
-                {
-                    Vector2 delta = e.mousePosition - dragStart;
-                    var pose = dragPose; pose.Rotation.X += delta.y * .5f; pose.Rotation.Y += delta.x * .5f; ChangePose(pose); SyncFields();
-                }
+                Stage.Yaw -= e.delta.x * .45f; Stage.Pitch = Mathf.Clamp(Stage.Pitch + e.delta.y * .4f, -35, 65); Stage.Orbit();
                 e.Use();
             }
         }
@@ -219,7 +214,10 @@ namespace rowemod.Mods
         {
             float[] values = { draft.Rotation.X, draft.Rotation.Y, draft.Rotation.Z, draft.Position.X, draft.Position.Y, draft.Position.Z };
             GUI.Label(new Rect(x, y, 18, 26), label, muted);
-            float value = GUI.HorizontalSlider(new Rect(x + 25, y + 8, 134, 18), values[axis], min, max);
+            bool changed = GUI.changed; GUI.changed = false;
+            float slider = GUI.HorizontalSlider(new Rect(x + 25, y + 8, 134, 18), Mathf.Clamp(values[axis], min, max), min, max);
+            bool moved = GUI.changed; GUI.changed |= changed;
+            float value = moved ? slider : values[axis];
             GUI.SetNextControlName("studio_text_axis_" + axis);
             string next = GUI.TextField(new Rect(x + 168, y, 76, 27), fieldText[axis] ?? "0", field);
             if (next != fieldText[axis])

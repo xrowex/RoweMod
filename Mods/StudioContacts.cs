@@ -69,8 +69,12 @@ namespace rowemod.Mods
     {
         private static readonly System.Collections.Generic.Dictionary<int, StudioBikeGeometry> cache = new();
         private Transform frame;
+        private Transform bars;
         private Vector3 pivot;
+        private Vector3 barsPivot, barsAxis;
         private Quaternion basis;
+        internal Vector3 Pivot => frame.TransformPoint(pivot);
+        internal Quaternion Basis => frame.rotation * basis;
         internal static StudioBikeGeometry Get(Animator bike, Transform physicalRoot)
         {
             if (bike == null) return null;
@@ -78,7 +82,8 @@ namespace rowemod.Mods
             if (cache.TryGetValue(id, out var found) && found.frame != null) return found;
             var result = new StudioBikeGeometry();
             result.frame = bike.transform.Find(StudioTargets.BikePaths[0]);
-            if (result.frame == null || physicalRoot == null) return null;
+            result.bars = bike.transform.Find(StudioTargets.BikePaths[1]);
+            if (result.frame == null || result.bars == null || physicalRoot == null) return null;
             var nodes = physicalRoot.GetComponentsInChildren<Transform>(false);
             foreach (var lower in nodes)
                 if (lower.name == "Forks_Anchor")
@@ -89,9 +94,18 @@ namespace rowemod.Mods
                             var forward = Vector3.ProjectOnPlane(lower.parent.forward, axis).normalized;
                             result.pivot = result.frame.InverseTransformPoint((lower.position + upper.position) * .5f);
                             result.basis = Quaternion.Inverse(result.frame.rotation) * Quaternion.LookRotation(forward, axis);
+                            result.barsPivot = result.bars.InverseTransformPoint((lower.position + upper.position) * .5f);
+                            result.barsAxis = Quaternion.Inverse(result.bars.rotation) * axis;
                             cache[id] = result; return result;
                         }
             return null;
+        }
+        internal void ConstrainNativeSteering()
+        {
+            // The real bike's steering bearing constrains the sampled targets.
+            // Visual-only FK needs the same connection: one shared axis and point.
+            bars.rotation = Quaternion.FromToRotation(bars.rotation * barsAxis, Basis * Vector3.up) * bars.rotation;
+            bars.position += Pivot - bars.TransformPoint(barsPivot);
         }
         internal void Apply(Transform node, StudioPose pose, float weight)
         {

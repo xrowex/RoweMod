@@ -2,6 +2,7 @@
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net6.0</TargetFramework><CheckEolTargetFramework>false</CheckEolTargetFramework></PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Mods/StudioVariation.cs" Link="StudioVariation.cs" />
+    <Compile Include="../../Mods/StudioGizmoMath.cs" Link="StudioGizmoMath.cs" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 </Project>

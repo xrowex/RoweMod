@@ -77,8 +77,31 @@ namespace rowemod.Mods
                 if (key.Time >= time && (after == null || key.Time < after.Time)) after = key;
             }
             if (before == null && after == null) return default;
+            // Native Loop repeats and Tweak can remain held at normalized time 1.
+            // Neither should invent an unkeyed neutral pose at its boundaries.
+            if (phase == 2)
+            {
+                if (before == null) return new StudioPose(after.Rotation, after.Position);
+                if (after == null) return new StudioPose(before.Rotation, before.Position);
+            }
+            float wrapStart = 0, wrapEnd = 0;
+            bool wrapped = false;
+            if (phase == 1 && (before == null || after == null))
+            {
+                StudioPoseKey first = null, last = null;
+                foreach (var key in Keys)
+                    if (key.Phase == phase && key.Target == target)
+                    {
+                        if (first == null || key.Time < first.Time) first = key;
+                        if (last == null || key.Time > last.Time) last = key;
+                    }
+                if (first == last) return new StudioPose(first.Rotation, first.Position);
+                wrapStart = before == null ? last.Time - 1 : last.Time;
+                wrapEnd = after == null ? first.Time + 1 : first.Time;
+                before = last; after = first; wrapped = true;
+            }
             if (before == after && before != null) return new StudioPose(before.Rotation, before.Position);
-            float start = before?.Time ?? 0, end = after?.Time ?? 1;
+            float start = wrapped ? wrapStart : before?.Time ?? 0, end = wrapped ? wrapEnd : after?.Time ?? 1;
             float blend = end <= start ? 0 : (time - start) / (end - start);
             blend = blend * blend * (3 - 2 * blend);
             return new StudioPose(StudioVector.Lerp(before?.Rotation ?? default, after?.Rotation ?? default, blend),

@@ -27,6 +27,7 @@ namespace rowemod.Mods
         private GameObject root;
         private AnimancerComponent riderPlayer;
         private StudioBikeGeometry geometry;
+        private readonly Dictionary<string, Quaternion> editBases = new();
         internal Animator Rider, Bike;
         internal UnityEngine.Camera Camera;
         internal RenderTexture Image;
@@ -205,6 +206,8 @@ namespace rowemod.Mods
             // Sample Generic Joints/Controls curves directly on a private clip
             // copy so arbitrary scrubbing evaluates the complete hierarchy.
             if (bikeClip != null) bikeClip.SampleAnimation(Bike.gameObject, time * bikeClip.length);
+            geometry?.ConstrainNativeSteering();
+            editBases.Clear();
             var goals = new (Transform joint, Vector3 local, Quaternion rotation)[4];
             for (int i = 0; i < 4; i++)
             {
@@ -222,6 +225,7 @@ namespace rowemod.Mods
             foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
             {
                 var node = Target(target); if (node == null) continue;
+                editBases[target] = geometry != null && (target == "Bike:Frame" || target == "Bike:Bars") ? geometry.Basis : node.rotation;
                 var pose = draft.HasValue && draftTarget == target ? draft.Value : variation?.Evaluate(phase, target, time) ?? default;
                 if (geometry != null && (target == "Bike:Frame" || target == "Bike:Bars")) geometry.Apply(node, pose, 1);
                 else { node.localRotation *= Quaternion.Euler(pose.Rotation.X, pose.Rotation.Y, pose.Rotation.Z);
@@ -237,6 +241,9 @@ namespace rowemod.Mods
             Orbit();
         }
         internal Transform Target(string name) => StudioRuntimePlayer.Target(Rider, Bike, name);
+        internal Vector3 ControlPivot(string target) => geometry != null && (target == "Bike:Frame" || target == "Bike:Bars") ? geometry.Pivot : Target(target)?.position ?? origin;
+        internal Quaternion ControlRotation(string target, StudioPose offset) =>
+            (editBases.TryGetValue(target, out var basis) ? basis : Target(target)?.rotation ?? Quaternion.identity) * Quaternion.Euler(offset.Rotation.X, offset.Rotation.Y, offset.Rotation.Z);
         internal void CaptureContact(StudioContactKey key)
         {
             int id = Mathf.RoundToInt(Rider.transform.Find(StudioTargets.ContactIdPaths[key.Limb])?.localPosition.y ?? 0);

@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.3.20
+
+- Joint clicks in Animation Studio now select the joint. Drag the red X, green Y or blue Z rotation rings to edit its pose; right-drag still orbits the preview.
+- Corrected the preview steering assembly to share the frame's steering axis and connection point before applying authored edits.
+- Fixed sparse Loop keys fading back toward the stock pose on every cycle. Loop tracks now wrap between authored keys, and a single key holds throughout the loop.
+- Tweak tracks now hold their nearest authored pose outside the keyed range, including full tweak. Existing saved variations use the corrected interpolation automatically.
+- Preserved inherited game contact locks, saved variations, presets and settings.
+
+**Testing note:** Release build, Studio data/gizmo math checks and compiled compatibility audits passed. The new steering correction, rotation rings and playback changes still require in-game visual and riding confirmation.
+
 ## 3.3.19
 
 - Added Animation Studio to the Streets main menu, using the equipped rider and bike. Edit rider/bike pose variations over native trick phases, save multiple versions, and explicitly apply a saved variation in game.

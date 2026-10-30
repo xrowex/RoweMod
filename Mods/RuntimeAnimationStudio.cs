@@ -69,7 +69,7 @@ namespace rowemod.Mods
             }
             catch (Exception ex) { CloseNow(); Status = ex.Message; Log.Warning("[AnimationStudio] " + ex); }
         }
-        internal static void RequestClose() => RequestAction(CloseNow);
+        internal static void RequestClose() { ReleaseGizmo(); RequestAction(CloseNow); }
         private static void RequestAction(Action action)
         {
             if (dirty || draftChanged) { pendingAction = action; confirmDiscard = true; playing = false; }
@@ -77,6 +77,7 @@ namespace rowemod.Mods
         }
         internal static void CloseNow()
         {
+            ReleaseGizmo();
             IsOpen = false; playing = false; confirmDiscard = false; pendingAction = null;
             Stage?.Dispose(); Stage = null;
             foreach (var events in disabledEvents) if (events != null) events.enabled = true;

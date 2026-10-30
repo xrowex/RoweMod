@@ -1,0 +1,22 @@
+{
+  "version": "3.3.20",
+  "releaseUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.20",
+  "sha256": "4c3b85e2f152177f0645b43f26dbc15e80c84ba9e77f590d7a76d85cf3b89864",
+  "gameVersion": "2.0.0.3073.0",
+  "steamBuildId": "26257400",
+  "buildErrors": 0,
+  "existingBuildWarnings": 51,
+  "automatedChecks": 484,
+  "studioChecks": 73,
+  "compiledWrapperMembers": 1759,
+  "wrapperVersions": 4,
+  "compiledNativePatchSignatures": 16,
+  "nativeRuntimeAndVisualChecks": "Not performed for this revision; user requested stage only before explicitly authorizing publication.",
+  "acceptancePending": [
+    "Visual steering connection and axis across trick phases",
+    "Rotation ring picking, dragging and undo in the live editor",
+    "Loop/Tweak physical riding playback and native IK timing",
+    "Mirrored playback, multiplayer and replay"
+  ],
+  "preservation": "Unrelated dirty Unity workbench and diagnostics excluded. No local game installation, restart, preset or assignment changes."
+}

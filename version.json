@@ -1,8 +1,8 @@
 {
-  "version": "3.3.19",
+  "version": "3.3.20",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "b4856efef3f0769ee9670346fc9ba3d9f79ff48de4e82b7ab8e224fd365f1bff",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.19",
-  "patchNotes": "Adds Animation Studio to the Streets main menu with the equipped rider and bike, editable trick variations, frame/key navigation and saved assignments. Stock BMX clips remain separate from legacy remaps. Contact locks inherit game animation weights, preserve authored limb positions and hold captured bike-relative anchors. Bar/frame edits use the equipped steering pivot. Presets and settings are preserved. 474 automated checks, including 63 Studio data checks, and native preview checks passed; full riding, mirrored playback and replay acceptance remain under review.",
+  "sha256": "4c3b85e2f152177f0645b43f26dbc15e80c84ba9e77f590d7a76d85cf3b89864",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.20",
+  "patchNotes": "Adds draggable red/green/blue rotation rings to Animation Studio; clicking joints now selects them. Corrects the steering preview axis and connection point. Fixes sparse Loop poses fading toward stock and holds Tweak poses outside authored keys. Existing variations, inherited contact locks, presets and settings are retained. 484 automated checks and compiled compatibility audits passed; the new visuals and riding playback still require in-game confirmation.",
   "requiredGameVersion": ""
 }

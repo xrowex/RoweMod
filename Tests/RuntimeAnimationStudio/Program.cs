@@ -12,6 +12,11 @@ internal static class Program
     static StudioVariation New(string name = "My variation") => new() { Name = name, TrickKey = "Native_Trick", RiderClips = new[] { "r_enter", null, "r_tweak", "r_exit" } };
     static void Main()
     {
+        Check(Near(StudioGizmoMath.SegmentDistance(5, 3, 0, 0, 10, 0, out float fraction), 3) && Near(fraction, .5f), "gizmo hit testing measures distance to the visible ring segment");
+        Check(Near(StudioGizmoMath.SegmentDistance(12, 0, 0, 0, 10, 0, out fraction), 2) && fraction == 1, "gizmo picking clamps to the segment endpoints");
+        Check(Near(StudioGizmoMath.SegmentDistance(3, 4, 0, 0, 0, 0, out fraction), 5), "edge-on collapsed ring segments remain pickable without NaN");
+        Check(Near(StudioGizmoMath.AngleDelta(179, -179), 2) && Near(StudioGizmoMath.AngleDelta(-179, 179), -2), "ring dragging crosses angle wrap without jumping backwards");
+        Check(Near(StudioGizmoMath.AngleDelta(0, 90) + StudioGizmoMath.AngleDelta(90, 180) + StudioGizmoMath.AngleDelta(180, 270) + StudioGizmoMath.AngleDelta(270, 0), 360), "ring drag increments retain a complete turn");
         var variation = New();
         Check(variation.Contact(0, 0, .5f) == StudioContactMode.Auto, "old variations retain the game's original contacts");
         variation.SetContact(0, 0, .25f, StudioContactMode.Locked);
@@ -51,6 +56,13 @@ internal static class Program
         Check(Near(variation.Evaluate(0, "Head", .25f).Rotation.X, 30), "interior interpolation blends from native pose");
         Check(Near(variation.Evaluate(0, "Head", .75f).Position.Y, .1f), "position interpolates back toward native pose");
         Check(variation.Evaluate(1, "Head", .5f).Rotation.X == 0, "keys stay within their phase");
+        var held = New(); held.SetKey(1, "Chest", .836f, pose); held.SetKey(2, "LeftUpperLeg", .98f, pose);
+        Check(held.Evaluate(1, "Chest", 0).Rotation.X == 60 && held.Evaluate(1, "Chest", 1).Rotation.X == 60, "a single Loop pose is held instead of falling back to stock every cycle");
+        Check(held.Evaluate(2, "LeftUpperLeg", 0).Rotation.X == 60 && held.Evaluate(2, "LeftUpperLeg", 1).Rotation.X == 60, "a late Tweak pose remains active when the native tweak state holds its last frame");
+        held.SetKey(1, "Head", .25f, default); held.SetKey(1, "Head", .75f, pose);
+        Check(Near(held.Evaluate(1, "Head", 0).Rotation.X, 30) && Near(held.Evaluate(1, "Head", 1).Rotation.X, 30), "Loop interpolation wraps between actual keys across the seam");
+        Check(Near(held.Evaluate(1, "Head", .5f).Rotation.X, 30), "Loop interior interpolation remains unchanged");
+        Check(held.Evaluate(0, "Chest", .5f).Rotation.X == 0 && held.Evaluate(3, "Chest", .5f).Rotation.X == 0, "held Loop and Tweak keys do not overwrite Enter or Exit phases");
         Check(variation.Evaluate(0, "RightHand", .5f).Rotation.X == 0, "keys do not affect unedited joints");
         Check(variation.Evaluate(0, "Head", float.NaN).Rotation.X == 0, "invalid playback time cannot produce NaN transforms");
         variation.SetKey(0, "Head", .5f, new StudioPose(new StudioVector(80, 0, 0), default));
