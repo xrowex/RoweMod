@@ -1,8 +1,8 @@
 {
-  "version": "3.3.20",
+  "version": "3.3.21",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "4c3b85e2f152177f0645b43f26dbc15e80c84ba9e77f590d7a76d85cf3b89864",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.20",
-  "patchNotes": "Adds draggable red/green/blue rotation rings to Animation Studio; clicking joints now selects them. Corrects the steering preview axis and connection point. Fixes sparse Loop poses fading toward stock and holds Tweak poses outside authored keys. Existing variations, inherited contact locks, presets and settings are retained. 484 automated checks and compiled compatibility audits passed; the new visuals and riding playback still require in-game confirmation.",
+  "sha256": "bc49f108da4167ac9f00a88c7dd29c4fedf0629a7b7416f0ac39756ea24456e2",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.21",
+  "patchNotes": "Corrects Animation Studio preview clothing that stays in the menu pose or stretches: matching garment bones now bind to the animated rider skeleton. Garment helper bones, offsets, materials and mesh bindings are preserved. Adds clothing binding diagnostics. Saved variations, outfits, presets and settings are retained. 504 automated checks and compiled compatibility audits passed; native clothing deformation still needs in-game visual confirmation.",
   "requiredGameVersion": ""
 }

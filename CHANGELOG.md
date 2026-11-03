@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.21
+
+- Corrected Animation Studio clothing binding so duplicate garment armatures use the avatar's animated preview skeleton instead of retaining the menu pose.
+- Preserved garment-specific helper bones and offsets, mesh bindposes, materials and bone-slot ordering. Repeated bone names are resolved by parent when needed.
+- Added garment-level binding diagnostics. Preview renderers with unresolved bones are skipped with a warning instead of producing distorted geometry.
+- Existing saved variations, outfits, presets and settings are preserved.
+
+**Testing note:** Automated bone-binding tests use stubbed transforms. Release build and compatibility checks passed; native clothing deformation still requires in-game confirmation.
+
 ## 3.3.20
 
 - Joint clicks in Animation Studio now select the joint. Drag the red X, green Y or blue Z rotation rings to edit its pose; right-drag still orbits the preview.

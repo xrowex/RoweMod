@@ -49,7 +49,8 @@ namespace rowemod.Mods
             var riderRoot = CloneTree(sourceRider.transform, root.transform, riderMap);
             riderRoot.gameObject.SetActive(true);
             riderRoot.localPosition = Vector3.zero; riderRoot.localRotation = Quaternion.identity; riderRoot.localScale = sourceRider.transform.lossyScale;
-            CopyRenderers(sourceRider.transform, riderMap);
+            var riderBinding = new StudioSkinBinding(sourceRider, riderMap);
+            CopyRenderers(sourceRider.transform, riderMap, riderBinding);
             Rider = riderRoot.gameObject.AddComponent<Animator>(); Rider.avatar = sourceRider.avatar;
             Rider.applyRootMotion = false; Rider.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             var headGear = riderRoot.Find("HeadGear"); var head = Rider.GetBoneTransform(HumanBodyBones.Head);
@@ -115,7 +116,7 @@ namespace rowemod.Mods
             Light("Fill", new Vector3(25, 145, 0), 14000, new Color(.63f, .76f, 1f));
             Resize(1100, 800); Orbit();
             Log.Msg($"[AnimationStudio] Source rider={sourceRider.name} active={sourceRider.gameObject.activeInHierarchy}; bike={sourceBikeRoot.name} active={sourceBikeRoot.gameObject.activeInHierarchy}; bike renderers={sourceBikeRoot.GetComponentsInChildren<Renderer>(true).Length}.");
-            Log.Msg($"[AnimationStudio] Visual-only stage ready: {skins.Count} skinned renderers; no gameplay or network components cloned.");
+            Log.Msg($"[AnimationStudio] Visual-only stage ready: {skins.Count} skinned renderers; clothing bones rebound={riderBinding.Rebound}, helpers reparented={riderBinding.Reparented}, helpers added={riderBinding.AddedHelpers}; no gameplay or network components cloned.");
         }
         private void Light(string name, Vector3 rotation, float intensity, Color color)
         {
@@ -132,7 +133,7 @@ namespace rowemod.Mods
             for (int i = 0; i < source.childCount; i++) CloneTree(source.GetChild(i), copy.transform, map);
             copy.SetActive(source.gameObject.activeSelf); return copy.transform;
         }
-        private void CopyRenderers(Transform source, Dictionary<int, Transform> map)
+        private void CopyRenderers(Transform source, Dictionary<int, Transform> map, StudioSkinBinding riderBinding = null)
         {
             // Native equips may point at an equivalent live skeleton outside their
             // menu subtree. Bind those references to this preview's canonical rig.
@@ -142,7 +143,8 @@ namespace rowemod.Mods
                 if (map.TryGetValue(bone.GetInstanceID(), out var copy)) byName.TryAdd(bone.name, copy);
             foreach (Transform bone in source.GetComponentsInChildren<Transform>(true))
                 if (map.TryGetValue(bone.GetInstanceID(), out var copy)) byName.TryAdd(bone.name, copy);
-            Transform Resolve(Transform bone) => bone == null ? null : map.TryGetValue(bone.GetInstanceID(), out var copy) ? copy : byName.TryGetValue(bone.name, out copy) ? copy : null;
+            Transform Resolve(Transform bone) => riderBinding != null ? riderBinding.Resolve(bone) :
+                bone == null ? null : map.TryGetValue(bone.GetInstanceID(), out var copy) ? copy : byName.TryGetValue(bone.name, out copy) ? copy : null;
             foreach (var renderer in source.GetComponentsInChildren<Renderer>(true))
             {
                 if (!map.TryGetValue(renderer.transform.GetInstanceID(), out var target)) continue;
@@ -150,12 +152,23 @@ namespace rowemod.Mods
                 Renderer result;
                 if (skin != null)
                 {
+                    var sourceBones = skin.bones;
+                    var bones = sourceBones.Select(Resolve).ToArray();
+                    var missing = sourceBones.Where((b, i) => b != null && bones[i] == null).Select(b => b.name).Take(8).ToArray();
+                    if (missing.Length > 0)
+                    {
+                        Log.Warning($"[AnimationStudio] Skipping preview renderer {skin.name} with unmapped bones: {string.Join(", ", missing)}");
+                        continue;
+                    }
                     var copy = target.gameObject.AddComponent<SkinnedMeshRenderer>(); copy.sharedMesh = skin.sharedMesh;
-                    var bones = skin.bones.Select(Resolve).ToArray();
-                    var missing = skin.bones.Where(b => b != null && Resolve(b) == null).Select(b => b.name).Take(8).ToArray();
-                    if (missing.Length > 0) Log.Warning($"[AnimationStudio] Unmapped bones on {skin.name}: {string.Join(", ", missing)}");
                     copy.bones = bones; copy.rootBone = Resolve(skin.rootBone) ?? target;
                     copy.localBounds = skin.localBounds; copy.updateWhenOffscreen = true; skins.Add(copy); result = copy;
+                    if (riderBinding != null)
+                    {
+                        int rebound = sourceBones.Where((b, i) => b != null &&
+                            (!map.TryGetValue(b.GetInstanceID(), out var cloned) || bones[i] != cloned)).Count();
+                        if (rebound > 0) Log.Msg($"[AnimationStudio] Bound {skin.name} ({skin.sharedMesh?.name}) to preview avatar: {rebound}/{bones.Length} bone references redirected from another armature.");
+                    }
                 }
                 else
                 {

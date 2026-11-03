@@ -1,0 +1,18 @@
+{
+  "version": "3.3.21",
+  "releaseUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.21",
+  "sha256": "bc49f108da4167ac9f00a88c7dd29c4fedf0629a7b7416f0ac39756ea24456e2",
+  "scope": "Animation Studio preview clothing binding",
+  "gameVersion": "2.0.0.3073.0",
+  "steamBuildId": "26257400",
+  "buildErrors": 0,
+  "existingBuildWarnings": 51,
+  "automatedChecks": 504,
+  "skinBindingChecks": 20,
+  "studioChecks": 73,
+  "compiledWrapperMembers": 1759,
+  "wrapperVersions": 4,
+  "compiledNativePatchSignatures": 16,
+  "nativeSkinDeformation": "Pending in-game visual confirmation; binding tests use stubbed transforms.",
+  "preservation": "Unrelated dirty Unity workbench and diagnostics excluded. No local game installation, restart, preset or assignment changes."
+}
