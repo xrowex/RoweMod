@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.3.22
+
+- Corrected Animation Studio bike rotations to use the equipped steering bearing, bottom bracket, pedal spindles and wheel axles. Cranks and pedals stay connected while scrubbing native tricks.
+- Fixed part ownership: bottom-bracket bearings follow the frame, pedal axles follow the cranks, wheels spin separately from fixed pegs and forks. Multiple bike edits apply in parent-first order.
+- Corrected clothing previews that retained the menu pose by copying the original MagicaCloth mesh and bone slots before simulation.
+- Fixed scattered rotation rings when the interface scale is above or below 1.
+- Saved variations, outfits, presets and settings are preserved.
+
+**Testing note:** The local candidate passed stock 55-part and custom 52-part native sweeps, each covering 54 tricks, 800 poses, 42 preview rotation cases and 84 weighted runtime apply/restore cases. Connection gaps stayed below 3 mm. Native preview rendering and ordinary startup were checked. Release build and compatibility checks passed. Full riding, controller feel, mirrored runtime dispatch and multiplayer remain unverified.
+
 ## 3.3.21
 
 - Corrected Animation Studio clothing binding so duplicate garment armatures use the avatar's animated preview skeleton instead of retaining the menu pose.

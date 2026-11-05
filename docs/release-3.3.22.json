@@ -1,0 +1,32 @@
+{
+  "version": "3.3.22",
+  "releaseUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.22",
+  "sha256": "62933a4feee0a4609c095742f95e0ebd7b57310148baf1c472b23835845784e7",
+  "scope": "Animation Studio bike bearings, physical rotation pivots, renderer ownership, original cloth meshes and scaled rotation gizmos",
+  "gameVersion": "2.0.0.3073.0",
+  "steamBuildId": "26257400",
+  "buildErrors": 0,
+  "existingBuildWarnings": 51,
+  "automatedChecks": 540,
+  "focusedStudioChecks": 168,
+  "testProjects": 16,
+  "compiledWrapperMembers": 1765,
+  "wrapperVersions": 4,
+  "compiledNativePatchSignatures": 16,
+  "lateNativeHookTargets": 12,
+  "newNativePatches": 0,
+  "native": {
+    "testedCandidateSha256": "13c0eb58e444f323a72942773f6fa401d080e2d6b26af9cc937945e106387044",
+    "releaseDifference": "Version metadata and version constants changed from the native-tested 3.3.21 local candidate to 3.3.22. Production fixes are unchanged; compatibility checks were repeated on the release DLL.",
+    "configurations": [
+      { "name": "Stock", "activeParts": 55, "tricks": 54, "poseSamples": 800, "previewRotationCases": 42, "previewRendererChecks": 2310, "runtimeApplyCases": 84, "runtimeRendererChecks": 4620, "runtimeRestoreChecks": 4620, "mappingErrors": 0, "editErrors": 0 },
+      { "name": "Equipped custom", "activeParts": 52, "tricks": 54, "poseSamples": 800, "previewRotationCases": 42, "previewRendererChecks": 2184, "runtimeApplyCases": 84, "runtimeRendererChecks": 4368, "runtimeRestoreChecks": 4368, "mappingErrors": 0, "editErrors": 0 }
+    ],
+    "connections": "All six bearing connection gaps below 3 mm; preview world origin is 10000 on each axis, with approximately 1 mm float resolution.",
+    "stockBottomBracket": "Original MainMenu hierarchy independently confirms BMX_Frame_NoBrand_Standard_BB under BB Visuals/BB. Frame ownership is correct; the diagnostic expected-name classifier was corrected before the successful stock rerun.",
+    "normalStartupWithoutHelper": true,
+    "visualChecks": "Observed equipped rider and complete bike in the editor, connected crank assembly, original pre-simulation shirt/pants meshes and complete RGB rotation rings.",
+    "limits": "Finite pose grid and two loaded configurations. Native renderer checks compare Transform motion. Runtime Apply/Restore was exercised; full riding, controller feel, mirrored dispatch, end-to-end LateUpdate playback and multiplayer remain unverified."
+  },
+  "preservation": "Unrelated dirty Unity workbench, diagnostics and historical documents excluded. Temporary native-audit helper archived outside game Mods. Config and 13 saved library files matched backups after testing. Publishing does not restart or replace the user's active game session."
+}

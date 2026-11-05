@@ -7,9 +7,9 @@
 		<RootNamespace>rowemod</RootNamespace>
 		<LangVersion>default</LangVersion>
 		<IsPackable>false</IsPackable>
-		<Version>3.3.21</Version>
-		<AssemblyVersion>3.3.21.0</AssemblyVersion>
-		<FileVersion>3.3.21.0</FileVersion>
+		<Version>3.3.22</Version>
+		<AssemblyVersion>3.3.22.0</AssemblyVersion>
+		<FileVersion>3.3.22.0</FileVersion>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyName>rowemod</AssemblyName>
 		<PlatformTarget>x64</PlatformTarget>
@@ -547,13 +547,17 @@
 		<Compile Include="Mods\TrickAnimationPackages.cs" />
 		<Compile Include="Mods\StudioVariation.cs" />
 		<Compile Include="Mods\StudioContacts.cs" />
+		<Compile Include="Mods\StudioBikeBearing.cs" />
+		<Compile Include="Mods\StudioBikePartMap.cs" />
 		<Compile Include="Mods\StudioGameBridge.cs" />
 		<Compile Include="Mods\StudioPreviewStage.cs" />
 		<Compile Include="Mods\StudioSkinBinding.cs" />
+		<Compile Include="Mods\StudioClothMesh.cs" />
 		<Compile Include="Mods\RuntimeAnimationStudio.cs" />
 		<Compile Include="Mods\RuntimeAnimationStudio.UI.cs" />
 		<Compile Include="Mods\RuntimeAnimationStudio.Gizmo.cs" />
 		<Compile Include="Mods\StudioGizmoMath.cs" />
+		<Compile Include="Mods\StudioGizmoDrawing.cs" />
 		<Compile Include="AnimationStudio\RoweAnimationPackage.cs" />
 		<Compile Include="Mods\TrickTweakGuard.cs" />
 		<Compile Include="Mods\HangFiveControl.cs" />

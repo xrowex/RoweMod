@@ -1,8 +1,8 @@
 {
-  "version": "3.3.21",
+  "version": "3.3.22",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "bc49f108da4167ac9f00a88c7dd29c4fedf0629a7b7416f0ac39756ea24456e2",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.21",
-  "patchNotes": "Corrects Animation Studio preview clothing that stays in the menu pose or stretches: matching garment bones now bind to the animated rider skeleton. Garment helper bones, offsets, materials and mesh bindings are preserved. Adds clothing binding diagnostics. Saved variations, outfits, presets and settings are retained. 504 automated checks and compiled compatibility audits passed; native clothing deformation still needs in-game visual confirmation.",
+  "sha256": "62933a4feee0a4609c095742f95e0ebd7b57310148baf1c472b23835845784e7",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.22",
+  "patchNotes": "Fixes Animation Studio bike rotations around equipped bearings and axles, keeps cranks and pedals connected, and corrects fixed bearing and pedal axle ownership. Fixes clothing previews using simulated meshes and scattered rotation rings at scaled UI sizes. Saved variations, outfits, presets and settings are retained. Native stock/custom bike sweeps and 540 automated checks passed; full riding and multiplayer remain unverified.",
   "requiredGameVersion": ""
 }

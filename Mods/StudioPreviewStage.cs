@@ -152,7 +152,11 @@ namespace rowemod.Mods
                 Renderer result;
                 if (skin != null)
                 {
-                    var sourceBones = skin.bones;
+                    if (!StudioClothMesh.TrySource(skin, out var sourceMesh, out var sourceBones))
+                    {
+                        Log.Warning($"[AnimationStudio] Skipping preview renderer {skin.name}: no valid original skin mesh/bone slots.");
+                        continue;
+                    }
                     var bones = sourceBones.Select(Resolve).ToArray();
                     var missing = sourceBones.Where((b, i) => b != null && bones[i] == null).Select(b => b.name).Take(8).ToArray();
                     if (missing.Length > 0)
@@ -160,9 +164,12 @@ namespace rowemod.Mods
                         Log.Warning($"[AnimationStudio] Skipping preview renderer {skin.name} with unmapped bones: {string.Join(", ", missing)}");
                         continue;
                     }
-                    var copy = target.gameObject.AddComponent<SkinnedMeshRenderer>(); copy.sharedMesh = skin.sharedMesh;
+                    var copy = target.gameObject.AddComponent<SkinnedMeshRenderer>(); copy.sharedMesh = sourceMesh;
                     copy.bones = bones; copy.rootBone = Resolve(skin.rootBone) ?? target;
-                    copy.localBounds = skin.localBounds; copy.updateWhenOffscreen = true; skins.Add(copy); result = copy;
+                    copy.localBounds = sourceMesh == skin.sharedMesh ? skin.localBounds : sourceMesh.bounds;
+                    copy.updateWhenOffscreen = true; skins.Add(copy); result = copy;
+                    if (sourceMesh != skin.sharedMesh)
+                        Log.Msg($"[AnimationStudio] Restored pre-simulation cloth mesh for {skin.name}: {sourceMesh.name}, {bones.Length} original bone slots.");
                     if (riderBinding != null)
                     {
                         int rebound = sourceBones.Where((b, i) => b != null &&
@@ -198,6 +205,36 @@ namespace rowemod.Mods
                     var joint = Bike.transform.Find(StudioTargets.BikePaths[node.name.Contains("Pegs") ? 1 : 5]);
                     if ((node.name == "Wheel Mesh" || node.name.Contains("Pegs")) && joint != null && map.TryGetValue(node.GetInstanceID(), out var visual)) visual.SetParent(joint, true);
                 }
+            // Split fixed bearings and pedal axles out of rotating visual groups.
+            // Check every rendered part so no mesh silently keeps a wrong joint.
+            foreach (var renderer in sourceRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                var names = new Stack<string>();
+                for (var node = renderer.transform; node != null && node != sourceRoot; node = node.parent) names.Push(node.name);
+                string path = string.Join("/", names);
+                int index = StudioBikePartMap.Joint(path);
+                if (index < 0)
+                {
+                    if (renderer.enabled && renderer.gameObject.activeInHierarchy)
+                        Log.Warning($"[AnimationStudio] Unmapped bike renderer: {path}");
+                    continue;
+                }
+                if (!map.TryGetValue(renderer.transform.GetInstanceID(), out var visual)) continue;
+                var joint = Bike.transform.Find(StudioTargets.BikePaths[index]);
+                if (joint == null) continue;
+                for (var parent = visual.parent; parent != null; parent = parent.parent)
+                {
+                    if (parent == joint) break;
+                    if (Array.IndexOf(StudioTargets.BikePaths, RelativeBikePath(parent)) >= 0)
+                    { visual.SetParent(joint, true); break; }
+                }
+            }
+        }
+        private string RelativeBikePath(Transform node)
+        {
+            var names = new Stack<string>();
+            for (; node != null && node != Bike.transform; node = node.parent) names.Push(node.name);
+            return string.Join("/", names);
         }
         private AnimationClip ClipCopy(AnimationClip original)
         {
@@ -219,7 +256,6 @@ namespace rowemod.Mods
             // Sample Generic Joints/Controls curves directly on a private clip
             // copy so arbitrary scrubbing evaluates the complete hierarchy.
             if (bikeClip != null) bikeClip.SampleAnimation(Bike.gameObject, time * bikeClip.length);
-            geometry?.ConstrainNativeSteering();
             editBases.Clear();
             var goals = new (Transform joint, Vector3 local, Quaternion rotation)[4];
             for (int i = 0; i < 4; i++)
@@ -235,12 +271,15 @@ namespace rowemod.Mods
                 if (joint != null && anchored) goals[i] = (joint, new Vector3(contactKey.AnchorPosition.X, contactKey.AnchorPosition.Y, contactKey.AnchorPosition.Z),
                     Quaternion.Euler(contactKey.AnchorRotation.X, contactKey.AnchorRotation.Y, contactKey.AnchorRotation.Z));
             }
+            // Carry inherited hand/foot goals through the same bearing repair as
+            // their bike joints, before carrying them through authored offsets.
+            geometry?.ConstrainNativeBike();
             foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
             {
                 var node = Target(target); if (node == null) continue;
-                editBases[target] = geometry != null && (target == "Bike:Frame" || target == "Bike:Bars") ? geometry.Basis : node.rotation;
+                editBases[target] = geometry != null && target.StartsWith("Bike:", StringComparison.Ordinal) ? geometry.ControlBasis(node) : node.rotation;
                 var pose = draft.HasValue && draftTarget == target ? draft.Value : variation?.Evaluate(phase, target, time) ?? default;
-                if (geometry != null && (target == "Bike:Frame" || target == "Bike:Bars")) geometry.Apply(node, pose, 1);
+                if (geometry != null && target.StartsWith("Bike:", StringComparison.Ordinal)) geometry.Apply(node, pose, 1);
                 else { node.localRotation *= Quaternion.Euler(pose.Rotation.X, pose.Rotation.Y, pose.Rotation.Z);
                     node.localPosition += new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z); }
             }
@@ -254,7 +293,7 @@ namespace rowemod.Mods
             Orbit();
         }
         internal Transform Target(string name) => StudioRuntimePlayer.Target(Rider, Bike, name);
-        internal Vector3 ControlPivot(string target) => geometry != null && (target == "Bike:Frame" || target == "Bike:Bars") ? geometry.Pivot : Target(target)?.position ?? origin;
+        internal Vector3 ControlPivot(string target) => geometry != null && target.StartsWith("Bike:", StringComparison.Ordinal) ? geometry.ControlPivot(Target(target)) : Target(target)?.position ?? origin;
         internal Quaternion ControlRotation(string target, StudioPose offset) =>
             (editBases.TryGetValue(target, out var basis) ? basis : Target(target)?.rotation ?? Quaternion.identity) * Quaternion.Euler(offset.Rotation.X, offset.Rotation.Y, offset.Rotation.Z);
         internal void CaptureContact(StudioContactKey key)

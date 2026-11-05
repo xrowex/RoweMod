@@ -41,16 +41,7 @@ namespace rowemod.Mods
             angle = Mathf.Atan2(Vector3.Dot(direction, ringV), Vector3.Dot(direction, ringU)) * Mathf.Rad2Deg; return true;
         }
         private static void GizmoLine(Vector2 a, Vector2 b, Color color, float thickness)
-        {
-            var matrix = GUI.matrix;
-            try
-            {
-                var delta = b - a;
-                GUIUtility.RotateAroundPivot(Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg, a);
-                Fill(new Rect(a.x, a.y - thickness / 2, delta.magnitude, thickness), color);
-            }
-            finally { GUI.matrix = matrix; }
-        }
+            => StudioGizmoDrawing.Line(a, b, color, thickness);
         private static void DrawRotationGizmo(Rect viewport)
         {
             if (Stage.Target(SelectedTarget) == null) return;

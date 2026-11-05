@@ -165,11 +165,11 @@ namespace rowemod.Mods
                             goals[i] = (joint, new Vector3(anchor.Position.X, anchor.Position.Y, anchor.Position.Z), Quaternion.Euler(anchor.Rotation.X, anchor.Rotation.Y, anchor.Rotation.Z));
                         }
                     }
-                foreach (string target in variation.Keys.Where(k => k.Phase == phase).Select(k => k.Target).Distinct())
+                foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike).Where(t => variation.Keys.Any(k => k.Phase == phase && k.Target == t)))
                 {
                     StudioPose pose = variation.Evaluate(phase, target, time);
                     Apply(Target(rider, bike, mirror ? StudioTargets.Mirror(target) : target), mirror ? StudioTargets.Reflect(pose) : pose, weight,
-                        target == "Bike:Frame" || target == "Bike:Bars" ? StudioBikeGeometry.Get(bike, bike?.transform.parent) : null);
+                        target.StartsWith("Bike:", StringComparison.Ordinal) ? StudioBikeGeometry.Get(bike, bike?.transform.parent) : null);
                 }
                 if (limbs != null)
                 {

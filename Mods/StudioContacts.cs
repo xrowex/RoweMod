@@ -69,12 +69,12 @@ namespace rowemod.Mods
     {
         private static readonly System.Collections.Generic.Dictionary<int, StudioBikeGeometry> cache = new();
         private Transform frame;
-        private Transform bars;
-        private Vector3 pivot;
-        private Vector3 barsPivot, barsAxis;
-        private Quaternion basis;
-        internal Vector3 Pivot => frame.TransformPoint(pivot);
-        internal Quaternion Basis => frame.rotation * basis;
+        private readonly System.Collections.Generic.List<StudioBikeBearing> bearings = new();
+        private readonly System.Collections.Generic.Dictionary<int, StudioBikeBearing> byJoint = new();
+        private StudioBikeBearing steering;
+        internal Vector3 Pivot => steering.Pivot;
+        internal Quaternion Basis => steering.Basis;
+        internal int BearingCount => bearings.Count;
         internal static StudioBikeGeometry Get(Animator bike, Transform physicalRoot)
         {
             if (bike == null) return null;
@@ -82,9 +82,30 @@ namespace rowemod.Mods
             if (cache.TryGetValue(id, out var found) && found.frame != null) return found;
             var result = new StudioBikeGeometry();
             result.frame = bike.transform.Find(StudioTargets.BikePaths[0]);
-            result.bars = bike.transform.Find(StudioTargets.BikePaths[1]);
-            if (result.frame == null || result.bars == null || physicalRoot == null) return null;
+            var joints = new Transform[StudioTargets.BikePaths.Length];
+            for (int i = 0; i < joints.Length; i++) joints[i] = bike.transform.Find(StudioTargets.BikePaths[i]);
+            if (result.frame == null || joints[1] == null || physicalRoot == null) return null;
             var nodes = physicalRoot.GetComponentsInChildren<Transform>(false);
+            Transform Find(string name, string ancestor = null)
+            {
+                foreach (var node in nodes)
+                    if (node.name == name)
+                    {
+                        if (ancestor == null) return node;
+                        for (var p = node.parent; p != null && p != physicalRoot; p = p.parent)
+                            if (p.name == ancestor) return node;
+                    }
+                return null;
+            }
+            void Add(int parent, int child, Transform socket, Transform axle)
+            {
+                if (joints[parent] == null || joints[child] == null || socket == null || axle == null) return;
+                var right = socket.right;
+                var up = Vector3.ProjectOnPlane(socket.up, right).normalized;
+                var bearing = new StudioBikeBearing(joints[parent], joints[child], socket.position, axle.position, right,
+                    Quaternion.LookRotation(Vector3.Cross(right, up), up));
+                result.bearings.Add(bearing); result.byJoint[joints[child].GetInstanceID()] = bearing;
+            }
             foreach (var lower in nodes)
                 if (lower.name == "Forks_Anchor")
                     foreach (var upper in nodes)
@@ -92,29 +113,32 @@ namespace rowemod.Mods
                         {
                             var axis = (upper.position - lower.position).normalized;
                             var forward = Vector3.ProjectOnPlane(lower.parent.forward, axis).normalized;
-                            result.pivot = result.frame.InverseTransformPoint((lower.position + upper.position) * .5f);
-                            result.basis = Quaternion.Inverse(result.frame.rotation) * Quaternion.LookRotation(forward, axis);
-                            result.barsPivot = result.bars.InverseTransformPoint((lower.position + upper.position) * .5f);
-                            result.barsAxis = Quaternion.Inverse(result.bars.rotation) * axis;
-                            cache[id] = result; return result;
+                            var point = (lower.position + upper.position) * .5f;
+                            result.steering = new StudioBikeBearing(result.frame, joints[1], point, point, axis, Quaternion.LookRotation(forward, axis));
+                            break;
                         }
-            return null;
+            if (result.steering == null) return null;
+            result.bearings.Add(result.steering); result.byJoint[joints[1].GetInstanceID()] = result.steering;
+            Add(0, 2, Find("BB_Anchor", "Chassis Visuals"), Find("BB Visuals"));
+            Add(2, 3, Find("Pedal_Anchor", "Left Crank Arm"), Find("Left Pedal Visuals"));
+            Add(2, 4, Find("Pedal_Anchor", "Right Crank Arm"), Find("Right Pedal Visuals"));
+            Add(1, 5, Find("FrontWheel_Anchor", "Front Wheel Visuals"), Find("Wheel Mesh", "FrontWheel_Joint"));
+            Add(0, 6, Find("RearWheel_Anchor", "Chassis Visuals"), Find("Back Wheel Visuals"));
+            cache[id] = result; return result;
         }
-        internal void ConstrainNativeSteering()
+        internal void ConstrainNativeBike()
         {
-            // The real bike's steering bearing constrains the sampled targets.
-            // Visual-only FK needs the same connection: one shared axis and point.
-            bars.rotation = Quaternion.FromToRotation(bars.rotation * barsAxis, Basis * Vector3.up) * bars.rotation;
-            bars.position += Pivot - bars.TransformPoint(barsPivot);
+            // Parents first: steering/cranks, then their wheels and pedals.
+            foreach (var bearing in bearings) bearing.Constrain();
         }
+        internal Vector3 ControlPivot(Transform node) => node != null && byJoint.TryGetValue(node.GetInstanceID(), out var bearing) ? bearing.Pivot :
+            node == null || node == frame ? Pivot : node.position;
+        internal Quaternion ControlBasis(Transform node) => node != null && byJoint.TryGetValue(node.GetInstanceID(), out var bearing) ? bearing.Basis :
+            node == null || node == frame ? Basis : node.rotation;
         internal void Apply(Transform node, StudioPose pose, float weight)
         {
-            var center = frame.TransformPoint(pivot);
-            var axes = frame.rotation * basis;
-            var delta = axes * Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(pose.Rotation.X, pose.Rotation.Y, pose.Rotation.Z), weight) * Quaternion.Inverse(axes);
-            node.position = center + delta * (node.position - center);
-            node.rotation = delta * node.rotation;
-            node.localPosition += new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z) * weight;
+            StudioBikeBearing.Apply(node, ControlPivot(node), ControlBasis(node), new Vector3(pose.Rotation.X, pose.Rotation.Y, pose.Rotation.Z),
+                new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z), weight);
         }
     }
 }
