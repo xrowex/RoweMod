@@ -2,7 +2,9 @@
 using Il2CppMashBox.Core.Runtime.Events;
 using MelonLoader;
 using rowemod.Utils;
+using System;
 using System.Collections;
+using Il2CppInterop.Runtime;
 using Il2CppFusion;
 using Il2CppMashBox.Addons.NetworkingFusion;
 using Il2CppMashBox.Character;
@@ -17,8 +19,8 @@ namespace rowemod.Mods
 {
     public class GameEventListener : MelonMod
     {
-        private const string OpenMainMenuEventName =
-            "GameEvent_TitleLoop_TransitionTrigger_OpenMainMenu";
+        private const string NativeTitleScreenTypeName =
+            "Il2CppMashBox.Addons.GameLoop.Title_Screen.TitleScreen, Assembly-CSharp";
         private const int IntroSkipMaxAttempts = 24;
         private const float IntroSkipInitialDelay = 0.5f;
         private const float IntroSkipRetryDelay = 0.25f;
@@ -234,69 +236,61 @@ namespace rowemod.Mods
 
         private static IEnumerator AutoSkipIntroRoutine(string source)
         {
-            yield return new WaitForSecondsRealtime(IntroSkipInitialDelay);
-
-            for (int attempt = 1; attempt <= IntroSkipMaxAttempts; attempt++)
+            try
             {
-                if (!Config.autoSkipIntro || _introSkipCompleted)
+                yield return new WaitForSecondsRealtime(IntroSkipInitialDelay);
+
+                // Older Streets wrappers do not expose this controller. Leave
+                // their title screen in control of the transition.
+                var titleType = Type.GetType(NativeTitleScreenTypeName, throwOnError: false);
+                var wrapperConstructor = titleType?.GetConstructor(new[] { typeof(IntPtr) });
+                var requestPlay = titleType?.GetMethod("RequestPlay", Type.EmptyTypes);
+                if (wrapperConstructor == null || requestPlay == null || requestPlay.IsStatic ||
+                    requestPlay.ReturnType != typeof(void))
                 {
-                    _introSkipRoutineRunning = false;
+                    Log.Msg("[IntroSkip] Native Play is unavailable on this build. Use Play on the title screen.");
                     yield break;
                 }
 
-                string activeSceneName = SceneManager.GetActiveScene().name;
-                if (!IsTitleScene(activeSceneName))
+                for (int attempt = 1; attempt <= IntroSkipMaxAttempts; attempt++)
                 {
-                    _introSkipRoutineRunning = false;
-                    yield break;
-                }
+                    var activeScene = SceneManager.GetActiveScene();
+                    if (!Config.autoSkipIntro || _introSkipCompleted || !IsTitleScene(activeScene.name))
+                        yield break;
 
-                GameEvent openMainMenuEvent = FindGameEvent(OpenMainMenuEventName);
-                if (openMainMenuEvent != null)
-                {
                     try
                     {
-                        openMainMenuEvent.Raise();
-                        _introSkipCompleted = true;
-                        _introSkipRoutineRunning = false;
-                        Log.Msg(
-                            $"[IntroSkip] Raised '{OpenMainMenuEventName}' " +
-                            $"from {source} on attempt {attempt}.");
+                        var nativeTitleType = Il2CppType.From(titleType);
+                        foreach (var candidate in Resources.FindObjectsOfTypeAll(nativeTitleType))
+                        {
+                            var screen = candidate?.TryCast<MonoBehaviour>();
+                            if (screen == null || !screen.isActiveAndEnabled || screen.gameObject.scene != activeScene)
+                                continue;
+
+                            // RequestPlay owns sign-in, mod.io preparation and the
+                            // transition. Keep its prompts and readiness checks intact.
+                            var title = wrapperConstructor.Invoke(new object[] { screen.Pointer });
+                            requestPlay.Invoke(title, null);
+                            _introSkipCompleted = true;
+                            Log.Msg($"[IntroSkip] Requested native Play from {source} on attempt {attempt}.");
+                            yield break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[IntroSkip] Native Play failed: {ex.GetBaseException().Message}. Use Play on the title screen.");
                         yield break;
                     }
-                    catch (System.Exception ex)
-                    {
-                        Log.Warning(
-                            $"[IntroSkip] Failed to raise '{OpenMainMenuEventName}' " +
-                            $"on attempt {attempt}: {ex.Message}");
-                    }
+
+                    yield return new WaitForSecondsRealtime(IntroSkipRetryDelay);
                 }
 
-                yield return new WaitForSecondsRealtime(IntroSkipRetryDelay);
+                Log.Warning("[IntroSkip] Native title screen was not ready. Use Play on the title screen.");
             }
-
-            _introSkipRoutineRunning = false;
-            Log.Warning(
-                $"[IntroSkip] Could not find '{OpenMainMenuEventName}' " +
-                $"after {IntroSkipMaxAttempts} attempts.");
-        }
-
-        private static GameEvent FindGameEvent(string eventName)
-        {
-            GameEvent[] events = Resources.FindObjectsOfTypeAll<GameEvent>();
-            if (events == null)
-                return null;
-
-            foreach (GameEvent gameEvent in events)
+            finally
             {
-                if (gameEvent != null &&
-                    string.Equals(gameEvent.name, eventName, System.StringComparison.Ordinal))
-                {
-                    return gameEvent;
-                }
+                _introSkipRoutineRunning = false;
             }
-
-            return null;
         }
 
         private static bool IsTitleScene(string sceneName)

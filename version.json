@@ -1,8 +1,8 @@
 {
-  "version": "3.3.22",
+  "version": "3.3.23",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "62933a4feee0a4609c095742f95e0ebd7b57310148baf1c472b23835845784e7",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.22",
-  "patchNotes": "Fixes Animation Studio bike rotations around equipped bearings and axles, keeps cranks and pedals connected, and corrects fixed bearing and pedal axle ownership. Fixes clothing previews using simulated meshes and scattered rotation rings at scaled UI sizes. Saved variations, outfits, presets and settings are retained. Native stock/custom bike sweeps and 540 automated checks passed; full riding and multiplayer remain unverified.",
+  "sha256": "7a419af41231ca838f9ac7c0d1b686d3691c496bcd5b709e622419721771d911",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.23",
+  "patchNotes": "Fixes Skip Main Intro leaving BMX Streets mod.io downloads blocked. Auto-skip now uses the game's Play flow so Streets can validate the mod.io session and restore saved gear before opening the main menu.",
   "requiredGameVersion": ""
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.23
+
+- Fixed Skip Main Intro leaving Streets' mod.io downloads blocked after opening the main menu. Auto-skip now uses the game's Play flow so Streets can validate the mod.io session and restore saved gear.
+- On older builds without the native Play controller, use Play on the title screen.
+
+**Testing note:** On Streets 2.0.0.3073.0, 3.3.22 entered the main menu with the title download block still active. The 3.3.23 Steam launch completed native mod.io preparation and opened the main menu with downloads enabled. A new paid purchase was outside the test.
+
 ## 3.3.22
 
 - Corrected Animation Studio bike rotations to use the equipped steering bearing, bottom bracket, pedal spindles and wheel axles. Cranks and pedals stay connected while scrubbing native tricks.
