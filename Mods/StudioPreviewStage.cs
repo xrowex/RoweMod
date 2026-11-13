@@ -14,6 +14,9 @@ namespace rowemod.Mods
     internal sealed class StudioPreviewStage : IDisposable
     {
         internal const string SceneName = "RoweMod_AnimationStudio";
+        private const int PreviewLayer = 30;
+        private const int PreviewMask = 1 << PreviewLayer;
+        private const float PreviewLightDistance = 18f;
         private readonly Vector3 origin = new(10000, 10000, 10000);
         private readonly List<UnityEngine.Object> owned = new();
         private readonly List<(Transform node, Vector3 position, Quaternion rotation)> rest = new();
@@ -99,34 +102,56 @@ namespace rowemod.Mods
             UnityEngine.Object.Destroy(floor.GetComponent<Collider>());
             var material = new Material(Shader.Find("HDRP/Lit")); material.SetColor("_BaseColor", new Color(.13f, .15f, .18f));
             material.SetFloat("_Smoothness", .2f); floor.GetComponent<Renderer>().sharedMaterial = material; owned.Add(material);
-            foreach (Transform node in root.GetComponentsInChildren<Transform>(true)) node.gameObject.layer = 30;
+            foreach (Transform node in root.GetComponentsInChildren<Transform>(true)) node.gameObject.layer = PreviewLayer;
 
             var cameraObject = new GameObject("Studio camera"); cameraObject.transform.SetParent(root.transform, false);
-            Camera = cameraObject.AddComponent<UnityEngine.Camera>(); Camera.cullingMask = 1 << 30;
+            Camera = cameraObject.AddComponent<UnityEngine.Camera>(); Camera.cullingMask = PreviewMask;
             Camera.clearFlags = CameraClearFlags.SolidColor; Camera.backgroundColor = new Color(.07f, .085f, .11f);
             Camera.nearClipPlane = .02f; Camera.farClipPlane = 60; Camera.fieldOfView = 38;
-            var hd = cameraObject.AddComponent<HDAdditionalCameraData>(); hd.volumeLayerMask = 1 << 30;
+            var hd = cameraObject.AddComponent<HDAdditionalCameraData>(); hd.volumeLayerMask = PreviewMask;
             hd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color; hd.backgroundColorHDR = new Color(.07f, .085f, .11f);
-            var volumeObject = new GameObject("Studio exposure"); volumeObject.layer = 30; volumeObject.transform.SetParent(root.transform, false);
-            var volume = volumeObject.AddComponent<Volume>(); volume.isGlobal = true; volume.priority = 10000;
+            var volumeObject = new GameObject("RoweMod Studio exposure") { layer = PreviewLayer };
+            volumeObject.transform.SetParent(root.transform, false);
+            // Keep the fixed exposure local even for game cameras whose volume mask includes the preview layer.
+            var volumeBounds = volumeObject.AddComponent<BoxCollider>();
+            volumeBounds.isTrigger = true;
+            volumeBounds.size = Vector3.one * 24f;
+            var volume = volumeObject.AddComponent<Volume>(); volume.isGlobal = false; volume.priority = 10000;
             var profile = ScriptableObject.CreateInstance<VolumeProfile>(); owned.Add(profile); volume.sharedProfile = profile;
             var exposure = profile.Add<Exposure>(); exposure.active = true;
             exposure.mode.Override(ExposureMode.Fixed); exposure.fixedExposure.Override(13f);
-            Light("Key", new Vector3(35, -35, 0), 28000, new Color(1f, .93f, .84f));
-            Light("Fill", new Vector3(25, 145, 0), 14000, new Color(.63f, .76f, 1f));
+            AddPreviewLight("Key", new Vector3(35, -35, 0), 28000, new Color(1f, .93f, .84f));
+            AddPreviewLight("Fill", new Vector3(25, 145, 0), 14000, new Color(.63f, .76f, 1f));
             Resize(1100, 800); Orbit();
             Log.Msg($"[AnimationStudio] Source rider={sourceRider.name} active={sourceRider.gameObject.activeInHierarchy}; bike={sourceBikeRoot.name} active={sourceBikeRoot.gameObject.activeInHierarchy}; bike renderers={sourceBikeRoot.GetComponentsInChildren<Renderer>(true).Length}.");
             Log.Msg($"[AnimationStudio] Visual-only stage ready: {skins.Count} skinned renderers; clothing bones rebound={riderBinding.Rebound}, helpers reparented={riderBinding.Reparented}, helpers added={riderBinding.AddedHelpers}; no gameplay or network components cloned.");
         }
-        private void Light(string name, Vector3 rotation, float intensity, Color color)
+        private void AddPreviewLight(string name, Vector3 rotation, float luxAtCenter, Color color)
         {
-            var go = new GameObject(name); go.transform.SetParent(root.transform, false); go.transform.localRotation = Quaternion.Euler(rotation);
-            var light = go.AddComponent<Light>(); light.type = LightType.Directional; light.intensity = intensity; light.color = color; light.shadows = LightShadows.None;
-            light.cullingMask = 1 << 30;
+            // HDRP directional lights have infinite reach. Aim bounded spots at the isolated preview stage.
+            var lightObject = new GameObject(name) { layer = PreviewLayer };
+            lightObject.transform.SetParent(root.transform, false);
+            var orientation = Quaternion.Euler(rotation);
+            lightObject.transform.localRotation = orientation;
+            lightObject.transform.localPosition = Vector3.up * .95f - orientation * Vector3.forward * PreviewLightDistance;
+
+            var light = lightObject.AddComponent<Light>();
+            light.type = LightType.Spot;
+            light.color = color;
+            light.shadows = LightShadows.None;
+            light.cullingMask = PreviewMask;
+            light.bounceIntensity = 0f;
+
+            var hdLight = lightObject.AddComponent<HDAdditionalLightData>();
+            hdLight.range = 44f;
+            hdLight.SetSpotAngle(100f, 75f);
+            hdLight.SetSpotLightLuxAt(luxAtCenter, PreviewLightDistance);
+            hdLight.fadeDistance = 60f;
+            hdLight.volumetricDimmer = 0f;
         }
         private Transform CloneTree(Transform source, Transform parent, Dictionary<int, Transform> map)
         {
-            var copy = new GameObject(source.name); copy.layer = 30;
+            var copy = new GameObject(source.name); copy.layer = PreviewLayer;
             copy.transform.SetParent(parent, false); copy.transform.localPosition = source.localPosition;
             copy.transform.localRotation = source.localRotation; copy.transform.localScale = source.localScale;
             map[source.GetInstanceID()] = copy.transform;

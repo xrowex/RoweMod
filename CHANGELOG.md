@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.24
+
+- Fixed Animation Studio preview lighting spilling into the Streets main menu. The key and fill lights and fixed exposure are now confined to the Studio preview stage.
+
 ## 3.3.23
 
 - Fixed Skip Main Intro leaving Streets' mod.io downloads blocked after opening the main menu. Auto-skip now uses the game's Play flow so Streets can validate the mod.io session and restore saved gear.

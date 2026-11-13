@@ -1,8 +1,8 @@
 {
-  "version": "3.3.23",
+  "version": "3.3.24",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "7a419af41231ca838f9ac7c0d1b686d3691c496bcd5b709e622419721771d911",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.23",
-  "patchNotes": "Fixes Skip Main Intro leaving BMX Streets mod.io downloads blocked. Auto-skip now uses the game's Play flow so Streets can validate the mod.io session and restore saved gear before opening the main menu.",
+  "sha256": "7851c6a2e71ae4a6f3587bf7144dd9df2240fa1d6fd5bd2fe362ed541d229e52",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.24",
+  "patchNotes": "Fixes Animation Studio lighting spilling into the Streets main menu. The key and fill lights and fixed exposure are now confined to the Studio preview stage.",
   "requiredGameVersion": ""
 }
