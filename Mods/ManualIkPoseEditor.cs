@@ -793,11 +793,13 @@ namespace rowemod.Mods
         {
             LiveFootDiagnostics.BeforeHumanIk(__instance);
             ManualIkPoseEditor.BeforeAnimatorIk(__instance);
+            StudioRuntimePlayer.BeginAnimatorContacts(__instance);
         }
 
         private static void Postfix(HumanIK __instance)
         {
             ManualIkPoseEditor.AfterAnimatorIk(__instance);
+            StudioRuntimePlayer.ApplyAnimatorContacts(__instance);
             LiveFootDiagnostics.AfterHumanIk(__instance);
         }
     }

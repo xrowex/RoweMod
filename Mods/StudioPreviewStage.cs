@@ -24,6 +24,7 @@ namespace rowemod.Mods
         private readonly List<SkinnedMeshRenderer> skins = new();
         private readonly Transform[] contactTargets = new Transform[4];
         private readonly Dictionary<(int limb, int id), Transform> bikeContacts = new();
+        private readonly Dictionary<Transform, (Transform pivot, Quaternion basis, float offset)> wristRollers = new();
         internal readonly float[] ContactWeights = new float[4];
         internal readonly float[] ContactGaps = new float[4];
         private Scene scene;
@@ -79,9 +80,12 @@ namespace rowemod.Mods
             for (int i = 0; i < 4; i++)
             {
                 var original = sourceBikeRoot.Find(StudioContacts.BikeTargets[i]);
-                var parent = Bike.transform.Find(StudioTargets.BikePaths[i < 2 ? 1 : i == 2 ? 3 : 4]);
+                var parent = StudioContacts.BikeJoint(Bike, i, 0);
                 if (original != null && parent != null && bikeMap.TryGetValue(original.GetInstanceID(), out var target))
-                { bikeContacts[(i, 0)] = target; target.SetParent(parent, true); }
+                {
+                    BindContact(target, parent, original.GetComponent<IKTarget>());
+                    bikeContacts[(i, 0)] = target;
+                }
             }
             // Streets also animates target IDs: hands can move to the seat and
             // feet to the rear tire, front pegs or front tire. Keep those goals
@@ -92,8 +96,9 @@ namespace rowemod.Mods
                 int limb = original.GoalType switch { AvatarIKGoal.LeftHand => 0, AvatarIKGoal.RightHand => 1, AvatarIKGoal.LeftFoot => 2, AvatarIKGoal.RightFoot => 3, _ => -1 };
                 if (limb < 0 || !bikeMap.TryGetValue(original.transform.GetInstanceID(), out var target)) continue;
                 var parent = Bike.transform.Find(StudioTargets.BikePaths[limb >= 2 && original.TargetID >= 2 ? 1 : 0]);
-                if (parent == null || bikeContacts.ContainsKey((limb, original.TargetID))) continue;
-                target.SetParent(parent, true); bikeContacts[(limb, original.TargetID)] = target;
+                if (!original.gameObject.activeInHierarchy || parent == null || bikeContacts.ContainsKey((limb, original.TargetID))) continue;
+                BindContact(target, parent, original);
+                bikeContacts[(limb, original.TargetID)] = target;
             }
             foreach (Transform node in root.GetComponentsInChildren<Transform>(true)) rest.Add((node, node.localPosition, node.localRotation));
 
@@ -125,6 +130,39 @@ namespace rowemod.Mods
             Resize(1100, 800); Orbit();
             Log.Msg($"[AnimationStudio] Source rider={sourceRider.name} active={sourceRider.gameObject.activeInHierarchy}; bike={sourceBikeRoot.name} active={sourceBikeRoot.gameObject.activeInHierarchy}; bike renderers={sourceBikeRoot.GetComponentsInChildren<Renderer>(true).Length}.");
             Log.Msg($"[AnimationStudio] Visual-only stage ready: {skins.Count} skinned renderers; clothing bones rebound={riderBinding.Rebound}, helpers reparented={riderBinding.Reparented}, helpers added={riderBinding.AddedHelpers}; no gameplay or network components cloned.");
+        }
+        private void BindContact(Transform target, Transform bikeJoint, IKTarget native)
+        {
+            if (native == null || !native._hasWristRollParent)
+            {
+                target.SetParent(bikeJoint, true);
+                return;
+            }
+
+            // Keep the target under its roller. Use the grip's unrolled basis
+            // when carrying the roller along with the animated bike joint.
+            var pivot = target.parent;
+            pivot.localRotation = Quaternion.identity;
+            pivot.SetParent(bikeJoint, true);
+            float offset = native.WristRollForwardOffset;
+            wristRollers[target] = (pivot, pivot.localRotation,
+                (native._isLeftWrist ? 180f + offset : -offset) + native.ExtraWristRoll);
+        }
+
+        private void RollWrist(int limb, Transform target)
+        {
+            if (!wristRollers.TryGetValue(target, out var roller)) return;
+            var elbow = Rider.GetBoneTransform(StudioContacts.End[limb])?.parent;
+            if (elbow == null) return;
+
+            // UnityIKLimb projects the elbow onto the plane perpendicular to
+            // the unrolled grip axis before turning the roller about local Z.
+            var pivot = roller.pivot;
+            pivot.localRotation = roller.basis;
+            Vector3 axis = pivot.forward;
+            Vector3 forearm = Vector3.ProjectOnPlane(elbow.position - pivot.position, axis);
+            float roll = Vector3.SignedAngle(forearm, -pivot.right, -axis) + roller.offset;
+            pivot.localRotation = roller.basis * Quaternion.AngleAxis(roll, Vector3.forward);
         }
         private void AddPreviewLight(string name, Vector3 rotation, float luxAtCenter, Color color)
         {
@@ -272,32 +310,45 @@ namespace rowemod.Mods
             }
             return clip;
         }
-        internal void Sample(StudioSource source, StudioVariation variation, int phase, float time, string draftTarget, StudioPose? draft)
+        private void SampleClips(StudioSource source, int phase, float time)
         {
-            if (source == null || root == null) return;
             foreach (var pose in rest) if (pose.node != null) { pose.node.localPosition = pose.position; pose.node.localRotation = pose.rotation; }
             var riderClip = ClipCopy(source.Clip(phase, false)); var bikeClip = ClipCopy(source.Clip(phase, true));
             if (riderClip != null) { var state = riderPlayer.Play(riderClip); state.Speed = 0; state.Time = time * riderClip.length; riderPlayer.Evaluate(0); }
             // Sample Generic Joints/Controls curves directly on a private clip
             // copy so arbitrary scrubbing evaluates the complete hierarchy.
             if (bikeClip != null) bikeClip.SampleAnimation(Bike.gameObject, time * bikeClip.length);
+        }
+        internal void Sample(StudioSource source, StudioVariation variation, int phase, float time, string draftTarget, StudioPose? draft)
+        {
+            SamplePose(source, variation, phase, time, draftTarget, draft, true);
+        }
+
+        private void SamplePose(StudioSource source, StudioVariation variation, int phase, float time, string draftTarget,
+            StudioPose? draft, bool solveContacts)
+        {
+            if (source == null || root == null) return;
+            SampleClips(source, phase, time);
             editBases.Clear();
             var goals = new (Transform joint, Vector3 local, Quaternion rotation)[4];
             for (int i = 0; i < 4; i++)
             {
                 var control = Rider.transform.Find(StudioTargets.ContactPaths[i]);
-                int id = Mathf.RoundToInt(Rider.transform.Find(StudioTargets.ContactIdPaths[i])?.localPosition.y ?? 0);
+                int id = SampledContactTarget(i);
                 var contactKey = variation?.ContactKeyAt(phase, i, time);
                 bool anchored = contactKey?.Mode == StudioContactMode.Locked && contactKey.HasAnchor;
                 var joint = StudioContacts.BikeJoint(Bike, i, anchored ? contactKey.TargetId : id);
                 var end = Rider.GetBoneTransform(StudioContacts.End[i]);
                 ContactWeights[i] = StudioContacts.Weight(variation, phase, i, time, control?.localPosition.y ?? 0);
-                if (joint != null && end != null) goals[i] = (joint, joint.InverseTransformPoint(end.position), Quaternion.Inverse(joint.rotation) * end.rotation);
-                if (joint != null && anchored) goals[i] = (joint, new Vector3(contactKey.AnchorPosition.X, contactKey.AnchorPosition.Y, contactKey.AnchorPosition.Z),
-                    Quaternion.Euler(contactKey.AnchorRotation.X, contactKey.AnchorRotation.Y, contactKey.AnchorRotation.Z));
+                if (joint != null && anchored)
+                    goals[i] = (joint, new Vector3(contactKey.AnchorPosition.X, contactKey.AnchorPosition.Y, contactKey.AnchorPosition.Z),
+                        Quaternion.Euler(contactKey.AnchorRotation.X, contactKey.AnchorRotation.Y, contactKey.AnchorRotation.Z));
+                else if (ContactWeights[i] > .0001f && bikeContacts.TryGetValue((i, contactKey?.UseBikeTarget == true ? contactKey.TargetId : id), out var target))
+                    goals[i] = (target, Vector3.zero, StudioContacts.BoneRotationFromGoal(i, Quaternion.identity));
+                else if (joint != null && end != null)
+                    goals[i] = (joint, joint.InverseTransformPoint(end.position), Quaternion.Inverse(joint.rotation) * end.rotation);
             }
-            // Carry inherited hand/foot goals through the same bearing repair as
-            // their bike joints, before carrying them through authored offsets.
+            // Equip targets follow their physical joints through bearing repair and authored offsets.
             geometry?.ConstrainNativeBike();
             foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
             {
@@ -308,22 +359,147 @@ namespace rowemod.Mods
                 else { node.localRotation *= Quaternion.Euler(pose.Rotation.X, pose.Rotation.Y, pose.Rotation.Z);
                     node.localPosition += new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z); }
             }
+            var blend = variation?.BlendInto(phase);
+            if (blend != null)
+            {
+                float weight = blend.Weight(blend.FromPhase, time);
+                if (weight > 0f)
+                    foreach (var offset in blend.Offsets)
+                        StudioRuntimePlayer.ApplyOffset(Target(offset.Target), new StudioPose(offset.Rotation, offset.Position), weight,
+                            offset.Target.StartsWith("Bike:", StringComparison.Ordinal) ? geometry : null);
+            }
+            if (!solveContacts) return;
             for (int i = 0; i < 4; i++)
             {
-                var goal = goals[i]; if (goal.joint == null) continue;
+                var goal = goals[i]; if (goal.joint == null) { ContactGaps[i] = 0f; continue; }
+                RollWrist(i, goal.joint);
                 var position = goal.joint.TransformPoint(goal.local); var rotation = goal.joint.rotation * goal.rotation;
                 StudioContacts.Solve(Rider, i, position, rotation, ContactWeights[i], 1, false);
                 ContactGaps[i] = StudioContacts.Gap(Rider, i, position, rotation, false);
             }
             Orbit();
         }
+
+        internal StudioPhaseBlend BuildBlend(StudioSource source, StudioVariation variation, int fromPhase, int toPhase, float duration)
+        {
+            SamplePose(source, variation, fromPhase, 1f, null, null, false);
+            var outgoing = new List<(string target, Transform node, Vector3 position, Quaternion rotation)>();
+            foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
+            {
+                var node = Target(target);
+                if (node != null) outgoing.Add((target, node, node.localPosition, node.localRotation));
+            }
+
+            // Measure the correction against the incoming authored pose. Keep
+            // the original curves so the correction can be adjusted or removed.
+            SamplePose(source, variation, toPhase, 0f, null, null, false);
+            var blend = new StudioPhaseBlend { FromPhase = fromPhase, Phase = toPhase, Duration = duration };
+            foreach (var (target, node, position, rotation) in outgoing)
+            {
+                var bikeGeometry = target.StartsWith("Bike:", StringComparison.Ordinal) ? geometry : null;
+                var correction = RebasePose(node, position, rotation, bikeGeometry);
+                blend.Offsets.Add(new StudioBlendOffset { Target = target, Rotation = correction.Rotation, Position = correction.Position });
+            }
+            return blend;
+        }
+
+        private static StudioPose RebasePose(Transform node, Vector3 position, Quaternion rotation, StudioBikeGeometry bikeGeometry)
+        {
+            Quaternion delta = Quaternion.Inverse(node.localRotation) * rotation;
+            if (bikeGeometry != null)
+            {
+                Quaternion basis = bikeGeometry.ControlBasis(node);
+                Quaternion desiredWorld = node.parent.rotation * rotation;
+                delta = Quaternion.Inverse(basis) * desiredWorld * Quaternion.Inverse(node.rotation) * basis;
+                Vector3 bikeAngles = delta.eulerAngles;
+                bikeGeometry.Apply(node, new StudioPose(new StudioVector(bikeAngles.x, bikeAngles.y, bikeAngles.z), default), 1f);
+            }
+            Vector3 angles = delta.eulerAngles;
+            Vector3 offset = position - node.localPosition;
+            if (bikeGeometry == null)
+            {
+                node.localPosition = position;
+                node.localRotation = rotation;
+            }
+            else
+            {
+                // Apply translation through the bearing so frame followers move too.
+                bikeGeometry.Apply(node, new StudioPose(default, new StudioVector(offset.x, offset.y, offset.z)), 1f);
+            }
+            return new StudioPose(new StudioVector(Mathf.DeltaAngle(0f, angles.x), Mathf.DeltaAngle(0f, angles.y),
+                Mathf.DeltaAngle(0f, angles.z)), new StudioVector(offset.x, offset.y, offset.z));
+        }
+        internal void CopyEndToExit(StudioSource source, StudioVariation variation, int fromPhase, float nextExitFrame)
+        {
+            const int exit = 3;
+            Sample(source, variation, fromPhase, 1f, null, null);
+            var frame = new List<(string target, Transform node, Vector3 position, Quaternion rotation)>();
+            foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
+            {
+                var node = Target(target);
+                if (node != null) frame.Add((target, node, node.localPosition, node.localRotation));
+            }
+
+            for (int limb = 0; limb < StudioTargets.Effectors.Length; limb++)
+            {
+                var previous = variation.ContactKeyAt(exit, limb, 0f);
+                if (!variation.Contacts.Any(key => key.Phase == exit && key.Limb == limb && key.Time > .00001f && key.Time <= nextExitFrame + .00001f))
+                {
+                    variation.SetContact(exit, limb, nextExitFrame, previous?.Mode ?? StudioContactMode.Auto);
+                    var restore = variation.ContactKeyAt(exit, limb, nextExitFrame);
+                    restore.UseBikeTarget = previous?.UseBikeTarget == true;
+                    restore.TargetId = previous?.TargetId ?? 0;
+                    if (previous?.HasAnchor == true)
+                    {
+                        restore.HasAnchor = true;
+                        restore.TargetId = previous.TargetId;
+                        restore.AnchorPosition = previous.AnchorPosition;
+                        restore.AnchorRotation = previous.AnchorRotation;
+                    }
+                }
+                bool planted = ContactWeights[limb] >= .95f;
+                variation.SetContact(exit, limb, 0f, planted ? StudioContactMode.Locked : StudioContactMode.Free);
+                if (planted)
+                {
+                    var sourceContact = variation.ContactKeyAt(fromPhase, limb, 1f);
+                    var copied = variation.ContactKeyAt(exit, limb, 0f);
+                    copied.UseBikeTarget = sourceContact?.UseBikeTarget == true;
+                    copied.TargetId = sourceContact != null && (sourceContact.HasAnchor || sourceContact.UseBikeTarget) ?
+                        sourceContact.TargetId : SampledContactTarget(limb);
+                }
+            }
+
+            SampleClips(source, exit, 0f);
+            geometry?.ConstrainNativeBike();
+            // Rebase the sampled local pose against Exit's own first frame.
+            // Bike keys rotate around the physical bearing in its control basis.
+            foreach (var (target, node, position, rotation) in frame)
+            {
+                var bikeGeometry = target.StartsWith("Bike:", StringComparison.Ordinal) ? geometry : null;
+                variation.SetKey(exit, target, 0f, RebasePose(node, position, rotation, bikeGeometry));
+            }
+
+            // Measure the planted contacts against the rebased frame. Unkeyed parent
+            // transforms can differ between clips even when the copied local pose matches.
+            for (int limb = 0; limb < StudioTargets.Effectors.Length; limb++)
+            {
+                var key = variation.ContactKeyAt(exit, limb, 0f);
+                if (key.Mode == StudioContactMode.Locked) CaptureContact(key, key.TargetId);
+            }
+        }
         internal Transform Target(string name) => StudioRuntimePlayer.Target(Rider, Bike, name);
+        internal bool HasContactTarget(int limb, int id) => bikeContacts.ContainsKey((limb, id));
+        internal int SampledContactTarget(int limb) =>
+            StudioContacts.TargetIDFromControl(Rider.transform.Find(StudioTargets.ContactIdPaths[limb])?.localPosition.y ?? 0);
         internal Vector3 ControlPivot(string target) => geometry != null && target.StartsWith("Bike:", StringComparison.Ordinal) ? geometry.ControlPivot(Target(target)) : Target(target)?.position ?? origin;
         internal Quaternion ControlRotation(string target, StudioPose offset) =>
             (editBases.TryGetValue(target, out var basis) ? basis : Target(target)?.rotation ?? Quaternion.identity) * Quaternion.Euler(offset.Rotation.X, offset.Rotation.Y, offset.Rotation.Z);
         internal void CaptureContact(StudioContactKey key)
         {
-            int id = Mathf.RoundToInt(Rider.transform.Find(StudioTargets.ContactIdPaths[key.Limb])?.localPosition.y ?? 0);
+            CaptureContact(key, SampledContactTarget(key.Limb));
+        }
+        private void CaptureContact(StudioContactKey key, int id)
+        {
             var joint = StudioContacts.BikeJoint(Bike, key.Limb, id); var end = Rider.GetBoneTransform(StudioContacts.End[key.Limb]);
             if (joint == null || end == null) return;
             var p = joint.InverseTransformPoint(end.position); var r = (Quaternion.Inverse(joint.rotation) * end.rotation).eulerAngles;

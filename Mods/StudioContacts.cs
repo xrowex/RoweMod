@@ -29,6 +29,24 @@ namespace rowemod.Mods
             else index = targetId >= 2 ? 1 : 0; // Front targets steer; rear targets follow the frame.
             return bike?.transform.Find(StudioTargets.BikePaths[index]);
         }
+        internal static IKTarget NativeTarget(UnityIKLimb limb, int id)
+        {
+            if (limb?.Targets == null) return null;
+            foreach (var target in limb.Targets)
+                if (target != null && target.TargetID == id && target.gameObject.activeInHierarchy)
+                    return target;
+            return null;
+        }
+        internal static int TargetIDFromControl(float y) => Mathf.Max(0, Mathf.FloorToInt((y + .05f) * 10f));
+        internal static float TargetControlFromIndex(int index) => index * .1f;
+        internal static Quaternion GoalFromBoneRotation(int limb, Quaternion rotation) =>
+            limb < 2 ? rotation * Quaternion.AngleAxis(limb == 0 ? -90f : 90f, Vector3.up) : rotation;
+        internal static Quaternion BoneRotationFromGoal(int limb, Quaternion rotation)
+        {
+            // Streets submits palm-space IK rotations. The BMX wrist bones are
+            // quarter-turned around that goal's Y axis, in opposite directions.
+            return limb < 2 ? rotation * Quaternion.AngleAxis(limb == 0 ? 90f : -90f, Vector3.up) : rotation;
+        }
         internal static float Weight(StudioVariation variation, int phase, int limb, float time, float native) =>
             variation?.Contact(phase, limb, time) switch { StudioContactMode.Locked => 1, StudioContactMode.Free => 0, _ => Mathf.Clamp01(native) };
         internal static float Gap(Animator rider, int limb, Vector3 goal, Quaternion rotation, bool soleGoal = true)
@@ -135,10 +153,11 @@ namespace rowemod.Mods
             node == null || node == frame ? Pivot : node.position;
         internal Quaternion ControlBasis(Transform node) => node != null && byJoint.TryGetValue(node.GetInstanceID(), out var bearing) ? bearing.Basis :
             node == null || node == frame ? Basis : node.rotation;
+        internal Transform Follower(Transform node) => node == frame && steering.Child.parent != frame ? steering.Child : null;
         internal void Apply(Transform node, StudioPose pose, float weight)
         {
             StudioBikeBearing.Apply(node, ControlPivot(node), ControlBasis(node), new Vector3(pose.Rotation.X, pose.Rotation.Y, pose.Rotation.Z),
-                new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z), weight);
+                new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z), weight, Follower(node));
         }
     }
 }

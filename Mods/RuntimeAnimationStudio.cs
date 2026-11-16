@@ -23,6 +23,10 @@ namespace rowemod.Mods
         internal static string SelectedTarget = "Hips";
         internal static string Status = "Choose a trick to make a variation.";
         private static bool playing, dirty, autoKey = true, draftChanged, gesture, wasMenuOpen;
+        private static bool fullTrick;
+        private static StudioSequence sequence;
+        private static float blendSeconds = .12f;
+        private static int blendSliderPhase = -1;
         private static StudioPose draft;
         private static float previewSpeed = 1;
         private static readonly Stack<string> undo = new(), redo = new();
@@ -63,7 +67,7 @@ namespace rowemod.Mods
                     { disabledEvents.Add(events); events.enabled = false; }
                 IsOpen = true;
                 if (Working == null || Source == null || !Sources.Any(s => s.Key == Working.TrickKey)) SelectSource(Sources[0].Key);
-                else Source = Sources.First(s => s.Key == Working.TrickKey);
+                else { Source = Sources.First(s => s.Key == Working.TrickKey); RefreshSequence(); }
                 Status = "Edit a copy, save a variation, then Apply to use it in game.";
                 Log.Msg($"[AnimationStudio] Opened with {Sources.Count} game tricks and {Library.Variations.Count} saved variations.");
             }
@@ -84,7 +88,7 @@ namespace rowemod.Mods
             disabledEvents.Clear();
             StudioRuntimePlayer.Restore();
             if (!wasMenuOpen) Main.CloseRoweModMenu();
-            Working = null; Source = null; dirty = draftChanged = gesture = false; undo.Clear(); redo.Clear();
+            Working = null; Source = null; sequence = null; dirty = draftChanged = gesture = false; undo.Clear(); redo.Clear();
         }
         internal static void OnSceneChanged(string scene)
         {
@@ -94,6 +98,7 @@ namespace rowemod.Mods
         internal static void SelectSource(string key)
         {
             Source = Sources.FirstOrDefault(s => s.Key == key); if (Source == null) return;
+            RefreshSequence();
             Working = new StudioVariation { Name = Source.Name + " - My style", TrickKey = Source.Key };
             for (int p = 0; p < 4; p++) { Working.RiderClips[p] = Source.Clip(p, false)?.name; Working.BikeClips[p] = Source.Clip(p, true)?.name; }
             Phase = 0; Time = .5f; dirty = draftChanged = false; undo.Clear(); redo.Clear(); playing = false; SyncDraft();
@@ -102,15 +107,26 @@ namespace rowemod.Mods
         {
             Source = Sources.FirstOrDefault(s => s.Key == variation.TrickKey);
             if (Source == null) { Status = "This variation's base trick is not loaded."; return; }
+            RefreshSequence();
             Working = variation.Copy(); dirty = draftChanged = false; Phase = 0; Time = .5f;
             playing = false;
             undo.Clear(); redo.Clear(); SyncDraft();
             if (Enumerable.Range(0, 4).Any(p => Working.RiderClips[p] != Source.Clip(p, false)?.name || Working.BikeClips[p] != Source.Clip(p, true)?.name))
                 Status = "This saved variation used different base clips. Review the stock BMX preview; Save rebases a backed-up copy.";
+            else if (Library.Active(variation.TrickKey) is { } applied && applied.Id == variation.Id &&
+                JsonConvert.SerializeObject(applied) != JsonConvert.SerializeObject(variation))
+                Status = "The game is using an older copy of this variation. Use Apply to game to ride these saved edits.";
+            else Status = "Opened " + variation.Name + ".";
         }
         private static void SyncDraft() { draft = Working?.Evaluate(Phase, SelectedTarget, Time) ?? default; draftChanged = false; SyncFields(); }
         private static float Duration => Source?.Clip(Phase, false)?.length ?? 1;
         private static float FrameRate => Mathf.Max(1, Source?.Clip(Phase, false)?.frameRate ?? 30);
+        private static void RefreshSequence()
+        {
+            sequence = new StudioSequence(Enumerable.Range(0, 4).Select(phase => Source.Clip(phase, false)?.length ?? 0f).ToArray());
+            blendSliderPhase = -1;
+        }
+        private static float FullTime => sequence.Start(Phase) + Time * sequence.Length(Phase);
         private static float Snap(float normalized) => Mathf.Clamp01(Mathf.Round(normalized * Duration * FrameRate) / Mathf.Max(1, Duration * FrameRate));
         private static void JumpKey(int direction)
         {
@@ -119,7 +135,15 @@ namespace rowemod.Mods
             if (!next.HasValue) { Status = "No " + (direction < 0 ? "previous" : "next") + " key in this phase."; return; }
             playing = false; Time = next.Value; SyncDraft();
         }
-        private static void StepFrame(int direction) { playing = false; Seek(Time + direction / Mathf.Max(1, Duration * FrameRate)); }
+        private static void StepFrame(int direction)
+        {
+            playing = false;
+            if (!fullTrick) { Seek(Time + direction / Mathf.Max(1, Duration * FrameRate)); return; }
+            int previous = sequence.Previous(Phase);
+            float rate = direction < 0 && Time <= .00001f && previous >= 0
+                ? Mathf.Max(1f, Source.Clip(previous, false).frameRate) : FrameRate;
+            SeekFull(FullTime + direction / rate, true);
+        }
         private static void SetContact(int limb, StudioContactMode mode)
         {
             if (Working == null || draftChanged) { Status = "Set a pose key before changing contact."; return; }
@@ -127,10 +151,41 @@ namespace rowemod.Mods
             if (mode == StudioContactMode.Locked) Stage.CaptureContact(Working.ContactKeyAt(Phase, limb, Time));
             Status = StudioTargets.Effectors[limb] + ": " + (mode == StudioContactMode.Auto ? "Inherited" : mode.ToString()) + " keyed. Inherited follows the game's animated contact.";
         }
+        private static void SetBikeContactTarget(int limb, int id)
+        {
+            if (Working == null || draftChanged || !Stage.HasContactTarget(limb, id)) return;
+            Remember();
+            Working.SetContact(Phase, limb, Time, StudioContactMode.Locked);
+            var key = Working.ContactKeyAt(Phase, limb, Time);
+            key.UseBikeTarget = true;
+            key.TargetId = id;
+            dirty = true;
+            playing = false;
+            Status = NiceTarget(StudioTargets.Effectors[limb]) + " locked to " + StudioTargets.ContactTargetName(limb, id) + " at the playhead.";
+        }
         private static void Seek(float normalized)
         {
             if (draftChanged) { Status = "Set a key or discard the unkeyed pose before scrubbing."; return; }
             Time = Snap(normalized); SyncDraft();
+        }
+        private static void SeekFull(float seconds, bool snap)
+        {
+            if (draftChanged) { Status = "Set a key or discard the unkeyed pose before scrubbing."; return; }
+            (Phase, Time) = sequence.At(seconds);
+            if (snap) Time = Snap(Time);
+            SyncDraft();
+        }
+        private static void SeekEnd(bool end)
+        {
+            playing = false;
+            if (fullTrick) SeekFull(end ? sequence.Total : 0f, false);
+            else Seek(end ? 1f : 0f);
+        }
+        private static void TogglePreview()
+        {
+            if (draftChanged) { Status = "Set a key or discard the unkeyed pose first."; return; }
+            if (!playing && (fullTrick ? FullTime >= sequence.Total : Time >= 1f)) SeekEnd(false);
+            playing = !playing;
         }
         private static void Remember()
         {
@@ -143,7 +198,7 @@ namespace rowemod.Mods
             var from = forward ? redo : undo; var to = forward ? undo : redo;
             if (from.Count == 0) return;
             to.Push(JsonConvert.SerializeObject(Working)); Working = JsonConvert.DeserializeObject<StudioVariation>(from.Pop());
-            dirty = true; SyncDraft();
+            dirty = true; blendSliderPhase = -1; SyncDraft();
         }
         private static void ChangePose(StudioPose value)
         {
@@ -165,6 +220,73 @@ namespace rowemod.Mods
             Remember(); Working.SetKey(Phase, SelectedTarget, Time, draft); draftChanged = false; dirty = true;
             Status = "Pose keyed at " + (Time * Duration).ToString("0.00") + " s.";
         }
+        private static bool CanCopyEndToExit => Working != null && Stage != null && Phase < 3 &&
+            !draftChanged && !confirmDiscard && Source?.Clip(Phase, false) != null && Source.Clip(3, false) != null;
+
+        private static void CopyEndToExit()
+        {
+            if (!CanCopyEndToExit) return;
+            var exitClip = Source.Clip(3, false);
+            float nextFrame = 1f / Mathf.Max(1f, exitClip.length * exitClip.frameRate);
+            var copy = Working.Copy();
+            bool replacesBlend = copy.BlendInto(3) != null;
+            copy.SetBlend(3, null);
+            playing = false;
+            try
+            {
+                Stage.CopyEndToExit(Source, copy, Phase, nextFrame);
+                string error = copy.Validate();
+                if (error != null) { Status = "Could not copy pose. " + error; return; }
+                Remember();
+                Working = copy;
+                string phaseName = Phases[Phase];
+                Phase = 3;
+                Time = 0f;
+                dirty = true;
+                SyncDraft();
+                Status = "Copied the last " + phaseName + " frame to the start of Exit." + (replacesBlend ? " Replaced the Exit blend." : "");
+            }
+            catch (Exception ex)
+            {
+                Status = "Could not copy pose. " + ex.Message;
+                Log.Warning("[AnimationStudio] " + Status);
+            }
+        }
+
+        private static bool CanBlendIntoPhase => Working != null && Stage != null && !draftChanged && !confirmDiscard &&
+            sequence != null && sequence.Length(Phase) > 0f && sequence.Previous(Phase) >= 0;
+
+        private static void SetPhaseBlend(bool remove)
+        {
+            if (!CanBlendIntoPhase) return;
+            playing = false;
+            var copy = Working.Copy();
+            copy.SetBlend(Phase, null);
+            int previous = sequence.Previous(Phase);
+            try
+            {
+                if (!remove)
+                {
+                    float duration = Mathf.Min(blendSeconds, Duration);
+                    copy.SetBlend(Phase, Stage.BuildBlend(Source, copy, previous, Phase, duration / Duration));
+                    string error = copy.Validate();
+                    if (error != null) { Status = error; return; }
+                    Status = $"Blended {Phases[previous]} into {Phases[Phase]} over {duration:0.00} s.";
+                }
+                else Status = $"Removed the blend into {Phases[Phase]}.";
+                Remember();
+                Working = copy;
+                Time = 0f;
+                dirty = true;
+                SyncDraft();
+            }
+            catch (Exception ex)
+            {
+                Status = "Could not blend phases. " + ex.Message;
+                Log.Warning("[AnimationStudio] " + Status);
+            }
+        }
+
         private static void DeleteKey()
         {
             if (Working == null) return;
@@ -215,21 +337,32 @@ namespace rowemod.Mods
             ControllerMenuInput.SetGameplayInputBlocked(true);
             if (playing && !draftChanged)
             {
-                Time += UnityEngine.Time.unscaledDeltaTime * previewSpeed / Mathf.Max(.02f, Duration);
-                if (Time > 1) Time = 0; SyncDraft();
+                float elapsed = UnityEngine.Time.unscaledDeltaTime * previewSpeed;
+                if (fullTrick)
+                {
+                    float next = FullTime + elapsed;
+                    SeekFull(next, false);
+                    if (next >= sequence.Total) playing = false;
+                }
+                else
+                {
+                    Time += elapsed / Mathf.Max(.02f, Duration);
+                    if (Time > 1) Time = 0;
+                    SyncDraft();
+                }
             }
             var keyboard = Keyboard.current; if (keyboard == null) return;
             if (keyboard.escapeKey.wasPressedThisFrame) RequestClose();
             bool ctrl = keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed;
             if (!confirmDiscard && ctrl && keyboard.sKey.wasPressedThisFrame) Save();
-            if (textInputFocused || confirmDiscard) return;
-            if (keyboard.spaceKey.wasPressedThisFrame) playing = !playing;
+            if (textInputFocused || confirmDiscard || Source == null) return;
+            if (keyboard.spaceKey.wasPressedThisFrame && Source != null) TogglePreview();
             if (keyboard.kKey.wasPressedThisFrame) KeyPose();
             if (keyboard.deleteKey.wasPressedThisFrame) DeleteKey();
             if (keyboard.leftArrowKey.wasPressedThisFrame) { if (ctrl) JumpKey(-1); else StepFrame(-1); }
             if (keyboard.rightArrowKey.wasPressedThisFrame) { if (ctrl) JumpKey(1); else StepFrame(1); }
-            if (keyboard.homeKey.wasPressedThisFrame) { playing = false; Seek(0); }
-            if (keyboard.endKey.wasPressedThisFrame) { playing = false; Seek(1); }
+            if (keyboard.homeKey.wasPressedThisFrame && Source != null) SeekEnd(false);
+            if (keyboard.endKey.wasPressedThisFrame && Source != null) SeekEnd(true);
             if (ctrl && keyboard.zKey.wasPressedThisFrame) Undo(keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed);
         }
         internal static void LateUpdate()

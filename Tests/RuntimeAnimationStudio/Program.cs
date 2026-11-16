@@ -18,6 +18,31 @@ internal static class Program
         Check(Near(StudioGizmoMath.AngleDelta(179, -179), 2) && Near(StudioGizmoMath.AngleDelta(-179, 179), -2), "ring dragging crosses angle wrap without jumping backwards");
         Check(Near(StudioGizmoMath.AngleDelta(0, 90) + StudioGizmoMath.AngleDelta(90, 180) + StudioGizmoMath.AngleDelta(180, 270) + StudioGizmoMath.AngleDelta(270, 0), 360), "ring drag increments retain a complete turn");
         var variation = New();
+        var sequence = new StudioSequence(new[] { .8f, 0f, .2f, .5f });
+        Check(Near(sequence.Total, 1.5f) && Near(sequence.Start(3), 1f), "full trick length follows the actual phase durations");
+        Check(sequence.At(0f) == (0, 0f) && sequence.At(.8f) == (2, 0f) && sequence.Previous(2) == 0,
+            "playback crosses a seam and skips the unavailable Loop");
+        Check(sequence.At(1f) == (3, 0f) && sequence.At(2f) == (3, 1f) && Near(sequence.At(.9f).time, .5f),
+            "the full timeline scrubs into Tweak and clamps at the end of Exit");
+        var loopSequence = new StudioSequence(new[] { .5f, .5f, 0f, .5f });
+        Check(loopSequence.At(.5f) == (1, 0f) && loopSequence.At(1f) == (3, 0f) && loopSequence.Previous(3) == 1,
+            "available Loop plays once and leads directly to Exit without Tweak");
+        var blend = new StudioPhaseBlend { FromPhase = 2, Phase = 3, Duration = .25f };
+        blend.Offsets.Add(new StudioBlendOffset { Target = "Hips", Rotation = new StudioVector(30f, 0, 0) });
+        Check(blend.Weight(2, 0f) == 1f && Near(blend.Weight(2, .125f), .5f) && blend.Weight(2, .25f) == 0f,
+            "blend correction eases from its full strength to the original destination pose");
+        Check(blend.Weight(0, 0f) == 0f && blend.Weight(2, 1.1f) == 0f && blend.Weight(2, float.NaN) == 0f,
+            "unmatched transitions, subsequent Loop laps and invalid time skip the blend");
+        var blended = New("Blended style");
+        blended.TrickKey = "Blended_Trick";
+        blended.SetKey(3, "Hips", 0f, new StudioPose(new StudioVector(5f, 0, 0), default));
+        blended.SetBlend(3, blend);
+        Check(blended.Validate() == null && blended.Evaluate(3, "Hips", 0f).Rotation.X == 5f, "the blend preserves existing authored keys");
+        var blendCopy = blended.Copy();
+        blendCopy.BlendInto(3).Duration = float.NaN;
+        Check(blendCopy.Validate() != null && blended.BlendInto(3).Duration == .25f, "blend copies are independent and bad durations are rejected");
+        blendCopy.SetBlend(3, null);
+        Check(blendCopy.BlendInto(3) == null && blendCopy.Evaluate(3, "Hips", 0f).Rotation.X == 5f, "removing a blend restores the original key curve");
         Check(variation.Contact(0, 0, .5f) == StudioContactMode.Auto, "old variations retain the game's original contacts");
         variation.SetContact(0, 0, .25f, StudioContactMode.Locked);
         variation.SetContact(0, 0, .75f, StudioContactMode.Free);
@@ -26,6 +51,19 @@ internal static class Program
         Check(variation.Contact(0, 0, .1f) == StudioContactMode.Auto && variation.Contact(0, 0, .5f) == StudioContactMode.Locked, "contact changes hold from their key without changing earlier motion");
         Check(variation.Contact(0, 0, .8f) == StudioContactMode.Free && variation.Contact(0, 0, 1) == StudioContactMode.Auto, "release and return to native contact are independent keys");
         Check(variation.Contact(1, 0, .5f) == StudioContactMode.Auto && variation.Contact(0, 1, .5f) == StudioContactMode.Auto, "contacts are isolated by limb and phase");
+        var targetVariation = variation.Copy();
+        targetVariation.SetContact(2, 1, .3f, StudioContactMode.Locked);
+        var target = targetVariation.ContactKeyAt(2, 1, .3f);
+        target.UseBikeTarget = true;
+        target.TargetId = 1;
+        var copiedTarget = targetVariation.Copy().ContactKeyAt(2, 1, .7f);
+        Check(copiedTarget.UseBikeTarget && copiedTarget.TargetId == 1 && targetVariation.Validate() == null,
+            "a locked seat target survives serialization and evaluation");
+        Check(targetVariation.ContactKeyAt(2, 1, .2f) == null, "a bike target starts at its keyed time");
+        target.TargetId = 3;
+        Check(targetVariation.Validate() != null, "a hand cannot select a foot-only target");
+        Check(StudioTargets.ContactTargetName(2, 0) == "Left pedal" && StudioTargets.ContactTargetName(3, 0) == "Right pedal",
+            "a pedal target is resolved for its own foot");
         Check(variation.AdjacentKey(0, .25f, 1) == .75f && variation.AdjacentKey(0, .75f, -1) == .25f, "navigation includes exact contact keys in both directions");
         Check(variation.AdjacentKey(0, 1, 1) == null && variation.AdjacentKey(0, 0, -1) == null, "navigation at boundaries does not wrap unexpectedly");
         Check(variation.AdjacentKey(0, .5f, 1, "LeftHand") == .75f && variation.AdjacentKey(0, .5f, 1, "RightHand") == null, "selected-joint navigation filters contact tracks");
@@ -91,6 +129,12 @@ internal static class Program
         try
         {
             var library = new StudioLibrary(root); library.Save(variation);
+            library.Save(blended); library.Assign(blended);
+            var blendReloaded = new StudioLibrary(root); blendReloaded.Load();
+            Check(blendReloaded.Active(blended.TrickKey).BlendInto(3).Offsets.Single().Rotation.X == 30f,
+                "the blend survives saving and applying a variation");
+            library.Reset(blended.TrickKey); library.Variations.RemoveAll(v => v.Id == blended.Id);
+            File.Delete(Path.Combine(root, blended.Id + ".variation.json"));
             var contactSaved = New("Contact style"); contactSaved.TrickKey = "Contact_Trick"; contactSaved.SetContact(2, 3, .5f, StudioContactMode.Free);
             library.Save(contactSaved); library.Assign(contactSaved);
             var contactReloaded = new StudioLibrary(root); contactReloaded.Load();

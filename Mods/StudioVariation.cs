@@ -15,6 +15,8 @@ namespace rowemod.Mods
         public bool MirrorEdits = true;
         public List<StudioPoseKey> Keys = new();
         public List<StudioContactKey> Contacts = new();
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public List<StudioPhaseBlend> Blends;
 
         public string Validate()
         {
@@ -35,10 +37,29 @@ namespace rowemod.Mods
             {
                 if (key == null || key.Phase < 0 || key.Phase > 3 || key.Limb < 0 || key.Limb > 3 ||
                     !Finite(key.Time) || key.Time < 0 || key.Time > 1 || !Enum.IsDefined(typeof(StudioContactMode), key.Mode) ||
-                    (key.HasAnchor && (key.TargetId < 0 || key.TargetId > 3 || !key.AnchorPosition.Valid(4) || !key.AnchorRotation.Valid(1440)))) return "Invalid contact key.";
+                    (key.HasAnchor && (key.TargetId < 0 || key.TargetId > 3 || !key.AnchorPosition.Valid(4) || !key.AnchorRotation.Valid(1440))) ||
+                    (key.UseBikeTarget && (key.Mode != StudioContactMode.Locked ||
+                        StudioTargets.ContactTargetName(key.Limb, key.TargetId) == null))) return "Invalid contact key.";
                 if (!seen.Add("contact|" + key.Phase + "|" + key.Limb + "|" + key.Time.ToString("R", System.Globalization.CultureInfo.InvariantCulture))) return "Two contact keys occupy the same frame.";
             }
+            if (Blends != null)
+                foreach (var blend in Blends)
+                {
+                    if (blend == null || blend.FromPhase < 0 || blend.Phase > 3 || blend.FromPhase >= blend.Phase ||
+                        !Finite(blend.Duration) || blend.Duration <= 0 || blend.Duration > 1 || blend.Offsets == null ||
+                        !seen.Add("blend|" + blend.Phase)) return "Invalid phase blend.";
+                    foreach (var offset in blend.Offsets)
+                        if (offset == null || !StudioTargets.Contains(offset.Target) || !offset.Rotation.Valid(180) || !offset.Position.Valid(2) ||
+                            !seen.Add("blend|" + blend.Phase + "|" + offset.Target)) return "Invalid phase blend offset.";
+                }
             return null;
+        }
+        internal StudioPhaseBlend BlendInto(int phase) => Blends?.Find(blend => blend.Phase == phase);
+        internal void SetBlend(int phase, StudioPhaseBlend blend)
+        {
+            Blends?.RemoveAll(existing => existing.Phase == phase);
+            if (blend != null) (Blends ??= new List<StudioPhaseBlend>()).Add(blend);
+            if (Blends?.Count == 0) Blends = null;
         }
         public StudioContactMode Contact(int phase, int limb, float time)
             => ContactKeyAt(phase, limb, time)?.Mode ?? StudioContactMode.Auto;
@@ -121,6 +142,58 @@ namespace rowemod.Mods
             key.Time = Math.Clamp(to, 0, 1); return true;
         }
     }
+    public sealed class StudioPhaseBlend
+    {
+        public int FromPhase, Phase;
+        public float Duration;
+        public List<StudioBlendOffset> Offsets = new();
+
+        internal float Weight(int fromPhase, float time)
+        {
+            if (fromPhase != FromPhase || !StudioVariation.Finite(time) || time >= Duration) return 0f;
+            float t = Math.Clamp(time / Duration, 0f, 1f);
+            return 1f - t * t * (3f - 2f * t);
+        }
+    }
+    public sealed class StudioBlendOffset
+    {
+        public string Target;
+        public StudioVector Rotation, Position;
+    }
+
+    internal sealed class StudioSequence
+    {
+        private readonly float[] durations, starts = new float[4];
+        internal float Total { get; }
+
+        internal StudioSequence(float[] durations)
+        {
+            this.durations = durations;
+            for (int i = 0; i < starts.Length; i++)
+            {
+                starts[i] = Total;
+                Total += durations[i];
+            }
+        }
+
+        internal float Start(int phase) => starts[phase];
+        internal float Length(int phase) => durations[phase];
+        internal int Previous(int phase)
+        {
+            for (int i = phase - 1; i >= 0; i--)
+                if (durations[i] > 0) return i;
+            return -1;
+        }
+
+        internal (int phase, float time) At(float seconds)
+        {
+            seconds = Math.Clamp(seconds, 0f, Total);
+            for (int i = 0; i < durations.Length; i++)
+                if (durations[i] > 0 && seconds < starts[i] + durations[i])
+                    return (i, (seconds - starts[i]) / durations[i]);
+            return (Previous(durations.Length), 1f);
+        }
+    }
     public sealed class StudioPoseKey
     {
         public int Phase;
@@ -135,6 +208,7 @@ namespace rowemod.Mods
         public float Time;
         public StudioContactMode Mode;
         public bool HasAnchor;
+        public bool UseBikeTarget;
         public int TargetId;
         public StudioVector AnchorPosition, AnchorRotation;
     }
@@ -155,6 +229,15 @@ namespace rowemod.Mods
     internal static class StudioTargets
     {
         internal static readonly string[] Effectors = { "LeftHand", "RightHand", "LeftFoot", "RightFoot" };
+        private static readonly string[][] ContactTargets =
+        {
+            new[] { "Left grip", "Seat" },
+            new[] { "Right grip", "Seat" },
+            new[] { "Left pedal", "Rear tire", "Left peg", "Front tire" },
+            new[] { "Right pedal", "Rear tire", "Right peg", "Front tire" }
+        };
+        internal static string ContactTargetName(int limb, int id) =>
+            limb >= 0 && limb < ContactTargets.Length && id >= 0 && id < ContactTargets[limb].Length ? ContactTargets[limb][id] : null;
         internal static readonly string[] ContactPaths = {
             "Character_Reference/LeftHandIK/LeftHand_IKWeight", "Character_Reference/RightHandIK/RightHand_IKWeight",
             "Character_Reference/LeftFootIK/LeftFoot_IKWeight", "Character_Reference/RightFootIK/RightFoot_IKWeight" };

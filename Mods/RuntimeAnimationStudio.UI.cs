@@ -196,10 +196,26 @@ namespace rowemod.Mods
             else if (Array.IndexOf(StudioTargets.Effectors, SelectedTarget) is int limb && limb >= 0)
             {
                 GUI.Label(new Rect(rect.x + 16, rect.y + 379, 244, 22), "BIKE CONTACT", muted);
-                var mode = Working.Contact(Phase, limb, Time);
+                var contact = Working.ContactKeyAt(Phase, limb, Time);
+                var mode = contact?.Mode ?? StudioContactMode.Auto;
                 for (int c = 0; c < 3; c++) if (Button(new Rect(rect.x + 12 + c * 86, rect.y + 407, 82, 30), c == 0 ? "Inherited" : ((StudioContactMode)c).ToString(), (int)mode == c)) SetContact(limb, (StudioContactMode)c);
-                string reach = Stage.ContactWeights[limb] > .95f && Stage.ContactGaps[limb] > .025f ? " Target is beyond this pose's reach." : "";
-                GUI.Label(new Rect(rect.x + 16, rect.y + 445, 244, 70), "Inherited follows Streets' animated contact. Lock/free changes are keyed at the playhead." + reach, muted);
+                int currentId = contact != null && (contact.HasAnchor || contact.UseBikeTarget) ? contact.TargetId : Stage.SampledContactTarget(limb);
+                bool enabled = GUI.enabled;
+                for (int id = 0; id < 4; id++)
+                {
+                    string label = StudioTargets.ContactTargetName(limb, id);
+                    if (label == null) break;
+                    GUI.enabled = enabled && !draftChanged && Stage.HasContactTarget(limb, id);
+                    if (Button(new Rect(rect.x + 12 + id % 2 * 129, rect.y + 444 + id / 2 * 28, 124, 24), label,
+                        contact?.UseBikeTarget == true && contact.TargetId == id))
+                        SetBikeContactTarget(limb, id);
+                }
+                GUI.enabled = enabled;
+                string target = StudioTargets.ContactTargetName(limb, currentId) ?? "Game target";
+                string contactStatus = mode == StudioContactMode.Free ? "Free at this frame" :
+                    Stage.ContactWeights[limb] > .95f && Stage.ContactGaps[limb] > .025f ? target + " is out of reach" :
+                    mode == StudioContactMode.Auto ? "Game target: " + target : "Locked to " + target;
+                GUI.Label(new Rect(rect.x + 16, rect.y + 498, 244, 24), contactStatus, muted);
             }
             else GUI.Label(new Rect(rect.x + 16, rect.y + 390, 242, 72), "Rotate each joint to pose the limb. Hips and bike joints also support movement.", muted);
             if (Button(new Rect(rect.x + 12, rect.yMax - 46, 120, 32), "Set key  K", true)) KeyPose();
@@ -230,23 +246,28 @@ namespace rowemod.Mods
         private static void DrawTimeline(Rect rect)
         {
             Fill(rect, Panel);
+            if (Source == null || sequence == null || sequence.Total <= 0f) return;
             if (Button(new Rect(rect.x + 12, rect.y + 12, 64, 30), playing ? "Pause" : "Play", playing))
-            { if (draftChanged) Status = "Set a key or discard your unkeyed pose first."; else { if (Time >= 1) Seek(0); playing = !playing; } }
+                TogglePreview();
             for (int p = 0; p < 4; p++)
             {
-                GUI.enabled = !confirmDiscard && Source?.Clip(p, false) != null;
-                if (Button(new Rect(rect.x + 92 + p * 85, rect.y + 12, 78, 30), Phases[p], Phase == p) && !draftChanged)
-                { Phase = p; Time = 0; SyncDraft(); }
+                GUI.enabled = !confirmDiscard && !draftChanged && sequence.Length(p) > 0f;
+                if (Button(new Rect(rect.x + 88 + p * 75, rect.y + 12, 68, 30), Phases[p], Phase == p))
+                { playing = false; Phase = p; Time = 0; SyncDraft(); }
             }
+            GUI.enabled = !confirmDiscard && !draftChanged;
+            if (Button(new Rect(rect.x + 392, rect.y + 12, 94, 30), "Full trick", fullTrick))
+            { fullTrick = !fullTrick; playing = false; }
             GUI.enabled = !confirmDiscard;
-            autoKey = GUI.Toggle(new Rect(rect.x + 450, rect.y + 17, 105, 24), autoKey, "Auto key");
-            previewSpeed = GUI.HorizontalSlider(new Rect(rect.x + 570, rect.y + 22, 100, 15), previewSpeed, .1f, 2f);
-            GUI.Label(new Rect(rect.x + 680, rect.y + 14, 118, 28), previewSpeed.ToString("0.0") + "x preview", muted);
-            if (Button(new Rect(rect.xMax - 110, rect.y + 12, 96, 30), "Delete key")) DeleteKey();
+            autoKey = GUI.Toggle(new Rect(rect.x + 502, rect.y + 17, 94, 24), autoKey, "Auto key");
+            previewSpeed = GUI.HorizontalSlider(new Rect(rect.x + 598, rect.y + 22, 74, 15), previewSpeed, .1f, 2f);
+            GUI.Label(new Rect(rect.x + 680, rect.y + 14, 68, 28), previewSpeed.ToString("0.0") + "x", muted);
+            if (!fullTrick && Button(new Rect(rect.xMax - 110, rect.y + 12, 96, 30), "Delete key")) DeleteKey();
             float start = rect.x + 80, width = rect.width - 105;
             GUI.Label(new Rect(rect.x + 13, rect.y + 69, 65, 22), "Rider", muted); GUI.Label(new Rect(rect.x + 13, rect.y + 94, 65, 22), "Bike", muted);
             GUI.Label(new Rect(rect.x + 13, rect.y + 119, 65, 22), "Contacts", muted);
-            for (int i = 0; i <= 10; i++)
+            if (fullTrick) DrawPhaseStrip(rect, start, width);
+            else for (int i = 0; i <= 10; i++)
             {
                 float px = start + i * width / 10;
                 Fill(new Rect(px, rect.y + 62, 1, 76), Line);
@@ -255,18 +276,18 @@ namespace rowemod.Mods
             Fill(new Rect(start, rect.y + 79, width, 1), Line); Fill(new Rect(start, rect.y + 104, width, 1), Line);
             Fill(new Rect(start, rect.y + 129, width, 1), Line);
             if (Working != null)
-                foreach (var key in Working.Keys.Where(k => k.Phase == Phase && (!selectedKeysOnly || k.Target == SelectedTarget)))
+                foreach (var key in Working.Keys.Where(k => (k.Phase == Phase || (fullTrick && sequence.Length(k.Phase) > 0f)) && (!selectedKeysOnly || k.Target == SelectedTarget)))
                 {
-                    float px = start + key.Time * width, py = rect.y + (key.Target.StartsWith("Bike:", StringComparison.Ordinal) ? 104 : 79);
+                    float px = start + TimelinePosition(key.Phase, key.Time) * width, py = rect.y + (key.Target.StartsWith("Bike:", StringComparison.Ordinal) ? 104 : 79);
                     var diamond = new Rect(px - 6, py - 7, 12, 14); Fill(diamond, key.Target == SelectedTarget ? Color.white : Blue);
-                    if (!confirmDiscard && !draftChanged && Event.current.type == EventType.MouseDown && diamond.Contains(Event.current.mousePosition))
+                    if (!fullTrick && !confirmDiscard && !draftChanged && Event.current.type == EventType.MouseDown && diamond.Contains(Event.current.mousePosition))
                     { Remember(); SelectTarget(key.Target); Time = key.Time; SyncDraft(); keyFrom = key.Time; keyTarget = key.Target; dragMode = 3; Event.current.Use(); break; }
                 }
             if (Working != null)
-                foreach (var key in Working.Contacts.Where(k => k.Phase == Phase && (!selectedKeysOnly || StudioTargets.Effectors[k.Limb] == SelectedTarget)))
+                foreach (var key in Working.Contacts.Where(k => (k.Phase == Phase || (fullTrick && sequence.Length(k.Phase) > 0f)) && (!selectedKeysOnly || StudioTargets.Effectors[k.Limb] == SelectedTarget)))
                 {
-                    var mark = new Rect(start + key.Time * width - 6, rect.y + 123, 12, 12); Fill(mark, key.Mode == StudioContactMode.Free ? new Color(1, .65f, .35f) : Blue);
-                    if (!confirmDiscard && !draftChanged && Event.current.type == EventType.MouseDown && mark.Contains(Event.current.mousePosition))
+                    var mark = new Rect(start + TimelinePosition(key.Phase, key.Time) * width - 6, rect.y + 123, 12, 12); Fill(mark, key.Mode == StudioContactMode.Free ? new Color(1, .65f, .35f) : Blue);
+                    if (!fullTrick && !confirmDiscard && !draftChanged && Event.current.type == EventType.MouseDown && mark.Contains(Event.current.mousePosition))
                     { Remember(); SelectTarget(StudioTargets.Effectors[key.Limb]); Time = key.Time; SyncDraft(); keyFrom = key.Time; contactDragLimb = key.Limb; dragMode = 5; Event.current.Use(); break; }
                 }
             var e = Event.current;
@@ -283,14 +304,15 @@ namespace rowemod.Mods
                 if (Working.MoveKey(Phase, keyTarget, keyFrom, next)) { keyFrom = Time = next; dirty = true; SyncDraft(); } e.Use();
             }
             if (!confirmDiscard && e.type == EventType.MouseDown && new Rect(start, rect.y + 44, width, 94).Contains(e.mousePosition))
-            { playing = false; Seek((e.mousePosition.x - start) / width); dragMode = 4; e.Use(); }
-            if (!confirmDiscard && e.type == EventType.MouseDrag && dragMode == 4) { Seek((e.mousePosition.x - start) / width); e.Use(); }
-            Fill(new Rect(start + Time * width, rect.y + 59, 2, 80), Blue);
+            { playing = false; SeekTimeline((e.mousePosition.x - start) / width); dragMode = 4; e.Use(); }
+            if (!confirmDiscard && e.type == EventType.MouseDrag && dragMode == 4) { SeekTimeline((e.mousePosition.x - start) / width); e.Use(); }
+            Fill(new Rect(start + TimelinePosition(Phase, Time) * width, rect.y + 59, 2, 80), Blue);
             if (draftChanged)
             {
                 GUI.Label(new Rect(rect.x + 12, rect.y + 139, rect.width - 170, 24), "Unkeyed pose · Set a key to keep it", text);
                 if (Button(new Rect(rect.xMax - 145, rect.y + 135, 130, 28), "Discard pose")) SyncDraft();
             }
+            else if (fullTrick) DrawFullTimelineFooter(rect);
             else
             {
                 float y = rect.y + 143, x = rect.x + 12;
@@ -301,8 +323,69 @@ namespace rowemod.Mods
                 if (Button(new Rect(x + 260, y, 52, 24), "Start")) { playing = false; Seek(0); }
                 if (Button(new Rect(x + 318, y, 52, 24), "End")) { playing = false; Seek(1); }
                 if (Button(new Rect(x + 382, y, 120, 24), selectedKeysOnly ? "Selected joint" : "All keys")) selectedKeysOnly = !selectedKeysOnly;
-                GUI.Label(new Rect(x + 516, y, rect.width - 540, 24), "Frame " + Mathf.RoundToInt(Time * Duration * FrameRate) + " / " + Mathf.RoundToInt(Duration * FrameRate) + "  |  Arrows: frame  Ctrl+Arrows: key  Home/End", muted);
+                float frameLabelWidth = rect.width - 696;
+                if (frameLabelWidth > 100)
+                {
+                    string frameLabel = "Frame " + Mathf.RoundToInt(Time * Duration * FrameRate) + " / " + Mathf.RoundToInt(Duration * FrameRate);
+                    if (frameLabelWidth > 430) frameLabel += "  |  Arrows: frame  Ctrl+Arrows: key  Home/End";
+                    GUI.Label(new Rect(x + 516, y, frameLabelWidth, 24), frameLabel, muted);
+                }
+                GUI.enabled = CanCopyEndToExit;
+                if (Button(new Rect(rect.xMax - 168, y, 154, 24), "Copy end to Exit")) CopyEndToExit();
+                GUI.enabled = !confirmDiscard;
             }
+        }
+        private static float TimelinePosition(int phase, float normalized) => fullTrick ?
+            (sequence.Start(phase) + normalized * sequence.Length(phase)) / sequence.Total : normalized;
+
+        private static void SeekTimeline(float normalized)
+        {
+            if (fullTrick) SeekFull(normalized * sequence.Total, true);
+            else Seek(normalized);
+        }
+
+        private static void DrawPhaseStrip(Rect rect, float start, float width)
+        {
+            for (int phase = 0; phase < Phases.Length; phase++)
+            {
+                if (sequence.Length(phase) <= 0f) continue;
+                float x = start + TimelinePosition(phase, 0f) * width;
+                float length = sequence.Length(phase) / sequence.Total * width;
+                Fill(new Rect(x, rect.y + 46, length, 20), Phase == phase ? new Color(.18f, .32f, .50f) : Line);
+                Fill(new Rect(x, rect.y + 46, 1, 92), new Color(.31f, .36f, .45f));
+                var blend = Working?.BlendInto(phase);
+                if (blend != null) Fill(new Rect(x, rect.y + 64, length * blend.Duration, 3), new Color(.45f, .80f, .71f));
+                if (length >= 38f) GUI.Label(new Rect(x + 4, rect.y + 46, length - 4, 19), Phases[phase], small);
+            }
+        }
+
+        private static void DrawFullTimelineFooter(Rect rect)
+        {
+            float y = rect.y + 143, x = rect.x + 12;
+            if (Button(new Rect(x, y, 54, 24), "Start")) SeekEnd(false);
+            if (Button(new Rect(x + 60, y, 54, 24), "End")) SeekEnd(true);
+            if (Button(new Rect(x + 122, y, 120, 24), selectedKeysOnly ? "Selected joint" : "All keys")) selectedKeysOnly = !selectedKeysOnly;
+            GUI.Label(new Rect(x + 254, y, 124, 24), $"{FullTime:0.00} / {sequence.Total:0.00} s", muted);
+            if (!CanBlendIntoPhase) return;
+
+            var blend = Working.BlendInto(Phase);
+            float maximum = Mathf.Min(.5f, Duration);
+            float minimum = Mathf.Min(.02f, maximum);
+            if (blendSliderPhase != Phase)
+            {
+                blendSliderPhase = Phase;
+                blendSeconds = blend == null ? .12f : blend.Duration * Duration;
+            }
+            float seconds = Mathf.Clamp(blendSeconds, minimum, maximum);
+            float blendControls = rect.xMax - 404;
+            if (maximum > minimum)
+            {
+                float next = GUI.HorizontalSlider(new Rect(blendControls, y + 7, 84, 15), seconds, minimum, maximum);
+                if (Mathf.Abs(next - seconds) > .00001f) blendSeconds = next;
+            }
+            GUI.Label(new Rect(blendControls + 92, y, 60, 24), $"{seconds:0.00} s", muted);
+            if (Button(new Rect(blendControls + 146, y, 146, 24), blend == null ? "Blend into " + Phases[Phase] : "Rebuild blend", blend != null)) SetPhaseBlend(false);
+            if (blend != null && Button(new Rect(blendControls + 298, y, 92, 24), "Remove blend")) SetPhaseBlend(true);
         }
         private static void DrawConfirmation(float width)
         {

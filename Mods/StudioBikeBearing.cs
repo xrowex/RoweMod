@@ -25,12 +25,22 @@ namespace rowemod.Mods
             child.rotation = Quaternion.FromToRotation(child.rotation * childAxis, parent.rotation * parentAxis) * child.rotation;
             child.position += Pivot - child.TransformPoint(childPoint);
         }
-        internal static void Apply(Transform node, Vector3 pivot, Quaternion basis, Vector3 rotation, Vector3 position, float weight)
+        internal static void Apply(Transform node, Vector3 pivot, Quaternion basis, Vector3 rotation, Vector3 position, float weight,
+            Transform follower = null)
         {
+            // The native animation binds the frame and steering as sibling paths.
+            // Carry the steering with the frame without changing either clip binding.
+            Vector3 followerPosition = follower == null ? default : node.InverseTransformPoint(follower.position);
+            Quaternion followerRotation = follower == null ? default : Quaternion.Inverse(node.rotation) * follower.rotation;
             var delta = basis * Quaternion.Slerp(Quaternion.identity, Quaternion.Euler(rotation.x, rotation.y, rotation.z), weight) * Quaternion.Inverse(basis);
             node.position = pivot + delta * (node.position - pivot);
             node.rotation = delta * node.rotation;
             node.localPosition += position * weight;
+            if (follower != null)
+            {
+                follower.position = node.TransformPoint(followerPosition);
+                follower.rotation = node.rotation * followerRotation;
+            }
         }
     }
 }

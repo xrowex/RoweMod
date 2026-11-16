@@ -331,7 +331,7 @@ namespace rowemod.Mods
             AdvanceReplayRecovery();
         }
 
-        private static bool IsNativeReplayActive()
+        internal static bool IsNativeReplayActive()
         {
             try
             {

@@ -47,6 +47,21 @@ internal static class Program
             var pedalBearing = new StudioBikeBearing(cranks, pedal, pedalPoint, pedalPoint, cranks.rotation * Vector3.right, cranks.rotation);
             cranks.localRotation = Quaternion.Euler(145, 0, 0); bearing.Constrain(); pedal.localPosition += new Vector3(0, .08f, -.06f); pedalBearing.Constrain();
             Check(Near(pedal.position, pedalBearing.Pivot), "pedal spindle follows its corrected rotating crank parent");
+
+            // Streets binds Bars_Joint and Frame_Joint as siblings.
+            var joints = new Transform { localRotation = Quaternion.Euler(18, -7, 13) };
+            frame.parent = joints;
+            var bars = new Transform { parent = joints, localPosition = new Vector3(0, .6f, .31f), localRotation = rootRotation };
+            var frontWheel = new Transform { parent = bars, localPosition = new Vector3(0, -.32f, .12f) };
+            var headset = frame.TransformPoint(new Vector3(0, .15f, .65f));
+            var steering = new StudioBikeBearing(frame, bars, headset, headset, frame.rotation * Vector3.up, frame.rotation);
+            var barsInFrame = frame.InverseTransformPoint(bars.position);
+            var wheelInFrame = frame.InverseTransformPoint(frontWheel.position);
+            var steeringInFrame = Quaternion.Inverse(frame.rotation) * bars.rotation;
+            StudioBikeBearing.Apply(frame, steering.Pivot, steering.Basis, new Vector3(20, 42, -13), new Vector3(.12f, .3f, -.09f), .6f, bars);
+            Check(Near(bars.position, frame.TransformPoint(barsInFrame)), "a weighted frame edit moves the sibling bars with it");
+            Check(Near(frontWheel.position, frame.TransformPoint(wheelInFrame)), "the front wheel stays with the steering assembly");
+            Check(Near(bars.rotation * Vector3.forward, (frame.rotation * steeringInFrame) * Vector3.forward), "frame edits preserve the steering angle");
         }
         var bindings = new (string path, int joint)[] {
             ("Chassis Visuals/Parts/Frame/Mesh",0),("Chassis Visuals/Parts/Seat/Mesh",0),("Chassis Visuals/Parts/Drive Train/Chain/Chain Top",0),

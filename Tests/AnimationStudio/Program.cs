@@ -23,7 +23,7 @@ var stock=new AnimationClip{name="Stock",humanMotion=true};
 var stockBike=new AnimationClip{name="Bike",humanMotion=false};
 var stockMirror=new AnimationClip{name="Mirror",humanMotion=true};
 var sharedRider=new TrickAnimationData{_enterAnimationClip=stock,_loopAnimationClip=stock,_tweakAnimationClip=stock,_exitAnimationClip=stock};
-var sharedBike=new TrickAnimationData{_enterAnimationClip=stockBike,_exitAnimationClip=stockBike};
+var sharedBike=new TrickAnimationData{_enterAnimationClip=stockBike,_exitAnimationClip=stockBike,hideFlags=HideFlags.DontUnloadUnusedAsset};
 var stockPartner=new SyncTrickAnimationData{_playerAnimationData=new TrickAnimationData{_enterAnimationClip=stockMirror,_exitAnimationClip=stockMirror},_vehicleAnimationData=sharedBike};
 var target=new SyncTrickAnimationData{_playerAnimationData=sharedRider,_vehicleAnimationData=sharedBike,_mirrorSyncData=stockPartner,_overallSpeedMult=2};
 var other=new SyncTrickAnimationData{_playerAnimationData=sharedRider,_vehicleAnimationData=sharedBike,_mirrorSyncData=stockPartner};
@@ -31,6 +31,7 @@ p.applyTiming=false;p.applyRules=false;
 TrickAnimationEditor.TestApply(target,p,clips);
 Check(TrickAnimationEditor.Saves==1,"explicit apply saves once");
 Check(target._playerAnimationData!=sharedRider && other._playerAnimationData._enterAnimationClip==stock,"only selected trick changes");
+Check((sharedRider.hideFlags & HideFlags.DontUnloadUnusedAsset) != 0, "isolated override retains the displaced rider asset");
 Check(target._playerAnimationData._loopAnimationClip==null,"empty Loop actually clears");
 Check(target._vehicleAnimationData._enterAnimationClip==stockBike,"keep bike preserves clips");
 Check(target._overallSpeedMult==2 && target._mirrorSyncData==stockPartner,"keep timing and mirror partner");
@@ -42,6 +43,7 @@ p.riderMirror=new RoweAnimationTrack{replace=true,clips=p.rider.clips.ToArray()}
 p.applyTiming=true;p.overallSpeed=1.2f;p.tweakSpeed=2.5f;p.applyRules=true;p.onlyInAir=true;
 TrickAnimationEditor.TestApply(target,p,clips);
 Check(target._mirrorSyncData!=stockPartner && target._mirrorSyncData._playerAnimationData._enterAnimationClip==clips[p.rider.clips[0]],"V2 linked mirror uses replacement");
+Check((stockPartner.hideFlags & HideFlags.DontUnloadUnusedAsset) != 0, "custom mirror retains the displaced native partner");
 Check(other._mirrorSyncData._playerAnimationData._enterAnimationClip==stockMirror,"stock mirror partner remains untouched");
 Check(target._mirrorSyncData._vehicleAnimationData._enterAnimationClip==stockBike,"kept mirror bike preserved");
 Check(TrickAnimationEditor.Saved.studioMirrorRouting && TrickAnimationEditor.Saved.playerMirrorLoopClip==null,"saved mirror routing includes deliberate empty Loop");
@@ -51,8 +53,11 @@ var ownRider=target._playerAnimationData;var ownMirror=target._mirrorSyncData;
 TrickAnimationEditor.TestApply(target,p,clips);
 Check(target._playerAnimationData==ownRider && target._mirrorSyncData==ownMirror,"repeat apply reuses private data");
 TrickAnimationEditor.TestRestoreMirror(target);Check(target._mirrorSyncData==stockPartner,"reset can restore original mirror route");
+sharedRider.hideFlags |= HideFlags.HideInHierarchy;
 TrickAnimationEditor.TestRelease();
 Check(target._playerAnimationData==sharedRider && target._vehicleAnimationData==sharedBike && ownRider.destroyed && ownMirror.destroyed,"scene cleanup restores stock references and destroys clones");
+Check(sharedRider.hideFlags == HideFlags.HideInHierarchy && stockPartner.hideFlags == HideFlags.None &&
+    sharedBike.hideFlags == HideFlags.DontUnloadUnusedAsset, "scene cleanup releases only the flags introduced by track isolation");
 var paired=new RoweAnimationPackage{id="RoweMod_Custom_Paired_456",title="Paired",rider=new RoweAnimationTrack{replace=true},bike=new RoweAnimationTrack{replace=true}};
 var pairedClips=new Dictionary<string,AnimationClip>();
 foreach(var role in new[]{"Rider","Bike"}) foreach(var phase in new[]{(0,"Enter"),(3,"Exit")})

@@ -28,6 +28,14 @@ namespace rowemod.Mods
             public TrickAnimationData MirrorRider, MirrorBike;
         }
         private static readonly List<StudioTrackCopy> studioTrackCopies = new();
+        private static readonly Dictionary<int, UnityEngine.Object> retainedStudioTrackAssets = new();
+
+        private static void RetainStockTrackAsset(UnityEngine.Object asset)
+        {
+            if (asset == null || (asset.hideFlags & HideFlags.DontUnloadUnusedAsset) != 0) return;
+            asset.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+            retainedStudioTrackAssets.Add(asset.GetInstanceID(), asset);
+        }
 
         private static void ReleaseStudioTrackCopies()
         {
@@ -45,6 +53,9 @@ namespace rowemod.Mods
                 if (copy.MirrorBike != null) UnityEngine.Object.Destroy(copy.MirrorBike);
                 if (copy.Mirror != null) UnityEngine.Object.Destroy(copy.Mirror);
             }
+            foreach (var asset in retainedStudioTrackAssets.Values)
+                if (asset != null) asset.hideFlags &= ~HideFlags.DontUnloadUnusedAsset;
+            retainedStudioTrackAssets.Clear();
             studioTrackCopies.Clear(); studioIsolatedData.Clear();
         }
 
@@ -203,6 +214,10 @@ namespace rowemod.Mods
             var rider = ScriptableObject.CreateInstance<TrickAnimationData>();
             var bike = ScriptableObject.CreateInstance<TrickAnimationData>();
             var copy = new StudioTrackCopy { Target = target, OriginalRider = target._playerAnimationData, OriginalBike = target._vehicleAnimationData, Rider = rider, Bike = bike, OriginalMirror = target._mirrorSyncData };
+            // A package can take the last native reference to a stock track.
+            // Keep those assets through scene and bundle unloads until restored.
+            RetainStockTrackAsset(copy.OriginalRider);
+            RetainStockTrackAsset(copy.OriginalBike);
             studioTrackCopies.Add(copy);
             if (target._playerAnimationData != null) CopyAnimationData(target._playerAnimationData, rider);
             if (target._vehicleAnimationData != null) CopyAnimationData(target._vehicleAnimationData, bike);
@@ -230,6 +245,7 @@ namespace rowemod.Mods
                 // Do not link back or modify the stock partner trick.
                 copy.Mirror._mirrorSyncData = null;
             }
+            RetainStockTrackAsset(copy.OriginalMirror);
             target._mirrorSyncData = copy.Mirror;
         }
 

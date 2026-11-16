@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.25
+
+- Preview and scrub the whole trick in Animation Studio. Blend into a phase with an adjustable duration, or copy a phase's last frame to the start of Exit.
+- Choose grip, seat, pedal, peg and tire contact points when the trick supports them. Free hands and feet release their native connections in gameplay, while edited wrists follow the game's Wrist Roller in the preview.
+- Bike parts and contacts follow the equipped bike's bearings when the frame moves. Studio leaves the game's solved pose in place for contacts that the edit didn't move.
+- Tuck Up and other stock clips stay available through the stock catalog when legacy animation packages are loaded.
+
+**Testing note:** Validation covered scripted gameplay on Streets 2.0.0.3073.0, including a Superman test variation with Free keys through Tweak and Exit, whole-trick playback, transition editing, and stock clip recovery after a Unity asset unload. Manual controller feel has yet to be checked.
+
 ## 3.3.24
 
 - Fixed Animation Studio preview lighting spilling into the Streets main menu. The key and fill lights and fixed exposure are now confined to the Studio preview stage.

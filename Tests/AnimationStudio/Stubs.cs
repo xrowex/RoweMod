@@ -3,7 +3,8 @@ using UnityEngine;
 using Il2CppMashBox.Core.Runtime.TrickSystem;
 namespace UnityEngine
 {
-    public class Object { static int next; int id = ++next; public int GetInstanceID()=>id; public bool destroyed; public static void Destroy(Object o) {o.destroyed=true;} public T TryCast<T>() where T:class => this as T; }
+    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, DontUnloadUnusedAsset = 32 }
+    public class Object { static int next; int id = ++next; public int GetInstanceID()=>id; public bool destroyed; public HideFlags hideFlags; public static void Destroy(Object o) {o.destroyed=true;} public T TryCast<T>() where T:class => this as T; }
     public class ScriptableObject:Object { public static T CreateInstance<T>() where T:ScriptableObject,new()=>new(); }
     public class AnimationClip:Object { public string name; public bool humanMotion,legacy; }
     public class AssetBundle:Object { public Object LoadAsset(string s, Type t)=>null; }
