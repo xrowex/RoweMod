@@ -1,0 +1,11 @@
+{
+  "name": "RoweMod (BMX Streets mod)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "menu-preview",
+      "command": "python3 -m http.server 8080 --directory docs"
+    }
+  ]
+}

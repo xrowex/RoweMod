@@ -469,7 +469,7 @@ namespace rowemod
                 return;
             }
 
-            Color focusColor = new Color(0.40f, 0.72f, 1f, 1f);
+            Color focusColor = uiAccentColor;
             DrawSolidColorRect(new Rect(ringRect.x, ringRect.y, ringRect.width, 2f), focusColor);
             DrawSolidColorRect(new Rect(ringRect.x, ringRect.yMax - 2f, ringRect.width, 2f), focusColor);
             DrawSolidColorRect(new Rect(ringRect.x, ringRect.y, 2f, ringRect.height), focusColor);
@@ -485,7 +485,7 @@ namespace rowemod
                 Color.clear,
                 10,
                 2,
-                new Color(0.40f, 0.72f, 1f, 1f));
+                Color.Lerp(uiAccentColor, Color.white, 0.18f));
             controllerFocusStyle.border = new RectOffset(10, 10, 10, 10);
             controllerFocusStyle.padding = new RectOffset(0, 0, 0, 0);
             controllerFocusStyle.margin = new RectOffset(0, 0, 0, 0);
