@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Il2CppAnimancer;
 using Il2CppMashBox.Addons.PhysicsDrivenAnimation;
 using Il2CppMashBox.Core.Runtime.Physics.Jointing;
 using Il2CppMashBox.Core.Runtime.TrickSystem;
@@ -16,7 +17,7 @@ namespace rowemod.Mods
         internal string Key, Name;
         internal SyncTrickAnimationData Data;
         internal AnimationClip[] Stock;
-        internal float IncomingWeight;
+        internal AnimancerState RiderState, BikeState;
         internal AnimationClip Clip(int phase, bool bike, bool mirror = false)
         {
             if (Stock != null) return Stock[phase + (bike ? 4 : 0) + (mirror ? 8 : 0)];
@@ -98,7 +99,7 @@ namespace rowemod.Mods
                 (layer.Weight < .001f && (brain._trickController == null || brain._trickController._phase == TrickControllerV2.Phase.Idle)))
                 return false;
             source = new StudioSource { Key = GetDataKey(data), Name = TrickName(data), Data = data,
-                IncomingWeight = Mathf.Clamp01(state.EffectiveWeight) };
+                RiderState = state, BikeState = animator.VehicleTrick?.CurrentState };
             // Some tricks share clips in both directions. Prefer the animator's active mirror route.
             bool matched = false;
             bool activeMirror = animator.Mirror;
@@ -134,6 +135,8 @@ namespace rowemod.Mods
         private static Animator lastBlendRider;
         private static StudioVariation lastBlendVariation;
         private static bool lastBlendMirror;
+        private static readonly AnimancerState[] riderStates = new AnimancerState[4];
+        private static readonly AnimancerState[] bikeStates = new AnimancerState[4];
         private static int lastPhase = -1, previousPhase = -1;
         private static bool lastPhaseAtEndpoint;
         private static AnimatedRagdoll contactRagdoll;
@@ -154,15 +157,14 @@ namespace rowemod.Mods
         private static UnityIKLimb[] Limbs(HumanIK human) => new[] { StudioContacts.Limb(human?._leftHandIK?.UnityObject),
             StudioContacts.Limb(human?._rightHandIK?.UnityObject), StudioContacts.Limb(human?._leftFootIK?.UnityObject), StudioContacts.Limb(human?._rightFootIK?.UnityObject) };
         private static bool TryActiveVariation(out StudioVariation variation, out int phase, out float time, out float weight,
-            out bool mirror, out Animator rider, out Animator bike, out float phaseProgress, out float incomingWeight)
+            out bool mirror, out Animator rider, out Animator bike, out float phaseProgress, out StudioSource source)
         {
-            variation = null; phase = 0; time = weight = phaseProgress = incomingWeight = 0; mirror = false; rider = bike = null;
+            variation = null; source = null; phase = 0; time = weight = phaseProgress = 0; mirror = false; rider = bike = null;
             var library = RuntimeAnimationStudio.Library;
             if (RuntimeAnimationStudio.IsOpen || library == null || library.Bindings.Count == 0 || !Main.playableSceneLoaded ||
                 !RemoteKillSwitched.isModEnabled || ReplayInputPatch.IsNativeReplayActive()) return false;
-            if (!TrickAnimationEditor.StudioLiveContext(out var source, out phase, out time, out weight, out mirror, out rider, out bike, out phaseProgress))
+            if (!TrickAnimationEditor.StudioLiveContext(out source, out phase, out time, out weight, out mirror, out rider, out bike, out phaseProgress))
                 return false;
-            incomingWeight = source.IncomingWeight;
             variation = library.Active(source.Key);
             return variation != null && (!mirror || variation.MirrorEdits) &&
                 string.Equals(source.Clip(phase, false)?.name, variation.RiderClips[phase], StringComparison.Ordinal);
@@ -304,6 +306,11 @@ namespace rowemod.Mods
 
         private static void ResetBlendTransition()
         {
+            if (lastBlendVariation != null)
+            {
+                Array.Clear(riderStates, 0, riderStates.Length);
+                Array.Clear(bikeStates, 0, bikeStates.Length);
+            }
             lastBlendVariation = null;
             lastBlendRider = null;
             lastPhase = previousPhase = -1;
@@ -340,6 +347,17 @@ namespace rowemod.Mods
             }
             applied.Clear();
         }
+
+        private static void ObserveState(AnimancerState[] states, int phase, AnimancerState state)
+        {
+            if (state == null) return;
+            for (int i = 0; i < states.Length; i++)
+                if (i != phase && states[i]?.Pointer == state.Pointer) states[i] = null;
+            states[phase] = state;
+        }
+
+        private static float PoseWeight(AnimancerState state) =>
+            state == null || !state.IsValid ? 0f : Mathf.Clamp01(state.EffectiveWeight);
 
         private static void RestorePhysicalContacts()
         {
@@ -494,20 +512,22 @@ namespace rowemod.Mods
             RestorePose();
             try
             {
-                if (!TryActiveVariation(out var variation, out int phase, out float time, out float weight,
-                    out bool mirror, out var rider, out var bike, out float phaseProgress, out float incomingWeight))
+                if (!TryActiveVariation(out var variation, out int phase, out float time, out _,
+                    out bool mirror, out var rider, out var bike, out float phaseProgress, out var source))
                 {
                     RestorePhysicalContacts();
                     ResetBlendTransition();
                     return;
                 }
                 int fromPhase = ObservePhase(variation, rider, mirror, phase, time, phaseProgress);
+                ObserveState(riderStates, phase, source.RiderState);
+                var bikeClip = source.Clip(phase, true, mirror);
+                if (bikeClip != null && source.BikeState?.Clip == bikeClip) ObserveState(bikeStates, phase, source.BikeState);
                 var blend = variation.BlendInto(phase);
-                float blendWeight = (blend?.Weight(fromPhase, phaseProgress) ?? 0f) * incomingWeight;
-                bool hasPose = weight >= .001f && variation.Keys.Any(key => key.Phase == phase);
+                float blendWeight = blend?.Weight(fromPhase, phaseProgress) ?? 0f;
                 AppliedFrames++;
                 LastApplied = variation.Name;
-                bool hasPoseOffsets = hasPose || blendWeight > 0f;
+                bool hasPoseOffsets = variation.Keys.Count > 0 || blendWeight > 0f;
                 if (!hasPoseOffsets && variation.Contacts.Count == 0) return;
 
                 var human = rider.GetComponentInChildren<HumanIK>(true) ?? rider.GetComponentInParent<HumanIK>();
@@ -534,18 +554,40 @@ namespace rowemod.Mods
                         // blending, wrist roll and reach limits, through our authored offset.
                         goals[i] = (joint, end, joint.InverseTransformPoint(end.position), Quaternion.Inverse(joint.rotation) * end.rotation, contact);
                     }
-                foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike).Where(t => variation.Keys.Any(k => k.Phase == phase && k.Target == t)))
+                StudioBikeGeometry geometry = null;
+                void ApplyTrack(string target, StudioPose pose, float poseWeight, bool isBike)
                 {
-                    StudioPose pose = variation.Evaluate(phase, target, time);
-                    Apply(Target(rider, bike, mirror ? StudioTargets.Mirror(target) : target), mirror ? StudioTargets.Reflect(pose) : pose, weight,
-                        target.StartsWith("Bike:", StringComparison.Ordinal) ? StudioBikeGeometry.Get(bike, bike?.transform.parent) : null);
+                    if (poseWeight < .001f) return;
+                    if (isBike) geometry ??= StudioBikeGeometry.Get(bike, bike?.transform.parent, live: true);
+                    Apply(Target(rider, bike, mirror ? StudioTargets.Mirror(target) : target), mirror ? StudioTargets.Reflect(pose) : pose,
+                        poseWeight, isBike ? geometry : null);
+                }
+                // The incoming state can be near zero even on a fully weighted trick layer.
+                // Keep evaluating outgoing keys while their native clip is still fading out.
+                for (int p = 0; p < riderStates.Length; p++)
+                {
+                    var riderState = riderStates[p];
+                    var bikeState = bikeStates[p];
+                    float riderWeight = PoseWeight(riderState);
+                    float bikeWeight = PoseWeight(bikeState);
+                    if (riderWeight < .001f && bikeWeight < .001f) continue;
+                    foreach (string target in StudioTargets.Rider.Concat(StudioTargets.Bike))
+                    {
+                        bool isBike = target.StartsWith("Bike:", StringComparison.Ordinal);
+                        var state = isBike ? bikeState : riderState;
+                        float poseWeight = isBike ? bikeWeight : riderWeight;
+                        if (poseWeight < .001f || !variation.Keys.Any(k => k.Phase == p && k.Target == target)) continue;
+                        float progress = state.NormalizedTime;
+                        float poseTime = p == 1 ? Mathf.Repeat(progress, 1) : Mathf.Clamp01(progress);
+                        ApplyTrack(target, variation.Evaluate(p, target, poseTime), poseWeight, isBike);
+                    }
                 }
                 if (blendWeight > 0f)
                     foreach (var offset in blend.Offsets)
                     {
-                        var pose = new StudioPose(offset.Rotation, offset.Position);
-                        Apply(Target(rider, bike, mirror ? StudioTargets.Mirror(offset.Target) : offset.Target), mirror ? StudioTargets.Reflect(pose) : pose,
-                            blendWeight, offset.Target.StartsWith("Bike:", StringComparison.Ordinal) ? StudioBikeGeometry.Get(bike, bike?.transform.parent) : null);
+                        bool isBike = offset.Target.StartsWith("Bike:", StringComparison.Ordinal);
+                        ApplyTrack(offset.Target, new StudioPose(offset.Rotation, offset.Position),
+                            blendWeight * PoseWeight(isBike ? bikeStates[phase] : riderStates[phase]), isBike);
                     }
                 if (limbs != null)
                 {

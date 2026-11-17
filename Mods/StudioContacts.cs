@@ -93,7 +93,7 @@ namespace rowemod.Mods
         internal Vector3 Pivot => steering.Pivot;
         internal Quaternion Basis => steering.Basis;
         internal int BearingCount => bearings.Count;
-        internal static StudioBikeGeometry Get(Animator bike, Transform physicalRoot)
+        internal static StudioBikeGeometry Get(Animator bike, Transform physicalRoot, bool live = false)
         {
             if (bike == null) return null;
             int id = bike.GetInstanceID();
@@ -124,17 +124,24 @@ namespace rowemod.Mods
                     Quaternion.LookRotation(Vector3.Cross(right, up), up));
                 result.bearings.Add(bearing); result.byJoint[joints[child].GetInstanceID()] = bearing;
             }
+            var physicalSteering = live ? physicalRoot.Find("Headset") : null;
             foreach (var lower in nodes)
-                if (lower.name == "Forks_Anchor")
-                    foreach (var upper in nodes)
-                        if (upper.name == "Headset_Anchor" && upper.parent == lower.parent && (upper.position - lower.position).sqrMagnitude > .000001f)
-                        {
-                            var axis = (upper.position - lower.position).normalized;
-                            var forward = Vector3.ProjectOnPlane(lower.parent.forward, axis).normalized;
-                            var point = (lower.position + upper.position) * .5f;
-                            result.steering = new StudioBikeBearing(result.frame, joints[1], point, point, axis, Quaternion.LookRotation(forward, axis));
-                            break;
-                        }
+            {
+                if (lower.name != "Forks_Anchor") continue;
+                var upper = lower.parent.Find("Headset_Anchor");
+                if (upper == null || (upper.position - lower.position).sqrMagnitude <= .000001f) continue;
+                var axis = (upper.position - lower.position).normalized;
+                var forward = Vector3.ProjectOnPlane(lower.parent.forward, axis).normalized;
+                var point = (lower.position + upper.position) * .5f;
+                var basis = Quaternion.LookRotation(forward, axis);
+                if (live)
+                {
+                    if (physicalSteering == null) continue;
+                    (point, basis) = StudioBikeBearing.RebaseSteering(lower.parent, physicalSteering, result.frame, joints[1], point, basis);
+                }
+                result.steering = new StudioBikeBearing(result.frame, joints[1], point, point, basis * Vector3.up, basis);
+                break;
+            }
             if (result.steering == null) return null;
             result.bearings.Add(result.steering); result.byJoint[joints[1].GetInstanceID()] = result.steering;
             Add(0, 2, Find("BB_Anchor", "Chassis Visuals"), Find("BB Visuals"));

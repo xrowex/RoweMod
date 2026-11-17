@@ -25,6 +25,15 @@ namespace rowemod.Mods
             child.rotation = Quaternion.FromToRotation(child.rotation * childAxis, parent.rotation * parentAxis) * child.rotation;
             child.position += Pivot - child.TransformPoint(childPoint);
         }
+        internal static (Vector3 point, Quaternion basis) RebaseSteering(Transform physicalFrame, Transform physicalSteering,
+            Transform animatedFrame, Transform animatedSteering, Vector3 point, Quaternion basis)
+        {
+            // The chassis and steering bodies can move independently of the animation skeleton.
+            // Transfer only the socket's offset from the physical hinge, in chassis space.
+            var offset = physicalFrame.InverseTransformPoint(point) - physicalFrame.InverseTransformPoint(physicalSteering.position);
+            return (animatedSteering.position + animatedFrame.TransformPoint(offset) - animatedFrame.position,
+                animatedFrame.rotation * Quaternion.Inverse(physicalFrame.rotation) * basis);
+        }
         internal static void Apply(Transform node, Vector3 pivot, Quaternion basis, Vector3 rotation, Vector3 position, float weight,
             Transform follower = null)
         {

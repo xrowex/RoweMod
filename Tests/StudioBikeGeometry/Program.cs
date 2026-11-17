@@ -62,6 +62,17 @@ internal static class Program
             Check(Near(bars.position, frame.TransformPoint(barsInFrame)), "a weighted frame edit moves the sibling bars with it");
             Check(Near(frontWheel.position, frame.TransformPoint(wheelInFrame)), "the front wheel stays with the steering assembly");
             Check(Near(bars.rotation * Vector3.forward, (frame.rotation * steeringInFrame) * Vector3.forward), "frame edits preserve the steering angle");
+
+            var physicalFrame = new Transform { localPosition = new Vector3(7, -3, 4), localRotation = rootRotation, scale = .8f };
+            var physicalSteering = new Transform { parent = physicalFrame, localPosition = new Vector3(0, .4f, .2f) };
+            var hingeOffset = new Vector3(.003f, -.024f, .03f);
+            var physicalSocket = physicalFrame.TransformPoint(physicalSteering.localPosition + hingeOffset);
+            var localSteeringBasis = Quaternion.Euler(-17, 0, 0);
+            var rebased = StudioBikeBearing.RebaseSteering(physicalFrame, physicalSteering, frame, bars, physicalSocket,
+                physicalFrame.rotation * localSteeringBasis);
+            var expectedSocket = frame.TransformPoint(frame.InverseTransformPoint(bars.position) + hingeOffset);
+            Check(Near(rebased.point, expectedSocket), "the head tube keeps its hinge offset when the physics chassis moves independently");
+            Check(Near(rebased.basis * Vector3.up, frame.rotation * localSteeringBasis * Vector3.up), "the equipped headset axis is expressed in the animation frame");
         }
         var bindings = new (string path, int joint)[] {
             ("Chassis Visuals/Parts/Frame/Mesh",0),("Chassis Visuals/Parts/Seat/Mesh",0),("Chassis Visuals/Parts/Drive Train/Chain/Chain Top",0),

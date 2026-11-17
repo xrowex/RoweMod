@@ -1,8 +1,8 @@
 {
-  "version": "3.3.25",
+  "version": "3.3.26",
   "downloadUrl": "https://raw.githubusercontent.com/xrowex/RoweMod/master/DLL/rowemod.dll",
-  "sha256": "6d14d48548942035acf31fbcebb6b538ac917d6077423fa4317fb7e6b2ba604b",
-  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.25",
-  "patchNotes": "Animation Studio now previews whole tricks, blends between phases, and copies the last frame into Exit. Choose bike contact points for hands and feet, use the native Wrist Roller in preview, and edit Tuck Up from the stock catalog.",
+  "sha256": "d57c9b6ebd6c44255810596a764405ae83fd3eb5cbe6cedc09ab09f62ae33b5a",
+  "notesUrl": "https://github.com/xrowex/RoweMod/releases/tag/v3.3.26",
+  "patchNotes": "Tuck Up frame edits now use the bike’s steering hinge during gameplay. Rider and bike pose edits follow the game’s blend between trick phases.",
   "requiredGameVersion": ""
 }

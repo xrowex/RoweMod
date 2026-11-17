@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.26
+
+- Fixed the large bike frame shift between Animation Studio and gameplay on edited Tuck Up variations. Frame edits use the bike’s steering hinge during gameplay, so the bars follow the frame.
+- Rider and bike pose edits blend with the game’s active trick animations through phase changes. The outgoing pose fades out as the incoming pose fades in.
+
+**Testing note.** In a scripted riding test with an existing Tuck Up variation, the held Tweak frame translation was within about 3 cm of the Studio preview, down from about 56 cm. The test verified that saved variations and assignments were preserved.
+
 ## 3.3.25
 
 - Preview and scrub the whole trick in Animation Studio. Blend into a phase with an adjustable duration, or copy a phase's last frame to the start of Exit.
